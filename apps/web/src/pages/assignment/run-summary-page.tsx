@@ -35,7 +35,7 @@ import {
 } from './_components/scoring-warning-banner';
 
 /**
- * F063 — 月跑結果摘要頁
+ * F063 — 月名單分派結果摘要頁
  *
  * 對應 prototype: /prototypes/33-run-summary.html
  *
@@ -449,7 +449,7 @@ export function RunSummaryPage() {
                     NFR-005 警示：偏差超過閾值
                   </p>
                   <p>
-                    本次月跑存在偏差超過 3% 的部門。建議檢查 ob_dept_pct 設定，或前往 F067
+                    本次月名單分派存在偏差超過 3% 的部門。建議檢查 ob_dept_pct 設定，或前往 F067
                     比對近月結果確認分派演算法表現。
                   </p>
                 </div>

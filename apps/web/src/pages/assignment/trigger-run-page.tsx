@@ -36,14 +36,14 @@ import {
 import { getBusinessRole, getUser } from '@/stores/auth-store';
 
 /**
- * F061 觸發月跑頁（Phase 2 全面改造）
+ * F061 觸發月名單分派頁（Phase 2 全面改造）
  *
  * 對應 prototype 31-trigger-run.html
  *
  * 主要區塊（依 prototype 由上而下）：
  *   - 處長唯讀 banner（businessRole='section_chief'）
- *   - 月跑執行中 banner（monthlyRunStatus='running'/'pending'）
- *   - 標題列 + CTA「啟動月跑」
+ *   - 月名單分派執行中 banner（monthlyRunStatus='running'/'pending'）
+ *   - 標題列 + CTA「啟動月名單分派」
  *   - 三份快照原子性提示
  *   - 左 7 欄：6 項 pre-check（PreCheckList）
  *   - 右 5 欄：本次執行摘要（RunSummaryPanel）
@@ -136,7 +136,7 @@ export function TriggerRunPage() {
     try {
       // F097 / AC-6：以選定之分派作業月份（target_work_ym）觸發
       const result = await triggerRun(ym);
-      showToast(`月跑已觸發（runId: ${result.runId}）`, 'success');
+      showToast(`月名單分派已觸發（runId: ${result.runId}）`, 'success');
       setShowConfirm(false);
       navigate(`/assignment/run-progress?runId=${result.runId}`);
     } catch (err: unknown) {
@@ -147,8 +147,8 @@ export function TriggerRunPage() {
         };
       };
       const status = e?.response?.status;
-      let msg = e?.response?.data?.message ?? '月跑觸發失敗';
-      if (status === 409) msg = '當月已有月跑執行中或已完成';
+      let msg = e?.response?.data?.message ?? '月名單分派觸發失敗';
+      if (status === 409) msg = '當月已有月名單分派執行中或已完成';
       else if (status === 503) msg = '此功能尚未開放';
       showToast(msg, 'error');
       setShowConfirm(false);
@@ -159,7 +159,7 @@ export function TriggerRunPage() {
 
   return (
     <AppLayout
-      title="觸發月跑"
+      title="觸發月名單分派"
       actions={
         ym ? (
           <div
@@ -191,13 +191,13 @@ export function TriggerRunPage() {
               <div className="flex-1">
                 <p className="font-semibold text-purple-900">處長角色為唯讀檢視</p>
                 <p className="text-xs text-purple-800 mt-0.5">
-                  您可查看本月月跑前置檢查與執行規劃，但無法觸發月跑（僅業務部長可執行）。
+                  您可查看本月月名單分派前置檢查與執行規劃，但無法觸發月名單分派（僅業務部長可執行）。
                 </p>
               </div>
             </div>
           )}
 
-          {/* 月跑執行中 banner */}
+          {/* 月名單分派執行中 banner */}
           {isBlockingRun && (
             <div
               data-testid="running-banner"
@@ -206,10 +206,10 @@ export function TriggerRunPage() {
               <AlertOctagon className="w-5 h-5 text-amber-700 mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="font-semibold text-amber-900">
-                  月跑執行中（無法重複觸發）
+                  月名單分派執行中（無法重複觸發）
                 </p>
                 <p className="text-xs text-amber-800 mt-1">
-                  本月已有月跑正在進行，需等其完成後才能再次觸發。
+                  本月已有月名單分派正在進行，需等其完成後才能再次觸發。
                 </p>
                 <button
                   type="button"
@@ -234,7 +234,7 @@ export function TriggerRunPage() {
                   </span>
                 </div>
                 <h2 className="text-xl font-bold text-gray-900">
-                  觸發 {ym.slice(0, 4)}-{ym.slice(4, 6)} 月跑
+                  觸發 {ym.slice(0, 4)}-{ym.slice(4, 6)} 月名單分派
                 </h2>
                 <p className="text-sm text-gray-600 mt-1">
                   啟動客戶名單分派計算。本次將處理{' '}
@@ -271,7 +271,7 @@ export function TriggerRunPage() {
                   >
                     <span className="inline-flex items-center gap-2 text-base font-semibold">
                       <PlayCircle className="w-5 h-5" />
-                      啟動月跑
+                      啟動月名單分派
                     </span>
                   </Button>
                 </div>
@@ -312,7 +312,7 @@ export function TriggerRunPage() {
       <ConfirmModal
         open={showConfirm}
         variant="warning"
-        title={`確認觸發 ${toHyphen(ym)} 月跑？`}
+        title={`確認觸發 ${toHyphen(ym)} 月名單分派？`}
         description={
           <div className="space-y-2 text-xs text-gray-600">
             <p>

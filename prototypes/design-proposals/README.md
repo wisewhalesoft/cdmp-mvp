@@ -251,8 +251,8 @@ Response:
 
 | # | 補強項目 | 對應的產品 gap |
 | --- | --- | --- |
-| 1 | **移除 ready 階段 per-card「觸發」按鈕** | 月跑為月份級操作（F078 原子性），per-list 觸發違反語意。Ready 卡片現只保留「檢視 + 退回」兩按鈕 |
-| 2 | **Ready 欄頂 CTA banner** | 引導使用者執行月跑。淺綠底配 `check-circle-2`，文案「N 份名單已準備完成」+ 主要按鈕「執行 YYYY-MM 月跑」（藍底白字）。`cnt.ready === 0` / `isHistoricalMonth` 時不渲染；`currentDemoState === 'locked'` 時改禁用狀態 |
+| 1 | **移除 ready 階段 per-card「觸發」按鈕** | 月名單分派為月份級操作（F078 原子性），per-list 觸發違反語意。Ready 卡片現只保留「檢視 + 退回」兩按鈕 |
+| 2 | **Ready 欄頂 CTA banner** | 引導使用者執行月名單分派。淺綠底配 `check-circle-2`，文案「N 份名單已準備完成」+ 主要按鈕「執行 YYYY-MM 月名單分派」（藍底白字）。`cnt.ready === 0` / `isHistoricalMonth` 時不渲染；`currentDemoState === 'locked'` 時改禁用狀態 |
 | 3 | **Canonical 化** | v2-B 內容 port 至 `prototypes/27-list-definition.html`；sidebar 從「v2 對照連結」改為完整 collapsible「客戶名單分派」section（與其他 assignment page 一致）；所有 `href="../X.html"` → `href="X.html"`；移除 header 上的「v2 設計提案 B」標籤 |
 
 #### v2.2 驗證方式
@@ -280,10 +280,10 @@ Response:
 
 #### A. Toolbar 清理 + Ready CTA secondary action（限 27 + design-proposals/B）
 
-- 27 toolbar 移除「Stage 0 試算」與「執行月跑」兩個按鈕（消除重複入口，月跑入口收歸 Ready CTA 唯一）
+- 27 toolbar 移除「Stage 0 試算」與「執行月名單分派」兩個按鈕（消除重複入口，月名單分派入口收歸 Ready CTA 唯一）
 - Toolbar 第一列剩：搜尋框 + 新增名單按鈕（director / admin only）
 - Ready CTA banner 從單按鈕變雙按鈕：
-  - 主按鈕「執行 YYYY-MM 月跑」(藍底白字，`bg-primary text-white`) — flex-1 撐滿
+  - 主按鈕「執行 YYYY-MM 月名單分派」(藍底白字，`bg-primary text-white`) — flex-1 撐滿
   - secondary「試算」(白底藍邊，`border-primary text-primary bg-white`，icon `calculator`) — shrink-0
   - 兩按鈕同列 `gap-2`
 - locked 狀態：兩按鈕都禁用（主按鈕灰底，secondary 灰邊）
@@ -297,7 +297,7 @@ Response:
 - `29c-approval-review.html` (簽核審閱)
 - `29-ratio-config.html` (deprecated 比例設定，連同上方 dashed divider 一併移除)
 
-最終 sidebar 「客戶名單分派」下方 **11 個 entries**：篩選欄位 / 計分卡設定 / 名單定義 / 準備完成摘要 / Stage 0 試算 / 觸發月跑 / 執行進度 / 結果摘要 / 執行歷史 / 快照詳情 / 結果比對
+最終 sidebar 「客戶名單分派」下方 **11 個 entries**：篩選欄位 / 計分卡設定 / 名單定義 / 準備完成摘要 / Stage 0 試算 / 觸發月名單分派 / 執行進度 / 結果摘要 / 執行歷史 / 快照詳情 / 結果比對
 
 同步更新 `assignmentPages` JS array 移除上述 4 個檔名引用，保留 `29d-ready-summary.html`。
 
@@ -329,7 +329,7 @@ Response:
 
 #### v2.3 落地對應 spec 變更建議
 
-- F078 spec：明確記載月跑入口只在「ready 階段 N>0」時於 27 頁面 Ready 欄頂出現（單一入口）
+- F078 spec：明確記載月名單分派入口只在「ready 階段 N>0」時於 27 頁面 Ready 欄頂出現（單一入口）
 - 29a/29b/29c spec：補上「儲存後跨頁 toast signal」協定（sessionStorage key `cdmp.pendingToast` 為共用 contract）
 - 27 spec：補上 init 時 consumePendingToast 流程
 

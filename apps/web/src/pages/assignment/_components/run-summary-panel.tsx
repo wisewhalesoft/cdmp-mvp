@@ -108,7 +108,7 @@ export function RunSummaryPanel({
           </div>
           {lists.length === 0 ? (
             <div className="p-6 text-xs text-center text-gray-400">
-              本月尚無可執行名單（無法觸發月跑）
+              本月尚無可執行名單（無法觸發月名單分派）
             </div>
           ) : (
             <ul className="divide-y divide-gray-200">

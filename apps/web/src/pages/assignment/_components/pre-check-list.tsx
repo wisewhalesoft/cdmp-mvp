@@ -2,7 +2,7 @@ import { CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import type { ReadinessResponse } from '@/api/assignment-run';
 
 /**
- * F061 6 項月跑前置條件 check
+ * F061 6 項月名單分派前置條件 check
  *
  * 對應 prototype 31-trigger-run.html L237-329
  *
@@ -11,7 +11,7 @@ import type { ReadinessResponse } from '@/api/assignment-run';
  *   2. dept-ratio-100：部門比例加總 = 100%（隱含於 stage=ready）
  *   3. personnel-ratio-100：人員比例加總 = 100%（隱含於 stage=ready）
  *   4. scoring-active：計分版本 active
- *   5. no-running-run：無 pending/running 月跑
+ *   5. no-running-run：無 pending/running 月名單分派
  *   6. etl-synced：4 個關鍵 ETL 均 completed
  *
  * 設計：純函式 `buildPreChecksFromReadiness` 將 readiness response 轉換成
@@ -103,19 +103,19 @@ export function buildPreChecksFromReadiness(
       : '尚無啟用計分版本，請至計分卡設定頁啟用',
   });
 
-  // 5. 無 running/pending 月跑
+  // 5. 無 running/pending 月名單分派
   const rs = readiness.monthlyRunStatus;
   const blockingRun = rs === 'pending' || rs === 'running';
   items.push({
     id: 'no-running-run',
-    label: '無進行中的月跑',
-    description: '同一月份僅能有一個進行中的月跑',
+    label: '無進行中的月名單分派',
+    description: '同一月份僅能有一個進行中的月名單分派',
     status: blockingRun ? 'fail' : 'pass',
     detail: blockingRun
-      ? '當月已有月跑進行中，請等待完成或先取消後再觸發'
+      ? '當月已有月名單分派進行中，請等待完成或先取消後再觸發'
       : rs === 'completed'
-        ? '當月已有完成的月跑紀錄（如需重跑請聯絡系統管理者）'
-        : '當月無進行中月跑',
+        ? '當月已有完成的月名單分派紀錄（如需重跑請聯絡系統管理者）'
+        : '當月無進行中月名單分派',
   });
 
   // 6. ETL 同步狀態
@@ -138,8 +138,8 @@ export function buildPreChecksFromReadiness(
   });
 
   // 7. 來源資料表有資料（rowCount>0）——與「ETL 同步」log 狀態不同：pipeline log 可能為 completed，
-  //    但目標表被清空 / 未載入（如 E2E 測試清表）→ 月跑會靜默算錯（ob_calendar 空→試算 0；
-  //    ob_arreturndf_min_cap 空→H 卡分數偏低）。空表視為 fail → 擋月跑觸發。
+  //    但目標表被清空 / 未載入（如 E2E 測試清表）→ 月名單分派會靜默算錯（ob_calendar 空→試算 0；
+  //    ob_arreturndf_min_cap 空→H 卡分數偏低）。空表視為 fail → 擋月名單分派觸發。
   const emptyTables = readiness.emptySourceTables ?? [];
   items.push({
     id: 'source-tables-loaded',

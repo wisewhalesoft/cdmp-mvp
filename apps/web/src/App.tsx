@@ -239,7 +239,7 @@ export function App() {
             </DirectorOrSectionChiefRoute>
           }
         />
-        {/* M04 觸發月跑：director only（共享分派作業月份） */}
+        {/* M04 觸發月名單分派：director only（共享分派作業月份） */}
         <Route
           path="/assignment/run"
           element={

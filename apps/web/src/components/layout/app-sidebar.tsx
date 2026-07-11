@@ -135,7 +135,7 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
             icon: ClipboardList,
             requires: 'director_or_section_chief',
           },
-          // M03d 準備完成摘要：director + section_chief（觀察可月跑前置）
+          // M03d 準備完成摘要：director + section_chief（觀察可月名單分派前置）
           // 對齊 prototype 29d-ready-summary.html L65（label「準備完成摘要」+ icon clipboard-check）
           {
             to: '/assignment/ready-summary',
@@ -150,10 +150,10 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
             icon: Calculator,
             requires: 'director_or_section_chief',
           },
-          // M04 觸發月跑：director only
+          // M04 觸發月名單分派：director only
           {
             to: '/assignment/run',
-            label: '觸發月跑',
+            label: '觸發月名單分派',
             icon: PlayCircle,
             requires: 'director_only',
           },

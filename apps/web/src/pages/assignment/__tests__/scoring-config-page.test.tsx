@@ -7,21 +7,21 @@
  *   - TS-F053-013：維度展開顯示分數詳細
  *   - 註：TS-F053-009 / 010（version-card metadata）已搬到 SelectedCardTypeBanner，
  *     對應測試已遷移至 card-type-list-tab.test.tsx 內 SelectedCardTypeBanner describe。
- *   - TS-F054-017：月跑鎖定時 DOM 按鈕 disabled
+ *   - TS-F054-017：月名單分派鎖定時 DOM 按鈕 disabled
  *   - TS-F054-019：新增維度 Modal 渲染與必填驗證
  *   - TS-F054-020：停用維度確認對話框
  *   - TS-F054-021：儲存成功 toast
  *   - TS-F054-022：422 區間重疊提示（透過 Modal error 顯示）
  *   - TS-F055-015：S5 2 級表格只 2 列
  *   - TS-F055-016：H 4 級表格 4 列
- *   - TS-F055-017：月跑鎖時儲存按鈕 disabled
+ *   - TS-F055-017：月名單分派鎖時儲存按鈕 disabled
  *   - TS-F055-019：重疊錯誤紅色邊框
  *   - TS-F055-020：儲存成功 toast
  *   - TS-F056-021：Fallback 紫色底色 + 標籤
  *   - TS-F056-022：標準對應無 Fallback 標籤
  *   - TS-F056-023：CARD_LEVEL 下拉依當前 cardType 動態
  *   - TS-F056-024：list_nm null 顯示「—」
- *   - TS-F056-025：月跑鎖時新增按鈕 disabled
+ *   - TS-F056-025：月名單分派鎖時新增按鈕 disabled
  *   - TS-F056-026：新增成功後列表更新 + toast
  *   - TS-F056-027：POST 422 Modal 不關閉
  *   - TS-F056-028：M3/HC/C3 過渡期 Fallback 標籤
@@ -355,7 +355,7 @@ describe('ScoringConfigPage — F054 寫入互動', () => {
   });
 });
 
-describe('ScoringConfigPage — F054 月跑鎖 UI', () => {
+describe('ScoringConfigPage — F054 月名單分派鎖 UI', () => {
   it('TS-F054-017：API 回 409 後新增按鈕 disabled', async () => {
     mockedCreateDimension.mockRejectedValue({
       response: { status: 409, data: { error: 'SCORING_VERSION_LOCKED' } },
@@ -599,7 +599,7 @@ describe.skip('ScoringConfigPage — F056 TIER 對應（v1.4，已由 Tab 5 v1.5
     expect(screen.getByTestId('tier-modal')).toBeInTheDocument();
   });
 
-  it('TS-F056-025：月跑鎖時新增 TIER 按鈕 disabled', async () => {
+  it('TS-F056-025：月名單分派鎖時新增 TIER 按鈕 disabled', async () => {
     mockedCreateTierMapping.mockRejectedValue({
       response: { status: 409, data: { error: 'SCORING_VERSION_LOCKED' } },
     });
@@ -963,7 +963,7 @@ describe('ScoringConfigPage — CardLevelsTab 單列儲存 / 刪除（v1.3 DELET
     });
     // AC-7 警告文字（spec：F056 引用 / Stage 2 分級 / 先移除對應 等關鍵字至少出現）
     const modal = screen.getByTestId('level-delete-confirm-modal');
-    expect(modal.textContent).toMatch(/月跑 Stage 2|TIER_LEVEL 對應|F056/);
+    expect(modal.textContent).toMatch(/月名單分派 Stage 2|TIER_LEVEL 對應|F056/);
 
     fireEvent.click(screen.getByTestId('level-delete-confirm'));
     await waitFor(() => {
@@ -1037,7 +1037,7 @@ describe('ScoringConfigPage — CardLevelsTab 新增等級（v1.5 POST）', () =
     ).toBeInTheDocument();
   });
 
-  it('TS-F055-N03：月跑鎖時 btn-add-level disabled', async () => {
+  it('TS-F055-N03：月名單分派鎖時 btn-add-level disabled', async () => {
     // 透過 updateCardLevels 422 SCORING_VERSION_LOCKED 觸發鎖 banner
     mockedUpdateCardLevels.mockRejectedValue({
       response: { status: 409, data: { error: 'SCORING_VERSION_LOCKED' } },
@@ -1185,7 +1185,7 @@ describe.skip('ScoringConfigPage — TierMappingTab 編輯 / 刪除（v1.4 DELET
     });
   });
 
-  it('TS-F056-E05：月跑鎖時所有 TIER 編輯 / 刪除 / 新增按鈕 disabled', async () => {
+  it('TS-F056-E05：月名單分派鎖時所有 TIER 編輯 / 刪除 / 新增按鈕 disabled', async () => {
     // 模擬已經是鎖定狀態：先觸發 createTierMapping 拋 409 設 isLocked
     mockedCreateTierMapping.mockRejectedValue({
       response: { status: 409, data: { error: 'SCORING_VERSION_LOCKED' } },
@@ -1464,7 +1464,7 @@ describe('ScoringConfigPage — F106 顯示 inactive 維度 + 啟用', () => {
     expect(mockedEnableDimension).not.toHaveBeenCalled();
   });
 
-  it('TS-F106-FE-07（AC-5）：月跑鎖時 啟用 / 停用 鈕一併 disabled', async () => {
+  it('TS-F106-FE-07（AC-5）：月名單分派鎖時 啟用 / 停用 鈕一併 disabled', async () => {
     mockedGetScoring.mockResolvedValue({
       version: DEFAULT_VERSION_WITH_VALUES,
       dimensions: DIMENSIONS_WITH_INACTIVE,

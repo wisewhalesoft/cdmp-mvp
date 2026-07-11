@@ -88,7 +88,7 @@
         <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
         <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
         <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
-        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派</a>
         <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
       </div>
     </nav>
@@ -317,7 +317,7 @@
           <div id="inactiveValueWarn" class="hidden rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
             <div class="flex-1">
-              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用，將被保留但月跑分派時不會匹配</p>
+              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用，將被保留但月名單分派時不會匹配</p>
               <p class="text-xs text-amber-800 mt-0.5" id="inactiveWarnDetail"></p>
               <p class="text-xs text-amber-700 mt-1">如需重新啟用請至 <a href="37-base-code.html?tab=options" class="underline font-medium">「篩選欄位 &gt; 可選值管理」</a>。</p>
             </div>
@@ -344,7 +344,7 @@
                 </span>
               </div>
               <p class="text-xs text-gray-500 mt-1 leading-relaxed">
-                以下為系統<span class="font-medium text-gray-600">依名單名稱自動套用</span>之特例排除規則，<span class="font-medium text-gray-600">無法在此編輯</span>，會影響本名單月跑實際分派的案件數。
+                以下為系統<span class="font-medium text-gray-600">依名單名稱自動套用</span>之特例排除規則，<span class="font-medium text-gray-600">無法在此編輯</span>，會影響本名單月名單分派實際分派的案件數。
                 調整上方「名單名稱」可能改變觸發的規則。
               </p>
             </div>
@@ -398,7 +398,7 @@
         </div>
       </div>
       <div class="p-5 space-y-3">
-        <p class="text-sm text-gray-700">停用後此名單將不會出現在月跑分派候選名單中，僅可於「已停用」分頁查詢。停用為軟刪除，紀錄保留供稽核。</p>
+        <p class="text-sm text-gray-700">停用後此名單將不會出現在月名單分派候選名單中，僅可於「已停用」分頁查詢。停用為軟刪除，紀錄保留供稽核。</p>
       </div>
       <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">
         <button onclick="closeDeactivateModal()" class="px-4 py-2 text-sm text-gray-600 hover:bg-white rounded-md border border-border">取消</button>
@@ -680,7 +680,7 @@
     // ============================================================
     // F095：系統特例排除規則 — 讀時推導（對齊 spec §5.2 偽碼 / AD-E07-26 §26.5）
     // 純前端 mock；落地後由後端 deriveAppliedSpecialRules(list_nm) 回傳 appliedSpecialRules[]，
-    // 與 F091 月跑 applyListNmSpecialDeletes 共用同一 trigger pure utility（保證 UI 與實際一致）。
+    // 與 F091 月名單分派 applyListNmSpecialDeletes 共用同一 trigger pure utility（保證 UI 與實際一致）。
     // ============================================================
     function deriveAppliedSpecialRules(listNm) {
       const nm = listNm || '';
@@ -1078,7 +1078,7 @@
       const box = document.getElementById('inactiveValueWarn');
       if (warned.length === 0) { box.classList.add('hidden'); return; }
       box.classList.remove('hidden');
-      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將被保留但月跑分派時不會匹配`;
+      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將被保留但月名單分派時不會匹配`;
       document.getElementById('inactiveWarnDetail').textContent = warned.join('、');
     }
 

@@ -19,7 +19,7 @@ import { MonthPicker } from '@/components/e07/MonthPicker';
 import { listRuns, type RunListItem, type RunStatus } from '@/api/assignment-run';
 
 /**
- * F065 — 月跑歷史頁
+ * F065 — 月名單分派歷史頁
  *
  * 對應 prototype: /prototypes/34-run-history.html
  *
@@ -116,7 +116,7 @@ export function RunHistoryPage() {
       setRuns(data.runs ?? []);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
-      setError(e?.response?.data?.message ?? '載入月跑歷史失敗');
+      setError(e?.response?.data?.message ?? '載入月名單分派歷史失敗');
     } finally {
       setLoading(false);
     }
@@ -204,7 +204,7 @@ export function RunHistoryPage() {
       <main className="flex-1 p-6 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <p className="text-sm text-gray-500">
-            月份 <span className="font-medium text-primary">{toYYYYMM(toYYYYMMRaw(ym))}</span> 之所有月跑。可選 2 個進行比對。
+            月份 <span className="font-medium text-primary">{toYYYYMM(toYYYYMMRaw(ym))}</span> 之所有月名單分派。可選 2 個進行比對。
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -310,7 +310,7 @@ export function RunHistoryPage() {
               data-testid="history-empty"
             >
               <History className="w-8 h-8 text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500">本月尚無月跑紀錄</p>
+              <p className="text-sm text-gray-500">本月尚無月名單分派紀錄</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -326,7 +326,7 @@ export function RunHistoryPage() {
                         data-testid="checkbox-select-all"
                         checked={selected.size > 0}
                         onChange={handleSelectAll}
-                        title="全選 / 全清（最多 2 筆已完成月跑）"
+                        title="全選 / 全清（最多 2 筆已完成月名單分派）"
                         className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/20"
                       />
                     </th>

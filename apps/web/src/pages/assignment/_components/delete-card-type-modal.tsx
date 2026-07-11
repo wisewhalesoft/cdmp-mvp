@@ -208,7 +208,7 @@ export function DeleteCardTypeModal({
                 </p>
                 <ul className="text-xs text-gray-600 space-y-0.5 ml-5 list-disc">
                   <li>
-                    <code>assignment_run_snapshot</code> — 歷史月跑 payload 完整保留
+                    <code>assignment_run_snapshot</code> — 歷史月名單分派 payload 完整保留
                   </li>
                   <li>
                     <code>ob_pool_data_list</code> — 歷史分派結果不變
@@ -244,7 +244,7 @@ export function DeleteCardTypeModal({
                       <code>{target.cardType}</code>
                     </p>
                     <p className="text-gray-700 mt-1">
-                      停用後這些名單定義的月跑將因無計分設定而無法執行，請確認已妥善處理相關名單定義後再停用
+                      停用後這些名單定義的月名單分派將因無計分設定而無法執行，請確認已妥善處理相關名單定義後再停用
                     </p>
                     <a
                       href="#/assignment/list-definition"

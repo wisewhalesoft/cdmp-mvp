@@ -24,7 +24,7 @@ import { SnapshotArrayView } from './_components/snapshot-array-view';
 import { RunPageBreadcrumb } from './_components/run-page-breadcrumb';
 
 /**
- * F066 — 月跑快照詳情頁
+ * F066 — 月名單分派快照詳情頁
  *
  * 對應 prototype: /prototypes/35-snapshot-detail.html
  *
@@ -43,17 +43,17 @@ const TAB_CONFIG: Record<
   config: {
     label: '設定快照',
     icon: FileText,
-    description: '月跑當下使用之 list_definition / 部門比例 / 個別比例 / 計分卡版本快照',
+    description: '月名單分派當下使用之 list_definition / 部門比例 / 個別比例 / 計分卡版本快照',
   },
   input_list: {
     label: '輸入名單',
     icon: ListChecks,
-    description: '月跑前篩選出之候選 OBPOOLDATA 客戶清單（Stage 1 候選快照）',
+    description: '月名單分派前篩選出之候選 OBPOOLDATA 客戶清單（Stage 1 候選快照）',
   },
   result: {
     label: '分派結果',
     icon: BarChart3,
-    description: '月跑完成後之最終分派結果（含 customer_id → assignee 映射）',
+    description: '月名單分派完成後之最終分派結果（含 customer_id → assignee 映射）',
   },
 };
 

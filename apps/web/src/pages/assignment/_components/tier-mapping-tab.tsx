@@ -38,7 +38,7 @@ import { CreateTierMappingModal } from './create-tier-mapping-modal';
  *   - 操作：新增（開 CreateTierMappingModal）/ 刪除（含 fallback NULL）
  *
  * Props：
- *   - isLocked：月跑鎖（disabled 寫入按鈕；由父頁面提供）
+ *   - isLocked：月名單分派鎖（disabled 寫入按鈕；由父頁面提供）
  *   - availableCardLevels：當前 cardType 的 CARD_LEVEL 等級清單（供 Modal CARD_LEVEL 下拉）
  *     若未提供，預設 ['A','B','C','D']（Iter 5b 暫定 hardcoded，Iter 6 可改 useQuery）
  */
@@ -283,7 +283,7 @@ export function TierMappingTabV15({
       <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
         <p className="text-xs text-gray-500">
           <Info size={14} className="inline mr-1 text-gray-400" />
-          月跑 Stage 2 完成 CARD_LEVEL 計算後，依此表 join 寫入
+          月名單分派 Stage 2 完成 CARD_LEVEL 計算後，依此表 join 寫入
           ob_pool_data_list.tier_level
         </p>
       </div>

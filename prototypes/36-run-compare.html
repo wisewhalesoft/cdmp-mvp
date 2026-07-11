@@ -85,7 +85,7 @@
         <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
       </a>
       <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派
       </a>
       <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="history" class="w-4 h-4"></i>執行歷史
@@ -153,7 +153,7 @@
       <div class="bg-white rounded-lg border border-border shadow-sm">
         <div class="px-5 py-4 border-b border-border flex items-center gap-2">
           <i data-lucide="git-compare" class="w-4 h-4 text-primary"></i>
-          <h3 class="text-sm font-semibold text-gray-800">選擇要比對的兩次月跑</h3>
+          <h3 class="text-sm font-semibold text-gray-800">選擇要比對的兩次月名單分派</h3>
         </div>
         <div class="grid grid-cols-2 gap-0 divide-x divide-border">
           <!-- Run A (Base) -->
@@ -163,9 +163,9 @@
               <span class="text-sm font-semibold text-primary">Base Run</span>
             </div>
             <select id="selA" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-              <option value="7a1b2c3d-4e5f">7a1b2c3d-4e5f — 2026-04 月跑（9,120 筆）</option>
-              <option value="ad4e5f6a-7b8c">ad4e5f6a-7b8c — 2026-03 月跑（8,780 筆）</option>
-              <option value="cf6a7b8c-9d0e">cf6a7b8c-9d0e — 2026-02 月跑（8,420 筆）</option>
+              <option value="7a1b2c3d-4e5f">7a1b2c3d-4e5f — 2026-04 月名單分派（9,120 筆）</option>
+              <option value="ad4e5f6a-7b8c">ad4e5f6a-7b8c — 2026-03 月名單分派（8,780 筆）</option>
+              <option value="cf6a7b8c-9d0e">cf6a7b8c-9d0e — 2026-02 月名單分派（8,420 筆）</option>
             </select>
             <div class="mt-3 grid grid-cols-3 gap-2 text-xs">
               <div><span class="text-gray-500">分派作業月份</span><div class="font-mono font-semibold text-gray-700">202604</div></div>
@@ -180,9 +180,9 @@
               <span class="text-sm font-semibold text-success">Compare Run</span>
             </div>
             <select id="selB" class="w-full px-3 py-2 text-sm border border-border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-              <option value="550e8400-e29b">550e8400-e29b — 2026-05 月跑（9,500 筆）</option>
-              <option value="7a1b2c3d-4e5f">7a1b2c3d-4e5f — 2026-04 月跑（9,120 筆）</option>
-              <option value="ad4e5f6a-7b8c">ad4e5f6a-7b8c — 2026-03 月跑（8,780 筆）</option>
+              <option value="550e8400-e29b">550e8400-e29b — 2026-05 月名單分派（9,500 筆）</option>
+              <option value="7a1b2c3d-4e5f">7a1b2c3d-4e5f — 2026-04 月名單分派（9,120 筆）</option>
+              <option value="ad4e5f6a-7b8c">ad4e5f6a-7b8c — 2026-03 月名單分派（8,780 筆）</option>
             </select>
             <div class="mt-3 grid grid-cols-3 gap-2 text-xs">
               <div><span class="text-gray-500">分派作業月份</span><div class="font-mono font-semibold text-gray-700">202605</div></div>
@@ -194,7 +194,7 @@
         <div class="px-5 py-3 border-t border-border bg-gray-50/40 flex items-center justify-between">
           <div class="text-xs text-gray-500 inline-flex items-center gap-1">
             <i data-lucide="info" class="w-3.5 h-3.5"></i>
-            僅 status = completed 的月跑可比對；同月比對通常用於重跑調參情境
+            僅 status = completed 的月名單分派可比對；同月比對通常用於重跑調參情境
           </div>
           <div class="flex items-center gap-2">
             <button class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-white transition">
@@ -222,7 +222,7 @@
       <div id="identicalBanner" class="hidden flex items-start gap-3 p-4 bg-green-50 border border-green-200 rounded-lg">
         <i data-lucide="check-circle" class="w-5 h-5 text-success mt-0.5 shrink-0"></i>
         <div class="flex-1">
-          <p class="font-semibold text-success">兩次月跑配對 100% 相同 — 分派演算法 deterministic 驗證通過</p>
+          <p class="font-semibold text-success">兩次月名單分派配對 100% 相同 — 分派演算法 deterministic 驗證通過</p>
           <p class="text-xs text-gray-600 mt-1">人員配對不一致率 0.00%（NFR-005 通過）。此結果代表演算法在相同輸入與設定下能產生穩定可重現的結果。</p>
         </div>
       </div>
@@ -595,7 +595,7 @@
       if (data.mismatchList.length === 0) {
         tbody.innerHTML = `<tr><td colspan="6" class="px-3 py-6 text-center text-success text-sm">
           <i data-lucide="check-circle" class="inline-block w-4 h-4 mr-1"></i>
-          兩次月跑配對 100% 相同 — 演算法 deterministic 驗證通過
+          兩次月名單分派配對 100% 相同 — 演算法 deterministic 驗證通過
         </td></tr>`;
       } else {
         tbody.innerHTML = data.mismatchList.map(m => `

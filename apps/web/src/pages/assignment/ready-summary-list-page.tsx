@@ -37,7 +37,7 @@ import { StageBreadcrumb } from './_components/stage-breadcrumb';
  *
  * 主要區塊：
  *   - MonthPicker
- *   - 全部 ready 綠 banner + 執行月跑 CTA / 部分 ready 橙 banner / 無 ready 空狀態
+ *   - 全部 ready 綠 banner + 執行月名單分派 CTA / 部分 ready 橙 banner / 無 ready 空狀態
  *   - section_chief 提示
  *   - 已 ready 名單卡片清單（依 createdAt DESC，點卡跳轉詳情）
  */
@@ -166,10 +166,10 @@ export function ReadySummaryListPage() {
                     </div>
                     <div>
                       <h2 className="text-lg font-semibold text-gray-800">
-                        本月所有名單均已準備完成 · 可執行月跑
+                        本月所有名單均已準備完成 · 可執行月名單分派
                       </h2>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {ym} 共 <strong>{readyLists.length}</strong> 筆名單已準備完成，待觸發月跑
+                        {ym} 共 <strong>{readyLists.length}</strong> 筆名單已準備完成，待觸發月名單分派
                       </p>
                     </div>
                   </div>
@@ -182,7 +182,7 @@ export function ReadySummaryListPage() {
                     >
                       <span className="inline-flex items-center gap-1.5">
                         <PlayCircle className="w-4 h-4" />
-                        執行月跑
+                        執行月名單分派
                       </span>
                     </Button>
                   </div>
@@ -199,7 +199,7 @@ export function ReadySummaryListPage() {
                   <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
                   <div className="flex-1 text-sm text-amber-900">
                     <p className="font-semibold">
-                      本月仍有 <span>{notReadyLists.length}</span> 筆名單未進入準備完成階段，無法執行月跑
+                      本月仍有 <span>{notReadyLists.length}</span> 筆名單未進入準備完成階段，無法執行月名單分派
                     </p>
                     <p className="text-xs text-amber-800 mt-1">
                       尚未完成名單：
@@ -219,7 +219,7 @@ export function ReadySummaryListPage() {
                   >
                     <span className="inline-flex items-center gap-1.5">
                       <PlayCircle className="w-4 h-4" />
-                      執行月跑
+                      執行月名單分派
                     </span>
                   </Button>
                 </div>
@@ -238,7 +238,7 @@ export function ReadySummaryListPage() {
                   本月尚無名單
                 </h3>
                 <p className="text-sm text-gray-500 max-w-md">
-                  請先至「名單定義」建立名單，並完成五階段流程後再回到本頁執行月跑。
+                  請先至「名單定義」建立名單，並完成五階段流程後再回到本頁執行月名單分派。
                 </p>
               </section>
             )}
@@ -266,7 +266,7 @@ export function ReadySummaryListPage() {
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <PlayCircle className="w-4 h-4" />
-                    執行月跑
+                    執行月名單分派
                   </span>
                 </Button>
               </section>

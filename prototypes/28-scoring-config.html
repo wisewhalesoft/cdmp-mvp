@@ -88,7 +88,7 @@
         <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
       </a>
       <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派
       </a>
       <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="history" class="w-4 h-4"></i>執行歷史
@@ -147,7 +147,7 @@
       <button onclick="showDemoState('422-duplicate')" id="demo-422-duplicate" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">422 重複代碼</button>
       <button onclick="showDemoState('422-mutex')" id="demo-422-mutex" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">422 Standard/Fallback 互斥</button>
       <button onclick="showDemoState('legacy-tier-values')" id="demo-legacy-tier-values" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">殘留舊值</button>
-      <button onclick="showDemoState('month-run-lock')" id="demo-month-run-lock" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">月跑鎖</button>
+      <button onclick="showDemoState('month-run-lock')" id="demo-month-run-lock" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">月名單分派鎖</button>
     </div>
 
     <div class="p-6">
@@ -201,12 +201,12 @@
         </div>
       </div>
 
-      <!-- ===== 月跑鎖警告條（僅 month-run-lock state） ===== -->
+      <!-- ===== 月名單分派鎖警告條（僅 month-run-lock state） ===== -->
       <div id="monthLockBanner" class="hidden mb-4 rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm text-amber-800">
         <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
         <div>
           <p class="font-semibold">分派執行中（assignment_run.status = running）</p>
-          <p class="text-xs mt-0.5">所有寫入功能（新增 / 編輯 / 停用）已暫時鎖定，鎖定將於月跑完成後自動解除</p>
+          <p class="text-xs mt-0.5">所有寫入功能（新增 / 編輯 / 停用）已暫時鎖定，鎖定將於月名單分派完成後自動解除</p>
         </div>
       </div>
 
@@ -471,7 +471,7 @@
             </table>
           </div>
           <div class="px-4 py-3 border-t border-border flex items-center justify-between">
-            <p class="text-xs text-gray-500"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-gray-400"></i>月跑 Stage 2 完成 CARD_LEVEL 計算後，依此表 join 寫入 ob_pool_data_list.tier_level</p>
+            <p class="text-xs text-gray-500"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 text-gray-400"></i>月名單分派 Stage 2 完成 CARD_LEVEL 計算後，依此表 join 寫入 ob_pool_data_list.tier_level</p>
           </div>
         </div>
       </div>
@@ -636,7 +636,7 @@
                 不受影響（保留）
               </p>
               <ul class="text-xs text-gray-600 space-y-0.5 ml-5 list-disc">
-                <li><code>assignment_run_snapshot</code> — 歷史月跑 payload 完整保留</li>
+                <li><code>assignment_run_snapshot</code> — 歷史月名單分派 payload 完整保留</li>
                 <li><code>ob_pool_data_list</code> — 歷史分派結果不變</li>
                 <li><code>ob_list_definition</code> — 名單定義紀錄保留（由業務主管自行處理）</li>
               </ul>
@@ -652,7 +652,7 @@
                 <p class="text-gray-700 mt-1">
                   該計分卡仍有 <span class="font-bold text-amber-900" id="delListDefCount">3</span> 筆生效中的名單定義（<code>ob_list_definition</code>）引用 CARD_TYPE = <code id="delListDefCardType">H</code>
                 </p>
-                <p class="text-gray-700 mt-1">停用後這些名單定義的月跑將因無計分設定而無法執行，請確認已妥善處理相關名單定義後再停用</p>
+                <p class="text-gray-700 mt-1">停用後這些名單定義的月名單分派將因無計分設定而無法執行，請確認已妥善處理相關名單定義後再停用</p>
                 <a href="27-list-definition.html" class="inline-flex items-center gap-1 mt-2 text-primary hover:underline font-medium">
                   查看相關名單定義
                   <i data-lucide="arrow-right" class="w-3 h-3"></i>
@@ -1199,7 +1199,7 @@
       const ct = selectedCardType ? getCardType(selectedCardType) : null;
 
       const isAmber = banner.classList.contains('bg-amber-50/60');
-      // 月跑鎖時 divide 線顏色換 amber-200，否則 border
+      // 月名單分派鎖時 divide 線顏色換 amber-200，否則 border
       const dividePalette = isAmber
         ? 'grid grid-cols-1 xl:grid-cols-12 divide-y xl:divide-y-0 xl:divide-x divide-amber-200'
         : 'grid grid-cols-1 xl:grid-cols-12 divide-y xl:divide-y-0 xl:divide-x divide-border';
@@ -1285,7 +1285,7 @@
       const affectedIcon = listDefsAffected > 0
         ? `<i data-lucide="alert-triangle" class="w-3 h-3 text-amber-600 mr-0.5 inline-block align-text-bottom"></i>`
         : '';
-      // 月跑鎖時 KPI hover 改為 amber-100
+      // 月名單分派鎖時 KPI hover 改為 amber-100
       const kpiBtnTheme = isAmber ? kpiBtnBase.replace('hover:bg-gray-100', 'hover:bg-amber-100').replace('focus:bg-gray-100', 'focus:bg-amber-100') : kpiBtnBase;
       stats.innerHTML = `
         <button type="button" onclick="switchTab('dim')" class="${kpiBtnTheme}">
@@ -2040,7 +2040,7 @@
     function submitAddLevel() {
       const ct = selectedCardType;
       if (!ct) return;
-      // 月跑鎖（AC-8e / BR-3）
+      // 月名單分派鎖（AC-8e / BR-3）
       if (monthRunLocked) {
         showLevelApiError('分派執行中，無法新增 CARD_LEVEL 等級（409 SCORING_VERSION_LOCKED）');
         return;
@@ -2385,7 +2385,7 @@
         monthRunLocked = true;
         selectedCardType = 'H';
         document.getElementById('monthLockBanner').classList.remove('hidden');
-        // 月跑鎖主題：amber-50 底 + amber-200 邊框，updateBanner() 偵測此 className 後會把 tile 切成 amber-500
+        // 月名單分派鎖主題：amber-50 底 + amber-200 邊框，updateBanner() 偵測此 className 後會把 tile 切成 amber-500
         banner.className = 'mb-4 rounded-xl bg-amber-50/60 border border-amber-200 shadow-sm';
       }
 

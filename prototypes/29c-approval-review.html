@@ -79,7 +79,7 @@
         <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
         <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
         <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
-        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派</a>
         <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
       </div>
     </nav>
@@ -184,7 +184,7 @@
         </div>
         <div class="flex items-center gap-3 mt-4 p-3 bg-amber-50/60 border border-amber-200 rounded-lg">
           <i data-lucide="clock" class="w-4 h-4 text-warning shrink-0"></i>
-          <p class="text-xs text-amber-900">本名單已等候審閱 <strong>2 天 6 小時</strong>；月跑通常於每月 20 日進行，請於 <strong>2026-05-18 18:00</strong> 前完成審閱以避免影響月跑排程。</p>
+          <p class="text-xs text-amber-900">本名單已等候審閱 <strong>2 天 6 小時</strong>；月名單分派通常於每月 20 日進行，請於 <strong>2026-05-18 18:00</strong> 前完成審閱以避免影響月名單分派排程。</p>
         </div>
       </section>
 
@@ -337,7 +337,7 @@
             <p class="font-semibold">核准後將觸發：</p>
             <ul class="list-disc pl-4 mt-1 space-y-0.5 text-green-800">
               <li>名單進入 <strong>準備完成（ready）</strong> 階段</li>
-              <li>當月 ready 名單均完成後，可於「觸發月跑」執行 Stage 1~3 計算</li>
+              <li>當月 ready 名單均完成後，可於「觸發月名單分派」執行 Stage 1~3 計算</li>
               <li>個別業務比例與部門比例維持鎖定狀態</li>
               <li>assignment_approval 寫入 1 筆 approve 紀錄</li>
             </ul>
@@ -345,7 +345,7 @@
         </div>
 
         <div class="rounded-lg bg-gray-50 border border-border p-3 text-xs text-gray-600">
-          <p class="inline-flex items-center gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 text-primary"></i>如月跑前發現問題，部長 / Admin 可於「準備完成」階段執行 <strong>Rollback ready → approval</strong>（F089）重新審閱。</p>
+          <p class="inline-flex items-center gap-1.5"><i data-lucide="info" class="w-3.5 h-3.5 text-primary"></i>如月名單分派前發現問題，部長 / Admin 可於「準備完成」階段執行 <strong>Rollback ready → approval</strong>（F089）重新審閱。</p>
         </div>
       </div>
       <div class="px-5 py-3 border-t border-border flex items-center justify-end gap-2 bg-gray-50/50">

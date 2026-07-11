@@ -837,7 +837,7 @@ export function Stage0EstimatePage() {
         <div className="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
           <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
           <p>
-            此試算不觸發正式分派，僅供工作量評估參考；實際分派件數以月跑執行結果為準。
+            此試算不觸發正式分派，僅供工作量評估參考；實際分派件數以月名單分派執行結果為準。
           </p>
         </div>
       </main>

@@ -62,7 +62,7 @@
         <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
         <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
         <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
-        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派</a>
         <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
       </div>
     </nav>
@@ -453,15 +453,15 @@
       { columnName: 'birth_date',  displayName: '客戶生日',         fieldType: 'date',        isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data',  columnDescription: 'OBPOOLDATA.BIRTH_DATE — 客戶出生日期（DATE）。Phase 3a 由 system-architect 與業務確認 OBPOOLDATA 實際是否含此欄位；此 prototype 僅為 UI demo 完整性（拍板 UI-Q5）' },
       { columnName: 'payt_term',   displayName: '還款期別',         fieldType: 'numeric',     isActive: false, isSystemFixed: false, dataSource: 'ob_pool_data',  columnDescription: '已停用：v2.0 起改由 month_cnt 取代' },
       // ── F109 / US-172：客戶資料（customer_core）來源篩選欄位（共 8 欄，is_system_fixed = false）──
-      // 關聯鍵 ob_pool_data.custo_no = customer_core.source_customer_no；月跑 Stage 1 以 LEFT JOIN 串接，NULL 視為排除（AC-8）
+      // 關聯鍵 ob_pool_data.custo_no = customer_core.source_customer_no；月名單分派 Stage 1 以 LEFT JOIN 串接，NULL 視為排除（AC-8）
       { columnName: 'gender',              displayName: '性別',     fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core',  columnDescription: 'customer_core.gender — 客戶性別（code→label：1 男 / 2 女 / 3 法人）。F109 / US-172 客戶資料來源篩選欄位。' },
-      { columnName: 'date_of_birth',       displayName: '年齡',     fieldType: 'numeric',     isActive: true,  isSystemFixed: false, dataSource: 'customer_core',  columnDescription: 'customer_core.date_of_birth — 客戶出生日期；月跑 Stage 1 以作業月份首日為基準即時計算實足年齡（OQ-172-01 已裁示），以 BETWEEN 最小–最大年齡過濾。F109 / US-172。' },
+      { columnName: 'date_of_birth',       displayName: '年齡',     fieldType: 'numeric',     isActive: true,  isSystemFixed: false, dataSource: 'customer_core',  columnDescription: 'customer_core.date_of_birth — 客戶出生日期；月名單分派 Stage 1 以作業月份首日為基準即時計算實足年齡（OQ-172-01 已裁示），以 BETWEEN 最小–最大年齡過濾。F109 / US-172。' },
       { columnName: 'occupation_desc',     displayName: '職業別',   fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core',  columnDescription: 'customer_core.occupation_desc — 職業別（已中文，共 55 種）。F109 / US-172。' },
       { columnName: 'education_desc',      displayName: '教育程度', fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core',  columnDescription: 'customer_core.education_desc — 教育程度（已中文，共 8 種）。F109 / US-172。' },
       { columnName: 'marital_status_desc', displayName: '婚姻狀況', fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core',  columnDescription: 'customer_core.marital_status_desc — 婚姻狀況（已中文，共 5 種）。F109 / US-172。' },
       { columnName: 'customer_type_desc',  displayName: '身分別',   fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core',  columnDescription: 'customer_core.customer_type_desc — 身分別（個人 / 法人 / 外籍人士 / 虛擬車商編號，共 4 種）。F109 / US-172。' },
       { columnName: 'monthly_income_desc', displayName: '收入區間', fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core',  columnDescription: 'customer_core.monthly_income_desc — 月收入區間（已級距，共 9 種）。F109 / US-172。' },
-      { columnName: 'cpost_city',          displayName: '居住城市', fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core',  columnDescription: 'customer_core.cpost_city — 居住城市；月跑取左 3 字縣市級（22 縣市，臺字形，OQ-172-02 已裁示）過濾。F109 / US-172。' }
+      { columnName: 'cpost_city',          displayName: '居住城市', fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'customer_core',  columnDescription: 'customer_core.cpost_city — 居住城市；月名單分派取左 3 字縣市級（22 縣市，臺字形，OQ-172-02 已裁示）過濾。F109 / US-172。' }
     ];
 
     // F076 categorical 可選值（對齊 spec § seed）

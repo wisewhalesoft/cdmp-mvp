@@ -95,7 +95,7 @@ export function RunSelector({
         className="bg-white rounded-lg border border-gray-200 p-6 text-sm text-gray-500"
       >
         <Info className="w-4 h-4 inline mr-1 text-gray-400" />
-        無可用的 completed 月跑紀錄；請先完成至少 2 次月跑後方可比對。
+        無可用的 completed 月名單分派紀錄；請先完成至少 2 次月名單分派後方可比對。
       </div>
     );
   }
@@ -117,7 +117,7 @@ export function RunSelector({
       <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-2">
         <GitCompare className="w-4 h-4 text-primary" />
         <h3 className="text-sm font-semibold text-gray-800">
-          選擇要比對的兩次月跑
+          選擇要比對的兩次月名單分派
         </h3>
       </div>
       <div className="grid grid-cols-2 gap-0 divide-x divide-gray-200">
@@ -174,7 +174,7 @@ export function RunSelector({
       <div className="px-5 py-3 border-t border-gray-200 bg-gray-50/40 flex items-center justify-between">
         <div className="text-xs text-gray-500 inline-flex items-center gap-1">
           <Info className="w-3.5 h-3.5" />
-          僅 status = completed 的月跑可比對；同月比對常用於重跑調參驗證
+          僅 status = completed 的月名單分派可比對；同月比對常用於重跑調參驗證
         </div>
         <div className="flex items-center gap-2">
           <button

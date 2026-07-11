@@ -404,7 +404,7 @@ describe('ListCreateDraftPage v2.1 (Phase 5d 波 8)', () => {
   });
 
   // ─────────────────────────────────────────
-  // lc.test#10 — INACTIVE option → 琥珀 warning + 「N 個可選值已停用，將被保留但月跑分派時不會匹配」
+  // lc.test#10 — INACTIVE option → 琥珀 warning + 「N 個可選值已停用，將被保留但月名單分派時不會匹配」
   //   對齊 prototype 27a L763
   // ─────────────────────────────────────────
   it('lc.test#10: 含 INACTIVE option → 顯示琥珀 banner（「N 個可選值已停用」訊息）', async () => {
@@ -427,7 +427,7 @@ describe('ListCreateDraftPage v2.1 (Phase 5d 波 8)', () => {
       expect(screen.getByTestId('inactive-warning-banner')).toBeInTheDocument();
     });
     const banner = screen.getByTestId('inactive-warning-banner');
-    expect(banner.textContent).toContain('1 個可選值已停用，將被保留但月跑分派時不會匹配');
+    expect(banner.textContent).toContain('1 個可選值已停用，將被保留但月名單分派時不會匹配');
   });
 
   // ─────────────────────────────────────────

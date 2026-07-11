@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { RunPageBreadcrumb } from '../run-page-breadcrumb';
 
 /**
- * 月跑下游頁共用麵包屑：執行歷史 › {leaf}
+ * 月名單分派下游頁共用麵包屑：執行歷史 › {leaf}
  *
  * 取代各頁 header 原本的「返回箭頭 + 標題 + 長版 runId code」。
  * 對應 prototype 32 / 33 / 35 / 36 header（leaf 標題與 prototype 一致）。

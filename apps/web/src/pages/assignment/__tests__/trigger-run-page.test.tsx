@@ -11,7 +11,7 @@ import type { ReadinessResponse } from '@/api/assignment-run';
 import type { ListListsResponse } from '@/api/assignment-list';
 
 /**
- * F061 觸發月跑頁全面改造（Phase 2）
+ * F061 觸發月名單分派頁全面改造（Phase 2）
  *
  * 對應 prototype 31-trigger-run.html
  */
@@ -140,14 +140,14 @@ describe('TriggerRunPage (Phase 2 改造)', () => {
     expect(items.length).toBe(7);
   });
 
-  it('全部 pre-check pass 時「啟動月跑」按鈕 enabled', async () => {
+  it('全部 pre-check pass 時「啟動月名單分派」按鈕 enabled', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('btn-start-run')).not.toBeDisabled();
     });
   });
 
-  it('有 pre-check fail 時「啟動月跑」按鈕 disabled', async () => {
+  it('有 pre-check fail 時「啟動月名單分派」按鈕 disabled', async () => {
     mockedGetReadiness.mockResolvedValue(
       makeReadiness({ scoringActive: false }),
     );
@@ -184,7 +184,7 @@ describe('TriggerRunPage (Phase 2 改造)', () => {
     });
   });
 
-  it('section_chief 視角隱藏「啟動月跑」按鈕', async () => {
+  it('section_chief 視角隱藏「啟動月名單分派」按鈕', async () => {
     mockedGetBusinessRole.mockReturnValue('section_chief');
     renderPage();
     await waitFor(() => {
@@ -193,7 +193,7 @@ describe('TriggerRunPage (Phase 2 改造)', () => {
     expect(screen.queryByTestId('btn-start-run')).not.toBeInTheDocument();
   });
 
-  it('點「啟動月跑」開啟 confirm modal', async () => {
+  it('點「啟動月名單分派」開啟 confirm modal', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('btn-start-run')).not.toBeDisabled();

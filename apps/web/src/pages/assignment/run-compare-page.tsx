@@ -35,7 +35,7 @@ const NFR005_THRESHOLD = 0.03;
 const PREVIEW_LIMIT = 50;
 
 /**
- * F067 — 兩個月跑比對頁
+ * F067 — 兩個月名單分派比對頁
  *
  * 對應 prototype: /prototypes/36-run-compare.html（6 區塊）
  *
@@ -202,7 +202,7 @@ export function RunComparePage() {
             <CheckCircle2 className="w-5 h-5 text-green-700 mt-0.5 shrink-0" />
             <div className="flex-1">
               <p className="font-semibold text-green-700">
-                兩次月跑配對 100% 相同 — 分派演算法 deterministic 驗證通過
+                兩次月名單分派配對 100% 相同 — 分派演算法 deterministic 驗證通過
               </p>
               <p className="text-xs text-gray-600 mt-1">
                 人員配對不一致率 0.00%（NFR-005 通過）。
@@ -452,7 +452,7 @@ function PersonnelMismatchSection({
                     colSpan={4}
                     className="px-3 py-6 text-center text-green-700 text-sm"
                   >
-                    兩次月跑配對 100% 相同 — 演算法 deterministic 驗證通過
+                    兩次月名單分派配對 100% 相同 — 演算法 deterministic 驗證通過
                   </td>
                 </tr>
               ) : (
@@ -694,7 +694,7 @@ function ConfigDiffSection({
           data-testid="config-diff-empty"
           className="px-5 py-6 text-sm text-gray-400 text-center"
         >
-          兩次月跑設定完全相同 — 無設定差異
+          兩次月名單分派設定完全相同 — 無設定差異
         </p>
       ) : (
         <div className="divide-y divide-gray-100">

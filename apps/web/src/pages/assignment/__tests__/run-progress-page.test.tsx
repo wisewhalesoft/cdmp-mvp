@@ -188,7 +188,7 @@ describe('RunProgressPage (F062 polling)', () => {
       });
     });
 
-    it('running 狀態 director 顯示「取消月跑」按鈕', async () => {
+    it('running 狀態 director 顯示「取消月名單分派」按鈕', async () => {
       mockedGetRun.mockResolvedValue({
         runId: 'R001',
         ym: '202605',
@@ -233,7 +233,7 @@ describe('RunProgressPage (F062 polling)', () => {
       expect(screen.queryByTestId('director-readonly-banner')).not.toBeInTheDocument();
     });
 
-    it('section_chief 不顯示「取消月跑」按鈕', async () => {
+    it('section_chief 不顯示「取消月名單分派」按鈕', async () => {
       mockedGetBusinessRole.mockReturnValue('section_chief');
       mockedGetRun.mockResolvedValue({
         runId: 'R001',
@@ -249,7 +249,7 @@ describe('RunProgressPage (F062 polling)', () => {
       expect(screen.queryByTestId('btn-cancel-run')).not.toBeInTheDocument();
     });
 
-    it('completed 狀態不顯示「取消月跑」按鈕', async () => {
+    it('completed 狀態不顯示「取消月名單分派」按鈕', async () => {
       mockedGetRun.mockResolvedValue({
         runId: 'R001',
         ym: '202605',
@@ -315,7 +315,7 @@ describe('RunProgressPage (F062 polling)', () => {
       );
     });
 
-    it('「取消月跑」按鈕 click → 開 confirm modal', async () => {
+    it('「取消月名單分派」按鈕 click → 開 confirm modal', async () => {
       mockedGetRun.mockResolvedValue({
         runId: 'R001',
         ym: '202605',

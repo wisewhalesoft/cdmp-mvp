@@ -180,7 +180,7 @@ export async function getDeptEstimate(
 }
 
 // =====================================================================
-// F061 — POST 觸發月跑
+// F061 — POST 觸發月名單分派
 // =====================================================================
 
 export interface TriggerRunResponse {
@@ -191,7 +191,7 @@ export interface TriggerRunResponse {
 }
 
 /**
- * F097 / AC-6（breaking change）：以使用者選定之分派作業月份（target_work_ym，YYYYMM）觸發月跑。
+ * F097 / AC-6（breaking change）：以使用者選定之分派作業月份（target_work_ym，YYYYMM）觸發月名單分派。
  *   - request body 必帶 `{ workYm }`；後端寫入 AssignmentRun.project_workym = workYm（不再自算 new Date()）。
  */
 export async function triggerRun(workYm: string): Promise<TriggerRunResponse> {
@@ -202,7 +202,7 @@ export async function triggerRun(workYm: string): Promise<TriggerRunResponse> {
 }
 
 // =====================================================================
-// F061 Phase 2 — GET 月跑前置條件就緒度
+// F061 Phase 2 — GET 月名單分派前置條件就緒度
 // =====================================================================
 
 export type EtlStatusValue = 'completed' | 'failed' | 'running' | 'missing';
@@ -230,7 +230,7 @@ export interface ReadinessResponse {
   monthlyRunStatus: 'none' | 'pending' | 'running' | 'completed' | 'failed';
   scoringActive: boolean;
   etlStatus: EtlStatusMap;
-  /** 4 張來源表是否皆有資料（rowCount>0）；false → 有空表，月跑會靜默算錯，應擋。 */
+  /** 4 張來源表是否皆有資料（rowCount>0）；false → 有空表，月名單分派會靜默算錯，應擋。 */
   sourcesAllHaveData: boolean;
   /** rowCount=0 之來源表清單。 */
   emptySourceTables: string[];
@@ -247,7 +247,7 @@ export async function getReadiness(ym?: string): Promise<ReadinessResponse> {
 }
 
 // =====================================================================
-// F062 Phase 2 — POST 取消月跑（director only）
+// F062 Phase 2 — POST 取消月名單分派（director only）
 // =====================================================================
 
 export interface CancelRunResponse {
@@ -265,7 +265,7 @@ export async function cancelRun(runId: string): Promise<CancelRunResponse> {
 }
 
 // =====================================================================
-// F062 — GET 月跑進度（polling 3 秒一次 per F062 BR-1）
+// F062 — GET 月名單分派進度（polling 3 秒一次 per F062 BR-1）
 // =====================================================================
 
 export type RunStatus = 'pending' | 'running' | 'completed' | 'failed';
@@ -309,7 +309,7 @@ export async function getRun(runId: string): Promise<RunProgressResponse> {
 }
 
 // =====================================================================
-// F065 — GET 月跑歷史
+// F065 — GET 月名單分派歷史
 // =====================================================================
 
 export interface RunListItem {
@@ -490,7 +490,7 @@ export async function getSnapshotByType(
 }
 
 // =====================================================================
-// F067 — GET 比對兩個月跑
+// F067 — GET 比對兩個月名單分派
 // =====================================================================
 
 /**

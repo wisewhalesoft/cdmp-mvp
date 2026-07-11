@@ -84,7 +84,7 @@
         <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
         <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
         <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
-        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派</a>
         <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
       </div>
     </nav>
@@ -309,7 +309,7 @@
           <div id="inactiveValueWarn" class="hidden rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
             <div class="flex-1">
-              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用，將被保留但月跑分派時不會匹配</p>
+              <p class="font-semibold text-amber-900" id="inactiveWarnTitle">部分可選值已停用，將被保留但月名單分派時不會匹配</p>
               <p class="text-xs text-amber-800 mt-0.5" id="inactiveWarnDetail"></p>
               <p class="text-xs text-amber-700 mt-1">如需重新啟用請至 <a href="37-base-code.html?tab=options" class="underline font-medium">「篩選欄位 &gt; 可選值管理」</a>。</p>
             </div>
@@ -423,7 +423,7 @@
           <div class="flex items-start gap-2">
             <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
             <div class="flex-1">
-              <p class="font-semibold text-amber-900">條件含已停用選項，推進後月跑分派時將忽略這些值</p>
+              <p class="font-semibold text-amber-900">條件含已停用選項，推進後月名單分派時將忽略這些值</p>
               <p class="mt-1 text-amber-800">推進後條件即被固化，如需重填需先 <strong>退回至草稿</strong>。</p>
               <p class="mt-1 text-amber-700" id="advInactiveDetail"></p>
             </div>
@@ -886,7 +886,7 @@
       const box = document.getElementById('inactiveValueWarn');
       if (warned.length === 0) { box.classList.add('hidden'); return; }
       box.classList.remove('hidden');
-      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將被保留但月跑分派時不會匹配`;
+      document.getElementById('inactiveWarnTitle').textContent = `${warned.length} 個可選值已停用，將被保留但月名單分派時不會匹配`;
       document.getElementById('inactiveWarnDetail').textContent = warned.join('、');
     }
 

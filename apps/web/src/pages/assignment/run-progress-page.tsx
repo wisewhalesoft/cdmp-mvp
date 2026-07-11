@@ -35,7 +35,7 @@ import { RunPageBreadcrumb } from './_components/run-page-breadcrumb';
 import { getBusinessRole } from '@/stores/auth-store';
 
 /**
- * F062 月跑進度頁（Phase 2 全面改造）
+ * F062 月名單分派進度頁（Phase 2 全面改造）
  *
  * 對應 prototype 32-run-progress.html
  *
@@ -143,7 +143,7 @@ export function RunProgressPage() {
       } catch (err: unknown) {
         const e = err as { response?: { data?: { message?: string } } };
         if (!aborted) {
-          setError(e?.response?.data?.message ?? '取得月跑進度失敗');
+          setError(e?.response?.data?.message ?? '取得月名單分派進度失敗');
           setLoading(false);
         }
         if (pollRef.current) {
@@ -169,7 +169,7 @@ export function RunProgressPage() {
     setCancelling(true);
     try {
       await apiCancelRun(runId);
-      showToast('月跑已取消（status=failed）', 'warning');
+      showToast('月名單分派已取消（status=failed）', 'warning');
       setShowCancel(false);
       // poll 會自然撈到新 status
     } catch (err: unknown) {
@@ -207,7 +207,7 @@ export function RunProgressPage() {
               <div className="flex-1">
                 <p className="font-semibold text-purple-900">處長角色為唯讀檢視</p>
                 <p className="text-xs text-purple-800 mt-0.5">
-                  您可查看月跑執行進度與三份快照規劃，但無法取消月跑（僅部長 / Admin 可執行）。
+                  您可查看月名單分派執行進度與三份快照規劃，但無法取消月名單分派（僅部長 / Admin 可執行）。
                 </p>
               </div>
             </div>
@@ -215,7 +215,7 @@ export function RunProgressPage() {
 
           {loading && !data && (
             <div className="p-12 text-center text-gray-400" data-testid="run-loading">
-              載入月跑資料中...
+              載入月名單分派資料中...
             </div>
           )}
 
@@ -255,7 +255,7 @@ export function RunProgressPage() {
                       >
                         <span className="inline-flex items-center gap-1 text-xs">
                           <XOctagon className="w-3.5 h-3.5" />
-                          取消月跑
+                          取消月名單分派
                         </span>
                       </Button>
                     )}
@@ -391,7 +391,7 @@ export function RunProgressPage() {
                   <Clock className="w-5 h-5 text-primary mt-0.5 shrink-0" />
                   <div>
                     <p className="font-semibold text-primary">
-                      月跑已排入佇列，等待 Worker 開始執行
+                      月名單分派已排入佇列，等待 Worker 開始執行
                     </p>
                     <p className="text-xs text-gray-600 mt-0.5">
                       通常於 30 秒內會進入 running 狀態。本頁將每 3 秒自動重新整理。
@@ -478,11 +478,11 @@ export function RunProgressPage() {
       <ConfirmModal
         open={showCancel}
         variant="danger"
-        title={`確認取消月跑 ${runId.slice(0, 13)}？`}
+        title={`確認取消月名單分派 ${runId.slice(0, 13)}？`}
         description={
           <div className="space-y-2 text-xs text-gray-600">
             <p>
-              月跑將標記為 <strong>failed</strong>（errorMessage='使用者取消'）。
+              月名單分派將標記為 <strong>failed</strong>（errorMessage='使用者取消'）。
             </p>
             <p>注意：背景 pipeline 不會立即中斷；下一輪 polling（3 秒）即會收到 failed 狀態。</p>
           </div>

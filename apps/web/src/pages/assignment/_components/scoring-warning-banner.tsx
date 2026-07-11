@@ -1,7 +1,7 @@
 import { AlertTriangle, AlertOctagon, X } from 'lucide-react';
 
 /**
- * F063 — 月跑結果摘要警告 Banner
+ * F063 — 月名單分派結果摘要警告 Banner
  *
  * 對應 spec：F061 / F054 v1.3 + prototype 33-run-summary.html 之 scoringWarnBanner
  *
@@ -26,7 +26,7 @@ export const ISSUE_TYPE_DESCRIPTIONS: Record<string, string> = {
   // 對齊 prototype map（BR-12 / 計分完整性兩類）
   BR12_EDGE_CARD_TYPE_SKIPPED: 'EDGE 客戶因 CARD_TYPE 未設定而跳過',
   SCORING_INTEGRITY_WARN: '計分完整性警示（系統使用 0 分代入）',
-  // F101 / AD-E07-29 OQ-F101-05：Stage 3/4/ASSIGNDAY 比例分派警告（月跑不中斷，對應欄位保持 NULL）
+  // F101 / AD-E07-29 OQ-F101-05：Stage 3/4/ASSIGNDAY 比例分派警告（月名單分派不中斷，對應欄位保持 NULL）
   STAGE3_NO_DEPT_RATION: '電銷課比例未設定（該名單／Tier 案件未分派至電銷課，dept_id 保持空）',
   STAGE4_NO_EMPL_WARN: '電銷課無人員比例設定（該課案件未分派至業務員，emplid 保持空）',
   ASSIGNDAY_NO_CALENDAR_WARN: '當月無工作日日曆資料（案件未設定指派日，assignday 保持空）',
@@ -77,7 +77,7 @@ export function ScoringWarningBanner({
     : 'bg-amber-200 text-amber-900';
   const title = isFailed
     ? `稽核失敗 — 共 ${warningSummary.issueCount} 筆問題`
-    : `本次月跑有 ${warningSummary.issueCount} 筆警告（不影響月跑成功）`;
+    : `本次月名單分派有 ${warningSummary.issueCount} 筆警告（不影響月名單分派成功）`;
 
   return (
     <div

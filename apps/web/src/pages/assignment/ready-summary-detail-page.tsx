@@ -63,7 +63,7 @@ const READY_SUMMARY_COLUMNS = ['prod_kind', 'spec_tp', 'caseyear', 'settle_src']
  *   - 部門比例唯讀表
  *   - 個別比例 accordion（唯讀，預設摺疊）
  *   - 簽核歷史時間軸
- *   - 操作：返回 / 退回簽核 (director only) / 執行月跑
+ *   - 操作：返回 / 退回簽核 (director only) / 執行月名單分派
  */
 
 /**
@@ -374,7 +374,7 @@ export function ReadySummaryDetailPage() {
                     </span>
                   </h1>
                   <p className="text-xs text-gray-500 mt-1">
-                    本名單已通過部長核准，等待執行月跑進行後續計算（亦可由部長／系統管理者退回重新審核）。
+                    本名單已通過部長核准，等待執行月名單分派進行後續計算（亦可由部長／系統管理者退回重新審核）。
                   </p>
                 </div>
                 {lastApprove && (
@@ -630,7 +630,7 @@ export function ReadySummaryDetailPage() {
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <PlayCircle className="w-4 h-4" />
-                    執行月跑
+                    執行月名單分派
                   </span>
                 </Button>
               </div>

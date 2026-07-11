@@ -312,7 +312,7 @@ export interface FullSnapshotResponse {
  *
  * - 唯讀端點：DirectorOrSectionChiefGuard 攔截 user role（403）
  * - 處長轄區隔離：personnelRatios 僅含本轄區 deptCode
- * - 歷史月份 / 月跑執行中均可呼叫（後端不攔截）
+ * - 歷史月份 / 月名單分派執行中均可呼叫（後端不攔截）
  *
  * 對應 React Drawer：apps/web/src/pages/assignment/_components/ListDetailDrawer.tsx
  */

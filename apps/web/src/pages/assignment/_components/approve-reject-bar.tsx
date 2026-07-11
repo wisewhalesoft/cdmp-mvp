@@ -154,7 +154,7 @@ export function ApproveRejectBar({
         title={`確認簽核通過名單 ${listNo}？`}
         description={
           <p className="text-xs text-gray-600">
-            簽核通過後名單將進入 <strong>準備完成</strong> 階段，並於下次月跑觸發時參與分派。
+            簽核通過後名單將進入 <strong>準備完成</strong> 階段，並於下次月名單分派觸發時參與分派。
           </p>
         }
         confirmLabel="確認簽核"

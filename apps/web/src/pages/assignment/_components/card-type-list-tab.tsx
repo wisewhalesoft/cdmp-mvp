@@ -33,11 +33,11 @@ import { CardTypeSwitcher } from './card-type-switcher';
  *   - 預設選中第一列（自動透過 useEffect 同步 context）
  *   - 點 row 切換選中（高亮 + 同步 context 給 Tab 2~5）
  *   - 點操作欄按鈕（編輯 / 停用）不觸發 row click
- *   - 月跑鎖時所有寫入按鈕（新增 / 編輯 / 停用）disabled + title hint
+ *   - 月名單分派鎖時所有寫入按鈕（新增 / 編輯 / 停用）disabled + title hint
  *   - 空清單顯示 empty state（提示新增）
  *
  * Props：
- *   - isLocked：月跑鎖狀態（由父頁面提供，目前 Iter 5a 暫定 false；Iter 5b 可從 assignment_run 取）
+ *   - isLocked：月名單分派鎖狀態（由父頁面提供，目前 Iter 5a 暫定 false；Iter 5b 可從 assignment_run 取）
  */
 
 interface Props {

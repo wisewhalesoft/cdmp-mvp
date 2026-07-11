@@ -5,7 +5,7 @@ import type { SummaryTierRow } from '@/api/assignment-run';
  * F063 TIER_LEVEL 分佈 bar chart
  *
  * 對應 prototype 33-run-summary.html L263-275（「TIER_LEVEL 分佈」/ renderTierChart）。
- * 資料來源：getSummary.tierDistribution（tier_level 由 F100/F101 月跑計分 score→card_level→tier 寫入）。
+ * 資料來源：getSummary.tierDistribution（tier_level 由 F100/F101 月名單分派計分 score→card_level→tier 寫入）。
  * 與 CARD_LEVEL donut 並列於 grid-cols-2（取代舊「待 Track D」placeholder）。
  */
 

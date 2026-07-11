@@ -249,7 +249,7 @@ describe('ReadySummaryDetailPage (29d 模式 B)', () => {
     });
   });
 
-  it('director 顯示「執行月跑」按鈕', async () => {
+  it('director 顯示「執行月名單分派」按鈕', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('btn-run-month')).toBeInTheDocument();

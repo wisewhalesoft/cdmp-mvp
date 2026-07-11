@@ -27,7 +27,7 @@ import {
  *
  * 注意：
  *   - body 不含 `cardVersion`（後端依 active 版本帶入）
- *   - 月跑鎖 disable 由父層按鈕負責；本 modal 內 submit 仍會送 API，由 server 回 409
+ *   - 月名單分派鎖 disable 由父層按鈕負責；本 modal 內 submit 仍會送 API，由 server 回 409
  */
 
 function nextAvailableLevel(existingCodes: string[]): string {

@@ -115,7 +115,7 @@ describe('ReadySummaryListPage (29d 模式 A)', () => {
     cleanup();
   });
 
-  it('全部 ready：顯示綠色月跑就緒 banner + 執行月跑 CTA', async () => {
+  it('全部 ready：顯示綠色月名單分派就緒 banner + 執行月名單分派 CTA', async () => {
     mockedListLists.mockResolvedValue(
       makeResp([
         makeList('OB001', 'ready'),
@@ -245,7 +245,7 @@ describe('ReadySummaryListPage (29d 模式 A)', () => {
     expect(screen.getByTestId('stage-step-5-current')).toBeInTheDocument();
   });
 
-  it('「執行月跑」按鈕在沒有任何 ready 時 disabled', async () => {
+  it('「執行月名單分派」按鈕在沒有任何 ready 時 disabled', async () => {
     mockedListLists.mockResolvedValue(
       makeResp([makeList('OB001', 'draft')]),
     );

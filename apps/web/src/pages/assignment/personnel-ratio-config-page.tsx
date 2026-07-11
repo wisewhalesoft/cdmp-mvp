@@ -120,7 +120,7 @@ export function PersonnelRatioConfigPage() {
   const [rollbacking, setRollbacking] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const [savingAll, setSavingAll] = useState(false);
-  // F084 v2.0：auto-advance 因月跑 guard 跳過時，退回顯示 fallback 手動推進按鈕（§7.1 月跑分支 / §7.2）
+  // F084 v2.0：auto-advance 因月名單分派 guard 跳過時，退回顯示 fallback 手動推進按鈕（§7.1 月名單分派分支 / §7.2）
   const [guardSkippedShowFallback, setGuardSkippedShowFallback] = useState(false);
 
   // form refs（依 deptCode 收集；給「儲存全部」遍歷使用）
@@ -265,7 +265,7 @@ export function PersonnelRatioConfigPage() {
    *
    * 「儲存全部」為 Promise.all 並發存多部門，故收集所有 response 後：
    *   - 任一 autoAdvanced=true → 自動推進成功 toast + 跨頁 pendingToast + redirect 名單列表
-   *   - 否則任一 autoAdvanceFailReason=ASSIGNMENT_RUN_ALREADY_RUNNING → 月跑 warning toast +
+   *   - 否則任一 autoAdvanceFailReason=ASSIGNMENT_RUN_ALREADY_RUNNING → 月名單分派 warning toast +
    *     退回顯示 fallback 手動按鈕（不 redirect）
    *   - 否則（部分完成 / flag off → autoAdvanced:false 無 failReason）→ 不額外 toast
    *     （子元件已顯示各部門「已儲存」toast）
@@ -295,9 +295,9 @@ export function PersonnelRatioConfigPage() {
         (r) => r.autoAdvanceFailReason === 'ASSIGNMENT_RUN_ALREADY_RUNNING',
       )
     ) {
-      // 月跑 guard 跳過（§7.1 月跑分支 / AC-5）：退回 fallback 手動按鈕
+      // 月名單分派 guard 跳過（§7.1 月名單分派分支 / AC-5）：退回 fallback 手動按鈕
       setGuardSkippedShowFallback(true);
-      showToast('比例已儲存；因分派執行中，請待月跑完成後手動推進至簽核', 'warning');
+      showToast('比例已儲存；因分派執行中，請待月名單分派完成後手動推進至簽核', 'warning');
       return { redirected: false };
     }
 
@@ -343,9 +343,9 @@ export function PersonnelRatioConfigPage() {
 
   // F084 v2.0 fallback 手動推進按鈕渲染 / disabled 守衛（response-driven，對齊 prototype renderActionBar）
   //   - 渲染條件（§7.2 / AC-7）：stage=personnel_ratio 且非唯讀（歷史 / 停用 / 非此階段 → 完全不渲染）
-  //     且（allDone 或 月跑 guard 跳過退回 fallback）。flag off 時 response 永遠 autoAdvanced:false
+  //     且（allDone 或 月名單分派 guard 跳過退回 fallback）。flag off 時 response 永遠 autoAdvanced:false
   //     無 failReason → allDone 時自然顯示手動按鈕（= 既有手動行為）。
-  //   - disabled：月跑進行中（guard 跳過）/ 處長本部門未完成 / 尚有部門未完成。
+  //   - disabled：月名單分派進行中（guard 跳過）/ 處長本部門未完成 / 尚有部門未完成。
   const fallbackStageOk = (ratiosStage ?? list?.stage) === 'personnel_ratio' && !ratiosReadOnly;
   const showFallbackAdvance = fallbackStageOk && (allDone || guardSkippedShowFallback);
   const fallbackDisabled =

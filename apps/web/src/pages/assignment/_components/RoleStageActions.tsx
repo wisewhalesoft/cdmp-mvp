@@ -15,7 +15,7 @@
  *
  * 橫切條件（C-1~C-5）：
  *   C-1 歷史月份 → 所有寫入按鈕 **DOM 完全不渲染**（查看保留）
- *   C-2 月跑鎖中 → 所有寫入按鈕 disabled；查看 enabled
+ *   C-2 月名單分派鎖中 → 所有寫入按鈕 disabled；查看 enabled
  *   C-3 已停用名單（status='inactive'）→ 由父層篩掉，本元件不處理
  *   C-4 section_chief 轄區隔離 → 由父層 / 後端篩掉，本元件 role 行為依 effectiveIdentity
  *   C-5 「查看」按鈕在任何條件下均可觸發 Drawer
@@ -111,7 +111,7 @@ export function RoleStageActions(props: RoleStageActionsProps) {
 
   // C-1：歷史月份 → 寫入按鈕完全不渲染（僅查看保留）
   const allowWrite = !isHistorical;
-  // C-2：月跑鎖中 → 寫入按鈕 disabled；查看仍 enabled
+  // C-2：月名單分派鎖中 → 寫入按鈕 disabled；查看仍 enabled
   const writeDisabled = isLocked;
 
   // 是否為寫入者（admin / director）

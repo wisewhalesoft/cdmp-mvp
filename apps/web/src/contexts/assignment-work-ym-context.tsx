@@ -16,8 +16,8 @@ import { getCurrentWorkYm } from '@/api/assignment-list';
  *     前端不得自行 new Date() 計算。
  *   - targetWorkYm（分派作業月份 / 作業月）：使用者正在作業的目標月份，預設 = currentWorkYm + 1（下月）。
  *
- * 涵蓋頁面（consume）：名單定義 / 準備完成摘要 / Stage 0 試算 / 月跑觸發（四頁，一處切換全頁同步）。
- * 不涵蓋：月跑歷史頁（run-history，獨立 local state）、下游結果頁（讀 run.project_workym，不加 MonthPicker）。
+ * 涵蓋頁面（consume）：名單定義 / 準備完成摘要 / Stage 0 試算 / 月名單分派觸發（四頁，一處切換全頁同步）。
+ * 不涵蓋：月名單分派歷史頁（run-history，獨立 local state）、下游結果頁（讀 run.project_workym，不加 MonthPicker）。
  *
  * 值一律以 YYYYMM 字串表示（與後端 / DB project_workym 一致）；MonthPicker 之 YYYY-MM 由消費頁轉換。
  */

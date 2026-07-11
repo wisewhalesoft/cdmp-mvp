@@ -561,7 +561,7 @@
 
     <!-- ==================== Banner: Month Run Lock Warning ==================== -->
     <section>
-      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Banner（月跑鎖定 / 警告條）</h2>
+      <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Banner（月名單分派鎖定 / 警告條）</h2>
       <div class="space-y-3">
         <!-- Info Banner -->
         <div class="rounded-lg p-3 bg-blue-50/60 border border-blue-100 flex items-start gap-2 text-sm text-gray-700">
@@ -576,7 +576,7 @@
           <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
           <div>
             <p class="font-semibold">分派執行中（assignment_run.status = running）</p>
-            <p class="text-xs mt-0.5">所有寫入功能（新增 / 編輯 / 停用）已暫時鎖定，鎖定將於月跑完成後自動解除（對應 409 <code>ASSIGNMENT_RUN_ALREADY_RUNNING</code> / <code>SCORING_VERSION_LOCKED</code>）</p>
+            <p class="text-xs mt-0.5">所有寫入功能（新增 / 編輯 / 停用）已暫時鎖定，鎖定將於月名單分派完成後自動解除（對應 409 <code>ASSIGNMENT_RUN_ALREADY_RUNNING</code> / <code>SCORING_VERSION_LOCKED</code>）</p>
           </div>
         </div>
         <!-- Error Banner -->
@@ -656,7 +656,7 @@
               <tr><td class="px-3 py-2 font-mono">dept_ratio</td><td class="px-3 py-2">部門比例</td><td class="px-3 py-2"><code>#DBEAFE / #1E40AF</code></td><td class="px-3 py-2"><code>building-2</code></td><td class="px-3 py-2 text-gray-500">部長設定中</td></tr>
               <tr><td class="px-3 py-2 font-mono">personnel_ratio</td><td class="px-3 py-2">個別比例</td><td class="px-3 py-2"><code>#CFFAFE / #0E7490</code></td><td class="px-3 py-2"><code>users</code></td><td class="px-3 py-2 text-gray-500">處長設定中</td></tr>
               <tr><td class="px-3 py-2 font-mono">approval</td><td class="px-3 py-2">待簽核</td><td class="px-3 py-2"><code>#FEF3C7 / #92400E</code></td><td class="px-3 py-2"><code>stamp</code></td><td class="px-3 py-2 text-gray-500">已送出，等待上層確認</td></tr>
-              <tr><td class="px-3 py-2 font-mono">ready</td><td class="px-3 py-2">備援可用</td><td class="px-3 py-2"><code>#DCFCE7 / #15803D</code></td><td class="px-3 py-2"><code>check-circle-2</code></td><td class="px-3 py-2 text-gray-500">月跑可使用此版本</td></tr>
+              <tr><td class="px-3 py-2 font-mono">ready</td><td class="px-3 py-2">備援可用</td><td class="px-3 py-2"><code>#DCFCE7 / #15803D</code></td><td class="px-3 py-2"><code>check-circle-2</code></td><td class="px-3 py-2 text-gray-500">月名單分派可使用此版本</td></tr>
             </tbody>
           </table>
         </div>
@@ -733,7 +733,7 @@
 
         <!-- 使用情境 -->
         <div class="bg-blue-50 border border-blue-100 rounded p-3 text-xs text-gray-700">
-          <p><span class="font-semibold text-primary">使用情境：</span>10 個重要 E07 頁面（27 名單、28/29 計分卡、30~36 月跑系列、37 篩選欄位）顯示。可用 <code>initRoleSwitcher()</code> + <code>renderRoleBadge(role)</code> 一鍵掛載。</p>
+          <p><span class="font-semibold text-primary">使用情境：</span>10 個重要 E07 頁面（27 名單、28/29 計分卡、30~36 月名單分派系列、37 篩選欄位）顯示。可用 <code>initRoleSwitcher()</code> + <code>renderRoleBadge(role)</code> 一鍵掛載。</p>
         </div>
       </div>
     </section>

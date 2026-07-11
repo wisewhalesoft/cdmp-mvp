@@ -207,7 +207,7 @@ describe.skip('ListDefinitionPage (FE-2 M01 名單定義) — v1.0 表格列 DEP
   });
 
   // Demo 觀察點 #7: locked banner
-  it('lockState.locked=true 顯示月跑鎖通知條 + 新增按鈕停用', async () => {
+  it('lockState.locked=true 顯示月名單分派鎖通知條 + 新增按鈕停用', async () => {
     mockedListLists.mockResolvedValue({
       ...baseResponse,
       lockState: { locked: true, reason: '分派執行中' },

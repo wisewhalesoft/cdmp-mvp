@@ -204,7 +204,7 @@ describe('CardTypeListTab — F069', () => {
     expect(empty.textContent).toContain('尚未設定任何計分卡類型');
   });
 
-  it('TC-F069-10：月跑鎖定時「新增」「編輯」「停用」按鈕 disabled', async () => {
+  it('TC-F069-10：月名單分派鎖定時「新增」「編輯」「停用」按鈕 disabled', async () => {
     vi.mocked(cardTypeApi.listCardTypes).mockResolvedValue({
       cardTypes: [THREE_CARDS[1]],
     });

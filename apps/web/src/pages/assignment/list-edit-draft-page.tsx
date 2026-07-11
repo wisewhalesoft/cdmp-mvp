@@ -1050,7 +1050,7 @@ export function ListEditDraftPage() {
                       <AlertTriangle className="w-4 h-4 text-warning mt-0.5 shrink-0" />
                       <div className="flex-1">
                         <p className="font-semibold text-amber-900">
-                          {inactiveDetails.length} 個可選值已停用，將被保留但月跑分派時不會匹配
+                          {inactiveDetails.length} 個可選值已停用，將被保留但月名單分派時不會匹配
                         </p>
                         <p className="text-xs text-amber-800 mt-0.5">
                           {inactiveDetails

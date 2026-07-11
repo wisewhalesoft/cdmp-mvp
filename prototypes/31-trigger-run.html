@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>觸發月跑 — 客戶名單分派 - CDMP</title>
+  <title>觸發月名單分派 — 客戶名單分派 - CDMP</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -89,7 +89,7 @@
         <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
       </a>
       <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary">
-        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派
       </a>
       <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="history" class="w-4 h-4"></i>執行歷史
@@ -100,7 +100,7 @@
 
   <!-- ===== Header ===== -->
   <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
-    <h1 class="text-base font-semibold text-gray-800">觸發月跑</h1>
+    <h1 class="text-base font-semibold text-gray-800">觸發月名單分派</h1>
     <div class="flex items-center gap-4">
       <!-- 分派作業月份 MonthPicker（仿 27 名單定義頁 header 樣式） -->
       <div class="flex items-center gap-2" data-testid="trigger-run-month-picker">
@@ -139,7 +139,7 @@
           <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
         </div>
         <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
-        <p class="text-sm text-gray-500 max-w-md">「觸發月跑」為部長 / 系統管理者專屬功能。業務員角色請至 Customer 360 查看您被分派的客戶名單。</p>
+        <p class="text-sm text-gray-500 max-w-md">「觸發月名單分派」為部長 / 系統管理者專屬功能。業務員角色請至 Customer 360 查看您被分派的客戶名單。</p>
         <a href="25-customer-360-list.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
           <i data-lucide="contact" class="w-4 h-4"></i>前往 Customer 360
         </a>
@@ -152,7 +152,7 @@
       <i data-lucide="eye" class="w-4 h-4 text-purple-700 mt-0.5 shrink-0"></i>
       <div class="flex-1">
         <p class="font-semibold text-purple-900">處長角色為唯讀檢視</p>
-        <p class="text-xs text-purple-800 mt-0.5">您可查看分派作業月份月跑前置檢查與執行規劃（分派作業月份為唯讀），但無法觸發月跑（僅業務部長可執行）。</p>
+        <p class="text-xs text-purple-800 mt-0.5">您可查看分派作業月份月名單分派前置檢查與執行規劃（分派作業月份為唯讀），但無法觸發月名單分派（僅業務部長可執行）。</p>
       </div>
     </div>
     <!-- Demo Bar -->
@@ -160,7 +160,7 @@
       <span class="text-xs text-gray-400 mr-1">Demo:</span>
       <button onclick="showDemoState('ready')" id="demo-ready" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">前置全綠（可啟動）</button>
       <button onclick="showDemoState('blocked')" id="demo-blocked" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">前置失敗（無法啟動）</button>
-      <button onclick="showDemoState('running')" id="demo-running" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">月跑執行中</button>
+      <button onclick="showDemoState('running')" id="demo-running" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">月名單分派執行中</button>
     </div>
 
     <div class="p-6 max-w-6xl">
@@ -169,9 +169,9 @@
       <div id="runningBanner" class="hidden mb-4 flex items-start gap-2 p-4 bg-amber-50 border-2 border-amber-200 rounded-lg">
         <i data-lucide="alert-octagon" class="w-5 h-5 text-warning mt-0.5 shrink-0"></i>
         <div class="flex-1">
-          <p class="font-semibold text-warning">月跑執行中（無法重複觸發）</p>
-          <p class="text-sm text-gray-700 mt-0.5"><span data-target-ym-compact>202606</span> 月跑正在執行中。</p>
-          <p class="text-xs text-gray-600 mt-1">本月已有月跑正在進行，需等其完成後才能再次觸發。</p>
+          <p class="font-semibold text-warning">月名單分派執行中（無法重複觸發）</p>
+          <p class="text-sm text-gray-700 mt-0.5"><span data-target-ym-compact>202606</span> 月名單分派正在執行中。</p>
+          <p class="text-xs text-gray-600 mt-1">本月已有月名單分派正在進行，需等其完成後才能再次觸發。</p>
           <a href="32-run-progress.html" class="mt-2 inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
             <i data-lucide="activity" class="w-4 h-4"></i>
             前往執行進度頁查看
@@ -189,7 +189,7 @@
                 分派作業月份 <span data-target-ym-compact>202606</span>
               </span>
             </div>
-            <h2 class="text-xl font-bold text-gray-900">觸發 <span data-target-ym-dash>2026-06</span> 月跑</h2>
+            <h2 class="text-xl font-bold text-gray-900">觸發 <span data-target-ym-dash>2026-06</span> 月名單分派</h2>
             <p class="text-sm text-gray-600 mt-1">啟動客戶名單分派計算。本次將處理 <span class="font-semibold text-gray-900" id="ctaActiveListCount">8</span> 個名單。</p>
 
             <div class="mt-3 flex items-center gap-4 text-xs text-gray-500">
@@ -202,7 +202,7 @@
           <div class="flex flex-col items-end gap-2">
             <button id="btnStartRun" onclick="openConfirmModal()" class="inline-flex items-center gap-2 px-6 py-3 bg-danger text-white text-base font-semibold rounded-lg hover:bg-red-600 transition shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
               <i data-lucide="play-circle" class="w-5 h-5"></i>
-              啟動月跑
+              啟動月名單分派
             </button>
           </div>
         </div>
@@ -286,10 +286,10 @@
               <span class="check-icon shrink-0 mt-0.5"></span>
               <div class="flex-1">
                 <div class="flex items-center justify-between">
-                  <h4 class="text-sm font-semibold text-gray-800">無進行中的月跑</h4>
+                  <h4 class="text-sm font-semibold text-gray-800">無進行中的月名單分派</h4>
                   <span class="check-badge text-xs"></span>
                 </div>
-                <p class="text-xs text-gray-500 mt-0.5">同一月份僅能有一個進行中的月跑</p>
+                <p class="text-xs text-gray-500 mt-0.5">同一月份僅能有一個進行中的月名單分派</p>
                 <p class="check-detail text-xs mt-1.5"></p>
               </div>
             </div>
@@ -319,7 +319,7 @@
                   <h4 class="text-sm font-semibold text-gray-800">來源資料表已載入</h4>
                   <span class="check-badge text-xs"></span>
                 </div>
-                <p class="text-xs text-gray-500 mt-0.5">4 張來源資料表目前皆有資料（非僅 log 完成；空表 → 月跑會靜默算錯，擋觸發）</p>
+                <p class="text-xs text-gray-500 mt-0.5">4 張來源資料表目前皆有資料（非僅 log 完成；空表 → 月名單分派會靜默算錯，擋觸發）</p>
               </div>
             </div>
           </div>
@@ -399,8 +399,8 @@
       <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
         <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
         <div>
-          <p class="font-medium text-gray-700 mb-0.5">月跑觸發說明</p>
-          <p>月跑啟動後於背景執行，您可至執行進度頁即時查看進度，完成後於執行歷史查看結果。已完成的月份可重新執行，前次結果仍會保留；執行不受日期限制。</p>
+          <p class="font-medium text-gray-700 mb-0.5">月名單分派觸發說明</p>
+          <p>月名單分派啟動後於背景執行，您可至執行進度頁即時查看進度，完成後於執行歷史查看結果。已完成的月份可重新執行，前次結果仍會保留；執行不受日期限制。</p>
         </div>
       </div>
 
@@ -417,7 +417,7 @@
           <div class="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
             <i data-lucide="play-circle" class="w-7 h-7 text-danger"></i>
           </div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">確認啟動 <span data-target-ym-dash>2026-06</span> 月跑？</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">確認啟動 <span data-target-ym-dash>2026-06</span> 月名單分派？</h3>
           <p class="text-sm text-gray-600 leading-relaxed">系統將立即開始執行本次分派計算。</p>
         </div>
         <div class="px-6 pb-2">
@@ -443,7 +443,7 @@
             <div class="flex items-start gap-2">
               <i data-lucide="info" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
               <div>
-                啟動後，名單定義、計分卡、比例與代碼設定將暫時鎖定，直到本次月跑完成或失敗。
+                啟動後，名單定義、計分卡、比例與代碼設定將暫時鎖定，直到本次月名單分派完成或失敗。
               </div>
             </div>
           </div>
@@ -572,7 +572,7 @@
       2: '<span class="text-emerald-600">所有 8 個名單部門比例加總均 = 100.0%</span>',
       3: '<span class="text-emerald-600">所有部門 × 名單組合人員比例加總 = 100.0%</span>',
       4: '<span class="text-emerald-600">6 種計分卡全部已啟用</span>',
-      5: '<span class="text-emerald-600">無進行中的月跑（最近一次已於 202605 完成）</span>',
+      5: '<span class="text-emerald-600">無進行中的月名單分派（最近一次已於 202605 完成）</span>',
       6: ''
     };
     [1,2,3,4,5,6].forEach(n => setCheckItemStatus(n, 'pass', defaultDetails[n]));
@@ -661,7 +661,7 @@
         // 全綠
         [1,2,3,4,5,6].forEach(n => setCheckItemStatus(n, 'pass', defaultDetails[n]));
         updatePreCheckSummary(6, 6);
-        btn.innerHTML = '<i data-lucide="play-circle" class="w-5 h-5"></i> 啟動月跑';
+        btn.innerHTML = '<i data-lucide="play-circle" class="w-5 h-5"></i> 啟動月名單分派';
       } else if (state === 'blocked') {
         banner.classList.add('hidden');
         fixPanel.classList.remove('hidden');
@@ -685,10 +685,10 @@
         setCheckItemStatus(2, 'pass', defaultDetails[2]);
         setCheckItemStatus(3, 'pass', defaultDetails[3]);
         setCheckItemStatus(4, 'pass', defaultDetails[4]);
-        setCheckItemStatus(5, 'fail', '<span class="text-danger">本月已有月跑正在執行中，需等其完成後才能再次觸發</span>');
+        setCheckItemStatus(5, 'fail', '<span class="text-danger">本月已有月名單分派正在執行中，需等其完成後才能再次觸發</span>');
         setCheckItemStatus(6, 'pass', defaultDetails[6]);
         updatePreCheckSummary(5, 6);
-        btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> 月跑執行中...';
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> 月名單分派執行中...';
       }
     }
 

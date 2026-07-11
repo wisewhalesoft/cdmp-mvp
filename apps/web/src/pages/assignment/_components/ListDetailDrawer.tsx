@@ -11,7 +11,7 @@
  *   - history：簽核歷史 timeline（依 created_at ASC）
  *
  * 互動：
- *   - 任何 stage / 歷史月份 / 月跑鎖中均可開啟（後端 GET /full-snapshot 不攔截）
+ *   - 任何 stage / 歷史月份 / 月名單分派鎖中均可開啟（後端 GET /full-snapshot 不攔截）
  *   - 點擊 backdrop / 右上 X / 「關閉」按鈕關閉 Drawer
  */
 
@@ -358,7 +358,7 @@ export function AppliedSpecialRulesPanel({
           <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
             以下為系統依名單名稱自動套用之特例排除規則，
             <span className="text-gray-600 font-medium">不可編輯</span>
-            ，影響本名單月跑實際分派的案件數。
+            ，影響本名單月名單分派實際分派的案件數。
           </p>
         </div>
       </div>

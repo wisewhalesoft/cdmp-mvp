@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 
 /**
- * 月跑下游頁共用麵包屑：執行歷史 › {目前頁}
+ * 月名單分派下游頁共用麵包屑：執行歷史 › {目前頁}
  *
  * 取代各頁 header 原本的「返回箭頭 + 標題 + 長版 runId code」組合
  * （長版 runId 不在 prototype 規劃內 — header 只規劃了頁標題）。

@@ -60,7 +60,7 @@ import {
  *   - Banner: historical / locked / future-empty / sales-blocked
  *   - KPI: 4 卡（總/進行中/待簽核/準備完成）
  *   - 月份準備度進度條
- *   - 工具列: 搜尋 + 新增名單按鈕（v2.3 移除「Stage 0 試算」/「執行月跑」既有入口）
+ *   - 工具列: 搜尋 + 新增名單按鈕（v2.3 移除「Stage 0 試算」/「執行月名單分派」既有入口）
  *   - 5 欄 Kanban：draft / dept_ratio / personnel_ratio / approval / ready
  *     Ready 欄頂含 CTA Banner（commit 5 接入）
  *   - Modal: 停用 / 推進 / Rollback
@@ -551,7 +551,7 @@ export function ListDefinitionPage() {
           </div>
         )}
 
-        {/* Banner: locked (月跑執行中) */}
+        {/* Banner: locked (月名單分派執行中) */}
         {isLocked && (
           <div
             data-testid="locked-banner"
@@ -561,7 +561,7 @@ export function ListDefinitionPage() {
             <div className="flex-1">
               <p className="font-semibold text-amber-800">分派執行中，名單定義暫時鎖定</p>
               <p className="text-xs text-amber-700 mt-0.5">
-                所有寫入按鈕已禁用，請待月跑完成後再進行操作。
+                所有寫入按鈕已禁用，請待月名單分派完成後再進行操作。
               </p>
             </div>
           </div>
@@ -759,7 +759,7 @@ export function ListDefinitionPage() {
           title={`核准名單 ${approveTarget?.listNo ?? ''}？`}
           description={
             <div className="space-y-2 text-xs text-gray-600">
-              <p>名單將進入「準備完成」階段，並於下次月跑觸發時參與分派。</p>
+              <p>名單將進入「準備完成」階段，並於下次月名單分派觸發時參與分派。</p>
             </div>
           }
           confirmLabel="確認核准"

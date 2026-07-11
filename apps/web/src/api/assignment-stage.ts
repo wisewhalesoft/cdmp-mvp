@@ -185,7 +185,7 @@ export interface SetPersonnelRatiosResponse {
    * F084 v2.0 auto-advance 結果（對齊後端 personnel-ratio.service.ts setPersonnelRatios return）。
    * - autoAdvanced: 本次 PUT 是否觸發自動推進成功（true → stage 已自動推進至 approval）
    * - newStage: autoAdvanced=true 時為 'approval'，否則 null
-   * - autoAdvanceFailReason: 僅「auto-advance 因月跑 guard 阻擋而跳過」時為
+   * - autoAdvanceFailReason: 僅「auto-advance 因月名單分派 guard 阻擋而跳過」時為
    *   'ASSIGNMENT_RUN_ALREADY_RUNNING'；其餘 autoAdvanced=false 情境一律 null（不帶 failReason）
    */
   autoAdvanced: boolean;

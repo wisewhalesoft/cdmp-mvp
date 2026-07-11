@@ -82,7 +82,7 @@
         <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
       </a>
       <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派
       </a>
       <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="history" class="w-4 h-4"></i>執行歷史
@@ -232,7 +232,7 @@
           </div>
           <div class="flex-1 min-w-0">
             <h3 class="text-sm font-semibold text-amber-900 flex items-center gap-2 flex-wrap">
-              本次月跑偵測到資料完整性警示
+              本次月名單分派偵測到資料完整性警示
               <span id="scoringWarnTotal" class="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-200 text-amber-900 tabular-nums">0 筆</span>
             </h3>
             <p id="scoringWarnSummary" class="text-xs text-amber-800 mt-0.5">已執行完成，下列項目未影響分派流程但建議檢查。</p>
@@ -352,7 +352,7 @@
         <i data-lucide="alert-circle" class="w-4 h-4 text-danger mt-0.5 shrink-0"></i>
         <div>
           <p class="font-semibold text-danger mb-0.5">NFR-005 警示：偏差超過閾值</p>
-          <p>本次月跑存在偏差超過 3% 的部門。建議檢查 ob_dept_pct 設定，或前往 F067 比對近月結果確認分派演算法表現。</p>
+          <p>本次月名單分派存在偏差超過 3% 的部門。建議檢查 ob_dept_pct 設定，或前往 F067 比對近月結果確認分派演算法表現。</p>
         </div>
       </div>
 
@@ -388,7 +388,7 @@
         title: '計分完整性警示',
         icon: 'shield-alert',
         severity: 'warn',
-        description: '部分計分維度於月跑時 ob_levelcard_score 無對應分數列。系統使用 0 分代入但仍完成計分，建議補齊分數區間。',
+        description: '部分計分維度於月名單分派時 ob_levelcard_score 無對應分數列。系統使用 0 分代入但仍完成計分，建議補齊分數區間。',
         columns: [
           { key: 'card_type', label: 'CARD_TYPE', cls: 'font-mono text-xs font-semibold' },
           { key: 'column_name', label: '維度', cls: 'font-mono text-xs' },
@@ -396,7 +396,7 @@
           { key: 'affected', label: '影響客戶數', cls: 'text-xs text-right tabular-nums font-semibold' },
         ],
       },
-      // F101 / AD-E07-29 OQ-F101-05：Stage 3/4/ASSIGNDAY 比例分派警告（月跑不中斷，對應欄位保持 NULL）
+      // F101 / AD-E07-29 OQ-F101-05：Stage 3/4/ASSIGNDAY 比例分派警告（月名單分派不中斷，對應欄位保持 NULL）
       STAGE3_NO_DEPT_RATION: {
         title: '電銷課比例未設定',
         icon: 'building-2',

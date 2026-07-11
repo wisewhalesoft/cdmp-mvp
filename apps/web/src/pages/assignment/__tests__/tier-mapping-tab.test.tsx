@@ -5,7 +5,7 @@
  *   TS-F056-021：Fallback 列顯示紫色底色 + 「Fallback」標籤
  *   TS-F056-022：標準對應列無 Fallback 標籤
  *   TS-F056-024：list_nm null 顯示「—」
- *   TS-F056-025：月跑鎖時新增按鈕 disabled
+ *   TS-F056-025：月名單分派鎖時新增按鈕 disabled
  *   TS-F056-028：M3/HC/C3 過渡 fallback 顯示一致
  *
  * v1.5 新增：
@@ -175,7 +175,7 @@ describe('TierMappingTabV15 — F056 v1.5', () => {
     expect(legacy.textContent).toContain('待遷移');
   });
 
-  it('TS-F056-025：月跑鎖時新增按鈕 disabled', async () => {
+  it('TS-F056-025：月名單分派鎖時新增按鈕 disabled', async () => {
     vi.mocked(api.getTierMapping).mockResolvedValue({ mappings: [] });
 
     render(wrap(<TierMappingTabV15 isLocked />));

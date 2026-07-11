@@ -28,7 +28,7 @@ export interface CardTypeSwitcherProps {
   selectedCardType: string | null;
   /** 全部可挑選的計分卡列表（含當前那筆） */
   availableCardTypes: CardTypeListItem[];
-  /** 月跑鎖（trigger disabled） */
+  /** 月名單分派鎖（trigger disabled） */
   monthRunLocked?: boolean;
   /** 切換到他張卡時呼叫 */
   onSwitchCardType: (code: string) => void;

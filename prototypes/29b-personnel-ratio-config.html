@@ -11,21 +11,21 @@
    - 使用者完成「最後一個讓所有部門加總 = 100%」的儲存（F082 PUT）後，
      後端於同一 transaction 內偵測完成度並「自動推進」，無需點任何推進按鈕。
    - 成功 → toast「名單『…』已自動推進至簽核階段，等待部長核准」+ redirect 名單列表。
-   - 月跑 guard 跳過 → toast「比例已儲存；因分派執行中，請待月跑完成後手動推進至簽核」
+   - 月名單分派 guard 跳過 → toast「比例已儲存；因分派執行中，請待月名單分派完成後手動推進至簽核」
      + 此時退回顯示 fallback 手動按鈕（見下）；不 redirect。
    - 部分完成 → 只顯示既有「已儲存」toast，無推進訊息。
 
-  【Fallback — 手動「推進至簽核」按鈕（flag = OFF 或 auto-advance 被月跑 guard 跳過，§7.2）】
+  【Fallback — 手動「推進至簽核」按鈕（flag = OFF 或 auto-advance 被月名單分派 guard 跳過，§7.2）】
    - 部長 / Admin：始終顯示（全部完成才 enabled）。
    - 處長：顯示，本部門未完成時 disabled + hover「本部門業務員比例尚未設定完成」。
-   - 月跑進行中：disabled + hover「分派執行中，無法推進」。
+   - 月名單分派進行中：disabled + hover「分派執行中，無法推進」。
    - 非 personnel_ratio / 已停用 / 歷史月份：完全不渲染（本原型固定當月 personnel_ratio，僅以註解標示）。
    - 點按 → advanceModal 確認對話框（保留作 fallback 確認）。
 
   【Feature Flag 對應】
    - 頁面上方 Demo Bar 的「自動推進 ON/OFF」toggle 對應後端 ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL
      （prod 預設 OFF；本原型預設 ON 以展示主路徑）。
-   - 「模擬月跑進行中」toggle 展示 AC-5：auto-advance 被月跑 guard 跳過 → 退回 fallback 按鈕。
+   - 「模擬月名單分派進行中」toggle 展示 AC-5：auto-advance 被月名單分派 guard 跳過 → 退回 fallback 按鈕。
    - 以上 toggle 僅為原型教學用，React 落地時由後端 flag + PUT response 欄位
      （autoAdvanced / newStage / autoAdvanceFailReason）驅動，非前端 toggle。
   ============================================================================
@@ -106,7 +106,7 @@
         <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
         <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
         <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
-        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派</a>
         <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
       </div>
     </nav>
@@ -194,11 +194,11 @@
         </div>
       </div>
       <span class="text-gray-300">|</span>
-      <!-- 月跑進行中 toggle -->
+      <!-- 月名單分派進行中 toggle -->
       <label class="inline-flex items-center gap-1.5 cursor-pointer select-none">
         <input type="checkbox" id="monthlyRunToggle" onchange="setMonthlyRunRunning(this.checked)" class="w-3.5 h-3.5 rounded border-gray-300 text-warning focus:ring-warning">
-        <span class="text-gray-600">模擬月跑進行中</span>
-        <span class="has-tooltip"><i data-lucide="help-circle" class="w-3 h-3 text-gray-400"></i><span class="tip">勾選後 auto-advance 會被月跑 guard 跳過（AC-5），退回顯示 fallback 按鈕</span></span>
+        <span class="text-gray-600">模擬月名單分派進行中</span>
+        <span class="has-tooltip"><i data-lucide="help-circle" class="w-3 h-3 text-gray-400"></i><span class="tip">勾選後 auto-advance 會被月名單分派 guard 跳過（AC-5），退回顯示 fallback 按鈕</span></span>
       </label>
       <span class="ml-auto text-[10px] text-gray-400 inline-flex items-center gap-1">
         <i data-lucide="info" class="w-3 h-3"></i>對應後端 <code class="font-mono bg-white/70 px-1 rounded border border-blue-100">ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL</code>（prod 預設 OFF）· 此原型預設 ON 展示主路徑
@@ -344,7 +344,7 @@
       </div>
 
       <!-- ===== 操作按鈕區 ===== -->
-      <!-- 推進區（btnAdvanceFallback）為 fallback：僅 flag OFF 或 auto-advance 被月跑 guard 跳過時渲染（§7.2 / AC-7）。
+      <!-- 推進區（btnAdvanceFallback）為 fallback：僅 flag OFF 或 auto-advance 被月名單分派 guard 跳過時渲染（§7.2 / AC-7）。
            React 落地時：非 personnel_ratio / 已停用 / 歷史月份 → 整個 btnAdvanceFallback 不渲染（本原型固定當月 personnel_ratio）。 -->
       <div id="actionBar" class="bg-white rounded-xl border border-border px-5 py-4 flex items-center justify-between gap-3">
         <a href="27-list-definition.html" class="text-sm text-gray-500 hover:text-gray-700 inline-flex items-center gap-1">
@@ -523,17 +523,17 @@
       // 業務處長：隱藏 rollback、隱藏「儲存全部」（僅可「儲存本部門」）
       document.getElementById('btnRollback').classList.toggle('hidden', isSectionChief);
       document.getElementById('btnSaveAll').classList.toggle('hidden', isSectionChief);
-      // 推進按鈕（fallback）顯示與否改由 renderActionBar() 依 flag / 完成度 / 角色 / 月跑決定
+      // 推進按鈕（fallback）顯示與否改由 renderActionBar() 依 flag / 完成度 / 角色 / 月名單分派決定
       renderAll();
       lucide.createIcons();
     }
 
     // ============================================================
-    // F084 v2.0 路徑開關（原型教學用 / 模擬後端 flag + 月跑 guard）
+    // F084 v2.0 路徑開關（原型教學用 / 模擬後端 flag + 月名單分派 guard）
     // ============================================================
     let AUTO_ADVANCE_FLAG = true;     // 對應 ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL（prod 預設 off；原型預設 on）
     let MONTHLY_RUN_RUNNING = false;  // 模擬 assignment_run.status IN ('pending','running')
-    // 月跑 guard 跳過後，使用者本次儲存仍需看到 fallback 按鈕 → 以此 flag 鎖定本頁顯示
+    // 月名單分派 guard 跳過後，使用者本次儲存仍需看到 fallback 按鈕 → 以此 flag 鎖定本頁顯示
     let GUARD_SKIPPED_SHOW_FALLBACK = false;
 
     function setAutoAdvanceFlag(on) {
@@ -554,7 +554,7 @@
 
     function setMonthlyRunRunning(running) {
       MONTHLY_RUN_RUNNING = running;
-      if (!running) GUARD_SKIPPED_SHOW_FALLBACK = false; // 月跑結束 → 不再強制顯示 fallback
+      if (!running) GUARD_SKIPPED_SHOW_FALLBACK = false; // 月名單分派結束 → 不再強制顯示 fallback
       renderActionBar();
       lucide.createIcons();
     }
@@ -1053,7 +1053,7 @@
     }
 
     // ============================================================
-    // renderActionBar — 依 flag / 完成度 / 角色 / 月跑 決定推進區呈現（§7.1 / §7.2）
+    // renderActionBar — 依 flag / 完成度 / 角色 / 月名單分派 決定推進區呈現（§7.1 / §7.2）
     // ============================================================
     function renderActionBar() {
       const hint = document.getElementById('autoAdvanceHint');
@@ -1074,9 +1074,9 @@
         return;
       }
 
-      // 主路徑：flag ON 且 auto-advance 未被月跑 guard 跳過 → 顯示提示條、無推進按鈕
+      // 主路徑：flag ON 且 auto-advance 未被月名單分派 guard 跳過 → 顯示提示條、無推進按鈕
       const showAutoHint = AUTO_ADVANCE_FLAG && !GUARD_SKIPPED_SHOW_FALLBACK;
-      // fallback 按鈕：flag OFF，或 auto-advance 被月跑 guard 跳過（GUARD_SKIPPED_SHOW_FALLBACK）
+      // fallback 按鈕：flag OFF，或 auto-advance 被月名單分派 guard 跳過（GUARD_SKIPPED_SHOW_FALLBACK）
       const showFallbackBtn = !AUTO_ADVANCE_FLAG || GUARD_SKIPPED_SHOW_FALLBACK;
 
       // --- auto-advance 提示條 ---
@@ -1143,15 +1143,15 @@
       // 部分完成 → autoAdvanced:false 無 failReason；僅留既有「已儲存」toast，無推進訊息（§7.1）
       if (!allDeptsDone()) { renderActionBar(); return; }
 
-      // 全部完成 + 月跑進行中 → guard 跳過（autoAdvanceFailReason: ASSIGNMENT_RUN_ALREADY_RUNNING，AC-5）
+      // 全部完成 + 月名單分派進行中 → guard 跳過（autoAdvanceFailReason: ASSIGNMENT_RUN_ALREADY_RUNNING，AC-5）
       if (MONTHLY_RUN_RUNNING) {
         GUARD_SKIPPED_SHOW_FALLBACK = true; // 退回顯示 fallback 手動按鈕
         renderActionBar();
-        toast('比例已儲存；因分派執行中，請待月跑完成後手動推進至簽核', 'warning');
+        toast('比例已儲存；因分派執行中，請待月名單分派完成後手動推進至簽核', 'warning');
         return;
       }
 
-      // 全部完成 + 月跑未進行 → auto-advance 成功（autoAdvanced:true, newStage:approval，§7.1 / AC-6）
+      // 全部完成 + 月名單分派未進行 → auto-advance 成功（autoAdvanced:true, newStage:approval，§7.1 / AC-6）
       GUARD_SKIPPED_SHOW_FALLBACK = false;
       renderActionBar();
       toast(`名單『${LIST_NM}』已自動推進至簽核階段，等待部長核准`, 'success');
@@ -1288,7 +1288,7 @@
         btn.classList.remove('border-gray-300', 'bg-white');
       }
       LATEST_REJECTION = null;
-      GUARD_SKIPPED_SHOW_FALLBACK = false; // 切換場景 → 重置月跑 guard 旗標
+      GUARD_SKIPPED_SHOW_FALLBACK = false; // 切換場景 → 重置月名單分派 guard 旗標
       document.getElementById('role-switcher').value = 'director';
 
       if (state === 'normal') {

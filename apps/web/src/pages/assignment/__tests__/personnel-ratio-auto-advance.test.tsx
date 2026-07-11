@@ -21,7 +21,7 @@ import type {
  *
  * 前端 response-driven（無 frontend flag；prototype L26-30）：
  *   - autoAdvanced=true → 自動推進 toast + redirect 名單列表
- *   - autoAdvanceFailReason=ASSIGNMENT_RUN_ALREADY_RUNNING → 月跑 warning toast + 退回 fallback 按鈕 + 不 redirect
+ *   - autoAdvanceFailReason=ASSIGNMENT_RUN_ALREADY_RUNNING → 月名單分派 warning toast + 退回 fallback 按鈕 + 不 redirect
  *   - autoAdvanced=false 無 failReason（部分完成 / flag off）→ 僅既有「已儲存」toast
  *
  * mock 對齊真實 contract（feedback_mock_real_system_contract）：
@@ -215,8 +215,8 @@ describe('PersonnelRatioConfigPage — F084 v2.0 Auto-Advance（FE）', () => {
     );
   });
 
-  // ── TC-F084-FE-003：月跑 guard → 月跑 toast + 退回 fallback 按鈕 + 不 redirect ──
-  it('TC-F084-FE-003：autoAdvanceFailReason=ASSIGNMENT_RUN_ALREADY_RUNNING → 月跑 toast + 顯示 fallback 按鈕', async () => {
+  // ── TC-F084-FE-003：月名單分派 guard → 月名單分派 toast + 退回 fallback 按鈕 + 不 redirect ──
+  it('TC-F084-FE-003：autoAdvanceFailReason=ASSIGNMENT_RUN_ALREADY_RUNNING → 月名單分派 toast + 顯示 fallback 按鈕', async () => {
     mockedSetPersonnelRatios.mockResolvedValue(
       buildPutResponse({
         autoAdvanced: false,
@@ -228,10 +228,10 @@ describe('PersonnelRatioConfigPage — F084 v2.0 Auto-Advance（FE）', () => {
     await waitFor(() => expect(screen.getByTestId('btn-save-all')).toBeEnabled());
     fireEvent.click(screen.getByTestId('btn-save-all'));
 
-    // 月跑 warning toast：完整單一字串（避免 /比例已儲存/ 與 /分派執行中/ 個別比對到多元素）
+    // 月名單分派 warning toast：完整單一字串（避免 /比例已儲存/ 與 /分派執行中/ 個別比對到多元素）
     await waitFor(() =>
       expect(
-        screen.getByText(/比例已儲存；因分派執行中，請待月跑完成後手動推進至簽核/),
+        screen.getByText(/比例已儲存；因分派執行中，請待月名單分派完成後手動推進至簽核/),
       ).toBeInTheDocument(),
     );
     // 退回顯示 fallback 手動按鈕
@@ -240,8 +240,8 @@ describe('PersonnelRatioConfigPage — F084 v2.0 Auto-Advance（FE）', () => {
     expect(screen.queryByTestId('list-definitions-page')).not.toBeInTheDocument();
   });
 
-  // ── TC-F084-FE-004：月跑 guard 跳過後 fallback 按鈕 disabled（月跑進行中）──
-  it('TC-F084-FE-004：月跑 guard 跳過 → fallback 推進按鈕 disabled', async () => {
+  // ── TC-F084-FE-004：月名單分派 guard 跳過後 fallback 按鈕 disabled（月名單分派進行中）──
+  it('TC-F084-FE-004：月名單分派 guard 跳過 → fallback 推進按鈕 disabled', async () => {
     mockedSetPersonnelRatios.mockResolvedValue(
       buildPutResponse({
         autoAdvanced: false,
@@ -287,7 +287,7 @@ describe('PersonnelRatioConfigPage — F084 v2.0 Auto-Advance（FE）', () => {
 
     // 既有「已儲存」toast
     await waitFor(() => expect(screen.getByText(/已儲存/)).toBeInTheDocument());
-    // 無自動推進訊息、無月跑訊息、無 redirect
+    // 無自動推進訊息、無月名單分派訊息、無 redirect
     expect(screen.queryByText(/已自動推進至簽核階段/)).not.toBeInTheDocument();
     expect(screen.queryByText(/因分派執行中/)).not.toBeInTheDocument();
     expect(screen.queryByTestId('list-definitions-page')).not.toBeInTheDocument();

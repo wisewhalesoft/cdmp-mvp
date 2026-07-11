@@ -16,7 +16,7 @@ import type { ReadinessResponse } from '@/api/assignment-run';
  *   2. 部門比例加總 = 100%（透過 stage=ready 隱含驗證）
  *   3. 人員比例加總 = 100%（透過 stage=ready 隱含驗證）
  *   4. 計分版本 active
- *   5. 無 pending/running 月跑
+ *   5. 無 pending/running 月名單分派
  *   6. ETL 同步狀態（pooldata/emphire/calendar/arreturndf 均 completed）
  */
 

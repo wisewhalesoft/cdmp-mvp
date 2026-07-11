@@ -81,7 +81,7 @@ import { detectOverlap } from './_utils/detect-overlap';
  *
  * 商業規則：
  *   - 覆寫式編輯（無草稿，BR-1）
- *   - 月跑鎖（API 回 409 SCORING_VERSION_LOCKED 時禁用按鈕）
+ *   - 月名單分派鎖（API 回 409 SCORING_VERSION_LOCKED 時禁用按鈕）
  *   - Fallback CARD_TYPE（M5 / M3 / HC / C3，card_level=NULL）以紫色底色顯示
  */
 
@@ -266,7 +266,7 @@ function ScoringConfigShell() {
   const navigate = useNavigate();
   const [topTab, setTopTab] = useState<TopTabKey>('cardtype');
   const { selectedCardItem, setSelected } = useSelectedCardType();
-  // Iter 5b：月跑鎖暫由 Legacy 內 fetchAll 取得；Shell 預設 false。
+  // Iter 5b：月名單分派鎖暫由 Legacy 內 fetchAll 取得；Shell 預設 false。
   // OPEN-J / OPEN-E：Iter 6+ 待整合 /assignment-run 端點查詢真實狀態，
   // 將實際 lock 狀態下傳給所有 Tab（包含 Tab 1 / Tab 5）以統一 UX。
   // Iter 7 已將 Tab 1 / Tab 5 接通 isLocked prop 通道；目前 Shell 層仍為 false，
@@ -352,7 +352,7 @@ function ScoringConfigShell() {
           onGoToListDefinitions={handleGoToListDefinitions}
         />
 
-        {/* F069 AC-6：月跑鎖警告 banner */}
+        {/* F069 AC-6：月名單分派鎖警告 banner */}
         <RunLockBanner isLocked={isLocked} />
 
         {/* 5-Tab 切換列（依 prototype 28 line 179~210 平鋪） */}
@@ -409,7 +409,7 @@ function ScoringConfigShell() {
         )}
         {needsSelection && hasSelection && topTab !== 'tier' && (
           // Tab 2~4 沿用 v1.4 ScoringConfigLegacyTabs 內部的 panel 邏輯
-          // Iter 7 已拆解：不再渲染 AppLayout / 月跑鎖 banner / 版本選擇器 / 4-Tab 列 / footer。
+          // Iter 7 已拆解：不再渲染 AppLayout / 月名單分派鎖 banner / 版本選擇器 / 4-Tab 列 / footer。
           // 改由 Shell 控制這些外殼，Legacy 只渲染對應 panel + modal + toast。
           // Iter 8：移除 selectedCardItem prop（VersionStrip 已拔除）
           // F054 v1.3 落差 1：ScoresTab 「前往 Tab 2 編輯」CTA 需切外層 topTab
@@ -567,7 +567,7 @@ export function ScoringConfigLegacyTabs({
     fetchTier();
   }, [fetchTier]);
 
-  // === 月跑鎖偵測（從錯誤碼推斷）===
+  // === 月名單分派鎖偵測（從錯誤碼推斷）===
   function checkLockFromError(err: any): boolean {
     const code = err?.response?.data?.error;
     if (code === 'SCORING_VERSION_LOCKED') {
@@ -606,9 +606,9 @@ export function ScoringConfigLegacyTabs({
   // ===== Render =====
   //
   // Iter 7 重構（review 差異 #1 / #2 / #29）：
-  //   - 移除 <AppLayout>、月跑鎖 banner、版本選擇器卡片、4-Tab 列、footer note；
+  //   - 移除 <AppLayout>、月名單分派鎖 banner、版本選擇器卡片、4-Tab 列、footer note；
   //     這些外殼由 Shell（ScoringConfigShell）統一管理，避免巢狀。
-  //   - 月跑鎖 banner 改由 Shell 的 <RunLockBanner> 顯示；本元件仍保留
+  //   - 月名單分派鎖 banner 改由 Shell 的 <RunLockBanner> 顯示；本元件仍保留
   //     `data-testid="lock-banner"`（既有測試 F054-017 / F056-025 依此判斷），
   //     位置移到 Fragment 頂部、僅在 isLocked=true 時 render。
   //   - <VersionStrip> 改顯示在 panel 頂部（替代既有 VersionCard）；保留
@@ -618,7 +618,7 @@ export function ScoringConfigLegacyTabs({
 
   return (
     <>
-      {/* 月跑鎖 banner（保留 testid 給既有測試；Shell RunLockBanner 是另一個獨立 banner） */}
+      {/* 月名單分派鎖 banner（保留 testid 給既有測試；Shell RunLockBanner 是另一個獨立 banner） */}
       {isLocked && (
         <div
           data-testid="lock-banner"
@@ -628,7 +628,7 @@ export function ScoringConfigLegacyTabs({
           <div>
             <p className="font-semibold text-[#F59E0B]">分派執行中，無法修改計分設定</p>
             <p className="text-xs text-gray-600 mt-0.5">
-              月跑期間（assignment_run.status IN pending/running）所有寫入功能將被鎖定
+              月名單分派期間（assignment_run.status IN pending/running）所有寫入功能將被鎖定
             </p>
           </div>
         </div>
@@ -1961,7 +1961,7 @@ function TierMappingTab({
         <span className="text-sm text-gray-500">共 {mappings.length} 筆對應</span>
         <p className="text-xs text-gray-500">
           <Info className="w-3.5 h-3.5 inline mr-1 text-gray-400" />
-          月跑 Stage 2 完成 CARD_LEVEL 計算後依此表 join 寫入 ob_pool_data_list.tier_level
+          月名單分派 Stage 2 完成 CARD_LEVEL 計算後依此表 join 寫入 ob_pool_data_list.tier_level
         </p>
       </div>
     </div>
@@ -2924,7 +2924,7 @@ function DisableConfirmModal({
       );
       onConfirmed();
     } catch {
-      // 月跑鎖等錯誤已透過 toast 顯示
+      // 月名單分派鎖等錯誤已透過 toast 顯示
       onClose();
     } finally {
       setSubmitting(false);
@@ -3028,7 +3028,7 @@ function EnableConfirmModal({
       );
       onConfirmed();
     } catch {
-      // 月跑鎖等錯誤已透過 toast 顯示
+      // 月名單分派鎖等錯誤已透過 toast 顯示
       onClose();
     } finally {
       setSubmitting(false);
@@ -3069,7 +3069,7 @@ function EnableConfirmModal({
                   <ul className="list-disc list-inside space-y-0.5 text-gray-600">
                     <li>狀態 inactive → active</li>
                     <li>寫入 assignment_audit_log（action=ENABLE）</li>
-                    <li>啟用後該維度重新納入下一次月跑計分</li>
+                    <li>啟用後該維度重新納入下一次月名單分派計分</li>
                   </ul>
                 </div>
               </div>
@@ -3773,7 +3773,7 @@ function LevelDeleteConfirmModal({
       } else if (code === 'CARD_LEVEL_RECORD_NOT_FOUND') {
         setErrorMsg(msg ?? '此 CARD_LEVEL 紀錄不存在（可能已被其他人刪除）');
       } else {
-        // 月跑鎖 / auth 等其他錯誤由 runWriteOp 的 toast 處理；對話框關閉
+        // 月名單分派鎖 / auth 等其他錯誤由 runWriteOp 的 toast 處理；對話框關閉
         onClose();
       }
     } finally {
@@ -3808,14 +3808,14 @@ function LevelDeleteConfirmModal({
             </p>
           </div>
           <div className="px-6 pb-2">
-            {/* AC-7 警告（規格指定文字：月跑 Stage 2 / TIER_LEVEL 對應 / F056） */}
+            {/* AC-7 警告（規格指定文字：月名單分派 Stage 2 / TIER_LEVEL 對應 / F056） */}
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-gray-700">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-[#F59E0B] mt-0.5 shrink-0" />
                 <div>
                   <p className="font-semibold text-[#F59E0B] mb-1">注意</p>
                   <p>
-                    刪除後此等級不再參與月跑 Stage 2 分級。若 TIER_LEVEL 對應（F056）中仍有此{' '}
+                    刪除後此等級不再參與月名單分派 Stage 2 分級。若 TIER_LEVEL 對應（F056）中仍有此{' '}
                     <code>(cardType, cardLevel)</code> 紀錄，將無法刪除（409{' '}
                     <code>CARD_LEVEL_REFERENCED</code>）。
                   </p>

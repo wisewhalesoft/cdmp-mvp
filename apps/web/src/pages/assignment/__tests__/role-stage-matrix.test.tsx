@@ -187,11 +187,11 @@ describe('F077 v1.3 — Role × Stage 矩陣（TS-F077-M-001~015）', () => {
   // ready 階段
   // ============================================================
 
-  it('M-013 admin / ready → 退回 / 查看；無 per-card 月跑觸發按鈕', () => {
+  it('M-013 admin / ready → 退回 / 查看；無 per-card 月名單分派觸發按鈕', () => {
     renderAt('ready', 'admin');
     expect(screen.getByTestId(`btn-rollback-${TEST_ID}`)).toBeTruthy();
     expect(screen.getByTestId(`btn-view-${TEST_ID}`)).toBeTruthy();
-    // 月跑觸發為 Ready 欄頂 CTA Banner（單一入口），per-card 不渲染
+    // 月名單分派觸發為 Ready 欄頂 CTA Banner（單一入口），per-card 不渲染
     expect(screen.queryByTestId(`btn-trigger-run-${TEST_ID}`)).toBeNull();
   });
 
@@ -217,7 +217,7 @@ describe('F077 v1.3 — 橫切條件（C-1 / C-2 / C-5）', () => {
     expect(screen.getByTestId(`btn-view-${TEST_ID}`)).toBeTruthy();
   });
 
-  it('C2-001 月跑鎖中 → 寫入按鈕 disabled；查看 enabled', () => {
+  it('C2-001 月名單分派鎖中 → 寫入按鈕 disabled；查看 enabled', () => {
     renderAt('draft', 'director', { isLocked: true });
     const editBtn = screen.getByTestId(`btn-edit-${TEST_ID}`) as HTMLButtonElement;
     const advanceBtn = screen.getByTestId(`btn-advance-${TEST_ID}`) as HTMLButtonElement;
@@ -229,7 +229,7 @@ describe('F077 v1.3 — 橫切條件（C-1 / C-2 / C-5）', () => {
     expect(viewBtn.disabled).toBe(false);
   });
 
-  it('C5-001 月跑鎖 + 歷史月份雙重條件下，查看仍可點擊', () => {
+  it('C5-001 月名單分派鎖 + 歷史月份雙重條件下，查看仍可點擊', () => {
     renderAt('approval', 'director', { isHistorical: true, isLocked: true });
     const viewBtn = screen.getByTestId(`btn-view-${TEST_ID}`) as HTMLButtonElement;
     expect(viewBtn).toBeTruthy();

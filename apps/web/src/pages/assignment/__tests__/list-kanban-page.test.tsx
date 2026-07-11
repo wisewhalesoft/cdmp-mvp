@@ -446,7 +446,7 @@ describe('F048 v2.0 — 搜尋過濾（TS-F048-K-009~010）', () => {
       buildResponse({
         lists: [
           makeItem({ listNo: 'OB202605001', listNm: '車貸催收名單', stage: 'draft' }),
-          makeItem({ listNo: 'OB202605002', listNm: '信貸月跑', stage: 'draft' }),
+          makeItem({ listNo: 'OB202605002', listNm: '信貸月名單分派', stage: 'draft' }),
           makeItem({ listNo: 'OB202605003', listNm: '車貸逾期', stage: 'draft' }),
         ],
         stageCounts: {
@@ -481,7 +481,7 @@ describe('F048 v2.0 — 搜尋過濾（TS-F048-K-009~010）', () => {
       buildResponse({
         lists: [
           makeItem({ listNo: 'OB202605001', listNm: '車貸催收名單', stage: 'draft' }),
-          makeItem({ listNo: 'OB202605002', listNm: '信貸月跑', stage: 'draft' }),
+          makeItem({ listNo: 'OB202605002', listNm: '信貸月名單分派', stage: 'draft' }),
         ],
         stageCounts: {
           draft: 2,
@@ -637,7 +637,7 @@ describe('F048 v2.0 — Detail Drawer（TS-F048-D-001~003）', () => {
     });
   });
 
-  it('D-003 月跑執行中「查看」按鈕仍可觸發 Drawer', async () => {
+  it('D-003 月名單分派執行中「查看」按鈕仍可觸發 Drawer', async () => {
     mockedListLists.mockResolvedValue(
       buildResponse({
         lockState: { locked: true, reason: '分派執行中' },
@@ -808,7 +808,7 @@ describe('F049 v1.1 / F061 v1.4 — Ready CTA Banner（TS-F049-CTA-001~005 + F06
     });
   }
 
-  it('F049-CTA-001 / F061-CTA-001 ready ≥1 且非歷史月份、非月跑鎖 → Banner 渲染含主按鈕 + secondary 試算', async () => {
+  it('F049-CTA-001 / F061-CTA-001 ready ≥1 且非歷史月份、非月名單分派鎖 → Banner 渲染含主按鈕 + secondary 試算', async () => {
     mockedListLists.mockResolvedValue(withReady(2));
     renderPage();
     await waitFor(() => {
@@ -840,7 +840,7 @@ describe('F049 v1.1 / F061 v1.4 — Ready CTA Banner（TS-F049-CTA-001~005 + F06
     expect(screen.queryByTestId('ready-cta-banner')).toBeNull();
   });
 
-  it('F049-CTA-004 / F061-CTA-003 月跑執行中 → Banner disabled，主按鈕 + 試算均 disabled', async () => {
+  it('F049-CTA-004 / F061-CTA-003 月名單分派執行中 → Banner disabled，主按鈕 + 試算均 disabled', async () => {
     mockedListLists.mockResolvedValue(withReady(2, true));
     renderPage();
     await waitFor(() => {
@@ -1375,7 +1375,7 @@ describe('F048 v2.0 — Banner（TS-F048-B-001~002）', () => {
     expect(screen.getByTestId('btn-view-OB202504001')).toBeTruthy();
   });
 
-  it('B-002 月跑執行中 → 橘色通知列；Toolbar 新增名單 disabled；寫入按鈕 disabled；查看 enabled', async () => {
+  it('B-002 月名單分派執行中 → 橘色通知列；Toolbar 新增名單 disabled；寫入按鈕 disabled；查看 enabled', async () => {
     mockedListLists.mockResolvedValue(
       buildResponse({
         lockState: { locked: true, reason: '分派執行中' },

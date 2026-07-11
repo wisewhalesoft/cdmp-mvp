@@ -8,11 +8,11 @@
  *   - 非歷史月份
  *
  * 兩個按鈕：
- *   - 主按鈕「執行月跑」：F061 v1.4 § 9 / US-132 AC-3
+ *   - 主按鈕「執行月名單分派」：F061 v1.4 § 9 / US-132 AC-3
  *   - secondary「試算」：F049 v1.1 AC-Banner-Entry，連結至 /assignment/estimate
  *     對齊 prototype 30-stage0-estimate.html
  *
- * 月跑鎖中：兩個按鈕均 disabled，Banner 改琥珀色 disabled 樣式（仍渲染）。
+ * 月名單分派鎖中：兩個按鈕均 disabled，Banner 改琥珀色 disabled 樣式（仍渲染）。
  *
  * Banner 不渲染（ready=0 或歷史月份）→ 父層條件不渲染本元件（DOM 完全不存在）。
  */
@@ -88,13 +88,13 @@ export function ReadyCtaBanner({
           className="flex-1 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded bg-blue-700 text-white hover:bg-blue-800 shadow-sm transition"
         >
           <PlayCircle className="w-3 h-3" />
-          執行 {workYm} 月跑
+          執行 {workYm} 月名單分派
         </button>
         <Link
           to="/assignment/estimate"
           data-testid="btn-estimate"
           className="shrink-0 inline-flex items-center justify-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold rounded border border-blue-700 text-blue-700 bg-white hover:bg-blue-50 transition"
-          title="Stage 0 試算（預估月跑筆數與分配）"
+          title="Stage 0 試算（預估月名單分派筆數與分配）"
         >
           <Calculator className="w-3 h-3" />
           試算

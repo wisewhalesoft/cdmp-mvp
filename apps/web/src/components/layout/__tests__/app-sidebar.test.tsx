@@ -46,14 +46,14 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     expect(allLabels).toContain('計分卡設定');
     expect(allLabels).toContain('名單定義');
     expect(allLabels).toContain('Stage 0 試算');
-    expect(allLabels).toContain('觸發月跑');
+    expect(allLabels).toContain('觸發月名單分派');
     expect(allLabels).not.toContain('帳號管理');
     expect(allLabels).not.toContain('資料來源');
     expect(allLabels).not.toContain('資料擷取');
     expect(allLabels).not.toContain('ETL Pipeline');
   });
 
-  it('業務處長（user + section_chief） → M02 計分卡 / 觸發月跑 隱藏；Stage 0 試算（F049 v2.0 / US-168 唯讀）與其他 E07 子項可見', () => {
+  it('業務處長（user + section_chief） → M02 計分卡 / 觸發月名單分派 隱藏；Stage 0 試算（F049 v2.0 / US-168 唯讀）與其他 E07 子項可見', () => {
     const visible = getVisibleMenuItems('user', 'section_chief');
     const allLabels = visible.flatMap((sec) => [
       ...(sec.items?.map((i) => i.label) ?? []),
@@ -74,7 +74,7 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     expect(allLabels).toContain('Stage 0 試算');
     // 不可見（director_only）
     expect(allLabels).not.toContain('計分卡設定');
-    expect(allLabels).not.toContain('觸發月跑');
+    expect(allLabels).not.toContain('觸發月名單分派');
     // 不可見（admin 專屬）
     expect(allLabels).not.toContain('帳號管理');
   });
@@ -198,7 +198,7 @@ describe('AppSidebar (component)', () => {
     expect(screen.getByText('客戶名單分派')).toBeInTheDocument();
     expect(screen.getByText('Stage 0 試算')).toBeInTheDocument();
     expect(screen.queryByText('計分卡設定')).toBeNull();
-    expect(screen.queryByText('觸發月跑')).toBeNull();
+    expect(screen.queryByText('觸發月名單分派')).toBeNull();
   });
 
   it('一般使用者 sidebar 僅顯示 Customer 360', () => {

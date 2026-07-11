@@ -64,7 +64,7 @@
         <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
         <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
         <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
-        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派</a>
         <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
       </div>
     </nav>
@@ -165,7 +165,7 @@
 
       <!-- ===== 模式 A：清單頁 ===== -->
       <div id="modeListWrap" class="hidden space-y-4">
-        <!-- 月跑就緒狀態 banner -->
+        <!-- 月名單分派就緒狀態 banner -->
         <section id="monthlyRunBanner" class="bg-white rounded-xl border border-border p-5">
           <div class="flex items-start justify-between gap-4">
             <div class="flex items-center gap-3">
@@ -173,25 +173,25 @@
                 <i data-lucide="check-circle-2" class="w-6 h-6"></i>
               </div>
               <div>
-                <h2 class="text-lg font-semibold text-gray-800" id="mrTitle">本月所有名單均已準備完成 · 可執行月跑</h2>
-                <p class="text-xs text-gray-500 mt-0.5" id="mrSubtitle">2026-05 共 <strong id="mrReadyCount">3</strong> 筆名單已準備完成，預計月跑時間 2026-05-20 02:00</p>
+                <h2 class="text-lg font-semibold text-gray-800" id="mrTitle">本月所有名單均已準備完成 · 可執行月名單分派</h2>
+                <p class="text-xs text-gray-500 mt-0.5" id="mrSubtitle">2026-05 共 <strong id="mrReadyCount">3</strong> 筆名單已準備完成，預計月名單分派時間 2026-05-20 02:00</p>
               </div>
             </div>
             <div class="flex items-center gap-2">
               <button id="btnRunMonth" onclick="onRunMonth()"
                 class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary">
-                <i data-lucide="play-circle" class="w-4 h-4"></i>執行月跑
+                <i data-lucide="play-circle" class="w-4 h-4"></i>執行月名單分派
               </button>
             </div>
           </div>
         </section>
 
-        <!-- 月跑前提示（部分名單未 ready） -->
+        <!-- 月名單分派前提示（部分名單未 ready） -->
         <section id="partialReadyBanner" class="hidden bg-amber-50/60 border border-amber-200 rounded-xl p-4">
           <div class="flex items-start gap-3">
             <i data-lucide="alert-triangle" class="w-5 h-5 text-warning mt-0.5 shrink-0"></i>
             <div class="flex-1 text-sm text-amber-900">
-              <p class="font-semibold">本月仍有 <span id="notReadyCount">2</span> 筆名單未進入準備完成階段，無法執行月跑</p>
+              <p class="font-semibold">本月仍有 <span id="notReadyCount">2</span> 筆名單未進入準備完成階段，無法執行月名單分派</p>
               <p class="text-xs text-amber-800 mt-1">尚未完成名單：<span id="notReadyList" class="font-mono"></span></p>
               <p class="text-xs text-amber-700 mt-1">請先完成上述名單的「個別業務比例」與「簽核」階段。</p>
             </div>
@@ -225,7 +225,7 @@
             </button>
             <button id="btnRunMonthDetail" onclick="onRunMonth()"
               class="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm">
-              <i data-lucide="play-circle" class="w-4 h-4"></i>執行月跑
+              <i data-lucide="play-circle" class="w-4 h-4"></i>執行月名單分派
             </button>
           </div>
         </div>
@@ -238,7 +238,7 @@
                 <span id="detailListNm">2026-05 業務二部 主力催收</span>
                 <span class="ml-2 text-base text-gray-500 font-normal">— <span class="font-mono" id="detailListNo">OB202605002</span></span>
               </h1>
-              <p class="text-xs text-gray-500 mt-1">本名單已通過部長核准，等待執行月跑進行後續計算（亦可由部長／系統管理者退回重新審核）。</p>
+              <p class="text-xs text-gray-500 mt-1">本名單已通過部長核准，等待執行月名單分派進行後續計算（亦可由部長／系統管理者退回重新審核）。</p>
             </div>
             <div class="text-right">
               <p class="text-[10px] text-gray-400 uppercase tracking-wider">最終核准資訊</p>
@@ -374,7 +374,7 @@
           <div class="text-xs text-red-900">
             <p class="font-semibold">退回後將進行：</p>
             <ul class="list-disc pl-4 mt-1 space-y-0.5 text-red-800">
-              <li>名單從「月跑可觸發清單」中 <strong>移除</strong></li>
+              <li>名單從「月名單分派可觸發清單」中 <strong>移除</strong></li>
               <li>刪除本名單的核准紀錄（共 <span id="rollbackApprovalCount">1</span> 筆）</li>
               <li>名單退回簽核階段，部長／系統管理者需重新審閱</li>
               <li>稽核日誌將寫入完整紀錄供日後追溯</li>
@@ -445,7 +445,7 @@
       const blocked = !m.canView;
       document.getElementById('roleBlockedBanner').classList.toggle('hidden', !blocked);
       document.getElementById('mainContent').classList.toggle('hidden', blocked);
-      // 月跑按鈕 / Rollback 按鈕依角色顯示
+      // 月名單分派按鈕 / Rollback 按鈕依角色顯示
       const btnRun = document.getElementById('btnRunMonth');
       const btnRunDetail = document.getElementById('btnRunMonthDetail');
       const btnRollback = document.getElementById('btnRollback');
@@ -567,7 +567,7 @@
       if (m.scope) {
         lists = lists.filter(l => l.scope.includes(m.scope));
       }
-      // 月跑就緒 banner
+      // 月名單分派就緒 banner
       const mrBanner = document.getElementById('monthlyRunBanner');
       const mrIcon = document.getElementById('mrIcon');
       const mrTitle = document.getElementById('mrTitle');
@@ -578,16 +578,16 @@
       if (ALL_READY) {
         mrIcon.className = 'w-12 h-12 rounded-full flex items-center justify-center bg-green-100 text-success';
         mrIcon.innerHTML = '<i data-lucide="check-circle-2" class="w-6 h-6"></i>';
-        mrTitle.textContent = '本月所有名單均已準備完成 · 可執行月跑';
+        mrTitle.textContent = '本月所有名單均已準備完成 · 可執行月名單分派';
         document.getElementById('mrReadyCount').textContent = lists.length;
-        mrSubtitle.innerHTML = `2026-05 共 <strong>${lists.length}</strong> 筆名單已準備完成，預計月跑時間 2026-05-20 02:00`;
+        mrSubtitle.innerHTML = `2026-05 共 <strong>${lists.length}</strong> 筆名單已準備完成，預計月名單分派時間 2026-05-20 02:00`;
         partial.classList.add('hidden');
         if (btnRun) btnRun.disabled = !m.canRunMonth;
       } else {
         mrIcon.className = 'w-12 h-12 rounded-full flex items-center justify-center bg-amber-100 text-warning';
         mrIcon.innerHTML = '<i data-lucide="alert-triangle" class="w-6 h-6"></i>';
-        mrTitle.textContent = '本月仍有名單未進入準備完成 · 月跑暫不可執行';
-        mrSubtitle.innerHTML = `已完成：<strong>${lists.length}</strong> 筆 · 未完成：<strong>${NOT_READY_LISTS.length}</strong> 筆，待全部完成方可月跑`;
+        mrTitle.textContent = '本月仍有名單未進入準備完成 · 月名單分派暫不可執行';
+        mrSubtitle.innerHTML = `已完成：<strong>${lists.length}</strong> 筆 · 未完成：<strong>${NOT_READY_LISTS.length}</strong> 筆，待全部完成方可月名單分派`;
         partial.classList.remove('hidden');
         document.getElementById('notReadyCount').textContent = NOT_READY_LISTS.length;
         document.getElementById('notReadyList').innerHTML = NOT_READY_LISTS.map(l => `${l.listNo}（${STAGE_LABEL_ZH[l.stage] || l.stage}）`).join('、');
@@ -793,10 +793,10 @@
     }
 
     // ============================================================
-    // 操作：執行月跑
+    // 操作：執行月名單分派
     // ============================================================
     function onRunMonth() {
-      toast('mock：將跳轉至「觸發月跑」頁面 31-trigger-run.html', 'info');
+      toast('mock：將跳轉至「觸發月名單分派」頁面 31-trigger-run.html', 'info');
       setTimeout(() => { window.location.href = '31-trigger-run.html'; }, 800);
     }
 

@@ -1,7 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 
 /**
- * F069 AC-6 / F070 AC-6 / F071 AC-7 / F072 AC-8：月跑鎖警告 banner
+ * F069 AC-6 / F070 AC-6 / F071 AC-7 / F072 AC-8：月名單分派鎖警告 banner
  *
  * 對應 prototype 28 line 170~177（`monthLockBanner` 區塊）：
  *   - 當 assignment_run.status IN ('pending', 'running') 時顯示
@@ -15,7 +15,7 @@ interface Props {
   /** 是否顯示 banner（依 assignment_run 狀態） */
   isLocked: boolean;
   /**
-   * 月跑狀態文字（可選；預設 "running"）。
+   * 月名單分派狀態文字（可選；預設 "running"）。
    * 若後端回傳 status='pending' 可帶入此 prop 客製顯示。
    */
   status?: string;
@@ -39,7 +39,7 @@ export function RunLockBanner({ isLocked, status = 'running' }: Props) {
           分派執行中（assignment_run.status = {status}）
         </p>
         <p className="text-xs mt-0.5">
-          所有寫入功能（新增 / 編輯 / 停用）已暫時鎖定，鎖定將於月跑完成後自動解除
+          所有寫入功能（新增 / 編輯 / 停用）已暫時鎖定，鎖定將於月名單分派完成後自動解除
         </p>
       </div>
     </div>

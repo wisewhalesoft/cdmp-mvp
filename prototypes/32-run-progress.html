@@ -82,7 +82,7 @@
         <i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算
       </a>
       <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
-        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月跑
+        <i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派
       </a>
       <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition">
         <i data-lucide="history" class="w-4 h-4"></i>執行歷史
@@ -161,7 +161,7 @@
             </span>
             <button id="cancelBtn" onclick="openCancelModal()" class="hidden inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-danger border border-danger/30 rounded-md hover:bg-red-50 transition">
               <i data-lucide="x-octagon" class="w-3.5 h-3.5"></i>
-              取消月跑
+              取消月名單分派
             </button>
           </div>
         </div>
@@ -217,7 +217,7 @@
         <div class="flex-1">
           <p class="font-semibold text-danger">執行失敗於 Stage 3 部門分配</p>
           <p class="text-xs text-gray-600 mt-1 font-mono bg-white border border-red-100 rounded p-2 leading-relaxed">
-            ASSIGNMENT_DEPT_RATIO_MISMATCH: 部門 D03 設定比例 25% 但實際可分配人員工作量已飽和（available_capacity = 0）。請先至「比例設定」調整 D03 部門比例或增加人員容量上限後重新觸發月跑。
+            ASSIGNMENT_DEPT_RATIO_MISMATCH: 部門 D03 設定比例 25% 但實際可分配人員工作量已飽和（available_capacity = 0）。請先至「比例設定」調整 D03 部門比例或增加人員容量上限後重新觸發月名單分派。
           </p>
           <div class="mt-2 flex items-center gap-2">
             <a href="31-trigger-run.html" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-danger rounded-md hover:bg-red-700 transition">
@@ -235,7 +235,7 @@
       <div id="pendingBanner" class="hidden flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
         <i data-lucide="clock" class="w-5 h-5 text-primary mt-0.5 shrink-0"></i>
         <div>
-          <p class="font-semibold text-primary">月跑已排入佇列，等待 Worker 開始執行</p>
+          <p class="font-semibold text-primary">月名單分派已排入佇列，等待 Worker 開始執行</p>
           <p class="text-xs text-gray-600 mt-0.5">通常於 30 秒內會進入 running 狀態。本頁將每 3 秒自動重新整理。</p>
         </div>
       </div>
@@ -313,7 +313,7 @@
         <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
         <div>
           <p class="font-medium text-gray-700 mb-0.5">執行進度說明</p>
-          <p>F062 採前端 Polling（預設 3 秒，可由 ASSIGNMENT_PROGRESS_POLL_INTERVAL_MS 配置）。月跑進入 completed / failed 後自動停止輪詢。Stage 階段紀錄儲存於 assignment_run_stage_log（AD-E07-7）。Admin 可中止 running 狀態的月跑。</p>
+          <p>F062 採前端 Polling（預設 3 秒，可由 ASSIGNMENT_PROGRESS_POLL_INTERVAL_MS 配置）。月名單分派進入 completed / failed 後自動停止輪詢。Stage 階段紀錄儲存於 assignment_run_stage_log（AD-E07-7）。Admin 可中止 running 狀態的月名單分派。</p>
         </div>
       </div>
 
@@ -330,7 +330,7 @@
           <div class="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
             <i data-lucide="alert-triangle" class="w-6 h-6 text-danger"></i>
           </div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">取消月跑執行？</h3>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">取消月名單分派執行？</h3>
           <p class="text-sm text-gray-600 leading-relaxed">
             Run <span class="font-mono text-gray-800">550e8400-e29b</span> 將被中止並標記為 cancelled。
           </p>
@@ -344,7 +344,7 @@
                 <ul class="list-disc list-inside space-y-0.5 text-gray-600">
                   <li>已完成的 Stage 0 / Stage 1 將保留 stage_log 紀錄</li>
                   <li>未完成的 Stage 不會寫入快照</li>
-                  <li>需重新觸發新的月跑（產生新 run_id）</li>
+                  <li>需重新觸發新的月名單分派（產生新 run_id）</li>
                 </ul>
               </div>
             </div>
