@@ -1,16 +1,17 @@
 /**
  * AD-E07-40 P2b — Producer/Consumer 接線 + 輪詢 Loop + processPayload 共用（fake/unit，免真實連線）。
  *
- * 覆蓋測試設計 AD-E07-40-P2b-test.md 之 fake/unit 群組（§0.2）：
- *   一、DISPATCH（6）— 🔴 driver 三分支 MUST-FIX 守門（不被 `!boss` 二元 gate 吞掉）
- *   二、PROD（5）     — Producer mssql 分支業務行為（轉接 MssqlQueueService）
- *   三、POLL（10）    — Consumer 輪詢 loop（reentrancy guard + 生命週期，vi.useFakeTimers）
- *   四、PAYLOAD（8）  — 🔴 processPayload 共用（I-MSSQL-QUEUE-PAYLOAD-UNITY-01）+ JSON.parse 轉接
+ * 覆蓋測試設計 AD-E07-40-P2b-test.md 之 fake/unit 群組（§0.2；PG 全面移除後收斂為 mssql 單一路徑，
+ * 原 postgres/boss 分支之 DISPATCH-004 / POLL-001 / PAYLOAD-007 已刪）：
+ *   一、DISPATCH（4）— driver 判定 + 防呆（mssql 走 MssqlQueueService；非 mssql 不啟輪詢）
+ *   二、PROD（5）     — Producer 業務行為（轉接 MssqlQueueService）
+ *   三、POLL（9）     — Consumer 輪詢 loop（reentrancy guard + 生命週期，vi.useFakeTimers）
+ *   四、PAYLOAD（7）  — processPayload 共用（I-MSSQL-QUEUE-PAYLOAD-UNITY-01）+ JSON.parse 轉接
  *   七、STATIC（3）   — 命名鎖定 + 前瞻性守門
  *   （ZERO-003 靜態守門一併置於本檔末，orphan-reaper / cancellation-poller 零改動）
  *
- * 手法（§0.2）：比照既有 f098-producer/consumer.spec.ts 之 fake boss 風格，改用 fake `MssqlQueueService`
- *   + fake `ConfigService`（driver 判定）+ `vi.useFakeTimers()`（輪詢時序）。需 MSSQL：否，CI 恆常執行。
+ * 手法（§0.2）：fake `MssqlQueueService` + fake `ConfigService`（driver 判定）+ `vi.useFakeTimers()`
+ *   （輪詢時序）。需 MSSQL：否，CI 恆常執行。
  *
  * Level: Unit。需 Postgres/MSSQL：否。
  */
@@ -24,19 +25,18 @@ import {
 } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import type PgBoss from 'pg-boss';
 import type { ConfigService } from '@nestjs/config';
 import { RunQueueProducer } from '../run-queue.producer';
 import { RunQueueConsumer } from '../run-queue.consumer';
 import type { MssqlQueueService } from '../mssql-queue.service';
-import { DEFAULT_RUN_QUEUE_TUNING, RunQueueTuning } from '../pg-boss.provider';
-import { RUN_QUEUE_NAME, RUN_QUEUE_BATCH_SIZE } from '../run-queue.constants';
+import { DEFAULT_RUN_QUEUE_TUNING, RunQueueTuning } from '../run-queue-tuning.provider';
+import { RUN_QUEUE_NAME } from '../run-queue.constants';
 
 // ── 檔案路徑（靜態守門用）────────────────────────────────────────────────────
 const QUEUE_DIR = join(__dirname, '..');
 const CONSUMER_PATH = join(QUEUE_DIR, 'run-queue.consumer.ts');
 const PRODUCER_PATH = join(QUEUE_DIR, 'run-queue.producer.ts');
-const PROVIDER_PATH = join(QUEUE_DIR, 'pg-boss.provider.ts');
+const PROVIDER_PATH = join(QUEUE_DIR, 'run-queue-tuning.provider.ts');
 const REAPER_PATH = join(QUEUE_DIR, 'orphan-reaper.ts');
 const CANCEL_PATH = join(QUEUE_DIR, 'cancellation-poller.ts');
 const SERVICE_PATH = join(QUEUE_DIR, 'mssql-queue.service.ts');
@@ -95,29 +95,7 @@ function asSvc(q: FakeMssqlQueue): MssqlQueueService {
   return q as unknown as MssqlQueueService;
 }
 
-interface FakeBoss {
-  send: ReturnType<typeof vi.fn>;
-  cancel: ReturnType<typeof vi.fn>;
-  work: ReturnType<typeof vi.fn>;
-}
-function makeBoss(jobId = 'pg-job-id'): FakeBoss {
-  return {
-    send: vi.fn(async () => jobId),
-    cancel: vi.fn(async () => undefined),
-    work: vi.fn(async () => 'worker-id'),
-  };
-}
-
-function makeJob(
-  runId: string,
-  ym: string,
-  id = 'job-1',
-): PgBoss.Job<{ runId: string; ym: string }> {
-  return { id, name: RUN_QUEUE_NAME, data: { runId, ym }, expireInSeconds: 900 };
-}
-
 function makeConsumer(opts: {
-  boss?: FakeBoss | null;
   dbType?: string | null;
   mssqlQueue?: FakeMssqlQueue | null;
   tuning?: RunQueueTuning;
@@ -128,7 +106,6 @@ function makeConsumer(opts: {
   const runRepo =
     opts.runRepo ?? { findOne: vi.fn(async () => ({ run_id: 'r1', status: 'pending' })) };
   return new RunQueueConsumer(
-    (opts.boss ?? null) as unknown as PgBoss,
     pipeline as any,
     runRepo as any,
     opts.tuning ?? DEFAULT_RUN_QUEUE_TUNING,
@@ -146,71 +123,45 @@ afterEach(() => {
 // 一、DISPATCH — 🔴 driver 三分支 MUST-FIX 守門
 // ===========================================================================
 describe('AD-E07-40 P2b DISPATCH（driver 三分支 MUST-FIX）', () => {
-  it('TS-MSSQL-P2B-DISPATCH-001（🔴 MUST-FIX）：mssql → send 呼叫 mssqlQueue.send，不誤觸 boss null 防呆 throw', async () => {
+  it('TS-MSSQL-P2B-DISPATCH-001：mssql → send 呼叫 mssqlQueue.send', async () => {
     const mq = makeMssqlQueue();
-    // mssql 環境下 boss 必為 null（createPgBoss 對非 postgres 回傳 null）。
-    const producer = new RunQueueProducer(
-      null,
-      DEFAULT_RUN_QUEUE_TUNING,
-      makeConfig('mssql'),
-      asSvc(mq),
-    );
+    const producer = new RunQueueProducer(asSvc(mq));
     const jobId = await producer.send({ runId: 'r1', ym: '202606' });
     expect(mq.send).toHaveBeenCalledTimes(1);
     expect(jobId).toBe('mssql-job-id');
   });
 
-  it('TS-MSSQL-P2B-DISPATCH-002（🔴 MUST-FIX）：mssql → cancel 呼叫 mssqlQueue.cancel，不誤觸 boss null 靜默 return', async () => {
+  it('TS-MSSQL-P2B-DISPATCH-002：mssql → cancel 呼叫 mssqlQueue.cancel', async () => {
     const mq = makeMssqlQueue();
-    const producer = new RunQueueProducer(null, DEFAULT_RUN_QUEUE_TUNING, makeConfig('mssql'), asSvc(mq));
+    const producer = new RunQueueProducer(asSvc(mq));
     await producer.cancel('some-job-id');
     expect(mq.cancel).toHaveBeenCalledTimes(1);
     expect(mq.cancel).toHaveBeenCalledWith('some-job-id');
   });
 
-  it('TS-MSSQL-P2B-DISPATCH-003（🔴 最核心守門）：mssql → onModuleInit 啟動輪詢（setInterval 1 次），不呼叫 boss.work、不 warn', async () => {
+  it('TS-MSSQL-P2B-DISPATCH-003（🔴 最核心守門）：mssql → onModuleInit 啟動輪詢（setInterval 1 次），不 warn', async () => {
     const mq = makeMssqlQueue();
-    const boss = makeBoss();
-    const consumer = makeConsumer({ boss, dbType: 'mssql', mssqlQueue: mq });
+    const consumer = makeConsumer({ dbType: 'mssql', mssqlQueue: mq });
     const warnSpy = vi.spyOn((consumer as any).logger, 'warn');
     const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
     await consumer.onModuleInit();
     expect(setIntervalSpy).toHaveBeenCalledTimes(1);
-    expect(boss.work).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
     consumer.onModuleDestroy(); // 清 timer，避免懸掛 handle
   });
 
-  it('TS-MSSQL-P2B-DISPATCH-004：postgres（boss 存在）→ 走既有 boss 路徑，mssqlQueue 完全不被呼叫', async () => {
-    const mq = makeMssqlQueue();
-    const boss = makeBoss();
-    const producer = new RunQueueProducer(boss as unknown as PgBoss, DEFAULT_RUN_QUEUE_TUNING, makeConfig('postgres'), asSvc(mq));
-    const consumer = makeConsumer({ boss, dbType: 'postgres', mssqlQueue: mq });
-    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
-
-    await producer.send({ runId: 'r1', ym: '202606' });
-    await producer.cancel('job-x');
-    await consumer.onModuleInit();
-
-    expect(boss.send).toHaveBeenCalledTimes(1);
-    expect(boss.cancel).toHaveBeenCalledTimes(1);
-    expect(boss.work).toHaveBeenCalledTimes(1);
-    expect(mq.send).not.toHaveBeenCalled();
-    expect(mq.cancel).not.toHaveBeenCalled();
-    expect(mq.claimNext).not.toHaveBeenCalled();
-    expect(setIntervalSpy).not.toHaveBeenCalled();
-  });
-
-  it('TS-MSSQL-P2B-DISPATCH-005：非 postgres 非 mssql（sqlite，boss=null 且無 mssqlQueue）→ 既有防呆保留，不誤判 mssql', async () => {
-    // config=null → 走 process.env.DB_TYPE（測試預設 sqlite）。mssqlQueue 未提供。
-    const producer = new RunQueueProducer(null, DEFAULT_RUN_QUEUE_TUNING, null, null);
-    const consumer = makeConsumer({ boss: null, dbType: null, mssqlQueue: null });
+  it('TS-MSSQL-P2B-DISPATCH-005：非 mssql（sqlite，無 mssqlQueue）→ 防呆保留，不啟動輪詢', async () => {
+    // producer 無 mssqlQueue → send 拋（佇列不可用）；consumer config=null → 走 process.env.DB_TYPE（測試預設 sqlite）。
+    const producer = new RunQueueProducer(null);
+    const consumer = makeConsumer({ dbType: null, mssqlQueue: null });
     const warnSpy = vi.spyOn((consumer as any).logger, 'warn');
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
 
     await expect(producer.send({ runId: 'r', ym: '202606' })).rejects.toThrow();
     await expect(producer.cancel('j')).resolves.toBeUndefined();
     await expect(consumer.onModuleInit()).resolves.toBeUndefined();
-    expect(warnSpy).toHaveBeenCalledTimes(1); // onModuleInit warn+return（不註冊任何 handler）
+    expect(setIntervalSpy).not.toHaveBeenCalled(); // 非 mssql → 不啟輪詢
+    expect(warnSpy).toHaveBeenCalledTimes(1); // onModuleInit warn+return
   });
 
   it('TS-MSSQL-P2B-CONFIG-006（🔴 MUST-FIX，AD §4.2 缺口）：assignment.module.ts providers 含 MssqlQueueService（API 程序）', () => {
@@ -231,7 +182,7 @@ describe('AD-E07-40 P2b PROD（Producer mssql 分支）', () => {
   let producer: RunQueueProducer;
   beforeEach(() => {
     mq = makeMssqlQueue();
-    producer = new RunQueueProducer(null, DEFAULT_RUN_QUEUE_TUNING, makeConfig('mssql'), asSvc(mq));
+    producer = new RunQueueProducer(asSvc(mq));
   });
 
   it('TS-MSSQL-P2B-PROD-001：send mssql 分支參數 = (RUN_QUEUE_NAME, payload, RUN_QUEUE_RETRY_LIMIT=0)', async () => {
@@ -276,23 +227,12 @@ describe('AD-E07-40 P2b PROD（Producer mssql 分支）', () => {
 // 三、POLL — Consumer 輪詢 Loop（reentrancy + 生命週期）
 // ===========================================================================
 describe('AD-E07-40 P2b POLL（輪詢 loop）', () => {
-  it('TS-MSSQL-P2B-POLL-001：postgres 分支維持既有行為（boss.work 1 次，不啟動 pollTimer）', async () => {
-    const boss = makeBoss();
-    const consumer = makeConsumer({ boss, dbType: 'postgres' });
-    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
-    await consumer.onModuleInit();
-    expect(boss.work).toHaveBeenCalledTimes(1);
-    expect(setIntervalSpy).not.toHaveBeenCalled();
-  });
-
-  it('TS-MSSQL-P2B-POLL-002：mssql 分支啟動輪詢（setInterval 1 次），不呼叫 boss.work', async () => {
+  it('TS-MSSQL-P2B-POLL-002：mssql 分支啟動輪詢（setInterval 1 次）', async () => {
     const mq = makeMssqlQueue();
-    const boss = makeBoss();
-    const consumer = makeConsumer({ boss, dbType: 'mssql', mssqlQueue: mq });
+    const consumer = makeConsumer({ dbType: 'mssql', mssqlQueue: mq });
     const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
     await consumer.onModuleInit();
     expect(setIntervalSpy).toHaveBeenCalledTimes(1);
-    expect(boss.work).not.toHaveBeenCalled();
     consumer.onModuleDestroy();
   });
 
@@ -444,7 +384,7 @@ describe('AD-E07-40 P2b POLL（輪詢 loop）', () => {
 // 四、PAYLOAD — 🔴 processPayload 共用
 // ===========================================================================
 describe('AD-E07-40 P2b PAYLOAD（processPayload 共用）', () => {
-  it('TS-MSSQL-P2B-PAYLOAD-001（🔴 旗艦）：pg-boss（handleJobs）與 mssql（pollOnce）呼叫同一個 processPayload', async () => {
+  it('TS-MSSQL-P2B-PAYLOAD-001（🔴 旗艦）：mssql（pollOnce）領到 job → 呼叫 processPayload', async () => {
     const mq = makeMssqlQueue();
     mq.claimNext.mockResolvedValueOnce({
       jobId: 'j1',
@@ -454,10 +394,9 @@ describe('AD-E07-40 P2b PAYLOAD（processPayload 共用）', () => {
     const consumer = makeConsumer({ dbType: 'mssql', mssqlQueue: mq });
     const ppSpy = vi.spyOn(consumer as any, 'processPayload').mockResolvedValue(undefined);
 
-    await consumer.handleJobs([makeJob('run-a', '202601')]); // pg-boss 路徑
-    await (consumer as any).pollOnce(); // mssql 路徑
+    await (consumer as any).pollOnce(); // mssql 路徑（PG 移除後唯一路徑）
 
-    expect(ppSpy).toHaveBeenCalledTimes(2); // 同一 spy 累計 = 2（證明兩路徑呼叫同一方法定義）
+    expect(ppSpy).toHaveBeenCalledTimes(1);
   });
 
   it('TS-MSSQL-P2B-PAYLOAD-002（靜態）：pipeline.runPipeline / 取消檢查特徵字串於 consumer 各恰 1 次（單一方法）', () => {
@@ -502,14 +441,6 @@ describe('AD-E07-40 P2b PAYLOAD（processPayload 共用）', () => {
     await expect(
       (consumer as any).processPayload('job-1', { runId: 'r1', ym: '202606' }),
     ).resolves.toBeUndefined();
-  });
-
-  it('TS-MSSQL-P2B-PAYLOAD-007：pg-boss 轉接層從 job.data/job.id 取參數傳入 processPayload', async () => {
-    const consumer = makeConsumer({ boss: makeBoss(), dbType: 'postgres' });
-    const ppSpy = vi.spyOn(consumer as any, 'processPayload').mockResolvedValue(undefined);
-    await consumer.handleJobs([makeJob('run-xyz', '202607', 'job-9')]);
-    expect(ppSpy).toHaveBeenCalledTimes(1);
-    expect(ppSpy).toHaveBeenCalledWith('job-9', { runId: 'run-xyz', ym: '202607' });
   });
 
   it('TS-MSSQL-P2B-PAYLOAD-008：mssql 轉接層 JSON.parse(claimed.payload) 還原為物件後才傳入 processPayload', async () => {

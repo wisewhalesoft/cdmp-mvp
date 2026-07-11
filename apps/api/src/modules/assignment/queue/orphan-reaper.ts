@@ -13,7 +13,7 @@ import {
   RUN_QUEUE_TUNING,
   RunQueueTuning,
   DEFAULT_RUN_QUEUE_TUNING,
-} from './pg-boss.provider';
+} from './run-queue-tuning.provider';
 
 /** orphan 回收後寫入之 error_message（F098 spec AC-6 指定文案，前端 F062 直接顯示，勿改字） */
 export const ORPHAN_ERROR_MESSAGE = 'worker 中斷，請重新觸發';

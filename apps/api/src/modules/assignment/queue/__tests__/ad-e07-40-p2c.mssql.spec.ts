@@ -38,7 +38,7 @@ import { QueueJob } from '@/database/entities/queue-job.entity';
 import { MssqlQueueService } from '../mssql-queue.service';
 import { OrphanReaper, ORPHAN_ERROR_MESSAGE } from '../orphan-reaper';
 import { RunQueueConsumer } from '../run-queue.consumer';
-import { DEFAULT_RUN_QUEUE_TUNING, RunQueueTuning } from '../pg-boss.provider';
+import { DEFAULT_RUN_QUEUE_TUNING, RunQueueTuning } from '../run-queue-tuning.provider';
 import { RUN_QUEUE_NAME, type RunJobPayload } from '../run-queue.constants';
 
 vi.setConfig({ testTimeout: 120000 });

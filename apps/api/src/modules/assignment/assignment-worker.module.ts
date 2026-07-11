@@ -12,12 +12,12 @@ import { MssqlQueueExpiryReaper } from './queue/mssql-queue-expiry-reaper';
  *
  * 只在 worker bootstrap（worker-main.ts）載入，**不**掛在 AppModule（API 程序不載）。
  * 職責：
- *  - `RunQueueConsumer`：註冊 pg-boss work handler，消費 'assignment-run' job → runPipeline。
+ *  - `RunQueueConsumer`：輪詢自建 T-SQL 佇列，消費 'assignment-run' job → runPipeline。
  *  - `OrphanReaper`：worker 啟動 + 定期掃描殭屍 running / pending run，標 failed。
  *
  * 重用 AssignmentModule 之 exports：
  *  - AssignmentRunPipelineService（已注入 CancellationPoller，於可中斷邊界中止）
- *  - pg-boss 實例（PG_BOSS）+ RUN_QUEUE_TUNING + RunQueueProducer
+ *  - RUN_QUEUE_TUNING + RunQueueProducer + MssqlQueueService
  *
  * consumer / reaper 自身需 AssignmentRun repo + DataSource（DataSource 為全域 TypeORM provider）。
  */

@@ -32,7 +32,7 @@ import { QueueJob } from '@/database/entities/queue-job.entity';
 import { MssqlQueueService } from '../mssql-queue.service';
 import { RunQueueProducer } from '../run-queue.producer';
 import { RunQueueConsumer } from '../run-queue.consumer';
-import { DEFAULT_RUN_QUEUE_TUNING, RunQueueTuning } from '../pg-boss.provider';
+import { DEFAULT_RUN_QUEUE_TUNING, RunQueueTuning } from '../run-queue-tuning.provider';
 
 vi.setConfig({ testTimeout: 120000 });
 

@@ -27,7 +27,7 @@ import { AssignmentRunGuardService } from '../../services/assignment-run-guard.s
 import {
   RUN_QUEUE_TUNING,
   RunQueueTuning,
-} from '../pg-boss.provider';
+} from '../run-queue-tuning.provider';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 
 const ACTOR = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789';

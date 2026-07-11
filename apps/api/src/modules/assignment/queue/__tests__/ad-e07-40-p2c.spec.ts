@@ -24,13 +24,13 @@ import { join } from 'path';
 import type { ConfigService } from '@nestjs/config';
 import { MssqlQueueExpiryReaper } from '../mssql-queue-expiry-reaper';
 import type { MssqlQueueService } from '../mssql-queue.service';
-import { DEFAULT_RUN_QUEUE_TUNING, RunQueueTuning } from '../pg-boss.provider';
+import { DEFAULT_RUN_QUEUE_TUNING, RunQueueTuning } from '../run-queue-tuning.provider';
 
 // ── 檔案路徑（靜態守門用）────────────────────────────────────────────────────
 const QUEUE_DIR = join(__dirname, '..');
 const EXPIRY_REAPER_PATH = join(QUEUE_DIR, 'mssql-queue-expiry-reaper.ts');
 const SERVICE_PATH = join(QUEUE_DIR, 'mssql-queue.service.ts');
-const PROVIDER_PATH = join(QUEUE_DIR, 'pg-boss.provider.ts');
+const PROVIDER_PATH = join(QUEUE_DIR, 'run-queue-tuning.provider.ts');
 const WORKER_MODULE_PATH = join(__dirname, '..', '..', 'assignment-worker.module.ts');
 const API_SRC = join(__dirname, '..', '..', '..', '..'); // apps/api/src
 const SRC_ROOT = API_SRC;

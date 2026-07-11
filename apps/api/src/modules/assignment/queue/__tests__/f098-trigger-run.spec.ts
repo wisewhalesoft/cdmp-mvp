@@ -38,6 +38,7 @@ import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.ent
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
+import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
 import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
@@ -69,6 +70,7 @@ async function buildModule(producer: SpyProducer, pipeline: SpyPipeline) {
           ObLevelcardVersion,
           EtlPipelineLog,
           EtlPipeline,
+          EtlPipelineVersion,
           User,
         ],
         synchronize: true,
@@ -80,6 +82,7 @@ async function buildModule(producer: SpyProducer, pipeline: SpyPipeline) {
         ObLevelcardVersion,
         EtlPipelineLog,
         EtlPipeline,
+        EtlPipelineVersion,
         User,
       ]),
     ],

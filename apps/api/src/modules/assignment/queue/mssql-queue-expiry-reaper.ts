@@ -11,7 +11,7 @@ import {
   RUN_QUEUE_TUNING,
   RunQueueTuning,
   DEFAULT_RUN_QUEUE_TUNING,
-} from './pg-boss.provider';
+} from './run-queue-tuning.provider';
 import { MssqlQueueService } from './mssql-queue.service';
 
 /**

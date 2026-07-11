@@ -7,7 +7,7 @@ import { WorkerAppModule } from './worker-app.module';
  *
  * 以 `createApplicationContext`（**非** HTTP app + port 綁定）啟動：
  *  - 不掛 HTTP server、不 expose port（AC-8 / TS-F098-WORKER-001）。
- *  - lifecycle hooks 仍會觸發：RunQueueConsumer.onModuleInit（註冊 pg-boss work handler）、
+ *  - lifecycle hooks 仍會觸發：RunQueueConsumer.onModuleInit（啟動自建 T-SQL 佇列輪詢）、
  *    OrphanReaper.onApplicationBootstrap（啟動掃描）。
  *
  * docker-compose `cdmp-worker` service 以
@@ -22,7 +22,7 @@ async function bootstrapWorker(): Promise<void> {
   // 確保 onApplicationBootstrap（OrphanReaper）觸發
   await appContext.init();
 
-  logger.log('cdmp-worker 已啟動：pg-boss consumer + orphan reaper 就緒（無 HTTP server）');
+  logger.log('cdmp-worker 已啟動：T-SQL 佇列 consumer + orphan reaper 就緒（無 HTTP server）');
 
   const shutdown = async (signal: string): Promise<void> => {
     logger.log(`收到 ${signal}，關閉 worker...`);

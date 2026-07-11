@@ -38,10 +38,7 @@ import { SystemModule } from '@/modules/system/system.module';
 import { RunQueueProducer } from './queue/run-queue.producer';
 import { CancellationPoller } from './queue/cancellation-poller';
 import { MssqlQueueService } from './queue/mssql-queue.service';
-import {
-  pgBossProvider,
-  runQueueTuningProvider,
-} from './queue/pg-boss.provider';
+import { runQueueTuningProvider } from './queue/run-queue-tuning.provider';
 
 /**
  * AssignmentModule — F061 / F062 / F065 / F066（M04 月跑觸發 + 歷史 + 詳情）
@@ -98,7 +95,7 @@ import {
     MonthlyRunReadinessService,
     StageTransitionService,
     SectionChiefScopeService,
-    // F098 / AD-E07-28 P1：API 側只註冊入列 producer + pg-boss 實例 + tuning。
+    // F098 / AD-E07-28 P1：API 側只註冊入列 producer + 佇列服務 + tuning。
     // worker 側（RunQueueConsumer / CancellationPoller / OrphanReaper）由 worker bootstrap
     // 之 AssignmentWorkerModule 註冊，不掛在 API module（API 程序不消費、不執行 pipeline）。
     RunQueueProducer,
@@ -110,7 +107,6 @@ import {
     // 需注入 MssqlQueueService；AD §4.2 檔案改動清單漏列 assignment.module（僅列 worker module），
     // 此為文件缺口補正。DB_TYPE≠mssql 時 producer 走 boss 路徑，此 provider 建立但不使用（無害）。
     MssqlQueueService,
-    pgBossProvider,
     runQueueTuningProvider,
   ],
   exports: [
@@ -118,13 +114,12 @@ import {
     MonthlyRunReadinessService,
     StageTransitionService,
     SectionChiefScopeService,
-    // worker module 重用 pipeline + pg-boss 實例 + tuning + producer（producer 供 pending 取消快路徑）
+    // worker module 重用 pipeline + tuning + producer（producer 供 pending 取消快路徑）
     AssignmentRunPipelineService,
     RunQueueProducer,
     CancellationPoller,
-    // worker module 之 RunQueueConsumer mssql 分支亦需 MssqlQueueService（透過 import AssignmentModule 取得）。
+    // worker module 之 RunQueueConsumer 需 MssqlQueueService（透過 import AssignmentModule 取得）。
     MssqlQueueService,
-    pgBossProvider,
     runQueueTuningProvider,
   ],
 })
