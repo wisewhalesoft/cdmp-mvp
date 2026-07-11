@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsIn, MaxLength, IsUUID, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsIn, MaxLength, IsNotEmpty } from 'class-validator';
+import { IsGuid } from '@/common/validators/is-guid.decorator';
 
 export class UpdateExtractionTaskDto {
   @IsOptional()
@@ -8,7 +9,8 @@ export class UpdateExtractionTaskDto {
   name?: string;
 
   @IsOptional()
-  @IsUUID('4', { message: '資料來源 ID 格式不正確' })
+  // @IsGuid：datasource.id 於 MSSQL 執行期新建為非 v4 uniqueidentifier（見 create DTO 說明）。
+  @IsGuid({ message: '資料來源 ID 格式不正確' })
   datasourceId?: string;
 
   @IsOptional()

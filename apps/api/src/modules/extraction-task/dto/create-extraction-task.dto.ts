@@ -1,4 +1,5 @@
-import { IsString, IsNotEmpty, IsIn, IsOptional, MaxLength, IsUUID, ValidateIf } from 'class-validator';
+import { IsString, IsNotEmpty, IsIn, IsOptional, MaxLength, ValidateIf } from 'class-validator';
+import { IsGuid } from '@/common/validators/is-guid.decorator';
 
 export class CreateExtractionTaskDto {
   @IsString({ message: '名稱必須為字串' })
@@ -6,7 +7,9 @@ export class CreateExtractionTaskDto {
   @MaxLength(255, { message: '名稱不得超過 255 個字元' })
   name: string;
 
-  @IsUUID('4', { message: '資料來源 ID 格式不正確' })
+  // @IsGuid（非 @IsUUID('4')）：datasource.id 為 @PrimaryGeneratedColumn('uuid') → MSSQL 執行期
+  //   新建之 datasource 為非 v4 uniqueidentifier，@IsUUID('4') 會誤擋。
+  @IsGuid({ message: '資料來源 ID 格式不正確' })
   @IsNotEmpty({ message: '請選擇資料來源' })
   datasourceId: string;
 

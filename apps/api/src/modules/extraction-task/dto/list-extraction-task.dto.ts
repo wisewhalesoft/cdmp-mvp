@@ -1,5 +1,6 @@
-import { IsOptional, IsInt, Min, Max, IsString, IsIn, IsUUID } from 'class-validator';
+import { IsOptional, IsInt, Min, Max, IsString, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsGuid } from '@/common/validators/is-guid.decorator';
 
 export class ListExtractionTaskDto {
   @IsOptional()
@@ -28,6 +29,7 @@ export class ListExtractionTaskDto {
   mode?: string;
 
   @IsOptional()
-  @IsUUID()
+  // @IsGuid：datasource.id 於 MSSQL 執行期新建為非 v4 uniqueidentifier（見 create DTO 說明）。
+  @IsGuid()
   datasourceId?: string;
 }
