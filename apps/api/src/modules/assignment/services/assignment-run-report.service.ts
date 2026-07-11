@@ -686,6 +686,13 @@ export class AssignmentRunReportService {
   private static readonly EXPORT_FETCH_BATCH = 500;
 
   /**
+   * F064 MSSQL keyset 分頁每批列數。取 2000（> PG 之 500）以攤薄對 dev CDMP 遠端連線之往返延遲：
+   * keyset 每頁為固定成本索引 seek（與深度無關），加大 batch 只減往返數、不增每列成本。
+   * 實測 202607（115,197 列）58 頁、7.4s、逐列不漏不重（distinct==total）。
+   */
+  private static readonly EXPORT_FETCH_BATCH_MSSQL = 2000;
+
+  /**
    * F064 v2.0 共用 row-producer（I-EXP-STREAM-01）：PostgreSQL **native server-side cursor**
    * （DECLARE … CURSOR + FETCH n）逐批 yield raw row，**不使用 OFFSET 分頁**（I-EXP-NOOFFSET-01）。
    *
@@ -762,38 +769,49 @@ export class AssignmentRunReportService {
   }
 
   /**
-   * F064 GAP 2（MSSQL 遷移）：MSSQL cursorRows 分支 — 以 T-SQL `OFFSET @k ROWS FETCH NEXT n
-   *   ROWS ONLY` 逐批分頁，複刻 PG server-side cursor 之語義（每往返取 n 列、逐列 yield、streaming
-   *   不全載）。選 OFFSET/FETCH 而非 T-SQL cursor 之因：PG 路徑本為「每往返 FETCH n 列」，OFFSET/FETCH
-   *   NEXT n 同為「每往返 n 列」→ 批次往返行為與 PG 一致（純 T-SQL cursor 之 `FETCH NEXT` 每往返僅 1 列，
-   *   反而偏離 PG 之批次語義）。
+   * F064 GAP 2（MSSQL 遷移）：MSSQL cursorRows 分支 — **keyset（seek）分頁**，複刻 PG server-side
+   *   cursor 之 streaming 語義（每往返取 n 列、逐列 yield、不全載記憶體），且 O(n) 不隨深度退化。
    *
-   * 列集合／順序與 PG 路徑逐列相同：SQL 主體（含 `ORDER BY r.list_no, r.orgno, r.appl_no` 與 23 欄
-   *   投影）完全沿用 buildExportQuery 產出、僅於尾端追加分頁子句 → 投影與排序不變，下游 formatRow /
-   *   xlsx / CSV 串流無差異。
+   * 🔴 為何不用 OFFSET/FETCH（前版）：`OFFSET @k ROWS FETCH NEXT n` 每頁自頭重跑 join+sort 再丟棄前
+   *   k 列（O(n²)）。dev CDMP 202607（115,197 列）實測 offset 50k 單頁 5.5s、全跑外推 >20min → 逾
+   *   `EXPORT_TIMEOUT_MS_DEFAULT`(5min) → 匯出逾時失敗（本次修復起因）。keyset 每頁為固定成本索引 seek
+   *   （實測深頁 ~0.3s，與深度無關）；改後 58 頁、7.4s、逐列不漏不重。
    *
-   * 參數：query.sql 已由 escapeQueryWithParameters 展開為 @0..@{N-1}（positional）；OFFSET 佔位取
-   *   下一個位置 @N（[...query.params, offset]），不與既有 runId / emplIds 佔位衝突（PARAM 索引依
-   *   TypeORM SqlServerQueryRunner 之 array-index 綁定：@k ↔ params[k]）。
+   * 作法：以 ORDER BY 之唯一鍵 (list_no, orgno, appl_no) 為游標，逐頁 `WHERE …前綴… AND (key > 上一頁末列)`。
+   *   正確性依賴該鍵於**單一 run 唯一**（DoD 實測 distinct==total==115197）→ 嚴格 `>` 展開之三段式
+   *   tuple 比較不漏不重。列集合／順序與 PG 路徑逐列相同（同一 SELECT／ORDER BY）。
+   *
+   * ⚠️ orgno 未在 23 欄輸出投影內 → 注入隱藏欄 `_ks_orgno` 供游標追蹤（formatRow 依欄名取值，忽略此欄，
+   *   xlsx/CSV 輸出不變）。注入點以 buildExportQuery 之固定字面（`FROM ob_monthly_run_result r` /
+   *   `ORDER BY r.list_no, r.orgno, r.appl_no`）定位。
+   *
+   * 參數：query.sql 已由 escapeQueryWithParameters 展開為 @0..@{N-1}（positional）；游標三值佔下一批位置
+   *   @N(list)/@{N+1}(orgno)/@{N+2}(appl)，於述詞中重複引用（tedious 允許同一具名 input 多處引用）。
+   *   第一頁無游標述詞，僅帶既有 @0..@{N-1}。索引依 TypeORM SqlServerQueryRunner array-index 綁定：@k ↔ params[k]。
    *
    * 一致性：匯出對象為**已完成**月跑之 result 快照（run 完成後 ob_monthly_run_result 不再異動）→ 各頁
    *   間免快照隔離即穩定，故不需 transaction（PG 之 tx 僅為 cursor 生命週期所需）。
-   *
-   * ⚠️ 效能：OFFSET/FETCH 每頁重跑 join+sort（O(n²)）；對匯出實際量級（數萬列，實測 202606≈55,863）
-   *   可接受。若未來出現超大匯出（數百萬列）效能問題，替代方案＝`DECLARE export_cursor CURSOR
-   *   FORWARD_ONLY READ_ONLY FOR <sql>; OPEN; FETCH NEXT …; CLOSE; DEALLOCATE`（單次 sort、O(n)，
-   *   代價為每列一往返）——排序／投影同為此 SQL，列集合／順序同樣保持與 PG 逐列相同。
    */
   private async cursorRowsMssql(query: ExportQuerySpec): Promise<Readable> {
-    const batch = AssignmentRunReportService.EXPORT_FETCH_BATCH;
+    const batch = AssignmentRunReportService.EXPORT_FETCH_BATCH_MSSQL;
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
 
-    // OFFSET 佔位＝既有參數之後的下一個位置索引（@0..@{N-1} 已用 → @N）。
-    const offsetParamIndex = query.params.length;
-    const pagedSql = `${query.sql}\n      OFFSET @${offsetParamIndex} ROWS FETCH NEXT ${batch} ROWS ONLY`;
+    // 注入隱藏游標欄 _ks_orgno（供 keyset 追蹤；formatRow 依名取值故忽略之）。
+    const ORDER_BY = 'ORDER BY r.list_no, r.orgno, r.appl_no';
+    const withKeyCol = query.sql.replace(
+      '\n      FROM ob_monthly_run_result r',
+      ',\n        r.orgno AS _ks_orgno\n      FROM ob_monthly_run_result r',
+    );
+    const orderByIdx = withKeyCol.lastIndexOf(ORDER_BY);
+    // head = SELECT … FROM … WHERE …（游標述詞插入於 head 尾、ORDER BY 之前）。
+    const head = withKeyCol.slice(0, orderByIdx).trimEnd();
+    const base = query.params.length; // 既有 @0..@{base-1}；游標三值取 @base/@{base+1}/@{base+2}
 
-    let offset = 0;
+    // 游標值（上一頁最後一列之鍵）；null = 尚在第一頁（無 keyset 述詞）。
+    let curList: unknown = null;
+    let curOrgno: unknown = null;
+    let curAppl: unknown = null;
     let ended = false;
     const cleanup = async (): Promise<void> => {
       if (ended) return;
@@ -806,17 +824,30 @@ export class AssignmentRunReportService {
       read() {
         void (async () => {
           try {
-            const rows: RawExportRow[] = await queryRunner.query(pagedSql, [
-              ...query.params,
-              offset,
-            ]);
+            const seek =
+              curList === null
+                ? ''
+                : ` AND (r.list_no > @${base}` +
+                  ` OR (r.list_no = @${base} AND r.orgno > @${base + 1})` +
+                  ` OR (r.list_no = @${base} AND r.orgno = @${base + 1} AND r.appl_no > @${base + 2}))`;
+            const pageSql = `${head}${seek}\n      ${ORDER_BY}\n      OFFSET 0 ROWS FETCH NEXT ${batch} ROWS ONLY`;
+            const params =
+              curList === null
+                ? query.params
+                : [...query.params, curList, curOrgno, curAppl];
+            const rows: RawExportRow[] = await queryRunner.query(pageSql, params);
             if (!rows || rows.length === 0) {
               await cleanup();
               this.push(null);
               return;
             }
-            // 先推進 offset（同步），再逐列 push；下一次 read() 讀取新 offset。
-            offset += rows.length;
+            // 先推進游標（同步），再逐列 push；下一次 read() 以新游標 seek。
+            const last = rows[rows.length - 1] as RawExportRow & {
+              _ks_orgno?: unknown;
+            };
+            curList = last.list_no;
+            curOrgno = last._ks_orgno;
+            curAppl = last.appl_no;
             for (const row of rows) {
               this.push(row);
             }
