@@ -7,12 +7,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { PassThrough, Readable } from 'stream';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapshot.entity';
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import {
   SectionChiefScopeService,
@@ -288,51 +289,68 @@ export class AssignmentRunReportService {
 
   async getSummary(runId: string, actor?: ActorUser | null): Promise<SummaryResponse> {
     const run = await this.requireCompletedRun(runId);
-    const { configPayload, resultPayload, inputListPayload } =
-      await this.loadAllPayloads(runId);
 
-    const allAssignments: ResultAssignment[] = Array.isArray(
-      (resultPayload as any)?.assignments,
-    )
-      ? ((resultPayload as any).assignments as ResultAssignment[])
-      : [];
-    // F063 v1.1 BR-6 / BR-7：section_chief scopeByCreator filter；director / admin bypass
-    const assignments = await this.scope.filterByEmplId<ResultAssignment>(
-      allAssignments,
-      actor,
-    );
-    const stage4Count = assignments.length;
-    const allStage1Cases = Array.isArray((inputListPayload as any)?.cases)
-      ? ((inputListPayload as any).cases as Array<{ emplid?: string | null }>)
-      : [];
-    const stage1Cases = await this.scope.filterByEmplId(allStage1Cases, actor);
-    const stage1Count = stage1Cases.length;
+    // ⚡ 效能（I-SUMMARY-SQL-01）：改以 SQL 聚合 ob_monthly_run_result（run_id 有索引），取代
+    //   loadAllPayloads 載入巨大 result / input_list 快照 payload（115K 筆 JSON；MSSQL ntext 讀取
+    //   + JSON.parse 約 45s → 前端 axios 逾時「資料無法載入」）。SQL GROUP BY 於同資料上 <1s。
+    //   下推路徑（PG/MSSQL 皆是）input_list == result == COUNT(*)（同一批 result 列，見
+    //   assignment-run-pipeline.service Bug A / 「有界子集供快照 payload」）→ stage1Count == stage4Count。
+    // F063 v1.1 BR-6 / BR-7：section_chief scope → emplid IN 轄區；director / admin bypass。
+    const shouldFilter = this.scope.shouldFilter(actor);
+    const scopeIds = shouldFilter
+      ? Array.from(await this.scope.getScopeEmplIds(actor!.userId))
+      : null;
+
+    const resultRepo = this.dataSource.getRepository(ObMonthlyRunResult);
+    const scoped = (
+      qb: SelectQueryBuilder<ObMonthlyRunResult>,
+    ): SelectQueryBuilder<ObMonthlyRunResult> => {
+      qb.where('r.run_id = :runId', { runId });
+      if (scopeIds) {
+        // 轄區為空 → 無可見列（1=0）；否則 emplid IN 轄區（NULL emplid 自然被排除，對齊 filterByEmplId）。
+        if (scopeIds.length === 0) qb.andWhere('1 = 0');
+        else qb.andWhere('r.emplid IN (:...scopeIds)', { scopeIds });
+      }
+      return qb;
+    };
+
+    // 總數 + distinct emplid（COUNT(DISTINCT) 自動略過 NULL，對齊原 emplSet 略過 null）。
+    const totals = await scoped(
+      resultRepo
+        .createQueryBuilder('r')
+        .select('COUNT(*)', 'cnt')
+        .addSelect('COUNT(DISTINCT r.emplid)', 'emps'),
+    ).getRawOne<{ cnt: string; emps: string }>();
+    const stage4Count = Number(totals?.cnt ?? 0);
+    const emplCount = Number(totals?.emps ?? 0);
+    const stage1Count = stage4Count; // 下推 invariant：input_list == result（同批列）
     const coverageRate = stage1Count === 0 ? 0 : stage4Count / stage1Count;
 
-    // 分派業務員數：distinct 非空 emplid（對齊 prototype「分派業務員數」stat card）。
-    // 已套 section_chief scope filter（assignments 為轄區子集），emplid 全 NULL（F101 未跑）→ 0。
-    const emplSet = new Set<string>();
-    for (const a of assignments) {
-      const e = a.emplid ?? null;
-      if (!e) continue;
-      emplSet.add(e);
-    }
-    const emplCount = emplSet.size;
-
-    // 部門統計：聚合 result 中 deptId
+    // 部門實際分派數（GROUP BY dept_id，略過 NULL；對齊原 deptActual）。
+    const deptQb = scoped(
+      resultRepo
+        .createQueryBuilder('r')
+        .select('r.dept_id', 'deptId')
+        .addSelect('COUNT(*)', 'cnt'),
+    );
+    deptQb.andWhere('r.dept_id IS NOT NULL').groupBy('r.dept_id');
+    const deptRows = await deptQb.getRawMany<{ deptId: string; cnt: string }>();
     const deptActual = new Map<string, number>();
-    for (const a of assignments) {
-      const d = a.deptId ?? null;
-      if (!d) continue;
-      deptActual.set(d, (deptActual.get(d) ?? 0) + 1);
-    }
+    for (const row of deptRows) deptActual.set(row.deptId, Number(row.cnt));
 
-    // 部門設定比例：聚合 config.deptPct 中各 deptId 的 ration 平均（spec L62 「設定比例」）
+    // 部門設定比例：聚合 config 快照 deptPct 各 deptId 的 ration 平均（spec L62「設定比例」；
+    //   只載 config 快照——體積小、非 result/input_list 巨大 payload）。
+    const configSnap = await this.snapshotRepo.findOne({
+      where: { run_id: runId, snapshot_type: 'config' },
+    });
     const deptConfigRatio = new Map<string, number>();
     const deptConfigSum = new Map<string, { sum: number; cnt: number }>();
     const cfgDeptPct: Array<{ deptId: string; ration: string | number }> =
-      Array.isArray((configPayload as any)?.deptPct)
-        ? (configPayload as any).deptPct
+      Array.isArray((configSnap?.payload as any)?.deptPct)
+        ? ((configSnap!.payload as any).deptPct as Array<{
+            deptId: string;
+            ration: string | number;
+          }>)
         : [];
     for (const d of cfgDeptPct) {
       if (!d.deptId) continue;
@@ -396,43 +414,57 @@ export class AssignmentRunReportService {
     }
     deptSummary.sort((a, b) => a.deptId.localeCompare(b.deptId));
 
-    // 等級分佈
-    const levelCounts = new Map<string, number>();
-    for (const a of assignments) {
-      const l = a.cardLevel ?? null;
-      if (!l) continue;
-      levelCounts.set(l, (levelCounts.get(l) ?? 0) + 1);
-    }
-    const levelDistribution: SummaryLevelRow[] = Array.from(
-      levelCounts.entries(),
-    )
-      .map(([cardLevel, count]) => ({
-        cardLevel,
-        count,
-        ratio:
-          stage4Count === 0
-            ? 0
-            : Math.round(((count / stage4Count) * 100) * 10) / 10,
-      }))
+    // 等級分佈（GROUP BY card_level，略過 NULL）。
+    const levelQb = scoped(
+      resultRepo
+        .createQueryBuilder('r')
+        .select('r.card_level', 'cardLevel')
+        .addSelect('COUNT(*)', 'cnt'),
+    );
+    levelQb.andWhere('r.card_level IS NOT NULL').groupBy('r.card_level');
+    const levelRows = await levelQb.getRawMany<{
+      cardLevel: string;
+      cnt: string;
+    }>();
+    const levelDistribution: SummaryLevelRow[] = levelRows
+      .map((row) => {
+        const count = Number(row.cnt);
+        return {
+          cardLevel: row.cardLevel,
+          count,
+          ratio:
+            stage4Count === 0
+              ? 0
+              : Math.round(((count / stage4Count) * 100) * 10) / 10,
+        };
+      })
       .sort((a, b) => a.cardLevel.localeCompare(b.cardLevel));
 
     // TIER_LEVEL 分佈（F063 gap fix；對齊 prototype「fn_calc_tier_level 計算結果」chart）。
     // tier_level 由 F100/F101 月跑計分寫入（score→card_level→tier）；NULL 不計入。
-    const tierCounts = new Map<string, number>();
-    for (const a of assignments) {
-      const t = a.tierLevel ?? null;
-      if (!t) continue;
-      tierCounts.set(t, (tierCounts.get(t) ?? 0) + 1);
-    }
-    const tierDistribution: SummaryTierRow[] = Array.from(tierCounts.entries())
-      .map(([tierLevel, count]) => ({
-        tierLevel,
-        count,
-        ratio:
-          stage4Count === 0
-            ? 0
-            : Math.round((count / stage4Count) * 100 * 10) / 10,
-      }))
+    const tierQb = scoped(
+      resultRepo
+        .createQueryBuilder('r')
+        .select('r.tier_level', 'tierLevel')
+        .addSelect('COUNT(*)', 'cnt'),
+    );
+    tierQb.andWhere('r.tier_level IS NOT NULL').groupBy('r.tier_level');
+    const tierRows = await tierQb.getRawMany<{
+      tierLevel: string;
+      cnt: string;
+    }>();
+    const tierDistribution: SummaryTierRow[] = tierRows
+      .map((row) => {
+        const count = Number(row.cnt);
+        return {
+          tierLevel: row.tierLevel,
+          count,
+          ratio:
+            stage4Count === 0
+              ? 0
+              : Math.round((count / stage4Count) * 100 * 10) / 10,
+        };
+      })
       .sort((a, b) => a.tierLevel.localeCompare(b.tierLevel));
 
     // F063 AC-5：section_chief 視角下 totalCases 為轄區內子集（= stage4Count）；

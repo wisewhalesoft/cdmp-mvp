@@ -36,6 +36,7 @@ import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.ent
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { User } from '@/database/entities/user.entity';
 
 const YM = '202605';
@@ -65,6 +66,7 @@ interface Env {
   snapRepo: Repository<AssignmentRunSnapshot>;
   auditRepo: Repository<AssignmentAuditLog>;
   emplSetRepo: Repository<ObEmplSet>;
+  resultRepo: Repository<ObMonthlyRunResult>;
   app: TestingModule;
 }
 
@@ -74,7 +76,7 @@ async function buildModule(): Promise<Env> {
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [AssignmentRun, AssignmentRunSnapshot, AssignmentAuditLog, ObEmplSet, ObEmphire, ObDeptPct, User],
+        entities: [AssignmentRun, AssignmentRunSnapshot, AssignmentAuditLog, ObEmplSet, ObEmphire, ObDeptPct, ObMonthlyRunResult, User],
         synchronize: true,
       }),
       TypeOrmModule.forFeature([
@@ -84,6 +86,7 @@ async function buildModule(): Promise<Env> {
         ObEmplSet,
         ObEmphire,
         ObDeptPct,
+        ObMonthlyRunResult,
         User,
       ]),
     ],
@@ -97,8 +100,40 @@ async function buildModule(): Promise<Env> {
     snapRepo: app.get(getRepositoryToken(AssignmentRunSnapshot)),
     auditRepo: app.get(getRepositoryToken(AssignmentAuditLog)),
     emplSetRepo: app.get(getRepositoryToken(ObEmplSet)),
+    resultRepo: app.get(getRepositoryToken(ObMonthlyRunResult)),
     app,
   };
+}
+
+/** getSummary 改讀 ob_monthly_run_result；由 result 快照 assignments 同步插入對應 result 列。 */
+async function seedResults(
+  repo: Repository<ObMonthlyRunResult>,
+  runId: string,
+  assignments: Array<{
+    applNo?: string;
+    listNo?: string;
+    deptId?: string | null;
+    emplid?: string | null;
+    cardLevel?: string | null;
+    tierLevel?: string | null;
+  }>,
+): Promise<void> {
+  let i = 0;
+  for (const a of assignments) {
+    i += 1;
+    await repo.save(
+      repo.create({
+        run_id: runId,
+        list_no: a.listNo ?? 'L1',
+        orgno: '00',
+        appl_no: a.applNo ?? `A${i}`,
+        dept_id: a.deptId ?? null,
+        emplid: a.emplid ?? null,
+        card_level: a.cardLevel ?? null,
+        tier_level: a.tierLevel ?? null,
+      } as Partial<ObMonthlyRunResult>),
+    );
+  }
 }
 
 async function seedRun(repo: Repository<AssignmentRun>): Promise<AssignmentRun> {
@@ -176,6 +211,7 @@ describe('AssignmentRunReportService + SnapshotService — scopeByCreator (F063/
     vi.restoreAllMocks();
     await env.auditRepo.createQueryBuilder().delete().execute();
     await env.snapRepo.createQueryBuilder().delete().execute();
+    await env.resultRepo.createQueryBuilder().delete().execute();
     await env.runRepo.createQueryBuilder().delete().execute();
     await env.emplSetRepo.createQueryBuilder().delete().execute();
     await seedEmplSet(env.emplSetRepo);
@@ -197,14 +233,14 @@ describe('AssignmentRunReportService + SnapshotService — scopeByCreator (F063/
         { applNo: 'A4', emplid: 'E4' },
       ],
     });
-    await seedSnap(env.snapRepo, run.run_id, 'result', {
-      assignments: [
-        { applNo: 'A1', deptId: 'D01', cardLevel: 'A', emplid: 'E1', listNo: 'L1' },
-        { applNo: 'A2', deptId: 'D01', cardLevel: 'B', emplid: 'E2', listNo: 'L1' },
-        { applNo: 'A3', deptId: 'D02', cardLevel: 'A', emplid: 'E3', listNo: 'L1' },
-        { applNo: 'A4', deptId: 'D02', cardLevel: 'C', emplid: 'E4', listNo: 'L1' },
-      ],
-    });
+    const assignments = [
+      { applNo: 'A1', deptId: 'D01', cardLevel: 'A', emplid: 'E1', listNo: 'L1' },
+      { applNo: 'A2', deptId: 'D01', cardLevel: 'B', emplid: 'E2', listNo: 'L1' },
+      { applNo: 'A3', deptId: 'D02', cardLevel: 'A', emplid: 'E3', listNo: 'L1' },
+      { applNo: 'A4', deptId: 'D02', cardLevel: 'C', emplid: 'E4', listNo: 'L1' },
+    ];
+    await seedSnap(env.snapRepo, run.run_id, 'result', { assignments });
+    await seedResults(env.resultRepo, run.run_id, assignments);
     return run;
   }
 

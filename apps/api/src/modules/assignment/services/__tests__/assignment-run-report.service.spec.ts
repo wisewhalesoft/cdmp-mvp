@@ -40,6 +40,7 @@ import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.ent
 import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
+import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
 import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
@@ -51,6 +52,7 @@ interface Env {
   snapRepo: Repository<AssignmentRunSnapshot>;
   auditRepo: Repository<AssignmentAuditLog>;
   deptPctRepo: Repository<ObDeptPct>;
+  resultRepo: Repository<ObMonthlyRunResult>;
   app: TestingModule;
 }
 
@@ -67,6 +69,7 @@ async function buildModule(): Promise<Env> {
           ObEmplSet,
           ObEmphire,
           ObDeptPct,
+          ObMonthlyRunResult,
           User,
         ],
         synchronize: true,
@@ -78,6 +81,7 @@ async function buildModule(): Promise<Env> {
         ObEmplSet,
         ObEmphire,
         ObDeptPct,
+        ObMonthlyRunResult,
         User,
       ]),
     ],
@@ -90,8 +94,43 @@ async function buildModule(): Promise<Env> {
     snapRepo: app.get(getRepositoryToken(AssignmentRunSnapshot)),
     auditRepo: app.get(getRepositoryToken(AssignmentAuditLog)),
     deptPctRepo: app.get(getRepositoryToken(ObDeptPct)),
+    resultRepo: app.get(getRepositoryToken(ObMonthlyRunResult)),
     app,
   };
+}
+
+/**
+ * getSummary 效能重構後改讀 ob_monthly_run_result（非快照 assignments）。測試以本 helper 由
+ * result 快照的 assignments 陣列同步插入對應 result 列（run_id + dept_id/emplid/card_level/tier_level；
+ * list_no/orgno 對聚合無影響，僅需 PK 唯一）。
+ */
+async function seedResults(
+  repo: Repository<ObMonthlyRunResult>,
+  runId: string,
+  assignments: Array<{
+    applNo?: string;
+    deptId?: string | null;
+    emplid?: string | null;
+    cardLevel?: string | null;
+    tierLevel?: string | null;
+  }>,
+): Promise<void> {
+  let i = 0;
+  for (const a of assignments) {
+    i += 1;
+    await repo.save(
+      repo.create({
+        run_id: runId,
+        list_no: 'L1',
+        orgno: '00',
+        appl_no: a.applNo ?? `A${i}`,
+        dept_id: a.deptId ?? null,
+        emplid: a.emplid ?? null,
+        card_level: a.cardLevel ?? null,
+        tier_level: a.tierLevel ?? null,
+      } as Partial<ObMonthlyRunResult>),
+    );
+  }
 }
 
 async function seedRun(
@@ -113,19 +152,23 @@ async function seedRun(
 }
 
 async function seedSnap(
-  repo: Repository<AssignmentRunSnapshot>,
+  env: Env,
   runId: string,
   type: 'config' | 'input_list' | 'result',
   payload: Record<string, unknown>,
 ): Promise<void> {
-  await repo.save(
-    repo.create({
+  await env.snapRepo.save(
+    env.snapRepo.create({
       run_id: runId,
       snapshot_type: type,
       payload,
       created_at: new Date(),
     } as Partial<AssignmentRunSnapshot>),
   );
+  // getSummary 效能重構後改讀 ob_monthly_run_result；由 result 快照 assignments 同步插入 result 列。
+  if (type === 'result' && Array.isArray((payload as any).assignments)) {
+    await seedResults(env.resultRepo, runId, (payload as any).assignments);
+  }
 }
 
 describe('AssignmentRunReportService — F063 / F064 / F067', () => {
@@ -140,6 +183,7 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
   beforeEach(async () => {
     await env.auditRepo.createQueryBuilder().delete().execute();
     await env.snapRepo.createQueryBuilder().delete().execute();
+    await env.resultRepo.createQueryBuilder().delete().execute();
     await env.runRepo.createQueryBuilder().delete().execute();
     await env.deptPctRepo.createQueryBuilder().delete().execute();
   });
@@ -151,16 +195,18 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
   describe('getSummary (F063)', () => {
     it('TC-M05-SUMMARY-001：正常輸出', async () => {
       const run = await seedRun(env.runRepo);
-      await seedSnap(env.snapRepo, run.run_id, 'config', {
+      await seedSnap(env, run.run_id, 'config', {
         deptPct: [
           { listNo: 'L1', deptId: 'D01', ration: '50' },
           { listNo: 'L1', deptId: 'D02', ration: '50' },
         ],
       });
-      await seedSnap(env.snapRepo, run.run_id, 'input_list', {
-        cases: new Array(10).fill({ applNo: 'A' }),
+      // input_list 快照對 getSummary 已無影響（改讀 ob_monthly_run_result）；下推路徑
+      //   input_list == result（同批列）→ stage1Count == stage4Count、coverage 恆 1。
+      await seedSnap(env, run.run_id, 'input_list', {
+        cases: new Array(5).fill({ applNo: 'A' }),
       });
-      await seedSnap(env.snapRepo, run.run_id, 'result', {
+      await seedSnap(env, run.run_id, 'result', {
         assignments: [
           { applNo: 'A1', deptId: 'D01', cardLevel: 'A', tierLevel: 'T1', emplid: 'E1' },
           { applNo: 'A2', deptId: 'D01', cardLevel: 'A', tierLevel: 'T1', emplid: 'E1' },
@@ -173,9 +219,9 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
       const s = await env.service.getSummary(run.run_id);
 
       expect(s.runId).toBe(run.run_id);
-      expect(s.stage1Count).toBe(10);
+      expect(s.stage1Count).toBe(5);
       expect(s.stage4Count).toBe(5);
-      expect(s.coverageRate).toBe(0.5);
+      expect(s.coverageRate).toBe(1);
       // F063 gap fix：分派業務員數（distinct emplid E1/E2 → 2）對齊 prototype「分派業務員數」stat card
       expect(s.emplCount).toBe(2);
 
@@ -223,11 +269,11 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
 
     it('TC-M05-SUMMARY-003：部門偏差恰 3% → alert=false（嚴格 >）', async () => {
       const run = await seedRun(env.runRepo);
-      await seedSnap(env.snapRepo, run.run_id, 'config', {
+      await seedSnap(env, run.run_id, 'config', {
         deptPct: [{ listNo: 'L1', deptId: 'D01', ration: '50' }],
       });
-      await seedSnap(env.snapRepo, run.run_id, 'input_list', { cases: [] });
-      await seedSnap(env.snapRepo, run.run_id, 'result', {
+      await seedSnap(env, run.run_id, 'input_list', { cases: [] });
+      await seedSnap(env, run.run_id, 'result', {
         assignments: [
           ...new Array(53).fill(0).map((_, i) => ({
             applNo: `A${i}`,
@@ -251,14 +297,14 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
       // 部門 D99 於 ob_dept_pct 有設定比例，但本次月跑無任何實際分派（actualCount=0）。
       // 「未分派部門」對使用者無意義（其 deviation 恆為 -configRatio 之假警示），須排除。
       const run = await seedRun(env.runRepo);
-      await seedSnap(env.snapRepo, run.run_id, 'config', {
+      await seedSnap(env, run.run_id, 'config', {
         deptPct: [
           { listNo: 'L1', deptId: 'D01', ration: '50' },
           { listNo: 'L1', deptId: 'D99', ration: '50' }, // 有設定、無實際分派
         ],
       });
-      await seedSnap(env.snapRepo, run.run_id, 'input_list', { cases: [] });
-      await seedSnap(env.snapRepo, run.run_id, 'result', {
+      await seedSnap(env, run.run_id, 'input_list', { cases: [] });
+      await seedSnap(env, run.run_id, 'result', {
         assignments: [
           { applNo: 'A1', deptId: 'D01', cardLevel: 'A' },
           { applNo: 'A2', deptId: 'D01', cardLevel: 'A' },
@@ -291,11 +337,11 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
           updated_at: new Date(),
         } as Partial<ObDeptPct>),
       );
-      await seedSnap(env.snapRepo, run.run_id, 'config', {
+      await seedSnap(env, run.run_id, 'config', {
         deptPct: [{ listNo: 'L1', deptId: 'XVE1', ration: '100' }],
       });
-      await seedSnap(env.snapRepo, run.run_id, 'input_list', { cases: [] });
-      await seedSnap(env.snapRepo, run.run_id, 'result', {
+      await seedSnap(env, run.run_id, 'input_list', { cases: [] });
+      await seedSnap(env, run.run_id, 'result', {
         assignments: [
           { applNo: 'A1', deptId: 'XVE1', cardLevel: 'A' },
           { applNo: 'A2', deptId: 'XVE2', cardLevel: 'A' }, // 無 ob_dept_pct 對應
@@ -316,9 +362,9 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
           cases: [{ cardType: 'X', applNoCount: 5, reason: 'edge' }],
         },
       });
-      await seedSnap(env.snapRepo, run.run_id, 'config', { deptPct: [] });
-      await seedSnap(env.snapRepo, run.run_id, 'input_list', { cases: [] });
-      await seedSnap(env.snapRepo, run.run_id, 'result', { assignments: [] });
+      await seedSnap(env, run.run_id, 'config', { deptPct: [] });
+      await seedSnap(env, run.run_id, 'input_list', { cases: [] });
+      await seedSnap(env, run.run_id, 'result', { assignments: [] });
 
       const s = await env.service.getSummary(run.run_id);
       expect(s.warnings.summaryCode).toBe('BR-12_EDGE_CARD_TYPE_SKIPPED');
@@ -348,13 +394,13 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
     }> {
       const runA = await seedRun(env.runRepo, { project_workym: '202604' });
       const runB = await seedRun(env.runRepo, { project_workym: '202605' });
-      await seedSnap(env.snapRepo, runA.run_id, 'config', {
+      await seedSnap(env, runA.run_id, 'config', {
         levelcardLevels: [{ cardVersion: 2 }],
         deptPct: [{ listNo: 'L1', deptId: 'D01', ration: '30' }],
         listDefinitions: [{ listNo: 'L1', crEnabled: false }],
       });
-      await seedSnap(env.snapRepo, runA.run_id, 'input_list', { cases: [] });
-      await seedSnap(env.snapRepo, runA.run_id, 'result', {
+      await seedSnap(env, runA.run_id, 'input_list', { cases: [] });
+      await seedSnap(env, runA.run_id, 'result', {
         assignments: [
           { applNo: 'A1', deptId: 'D01', cardLevel: 'A', emplid: 'E1' },
           { applNo: 'A2', deptId: 'D01', cardLevel: 'A', emplid: 'E2' },
@@ -362,13 +408,13 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
         ],
       });
 
-      await seedSnap(env.snapRepo, runB.run_id, 'config', {
+      await seedSnap(env, runB.run_id, 'config', {
         levelcardLevels: [{ cardVersion: 3 }],
         deptPct: [{ listNo: 'L1', deptId: 'D01', ration: '35' }],
         listDefinitions: [{ listNo: 'L1', crEnabled: true }],
       });
-      await seedSnap(env.snapRepo, runB.run_id, 'input_list', { cases: [] });
-      await seedSnap(env.snapRepo, runB.run_id, 'result', {
+      await seedSnap(env, runB.run_id, 'input_list', { cases: [] });
+      await seedSnap(env, runB.run_id, 'result', {
         assignments: [
           // A1 同 E1（一致）
           { applNo: 'A1', deptId: 'D01', cardLevel: 'A', emplid: 'E1' },
@@ -417,10 +463,10 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
     it('TC-M05-COMPARE-004：0 共同案件 → rate=0 alert=false（無除零）', async () => {
       const runA = await seedRun(env.runRepo, { project_workym: '202603' });
       const runB = await seedRun(env.runRepo, { project_workym: '202604' });
-      await seedSnap(env.snapRepo, runA.run_id, 'result', {
+      await seedSnap(env, runA.run_id, 'result', {
         assignments: [{ applNo: 'A1', emplid: 'E1' }],
       });
-      await seedSnap(env.snapRepo, runB.run_id, 'result', {
+      await seedSnap(env, runB.run_id, 'result', {
         assignments: [{ applNo: 'B1', emplid: 'E2' }],
       });
       const c = await env.service.compareRuns(runA.run_id, runB.run_id);

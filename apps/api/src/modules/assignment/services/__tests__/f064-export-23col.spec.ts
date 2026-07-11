@@ -306,9 +306,14 @@ describe('F064 v2.0 — 匯出分派結果（23 欄）SQLite/Unit', () => {
       expect(qBody).toContain('r.emplid IN');
     });
 
-    it('TS-F064-STATIC-003：getSummary / compareRuns 仍讀 snapshot（不受重構影響）', () => {
+    it('TS-F064-STATIC-003：compareRuns 仍讀 snapshot；getSummary 改 SQL 聚合（I-SUMMARY-SQL-01）', () => {
+      // getSummary 效能重構：不再 loadAllPayloads（巨大 result/input_list 快照 → 45s 逾時），
+      //   改以 SQL 聚合 ob_monthly_run_result（<1s）；僅載小型 config 快照取 deptPct。
       const getSummary = sliceFn(SERVICE_SRC, 'async getSummary(');
-      expect(getSummary).toContain('loadAllPayloads(');
+      expect(getSummary).not.toContain('loadAllPayloads(');
+      expect(getSummary).toContain('getRepository(ObMonthlyRunResult)');
+      expect(getSummary).toContain("snapshot_type: 'config'");
+      // compareRuns 仍讀 snapshot（不受本次重構影響）。
       const compareRuns = sliceFn(SERVICE_SRC, 'async compareRuns(');
       expect(compareRuns).toContain('loadAllPayloads(');
     });
