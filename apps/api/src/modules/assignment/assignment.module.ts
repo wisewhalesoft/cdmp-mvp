@@ -41,7 +41,7 @@ import { MssqlQueueService } from './queue/mssql-queue.service';
 import { runQueueTuningProvider } from './queue/run-queue-tuning.provider';
 
 /**
- * AssignmentModule — F061 / F062 / F065 / F066（M04 月跑觸發 + 歷史 + 詳情）
+ * AssignmentModule — F061 / F062 / F065 / F066（M04 月名單分派觸發 + 歷史 + 詳情）
  *
  * 同時 export AssignmentRunGuardService / MonthlyRunReadinessService /
  * StageTransitionService 供其他模組（assignment-list / assignment-scoring / ...）注入。

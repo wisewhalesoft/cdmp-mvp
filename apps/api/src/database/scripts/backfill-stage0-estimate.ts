@@ -2,9 +2,9 @@
  * 一次性 backfill：重算既有 ready 名單的物化 Stage 0 估算
  *
  * F092（2026-05-26）起，per-list 估算升級為完整 Stage1FilterChain dry-run
- * （欄位篩選 + month_cnt 期別 + 近3月去重 + 特殊 DELETE，與月跑同源 → estimate ≡ run）。
+ * （欄位篩選 + month_cnt 期別 + 近3月去重 + 特殊 DELETE，與月名單分派同源 → estimate ≡ run）。
  * 改 code 不回填既有 ready 名單的 stage0_estimate_count，故以本腳本用**同一條 chain**
- * （executeStage1Chain dryRun:true）重算並寫回，與 estimateListCount / 月跑邏輯一致。
+ * （executeStage1Chain dryRun:true）重算並寫回，與 estimateListCount / 月名單分派邏輯一致。
  *
  * 用法（本機，讀 apps/api/.env，連 localhost:5432）：
  *   cd apps/api && npx ts-node -r tsconfig-paths/register src/database/scripts/backfill-stage0-estimate.ts
@@ -42,7 +42,7 @@ async function main(): Promise<void> {
     const before = list.stage0_estimate_count;
     const workdt = deriveWorkdt(list.project_workym);
 
-    // 與 estimateListCount（F092）/ 月跑同源：完整鏈唯讀 COUNT
+    // 與 estimateListCount（F092）/ 月名單分派同源：完整鏈唯讀 COUNT
     const result = await executeStage1Chain(list, workdt, poolRepo, poolDataListRepo, {
       dryRun: true,
     });

@@ -3,8 +3,8 @@
  *
  * 對應測試設計：
  *   - DD-005：去重來源聯集（etl_legacy + monthly_run + NULL data_source），SQL 不加 data_source 過濾
- *   - CH-003：月跑模式回完整案件列（MONTH_CNT + 去重交互）
- *   - CH-004：月跑 vs dry-run 同 fixture 回相同 count（F092 前置驗證）
+ *   - CH-003：月名單分派模式回完整案件列（MONTH_CNT + 去重交互）
+ *   - CH-004：月名單分派 vs dry-run 同 fixture 回相同 count（F092 前置驗證）
  *
  * 本專案無 PostgreSQL TestContainer package（memory：feedback_pg_advisory_lock_sqlite_compat）；
  * 以 better-sqlite3 in-memory 跑真實 Stage 1 chain（assignday 字串比對 + custo_no 去重 + month_cnt 整數過濾）。
@@ -169,7 +169,7 @@ describe('F091 整合 — Stage1FilterChain（better-sqlite3 in-memory）', () =
     expect(result.count).toBe(2);
   });
 
-  it('CH-003：月跑模式回完整案件列（MONTH_CNT 過濾 + 去重交互）', async () => {
+  it('CH-003：月名單分派模式回完整案件列（MONTH_CNT 過濾 + 去重交互）', async () => {
     const list = await makeList(); // list_period 1~6 interval 1 → month_cnt IN (1..6)
     // 7 筆 month_cnt 1~6 入選 month_cnt 過濾；3 筆 month_cnt=9 被排除
     for (let i = 1; i <= 7; i++) {
@@ -190,7 +190,7 @@ describe('F091 整合 — Stage1FilterChain（better-sqlite3 in-memory）', () =
     expect(result.skipped).toBe(false);
   });
 
-  it('CH-004：月跑 vs dry-run 同 fixture 回相同 count（F092 前置）', async () => {
+  it('CH-004：月名單分派 vs dry-run 同 fixture 回相同 count（F092 前置）', async () => {
     const list = await makeList();
     for (let i = 1; i <= 7; i++) {
       await seedPool({ applNo: `A${i}`, custoNo: `C${i}`, monthCnt: ((i - 1) % 6) + 1 });

@@ -9,7 +9,7 @@
  *
  *   GET /card-levels/preview (§5.2 / AC-3 / BR-2)
  *     ── F094 死欄修正：preview 不再讀 `ob_pool_data_list.score`（自 F094 起恆 NULL），改為
- *        「重用月跑 Stage 2 計分下推（buildStage2ScoreExpr），對每列 ob_pool_data 以該 cardType
+ *        「重用月名單分派 Stage 2 計分下推（buildStage2ScoreExpr），對每列 ob_pool_data 以該 cardType
  *        active version 即時算分」。
  *     ── BR-2 快取（本次）：SQL 改回傳「分數 histogram」（每列＝相異 score 及其列數，level 無關，
  *        `GROUP BY s.score`），分桶改在記憶體（first-match-wins / inclusive / NULL 於 WHERE 排除）。
@@ -305,7 +305,7 @@ describe('AssignmentScoringService — F055 getCardLevels + previewCardLevels', 
     expect(poolDataListRepo.query).not.toHaveBeenCalled();
   });
 
-  it('preview 月跑鎖不阻擋（純讀取）', async () => {
+  it('preview 月名單分派鎖不阻擋（純讀取）', async () => {
     runRepo.findOne.mockResolvedValue({ status: 'running' });
     mockActiveVersion('H', 1);
     poolDataListRepo.query.mockResolvedValue([]);

@@ -438,7 +438,7 @@ describe('P3c STATIC — 靜態守門（capture，恆執行）', () => {
 // ===========================================================================
 // DISPATCH — 呼叫鏈守門（method source scan，恆執行）+ 純函式三態
 // ===========================================================================
-describe('P3c DISPATCH — Stage 3/4 接線 mssql 月跑鏈路', () => {
+describe('P3c DISPATCH — Stage 3/4 接線 mssql 月名單分派鏈路', () => {
   /** executeStage2to3PushdownMssql 之編譯後方法本體字串。 */
   const methodSrc = (
     AssignmentRunPipelineService.prototype as unknown as {

@@ -50,7 +50,7 @@ export class TargetTableService {
   /**
    * ETL 目標資料表現況：每個 pipeline 之 target_load 目標表 + 真實筆數（metadata 快速查）+ 上次載入。
    *
-   * 讓管理者一眼看出「pipeline log 顯示 completed，但目標表其實是空的」（多次 E2E 測試清表 → 月跑/試算
+   * 讓管理者一眼看出「pipeline log 顯示 completed，但目標表其實是空的」（多次 E2E 測試清表 → 月名單分派/試算
    * 靜默壞掉的根因）。pipeline 顯示名可自訂 → 一律以 definition 的 target_load targetTable 定位（穩定）。
    */
   async getTargetTableStats(): Promise<{ data: TargetTableStat[] }> {

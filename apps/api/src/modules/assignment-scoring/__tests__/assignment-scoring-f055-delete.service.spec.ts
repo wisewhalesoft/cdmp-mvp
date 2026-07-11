@@ -8,7 +8,7 @@
  *   - TS-F055-D03：找不到複合 PK 紀錄 → 404 CARD_LEVEL_RECORD_NOT_FOUND
  *   - TS-F055-D04：仍被 ob_tier 引用 → 409 CARD_LEVEL_REFERENCED（cascade reference check, BR-6）
  *   - TS-F055-D05：fallback 對應（card_level IS NULL）不阻擋本表 cardLevel 刪除（cascade 僅比對相同 cardLevel）
- *   - TS-F055-D06：月跑鎖 → 409 SCORING_VERSION_LOCKED
+ *   - TS-F055-D06：月名單分派鎖 → 409 SCORING_VERSION_LOCKED
  *   - TS-F055-D07：audit_log entity_id = '{cardType}|{cardVersion}|{cardLevel}'，before_value 含 scoreS/scoreE，after_value = null
  */
 
@@ -219,7 +219,7 @@ describe('AssignmentScoringService — F055 deleteCardLevel', () => {
     expect(levelRepo.delete).toHaveBeenCalled();
   });
 
-  it('TS-F055-D06：月跑鎖 → 409 SCORING_VERSION_LOCKED', async () => {
+  it('TS-F055-D06：月名單分派鎖 → 409 SCORING_VERSION_LOCKED', async () => {
     runRepo.findOne.mockResolvedValue({ status: 'running' });
 
     try {

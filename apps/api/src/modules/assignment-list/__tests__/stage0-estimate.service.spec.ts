@@ -440,7 +440,7 @@ describe('Stage0EstimateService', () => {
       // v1.2：condition_payload=null → 路徑 B fallback。
       // 篩選欄位：prod_kind='01' / settle_src='N' / case_status='02'（→ list_type）。
       // 不用 caseyear（year_cnt 整數比對在 SQLite 型別親和性與 PG 不同，整數映射另以純函式驗證）。
-      // F092：estimateListCount 升級為完整鏈 dry-run，月跑 MONTH_CNT 期別過濾一併套用。
+      // F092：estimateListCount 升級為完整鏈 dry-run，月名單分派 MONTH_CNT 期別過濾一併套用。
       //   seedActiveList 預設 list_period_start='001'/end='030'/interval='030' → month_cnt IN (1,31)。
       //   故所有受測列補 month_cnt:1（落在期別集合內），讓本案例之鑑別維持於欄位篩選（prod/settle/list_type）。
       await seedActiveList(env.listRepo, 'OB202605001', {
@@ -555,7 +555,7 @@ describe('Stage0EstimateService', () => {
     });
 
     // TS-F049-EST-005c：skipReason='EMPTY_CONDITIONS' → estimateListCount 回 count=0（BR-5）
-    it('TS-F049-EST-005c：condition_payload.conditions=[] → count=0（HTTP 200，與月跑 Stage 1 skip 一致）', async () => {
+    it('TS-F049-EST-005c：condition_payload.conditions=[] → count=0（HTTP 200，與月名單分派 Stage 1 skip 一致）', async () => {
       await seedActiveList(env.listRepo, 'OB202605EMP', {
         condition_payload: { logic: 'AND', conditions: [] },
         // 確保不會 fallback 到路徑 B：路徑 A（condition_payload 非 null）優先，空 conditions → skip
@@ -617,7 +617,7 @@ describe('Stage0EstimateService', () => {
   });
 
   // =========================================================================
-  // TS-F049-EST-001~008：buildStage1WhereConditions 純函式（複用月跑 Stage 1 演算法）
+  // TS-F049-EST-001~008：buildStage1WhereConditions 純函式（複用月名單分派 Stage 1 演算法）
   //   驗證 estimateListCount 改為複用此演算法後的 where / params / skipReason / warnings
   // =========================================================================
   describe('buildStage1WhereConditions（試算複用之 Stage 1 演算法）', () => {

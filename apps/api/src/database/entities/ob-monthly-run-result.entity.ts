@@ -21,19 +21,19 @@ import {
 import { AssignmentRun } from './assignment-run.entity';
 
 /**
- * ob_monthly_run_result — 月跑分派提案結果表（AD-E07-25 單源化核心產出）
+ * ob_monthly_run_result — 月名單分派提案結果表（AD-E07-25 單源化核心產出）
  *
- * 承載每次月跑對各名單的 Stage 1~4 分派提案：
+ * 承載每次月名單分派對各名單的 Stage 1~4 分派提案：
  *   - Stage 1 寫入（案件識別 + custo_no / settle_src / assignday）
  *   - Stage 2 計分（score / card_level / tier_level）
  *   - Stage 3 CR 回分（is_cr / cr_id / cr_nm）
  *   - Stage 4 分派（dept_id / emplid / emplid_deptid）
  *
- * 月跑寫入 / Stage 3/4 讀取目標由 ob_pool_data_list（data_source='monthly_run'）切換至本表
+ * 月名單分派寫入 / Stage 3/4 讀取目標由 ob_pool_data_list（data_source='monthly_run'）切換至本表
  * （F094 AC-2 / AC-3），使 ob_pool_data_list 回歸 ETL 單一來源（F090 v2.0）。
  *
  * 複合 PK：(run_id, list_no, orgno, appl_no)；run_id FK → assignment_run ON DELETE CASCADE
- * （月跑 run 刪除時自動清除對應結果列，F094 AC-6）。
+ * （月名單分派 run 刪除時自動清除對應結果列，F094 AC-6）。
  *
  * 欄位精簡（DP-AD25-2 方案 A）：僅存 Stage 2~4 計算結果，不複製 ob_pool_data 業務欄位
  * （spec_name / year_produ / payt_term 等於計算時由 in-memory ObPoolData[] 取得）。
@@ -44,7 +44,7 @@ import { AssignmentRun } from './assignment-run.entity';
 @Index('idx_omrr_assignday', ['assignday'])
 @Entity('ob_monthly_run_result')
 export class ObMonthlyRunResult {
-  // ----- PK：月跑 ID + 名單 + 機構 + 案件申請號 -----
+  // ----- PK：月名單分派 ID + 名單 + 機構 + 案件申請號 -----
   @PrimaryColumn({ name: 'run_id', type: uuidColumnType })
   run_id: string;
 

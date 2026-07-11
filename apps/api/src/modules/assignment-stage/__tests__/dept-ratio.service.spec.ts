@@ -14,7 +14,7 @@ import { ERROR_CODES } from '@/common/errors/error-codes';
  *   - GET 回傳在職部門 + 既有但已下線部門
  *   - PUT 加總 100% / 邊界容忍 ±0.01% / 越界
  *   - 處長不可達（由 controller layer DirectorGuard 拒絕；service 不需另測）
- *   - 月跑進行中 → 409
+ *   - 月名單分派進行中 → 409
  *   - 歷史月份 → 403
  *   - 非 dept_ratio → 422 LIST_STAGE_TRANSITION_FORBIDDEN
  *   - 覆寫式：原 5 筆 + 新 3 筆 → DB 剩 3 筆
@@ -235,7 +235,7 @@ describe('DeptRatioService (F079)', () => {
   });
 
   // TC-M03a-006
-  it('PUT 月跑進行中 → 409', async () => {
+  it('PUT 月名單分派進行中 → 409', async () => {
     runGuard.assertNoRunningRun.mockRejectedValue(new Error('ASSIGNMENT_RUN_ALREADY_RUNNING'));
     await expect(
       svc.setDeptRatios('L1', { deptRatios: [{ obdeptId: 'X', obdeptNm: 'X', ration: 100 }] }, { userId: 'u1', ipAddress: null }, '202605'),

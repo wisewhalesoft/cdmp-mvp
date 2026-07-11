@@ -5,7 +5,7 @@
  *
  * 涵蓋：
  *   - IT-CASCADE-001：F072 6 步驟級聯刪除完整筆數驗證 + 排除項保留
- *   - IT-LOCK-001：月跑 running 時 9 端點一致性（含錯誤碼分流）
+ *   - IT-LOCK-001：月名單分派 running 時 9 端點一致性（含錯誤碼分流）
  *   - IT-MIGRATION-001：D-CT-02 seed idempotent（同 cardType 重跑 ON CONFLICT DO NOTHING）
  *
  * 註：
@@ -300,9 +300,9 @@ describe('M02 Cross-Spec Integration (Iter 6)', () => {
   });
 
   // =========================================================================
-  // IT-LOCK-001：月跑 running 時所有寫入端點一致回 409
+  // IT-LOCK-001：月名單分派 running 時所有寫入端點一致回 409
   // =========================================================================
-  describe('IT-LOCK-001：月跑鎖 9 端點一致性', () => {
+  describe('IT-LOCK-001：月名單分派鎖 9 端點一致性', () => {
     async function seedHWithLock(status: 'pending' | 'running' = 'running') {
       const now = new Date();
       await ds.getRepository(ObCardType).save({

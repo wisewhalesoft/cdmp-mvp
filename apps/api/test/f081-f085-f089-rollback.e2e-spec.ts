@@ -351,7 +351,7 @@ describe('F081 / F085 / F089 v1.3 Rollback E2E + F077 v1.3 section_chief 隔離'
       expect(reloaded?.stage).toBe('draft');
     });
 
-    it('TS-F081-003 月跑執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
+    it('TS-F081-003 月名單分派執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
       const listNo = 'OB202605012';
       await seedList(ds, { listNo, stage: 'dept_ratio' });
       await seedAssignmentRun(ds, 'running');
@@ -409,7 +409,7 @@ describe('F081 / F085 / F089 v1.3 Rollback E2E + F077 v1.3 section_chief 隔離'
       expect(res.body.error).toBe('STAGE_ROLLBACK_BLOCKED');
     });
 
-    it('TS-F085-003 月跑執行中 → 409', async () => {
+    it('TS-F085-003 月名單分派執行中 → 409', async () => {
       const listNo = 'OB202605022';
       await seedList(ds, { listNo, stage: 'personnel_ratio' });
       await seedAssignmentRun(ds, 'running');
@@ -460,7 +460,7 @@ describe('F081 / F085 / F089 v1.3 Rollback E2E + F077 v1.3 section_chief 隔離'
       expect(res.status).toBe(422);
     });
 
-    it('TS-F089-003 月跑執行中 → 409', async () => {
+    it('TS-F089-003 月名單分派執行中 → 409', async () => {
       const listNo = 'OB202605033';
       await seedList(ds, { listNo, stage: 'ready' });
       await seedAssignmentRun(ds, 'running');

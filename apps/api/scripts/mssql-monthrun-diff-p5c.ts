@@ -1,11 +1,11 @@
 /**
- * AD-E07-43 P5c — MONTHRUN-DIFF：真實 PG 月跑 vs MSSQL 全鏈逐列比對（Tier 2 主要證據）
+ * AD-E07-43 P5c — MONTHRUN-DIFF：真實 PG 月名單分派 vs MSSQL 全鏈逐列比對（Tier 2 主要證據）
  *
  * 定調（AD §3.1 / test-spec AD-E07-43-P5c-test.md）：manual/script，非 CI 常駐測試。
- * 比照 F101/F102/F104 前例（觸發真實月跑鏈路、SQL 直接查表比對、輸出人工可讀差異記錄）。
+ * 比照 F101/F102/F104 前例（觸發真實月名單分派鏈路、SQL 直接查表比對、輸出人工可讀差異記錄）。
  *
  * ★ 方法論（Approach A — 案件集釘選 PG 輸出，隔離 Stage 2~4/CR 引擎；見 impl log AD-2）：
- *   1. 選定 PG 生產月跑 run（07944a82 / 202607，現行 ob_pool_data 100% 覆蓋其案件集）。
+ *   1. 選定 PG 生產月名單分派 run（07944a82 / 202607，現行 ob_pool_data 100% 覆蓋其案件集）。
  *   2. 唯讀讀取該 run 的 ob_monthly_run_result（＝案件集＋每列預期 10 欄）與其輸入表
  *      （ob_pool_data / customer_core / ob_arreturndf_min_cap / ob_emphire / ob_dept_pct /
  *       ob_empl_set / ob_calendar / ob_list_definition / 計分卡 config）。**PG 全程唯讀**。

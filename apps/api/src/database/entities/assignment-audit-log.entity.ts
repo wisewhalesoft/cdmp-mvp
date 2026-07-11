@@ -21,7 +21,7 @@ export class AssignmentAuditLog {
   // m16 / AD-E07-17 議題 2 / 2026-05-16：length 由 10 擴為 30，
   // union 補充 STAGE_ADVANCE / STAGE_ROLLBACK / STAGE_REJECT / ASSIGN_ROLE / REVOKE_ROLE
   // P1 B6 / F064 AC-5 / 2026-05-17：補 EXPORT（分派結果匯出稽核）
-  // F062 / Phase 2 / 2026-05-17：補 CANCEL（月跑取消稽核）
+  // F062 / Phase 2 / 2026-05-17：補 CANCEL（月名單分派取消稽核）
   // F054 v1.3 / 2026-05-18：補 SCORING_INTEGRITY_WARN（計分設定完整性稽核警告，25 chars，仍在 VARCHAR(30) 內）
   @Column({ name: 'action', type: 'varchar', length: 30 })
   action:

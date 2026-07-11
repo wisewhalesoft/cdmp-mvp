@@ -9,9 +9,9 @@
  *
  * 對應 spec：
  *   - F050 v2.1：建立草稿 — LIST_NO 自動產生、999 上限、完整條件集相等唯一（v2.2）、
- *                conditionPayload 必填、月跑鎖
+ *                conditionPayload 必填、月名單分派鎖
  *   - F051 v2.1：覆寫式編輯 — 404 / inactive / 4-state semantics / 衝突排除自身
- *   - F052 v2.0：軟刪除 — 重複停用阻擋、月跑鎖
+ *   - F052 v2.0：軟刪除 — 重複停用阻擋、月名單分派鎖
  *   - 共通：assertNoRunningRun 頂層呼叫、audit log 寫入
  */
 
@@ -105,7 +105,7 @@ async function buildModule(): Promise<{
  */
 function baseCreateDto(overrides: Partial<any> = {}) {
   return {
-    listNm: '車貸月跑名單',
+    listNm: '車貸月名單分派名單',
     listPeriodStart: 1,
     listPeriodEnd: 6,
     listInterval: 1,
@@ -301,7 +301,7 @@ describe('AssignmentListService', () => {
       }
     });
 
-    it('TC-M01-CREATE-006：月跑執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
+    it('TC-M01-CREATE-006：月名單分派執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
       await runRepo.save({
         run_id: 'r-running-001',
         project_workym: YM,
@@ -431,7 +431,7 @@ describe('AssignmentListService', () => {
       }
     });
 
-    it('TC-M01-UPDATE-007：月跑執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
+    it('TC-M01-UPDATE-007：月名單分派執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
       const listNo = await seedActive();
       await runRepo.save({
         run_id: 'r-002',
@@ -496,7 +496,7 @@ describe('AssignmentListService', () => {
       }
     });
 
-    it('TC-M01-DISABLE-004：月跑執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
+    it('TC-M01-DISABLE-004：月名單分派執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
       const listNo = await seedActive();
       await runRepo.save({
         run_id: 'r-003',
@@ -542,7 +542,7 @@ describe('AssignmentListService', () => {
       expect(res.stageCounts.disabled).toBe(1);
     });
 
-    it('TC-M01-LIST-004：月跑執行中 → lockState.locked=true', async () => {
+    it('TC-M01-LIST-004：月名單分派執行中 → lockState.locked=true', async () => {
       await runRepo.save({
         run_id: 'r-004',
         project_workym: YM,

@@ -274,12 +274,12 @@ export class AssignmentRunPipelineService {
     private readonly poolRepo: Repository<ObPoolData>,
     /**
      * F091 近 3 個月去重來源（ETL 單一來源；F094 切換後仍只讀本表，不寫入）。
-     * 月跑提案改寫入 ob_monthly_run_result（resultRepo），不再寫 ob_pool_data_list。
+     * 月名單分派提案改寫入 ob_monthly_run_result（resultRepo），不再寫 ob_pool_data_list。
      */
     @InjectRepository(ObPoolDataList)
     private readonly poolDataListRepo: Repository<ObPoolDataList>,
     /**
-     * F094 / AD-E07-25：月跑 Stage 1~4 分派提案結果寫入目標（取代 ob_pool_data_list）。
+     * F094 / AD-E07-25：月名單分派 Stage 1~4 分派提案結果寫入目標（取代 ob_pool_data_list）。
      */
     @InjectRepository(ObMonthlyRunResult)
     private readonly resultRepo: Repository<ObMonthlyRunResult>,
@@ -434,7 +434,7 @@ export class AssignmentRunPipelineService {
       }
 
       // F061 v1.3 BR-13 / AC-7c：Stage 2 前 ScoringIntegrityCheckService soft check
-      // 不嵌入 fn_calc_tier_level；不阻擋月跑；逐個 valid CARD_TYPE 掃描
+      // 不嵌入 fn_calc_tier_level；不阻擋月名單分派；逐個 valid CARD_TYPE 掃描
       const integrityIssues: IntegrityIssue[] = [];
       const integrityWarningTypes = new Set<string>();
       if (this.integrityCheckService) {
@@ -552,7 +552,7 @@ export class AssignmentRunPipelineService {
       await this.checkCancelled(runId);
 
       const now = new Date();
-      // F094 / AD-E07-25 Phase A：月跑 Stage 1~4 提案結果寫入 ob_monthly_run_result（帶 run_id），
+      // F094 / AD-E07-25 Phase A：月名單分派 Stage 1~4 提案結果寫入 ob_monthly_run_result（帶 run_id），
       // **不再寫入 ob_pool_data_list**（後者回歸 ETL 單一來源；去重仍只讀 ob_pool_data_list）。
       // snapshot type=result 短期雙軌保留（DP-AD25-3），作為稽核快照與本表並存。
       await this.dataSource.transaction(async (txm) => {
@@ -983,7 +983,7 @@ export class AssignmentRunPipelineService {
   /**
    * F101 / AD-E07-29 §3.4：載入 ym 整月之工作日千分比（複用 computeWorkingDayRatios）。
    * 與 Stage 0 試算 calculateDailyEstimate 同算法 + 同 ob_calendar（I-RUN-EST-01）。
-   * 無工作日 → 回空陣列（distributeStage3to4 寫 ASSIGNDAY_NO_CALENDAR_WARN，月跑不中斷）。
+   * 無工作日 → 回空陣列（distributeStage3to4 寫 ASSIGNDAY_NO_CALENDAR_WARN，月名單分派不中斷）。
    */
   private async loadWorkingDayRatios(
     ym: string,
@@ -1119,7 +1119,7 @@ export class AssignmentRunPipelineService {
    *      ration + ASSIGNDAY 千分比；案件池 WHERE is_cr<>'Y' 扣量 I-CR-DEDUCT-01、CR 案件納 ASSIGNDAY
    *      散佈 I-CR-ASSIGNDAY-01）。
    *
-   * **範圍限 P3b+P3c+P3d**：3e（tier 收尾）之 MSSQL 化尚未移植。經 P3d 後 mssql 月跑之 CR 三欄
+   * **範圍限 P3b+P3c+P3d**：3e（tier 收尾）之 MSSQL 化尚未移植。經 P3d 後 mssql 月名單分派之 CR 三欄
    * （cr_id→emplid、dept_id、is_cr）不再恆維持 Stage 1 帶入原值（DISPATCH-004 DoD）。CR 前置一律走
    * MSSQL 平行版 `runCrPrioritySqlMssql`（**不**呼叫 PG-only 版，逐字對 MSSQL 執行會語法錯，
    * DISPATCH-005 靜態守門）。fallback schema 檢查一次性查回 ob_pool_data 欄位集合共用予各 list
@@ -1503,7 +1503,7 @@ export class AssignmentRunPipelineService {
    *
    * customer_core 無 entity（AD-E06-1）→ raw SQL。SQLite 測試環境二表不存在 → 查詢拋錯，
    * 以 try/catch graceful degrade 回空 Map（cc/arCap=null → 屬性走 default，等價舊行為，OQ-3）。
-   * 正式月跑（PG）二表存在 → 正常取回。
+   * 正式月名單分派（PG）二表存在 → 正常取回。
    */
   private async prefetchScoringSources(pool: ObPoolData[]): Promise<{
     ccMap: Map<string, CustomerCoreRow>;
@@ -1585,8 +1585,8 @@ export class AssignmentRunPipelineService {
    * 且不支援（I-PORT-01）；故以 DB_TYPE gate 分流，與 pg-boss / advisory-lock 既有 PG-only gate 一致。
    *
    * @param list   名單定義
-   * @param workdt 月跑工作日 PROJECT_WORKYM+'01'（去重視窗 + 年資規則）
-   * @param runId  月跑 ID（PG 下推 INSERT…SELECT 之 run_id 常數；非 PG 路徑不使用）
+   * @param workdt 月名單分派工作日 PROJECT_WORKYM+'01'（去重視窗 + 年資規則）
+   * @param runId  月名單分派 ID（PG 下推 INSERT…SELECT 之 run_id 常數；非 PG 路徑不使用）
    * @returns
    *   - `{ skipped: true }`：composer 回 skipReason='EMPTY_CONDITIONS' → 不撈 pool（已 logger.warn）
    *   - `{ skipped: false, pool }`：Stage 1 過濾後的 ob_pool_data 案件清單（供 Stage 2~4）
@@ -1740,7 +1740,7 @@ export class AssignmentRunPipelineService {
       list,
       workdt,
       this.poolRepo,
-      // F094：去重來源仍為 ob_pool_data_list（poolDataListRepo），非月跑結果表（AC-7）
+      // F094：去重來源仍為 ob_pool_data_list（poolDataListRepo），非月名單分派結果表（AC-7）
       this.poolDataListRepo,
       { dryRun: false },
     );

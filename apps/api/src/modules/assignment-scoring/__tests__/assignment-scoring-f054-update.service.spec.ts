@@ -354,7 +354,7 @@ describe('AssignmentScoringService — F054 updateDimensions', () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
-  it('AC-5：月跑鎖（pending/running）時 → 409 SCORING_VERSION_LOCKED', async () => {
+  it('AC-5：月名單分派鎖（pending/running）時 → 409 SCORING_VERSION_LOCKED', async () => {
     runRepo.findOne.mockResolvedValue({ run_id: 'r1', status: 'pending' });
 
     await expect(

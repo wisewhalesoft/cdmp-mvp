@@ -3,7 +3,7 @@ import { In, Repository } from 'typeorm';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 
 /**
- * 月跑鎖檢查 helper（共用於 F053~F056 計分編輯與 F070~F072 CARD_TYPE CRUD）。
+ * 月名單分派鎖檢查 helper（共用於 F053~F056 計分編輯與 F070~F072 CARD_TYPE CRUD）。
  *
  * 依 OPEN-3 決議（PO 2026-05-14）：同一 DB 條件（assignment_run.status IN ('pending','running')）
  * 但依呼叫端意圖回兩種錯誤碼：

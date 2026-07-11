@@ -9,7 +9,7 @@
  *   - TS-F055-010：相鄰接觸 [81,100]+[61,80] 允許
  *   - BE-F055-001：levels 比 DB 現有筆數少（僅更新傳入的，其他保留）
  *   - BE-F055-002：preview 中 scoreS > scoreE → 422（單筆內反向區間視為重疊）
- *   - AC-5：月跑鎖 → 409
+ *   - AC-5：月名單分派鎖 → 409
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -296,7 +296,7 @@ describe('AssignmentScoringService — F055 updateCardLevels', () => {
     ).rejects.toBeInstanceOf(UnprocessableEntityException);
   });
 
-  it('AC-5：月跑鎖 → 409 SCORING_VERSION_LOCKED', async () => {
+  it('AC-5：月名單分派鎖 → 409 SCORING_VERSION_LOCKED', async () => {
     runRepo.findOne.mockResolvedValue({ status: 'running' });
     await expect(
       service.updateCardLevels(

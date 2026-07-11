@@ -23,7 +23,7 @@ import { ERROR_CODES } from '@/common/errors/error-codes';
  *   - lock 超時錯誤碼 = { code: '55P03' }（PostgreSQL 標準碼，非自訂字串）
  *   - 稽核 metadata auto_advanced_by_completion = boolean true（非 1 / 'true'）
  *   - operator_role 推導 = role==='admin' ? 'admin' : (businessRole ?? 'section_chief')
- *   - tx 內月跑 guard = runGuard.isRunning()（回 boolean），非 assertNoRunningRun()（拋例外）
+ *   - tx 內月名單分派 guard = runGuard.isRunning()（回 boolean），非 assertNoRunningRun()（拋例外）
  *
  * SQLite 相容：預設 DB_TYPE='sqlite'（test/setup.ts）→ advisory lock 段跳過，
  *   偵測+推進直接在 mgr 上執行；lock 超時案例（TC-014~016）暫切 DB_TYPE='postgres'
@@ -367,11 +367,11 @@ describe('PersonnelRatioService — F084 v2.0 Auto-Advance', () => {
   });
 
   // =========================================================================
-  // 3.5 月跑 Guard 場景（tx 內 isRunning）
+  // 3.5 月名單分派 Guard 場景（tx 內 isRunning）
   // =========================================================================
 
   // TC-F084-012
-  it('TC-F084-012：月跑 running → autoAdvanced:false + failReason，PUT 寫入保留', async () => {
+  it('TC-F084-012：月名單分派 running → autoAdvanced:false + failReason，PUT 寫入保留', async () => {
     runGuard.isRunning.mockResolvedValue(true);
 
     const res = await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
@@ -386,7 +386,7 @@ describe('PersonnelRatioService — F084 v2.0 Auto-Advance', () => {
   });
 
   // TC-F084-013
-  it('TC-F084-013：月跑 pending（isRunning 回 true）同樣觸發 guard', async () => {
+  it('TC-F084-013：月名單分派 pending（isRunning 回 true）同樣觸發 guard', async () => {
     runGuard.isRunning.mockResolvedValue(true);
 
     const res = await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
@@ -434,7 +434,7 @@ describe('PersonnelRatioService — F084 v2.0 Auto-Advance', () => {
   });
 
   // TC-F084-016
-  it('TC-F084-016：lock 超時 vs 月跑 guard 的回應欄位差異', async () => {
+  it('TC-F084-016：lock 超時 vs 月名單分派 guard 的回應欄位差異', async () => {
     // 子場景 A：lock 超時 → 不含 failReason
     process.env.DB_TYPE = 'postgres';
     mgr.query
@@ -444,7 +444,7 @@ describe('PersonnelRatioService — F084 v2.0 Auto-Advance', () => {
     expect(resA.autoAdvanced).toBe(false);
     expect(resA.autoAdvanceFailReason == null).toBe(true);
 
-    // 子場景 B：月跑 guard → 含 failReason
+    // 子場景 B：月名單分派 guard → 含 failReason
     process.env.DB_TYPE = 'sqlite';
     runGuard.isRunning.mockResolvedValue(true);
     const resB = await svc.setPersonnelRatios('OB202506001', dtoForXTE0, validActor, '202605');
@@ -879,7 +879,7 @@ describe('StageActionService.advancePersonnelRatioToApproval — F084 v2.0 fallb
   });
 
   // TC-F084-028
-  it('TC-F084-028：月跑進行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
+  it('TC-F084-028：月名單分派進行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
     const { ConflictException } = await import('@nestjs/common');
     runGuard.assertNoRunningRun.mockRejectedValue(
       new ConflictException({ error: ERROR_CODES.ASSIGNMENT_RUN_ALREADY_RUNNING }),

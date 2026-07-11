@@ -78,7 +78,7 @@ export interface Stage1SqlCore {
  * 產生 Stage 1 唯一 SQL core（WHERE + params），run / estimate 共用。
  *
  * @param list             名單定義（欄位篩選 + month_cnt + list_nm 觸發特例）
- * @param workdt           月跑工作日 PROJECT_WORKYM+'01'（去重視窗 + year-above cutoff 取當年）
+ * @param workdt           月名單分派工作日 PROJECT_WORKYM+'01'（去重視窗 + year-above cutoff 取當年）
  * @param poolDataListRepo 近 3 月去重來源（查 MAX(assignday) 推算上界；anti-join 子查詢針對本表）
  */
 export async function buildStage1Sql(

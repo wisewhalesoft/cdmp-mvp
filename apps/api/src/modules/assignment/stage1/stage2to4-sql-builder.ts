@@ -153,7 +153,7 @@ function sqlLiteral(v: string): string {
  *     - ADD_UN_CAPITAL（range）← COALESCE(ar.add_un_capital, 0)（F103 不動）
  *
  * **F104 變更**（對齊 legacy SP，AD-E07-10-L v4.0）：
- *   - cus_sex NULL-safe cast（BR-F104-13）：禁裸 `::int`，髒值 'C'/'D' → NULL（不拋例外、不中斷月跑）。
+ *   - cus_sex NULL-safe cast（BR-F104-13）：禁裸 `::int`，髒值 'C'/'D' → NULL（不拋例外、不中斷月名單分派）。
  *   - 兩處 default 分離（BR-F104-13a）：CUS_SEX 計分欄 default=3；五欄分流 gating default='1'（個人）。
  *   - 五欄 isCorp 分流（CAREA_NO1/NO2/CELLULAR/AGE/EDUCAT_BACK）：個人取自身屬性、法人取 0/per-card default。
  *   - per-card default（LIST_MONTH/LOAN_RATE/EDUCAT_BACK/三縣市欄）依 cardType（CARD_DEFAULTS / AD-E07-33）。
@@ -284,7 +284,7 @@ export function resolveColumnSource(columnName: string, cardType: string): Colum
       //   未 hardcode 之 ob_pool_data 數值欄位 → to_jsonb(o) 取值 cast numeric。
       //   安全性：column_name 來自 ob_levelcard_column.column_name（DB 管理者設定，非外部輸入）；
       //     lower() 對齊大小寫；幽靈欄位（to_jsonb 無此 key）/ 非數值文字 → cast → NULL → COALESCE 0
-      //     （靜默 +0，不阻擋月跑，BR-F103-08）。category 維度已由 hardcode case 覆蓋，不進此分支。
+      //     （靜默 +0，不阻擋月名單分派，BR-F103-08）。category 維度已由 hardcode case 覆蓋，不進此分支。
       return {
         kind: 'range',
         expr: `COALESCE((to_jsonb(o)->>'${columnName.toLowerCase()}')::numeric, 0)`,

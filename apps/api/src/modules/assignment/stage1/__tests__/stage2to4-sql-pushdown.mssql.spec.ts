@@ -671,7 +671,7 @@ describe('P3b FALLBACK — schema 檢查（I-MSSQL-DYNAMIC-FALLBACK-01）', () =
     }
   });
 
-  it('FALLBACK-002b：幽靈欄位 0 ∈ [0,100] → 命中對應 score（BR-F103-08 不阻擋月跑）', async (ctx) => {
+  it('FALLBACK-002b：幽靈欄位 0 ∈ [0,100] → 命中對應 score（BR-F103-08 不阻擋月名單分派）', async (ctx) => {
     ensureMssql(ctx);
     const L = 'P3BL_FB2';
     await seedColumn('ZP3BG', 'XYZ_COL', MatchType.RANGE);

@@ -1,5 +1,5 @@
 /**
- * F098 / AD-E07-28 P1：月跑 worker 抽離 — 自建 T-SQL 佇列共用常數與型別。
+ * F098 / AD-E07-28 P1：月名單分派 worker 抽離 — 自建 T-SQL 佇列共用常數與型別。
  *
  * ⚠️ **單一事實來源（single source of truth）**：queue name 與 job payload 型別
  * 由本檔集中匯出，producer（cdmp-api）與 consumer（cdmp-worker）一律 import 此處常數，
@@ -8,13 +8,13 @@
  */
 
 /**
- * 月跑佇列名稱（AD-E07-28 §4.2 / A-4）。
+ * 月名單分派佇列名稱（AD-E07-28 §4.2 / A-4）。
  * producer `send(RUN_QUEUE_NAME, …)` 與 consumer `claimNext(RUN_QUEUE_NAME, …)` 必須引用同一常數。
  */
 export const RUN_QUEUE_NAME = 'assignment-run';
 
 /**
- * 月跑 job 之 payload 形狀（AD-E07-28 §4.2 / A-4）。
+ * 月名單分派 job 之 payload 形狀（AD-E07-28 §4.2 / A-4）。
  * 經佇列之 JSON 序列化往返後，consumer 由 `claimed.payload` 取回相同物件（runId/ym 不失真）。
  */
 export interface RunJobPayload {
@@ -25,7 +25,7 @@ export interface RunJobPayload {
 }
 
 /**
- * 月跑 job retry 上限（OQ-AD28-04 拍板 = 0）。
+ * 月名單分派 job retry 上限（OQ-AD28-04 拍板 = 0）。
  * 未完備冪等清理前，失敗一律標 failed、不自動重派；重跑須由使用者人工 triggerRun。
  */
 export const RUN_QUEUE_RETRY_LIMIT = 0;

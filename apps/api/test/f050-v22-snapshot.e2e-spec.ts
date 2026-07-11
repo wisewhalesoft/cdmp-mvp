@@ -15,7 +15,7 @@
  *   SS-009 無 Token → 401 AUTH_TOKEN_MISSING
  *   SS-010 listNo 不存在 → 404 ASSIGNMENT_LIST_NOT_FOUND
  *   SS-011 歷史月份名單可開啟 Drawer（不攔截）
- *   SS-012 月跑執行中可開啟 Drawer（不攔截）
+ *   SS-012 月名單分派執行中可開啟 Drawer（不攔截）
  *
  * 命名漂移注意（spec drift）：
  *   - test spec 範例文字使用 `action='CREATE' / 'ADVANCE_STAGE' / 'APPROVE'`
@@ -785,9 +785,9 @@ describe('F050 v2.2 §6.2 — GET full-snapshot E2E (SS 群組 12 場景)', () =
   });
 
   // ============================================================
-  // SS-012：月跑執行中可開啟 Drawer
+  // SS-012：月名單分派執行中可開啟 Drawer
   // ============================================================
-  it('TS-F050-SS-012：月跑執行中可開啟 Drawer（不攔截 ASSIGNMENT_RUN_ALREADY_RUNNING）', async () => {
+  it('TS-F050-SS-012：月名單分派執行中可開啟 Drawer（不攔截 ASSIGNMENT_RUN_ALREADY_RUNNING）', async () => {
     const listNo = 'OB202605012';
     await seedList(ds, { listNo, stage: 'ready', conditionPayload: baseConditionPayload });
     await seedAssignmentRun(ds, 'running');

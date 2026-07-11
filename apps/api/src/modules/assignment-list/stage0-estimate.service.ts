@@ -18,11 +18,11 @@ import {
   type ActorUser,
 } from '@/modules/assignment/services/section-chief-scope.service';
 // F092 / AD-E07-23 §23.5：per-list 估算升級為完整 Stage 1 篩選鏈唯讀 dry-run，
-// 與月跑共用同一 executeStage1Chain（消除 estimate / run 雙軌 drift）。
-// 以 namespace import 引用，確保 dry-run 路徑與 AssignmentRunPipelineService 月跑同源，
+// 與月名單分派共用同一 executeStage1Chain（消除 estimate / run 雙軌 drift）。
+// 以 namespace import 引用，確保 dry-run 路徑與 AssignmentRunPipelineService 月名單分派同源，
 // 並使 unit test 之 vi.spyOn(chainModule, 'executeStage1Chain') 可攔截內部呼叫。
 import * as stage1Chain from '@/modules/assignment/stage1/stage1-filter-chain';
-// F099 / AD-E07-28 P2：estimate 改與月跑 run 共用 buildStage1Sql core（I-RUN-EST-01）。
+// F099 / AD-E07-28 P2：estimate 改與月名單分派 run 共用 buildStage1Sql core（I-RUN-EST-01）。
 // PG 走 SELECT COUNT(*) 下推；非 PG（SQLite 測試）沿用 executeStage1Chain dry-run（JS oracle）。
 import { estimateStage1SqlCount } from '@/modules/assignment/stage1/stage1-sql-executor';
 // AD-E07-42 P3a：MSSQL Stage 1 estimate 下推（DB_TYPE='mssql' 分支，DISPATCH-002）。
@@ -194,7 +194,7 @@ export function resolveCalendarDay(
  * F101 / AD-E07-29 §3.4：純函式抽取——由 (calendar_date, rest_flg) 列產出工作日千分比表。
  *
  * 與 calculateDailyEstimate 共用同一算法（baseRatio=FLOOR(1000/workingDays) + calendar_date DESC
- * 前 remainder 個 +1），使月跑 Stage 4 ASSIGNDAY（distributeStage3to4）與 Stage 0 試算同源
+ * 前 remainder 個 +1），使月名單分派 Stage 4 ASSIGNDAY（distributeStage3to4）與 Stage 0 試算同源
  * （I-RUN-EST-01）。回傳僅工作日（isWorkday=true），依 calendar_date ASC 排序。
  *
  * @param rows           ob_calendar 列（calendar_date 為 Date | 'YYYY-MM-DD' 字串）
@@ -386,9 +386,9 @@ export class Stage0EstimateService {
    *   - 內部改呼叫 `executeStage1Chain(list, workdt, poolRepo, poolDataListRepo, { dryRun: true })`，
    *     取 `result.count`，取代原欄位篩選版 COUNT（F049 v1.2 buildPoolCountQuery 路徑）。
    *   - 估算涵蓋完整鏈：欄位篩選 + MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE，
-   *     與正式月跑 Stage 1 案件數嚴格一致（與 AssignmentRunPipelineService 同源 executeStage1Chain）。
+   *     與正式月名單分派 Stage 1 案件數嚴格一致（與 AssignmentRunPipelineService 同源 executeStage1Chain）。
    *   - dry-run 唯讀：不寫 ob_pool_data_list / assignment_run / assignment_run_snapshot（F092 AC-2 / BR-2）。
-   *   - EMPTY_CONDITIONS → result.skipped=true → count=0（與月跑 skip 一致；F049 BR-5）。
+   *   - EMPTY_CONDITIONS → result.skipped=true → count=0（與月名單分派 skip 一致；F049 BR-5）。
    *
    * workdt 推導：以名單 project_workym（'YYYYMM'）轉為當月 1 日 Date（PROJECT_WORKYM + '01'），
    * 與 AssignmentRunPipelineService.parseWorkdt 同規則（去重視窗 + 年資特殊 DELETE 取當年）。
@@ -799,25 +799,25 @@ export class Stage0EstimateService {
   // -------------------------------------------------------------------------
   // 內部：完整 Stage 1 篩選鏈唯讀 dry-run COUNT（F092 / AD-E07-23 §23.5）
   //
-  // 取代 F049 v1.2 欄位篩選版 buildPoolCountQuery。改呼叫與月跑同源的
+  // 取代 F049 v1.2 欄位篩選版 buildPoolCountQuery。改呼叫與月名單分派同源的
   // executeStage1Chain({ dryRun: true })，使試算涵蓋：
   //   ① 欄位篩選（buildStage1WhereConditions，路徑 A/B 不變）
   //   ② MONTH_CNT 期別過濾
   //   ③ 詐騙白牌 / 中結強案 / 中結 / 年資 特殊 DELETE
   //   ④ 近 3 個月去重（查 ob_pool_data_list）
-  // 確保 estimate 數字 ≡ 正式月跑 Stage 1 案件數（DP-AD23-1 完整鏈精確模式）。
+  // 確保 estimate 數字 ≡ 正式月名單分派 Stage 1 案件數（DP-AD23-1 完整鏈精確模式）。
   //
   // dry-run 唯讀（F092 AC-2 / BR-2）：executeStage1Chain dryRun:true 僅 SELECT，
   // 不寫 ob_pool_data_list / assignment_run / assignment_run_snapshot。
   //
   // EMPTY_CONDITIONS（含空 conditions / wildcard 後零 fragment）→ result.skipped=true →
-  // count=0（與月跑 Stage 1 skip 該名單一致；F049 BR-5）。
+  // count=0（與月名單分派 Stage 1 skip 該名單一致；F049 BR-5）。
   // -------------------------------------------------------------------------
 
   private async dryRunChainCount(def: ObListDefinition): Promise<number> {
     const workdt = this.deriveWorkdt(def.project_workym);
 
-    // F099 P2 / AD-E07-42 P3a：PG 與 MSSQL 皆走 SELECT COUNT(*) 下推（與月跑 run 之 INSERT…SELECT 共用
+    // F099 P2 / AD-E07-42 P3a：PG 與 MSSQL 皆走 SELECT COUNT(*) 下推（與月名單分派 run 之 INSERT…SELECT 共用
     // 同源 buildStage1Sql[Mssql] core，I-RUN-EST-01）；非 PG/MSSQL（SQLite 測試）沿用 executeStage1Chain
     // dry-run（JS oracle，PG-only CAST 不適用）。DISPATCH-002：三分支中 mssql 走 estimateStage1SqlCountMssql。
     const dbType = process.env.DB_TYPE;
@@ -851,7 +851,7 @@ export class Stage0EstimateService {
       { dryRun: true },
     );
 
-    // 非阻擋型 warning 紀錄（與月跑 Stage 1 一致）
+    // 非阻擋型 warning 紀錄（與月名單分派 Stage 1 一致）
     for (const w of result.warnings) {
       this.logger.warn(
         `[Stage0Estimate] chain warning list_no=${def.list_no} code=${w.code} column=${(w as { columnName?: string }).columnName ?? '-'} reason=${w.reason}`,

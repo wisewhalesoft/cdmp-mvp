@@ -44,7 +44,7 @@ interface Env {
   snapshotRepo: Repository<AssignmentRunSnapshot>;
   listRepo: Repository<ObListDefinition>;
   poolRepo: Repository<ObPoolData>;
-  /** F094：月跑提案結果表（ob_monthly_run_result，取代 ob_pool_data_list 寫入目標） */
+  /** F094：月名單分派提案結果表（ob_monthly_run_result，取代 ob_pool_data_list 寫入目標） */
   resultRepo: Repository<ObMonthlyRunResult>;
   /** F094：去重來源（ob_pool_data_list，仍只讀不寫） */
   poolDataListRepo: Repository<ObPoolDataList>;
@@ -634,30 +634,30 @@ describe('AssignmentRunPipelineService — F061 v1.2 AC-3 / AC-4', () => {
   });
 
   // =========================================================================
-  // F094 / AD-E07-25 Phase A：月跑 Stage 1~4 寫入 ob_monthly_run_result（切換落點）
+  // F094 / AD-E07-25 Phase A：月名單分派 Stage 1~4 寫入 ob_monthly_run_result（切換落點）
   // 對應 TS-F094-ST1-001~003 / ST34-001~002 / SN-001 / DEDUP-001
   // （SQLite in-memory integration，對齊本 spec 既有 better-sqlite3 module；非 PG TestContainer）
   // =========================================================================
-  describe('TS-F094-ST1：月跑 Stage 1 寫入 ob_monthly_run_result（不再寫 ob_pool_data_list）', () => {
-    it('TS-F094-ST1-001: 月跑提案寫入 ob_monthly_run_result（帶 run_id, result_status=PENDING）；ob_pool_data_list 不被寫入', async () => {
+  describe('TS-F094-ST1：月名單分派 Stage 1 寫入 ob_monthly_run_result（不再寫 ob_pool_data_list）', () => {
+    it('TS-F094-ST1-001: 月名單分派提案寫入 ob_monthly_run_result（帶 run_id, result_status=PENDING）；ob_pool_data_list 不被寫入', async () => {
       await seedMinimalScenario(env);
       const run = await seedRun(env.runRepo, YM);
 
       await env.service.runPipeline(run.run_id, YM);
 
-      // 月跑結果寫入新表，帶 run_id + PK 四欄 + result_status='PENDING'
+      // 月名單分派結果寫入新表，帶 run_id + PK 四欄 + result_status='PENDING'
       const rows = await env.resultRepo.find({ where: { run_id: run.run_id } });
       expect(rows.length).toBeGreaterThan(0);
       expect(rows.every((r) => r.run_id === run.run_id)).toBe(true);
       expect(rows.every((r) => !!r.list_no && !!r.orgno && !!r.appl_no)).toBe(true);
       expect(rows.every((r) => r.result_status === 'PENDING')).toBe(true);
 
-      // regression guard：ob_pool_data_list 未被月跑寫入（單源化 — 僅 ETL 來源）
+      // regression guard：ob_pool_data_list 未被月名單分派寫入（單源化 — 僅 ETL 來源）
       const pdlRows = await env.poolDataListRepo.find();
       expect(pdlRows).toHaveLength(0);
     });
 
-    it('TS-F094-ST1-001b: ob_pool_data_list 既有 ETL 歷史不受月跑影響（不寫入該表）', async () => {
+    it('TS-F094-ST1-001b: ob_pool_data_list 既有 ETL 歷史不受月名單分派影響（不寫入該表）', async () => {
       await seedMinimalScenario(env);
 
       // 預先 seed 一筆 ETL 歷史列（單源化後 data_source='etl_load'）
@@ -671,12 +671,12 @@ describe('AssignmentRunPipelineService — F061 v1.2 AC-3 / AC-4', () => {
       const run = await seedRun(env.runRepo, YM);
       await env.service.runPipeline(run.run_id, YM);
 
-      // ETL 歷史列仍存在且仍只有 1 筆（月跑未寫入 ob_pool_data_list）
+      // ETL 歷史列仍存在且仍只有 1 筆（月名單分派未寫入 ob_pool_data_list）
       const pdlRows = await env.poolDataListRepo.find();
       expect(pdlRows).toHaveLength(1);
       expect(pdlRows[0].appl_no).toBe('LEGACY999');
 
-      // 月跑結果在新表
+      // 月名單分派結果在新表
       const resultRows = await env.resultRepo.find({ where: { run_id: run.run_id } });
       expect(resultRows.length).toBeGreaterThan(0);
     });
@@ -708,7 +708,7 @@ describe('AssignmentRunPipelineService — F061 v1.2 AC-3 / AC-4', () => {
   });
 
   describe('TS-F094-SN：snapshot type=result 短期雙軌保留', () => {
-    it('TS-F094-SN-001: 月跑完成後仍寫 assignment_run_snapshot type=result（與本表並存）', async () => {
+    it('TS-F094-SN-001: 月名單分派完成後仍寫 assignment_run_snapshot type=result（與本表並存）', async () => {
       await seedMinimalScenario(env);
       const run = await seedRun(env.runRepo, YM);
 
@@ -743,16 +743,16 @@ describe('AssignmentRunPipelineService — F061 v1.2 AC-3 / AC-4', () => {
   });
 
   describe('TS-F094-DEDUP：去重來源仍只讀 ob_pool_data_list（不讀本表）', () => {
-    it('TS-F094-DEDUP-001: 月跑兩次 — 第二次去重不因第一次提案（本表）而排除（提案非真相）', async () => {
+    it('TS-F094-DEDUP-001: 月名單分派兩次 — 第二次去重不因第一次提案（本表）而排除（提案非真相）', async () => {
       await seedMinimalScenario(env);
 
-      // 第一次月跑：寫入 ob_monthly_run_result（custo_no=CA001 / CA002）
+      // 第一次月名單分派：寫入 ob_monthly_run_result（custo_no=CA001 / CA002）
       const run1 = await seedRun(env.runRepo, YM);
       await env.service.runPipeline(run1.run_id, YM);
       const firstRows = await env.resultRepo.find({ where: { run_id: run1.run_id } });
       expect(firstRows.length).toBe(2);
 
-      // 第二次月跑：去重只讀 ob_pool_data_list（空）→ 不因第一次本表提案而去重
+      // 第二次月名單分派：去重只讀 ob_pool_data_list（空）→ 不因第一次本表提案而去重
       const run2 = await seedRun(env.runRepo, YM);
       await env.service.runPipeline(run2.run_id, YM);
       const secondRows = await env.resultRepo.find({ where: { run_id: run2.run_id } });

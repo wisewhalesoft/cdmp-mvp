@@ -16,7 +16,7 @@ import { MatchType } from '../dto/match-type.enum';
  *
  * 設計原則（spec BR-13）：
  *   1. application 層獨立 service，**不嵌入 fn_calc_tier_level**
- *   2. **不拋 exception**：回傳 IntegrityResult，月跑繼續執行
+ *   2. **不拋 exception**：回傳 IntegrityResult，月名單分派繼續執行
  *   3. 每維度每 rule_violated 寫一筆彙總 audit_log（action='SCORING_INTEGRITY_WARN'）
  *   4. 不寫每筆 appl_no 明細（避免日誌爆量）
  *
@@ -51,7 +51,7 @@ export interface IntegrityCheckOptions {
   cardVersion?: number;
   /** 受影響案件數（用於 audit log violated_row_count）；caller 估算後傳入 */
   affectedRowCount?: number;
-  /** 當前月跑 run_id（用於 audit log） */
+  /** 當前月名單分派 run_id（用於 audit log） */
   runId?: string;
   actorId?: string;
   actorName?: string;

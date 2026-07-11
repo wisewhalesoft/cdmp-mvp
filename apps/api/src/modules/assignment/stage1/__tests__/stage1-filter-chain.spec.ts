@@ -486,7 +486,7 @@ describe('F091 四、executeStage1Chain 封裝（AC-7 / AC-8）', () => {
     expect(result.appliedRuleIds).toContain('R-PERIOD-MOTORCYCLE');
   });
 
-  it('CH-005：MONTH_CNT skip（list_period_* null）→ 月跑仍繼續（不阻擋）+ warning', async () => {
+  it('CH-005：MONTH_CNT skip（list_period_* null）→ 月名單分派仍繼續（不阻擋）+ warning', async () => {
     const list = makeList({
       list_period_start: null as unknown as string,
       condition_payload: { logic: 'AND', conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] }] } as ObListDefinition['condition_payload'],

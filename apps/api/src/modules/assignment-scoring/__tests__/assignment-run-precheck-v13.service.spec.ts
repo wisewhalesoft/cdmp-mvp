@@ -1,10 +1,10 @@
 /**
  * F061 v1.3 — AssignmentRunPipelineService Pre-check Unit Tests
  *
- * 涵蓋月跑啟動前稽核流程（v1.3 新增）：
+ * 涵蓋月名單分派啟動前稽核流程（v1.3 新增）：
  *   - TS-F061-PRE-001：稽核通過 → pipeline 繼續執行（Stage 1 被觸發）
  *   - TS-F061-PRE-002：稽核失敗 → pipeline 中止，run status='failed'，error 含 SCORING_INTEGRITY_FAILED
- *   - TS-F061-PRE-003：月跑鎖存在 → precheck 不觸發稽核，直接回 409 SCORING_VERSION_LOCKED
+ *   - TS-F061-PRE-003：月名單分派鎖存在 → precheck 不觸發稽核，直接回 409 SCORING_VERSION_LOCKED
  *   - TS-F061-PRE-004：ScoringIntegrityCheckService 以 spy/mock 驗證被呼叫一次
  *   - TS-F061-PRE-005：稽核失敗時 assignment_audit_log 記錄 action='RUN'，after_value 含 status='failed' 與 issues
  *   - TS-F061-PRE-006：precheck 通過後 run status 由 pending → running（非 failed）
@@ -46,7 +46,7 @@ describe('AssignmentRunPipelineService — F061 v1.3 Pre-check', () => {
 
   beforeEach(async () => {
     runRepo = {
-      findOne: vi.fn().mockResolvedValue(null),  // 預設：無月跑鎖
+      findOne: vi.fn().mockResolvedValue(null),  // 預設：無月名單分派鎖
       save: vi.fn((e: any) => Promise.resolve(e)),
       create: vi.fn((d: any) => ({ ...d, run_id: 'run-uuid-1' })),
     };
@@ -104,13 +104,13 @@ describe('AssignmentRunPipelineService — F061 v1.3 Pre-check', () => {
     );
   });
 
-  describe('TS-F061-PRE-003：月跑鎖存在 → 不觸發稽核，直接 409', () => {
+  describe('TS-F061-PRE-003：月名單分派鎖存在 → 不觸發稽核，直接 409', () => {
     it.todo(
       // TODO（tdd-implementation）：
-      // Arrange：runRepo.findOne mock 回傳 { status: 'running', ... }（月跑鎖存在）
+      // Arrange：runRepo.findOne mock 回傳 { status: 'running', ... }（月名單分派鎖存在）
       // Act：expect(service.runPipeline(...)).rejects.toThrow(ConflictException)
       // Assert：integrityCheckServiceMock.checkIntegrity 未被呼叫（never called）
-      '月跑鎖存在 → checkIntegrity 不觸發，throw ConflictException 409',
+      '月名單分派鎖存在 → checkIntegrity 不觸發，throw ConflictException 409',
     );
   });
 

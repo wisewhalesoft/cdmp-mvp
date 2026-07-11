@@ -422,7 +422,7 @@ describe('P5g ISOLATION（MSSQL）— 並行讀者可見性 probe（不預設分
       if (!bError) {
         expect(b.c).toBe(5);
       }
-      // ISO-003 記錄性：分支已 console 記錄供業務評估月跑期間查詢阻塞可接受度
+      // ISO-003 記錄性：分支已 console 記錄供業務評估月名單分派期間查詢阻塞可接受度
       expect(['(a) 立即讀舊值', '(b) 阻塞等待', 'lock-timeout']).toContain(branch);
     } finally {
       // 確保交易已關閉

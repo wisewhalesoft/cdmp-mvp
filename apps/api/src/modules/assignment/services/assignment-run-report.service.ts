@@ -387,7 +387,7 @@ export class AssignmentRunReportService {
     const deptSummary: SummaryDeptRow[] = [];
     for (const deptId of allDeptIds) {
       const actualCount = deptActual.get(deptId) ?? 0;
-      // 排除「未分派部門」（actualCount=0）：部門於 ob_dept_pct 有設定比例但本次月跑無任何實際
+      // 排除「未分派部門」（actualCount=0）：部門於 ob_dept_pct 有設定比例但本次月名單分派無任何實際
       // 分派時，其 deviation 恆為 -configRatio（假警示）、實際比例 0%，對使用者無意義 → 不列入
       // deptSummary（連動上方「分派部門數」stat card、部門偏差 chart 與 NFR-005 footer 一次收斂）。
       if (actualCount === 0) continue;
@@ -441,7 +441,7 @@ export class AssignmentRunReportService {
       .sort((a, b) => a.cardLevel.localeCompare(b.cardLevel));
 
     // TIER_LEVEL 分佈（F063 gap fix；對齊 prototype「fn_calc_tier_level 計算結果」chart）。
-    // tier_level 由 F100/F101 月跑計分寫入（score→card_level→tier）；NULL 不計入。
+    // tier_level 由 F100/F101 月名單分派計分寫入（score→card_level→tier）；NULL 不計入。
     const tierQb = scoped(
       resultRepo
         .createQueryBuilder('r')
@@ -625,7 +625,7 @@ export class AssignmentRunReportService {
         : 'o.appl_date'; // sqlite（測試）；PG 已移除
 
     // I-EXP-LINEAGE-01（F064 v2.1 修正）：pool 屬性取自 **ob_pool_data o**（共享池，PK=orgno+appl_no），
-    // **非** ob_pool_data_list（per-list 去重表）。月跑 Stage 1 為
+    // **非** ob_pool_data_list（per-list 去重表）。月名單分派 Stage 1 為
     //   INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o
     // → result 母體血緣源頭即 ob_pool_data（by orgno+appl_no）。改用 list_no+orgno+appl_no 連 pool_data_list
     // 會掉列（202606 實測掉 6,438 列／11.5%，因部分 result 案件不在該名單之 per-list 去重表）。
@@ -786,7 +786,7 @@ export class AssignmentRunReportService {
    *   @N(list)/@{N+1}(orgno)/@{N+2}(appl)，於述詞中重複引用（tedious 允許同一具名 input 多處引用）。
    *   第一頁無游標述詞，僅帶既有 @0..@{N-1}。索引依 TypeORM SqlServerQueryRunner array-index 綁定：@k ↔ params[k]。
    *
-   * 一致性：匯出對象為**已完成**月跑之 result 快照（run 完成後 ob_monthly_run_result 不再異動）→ 各頁
+   * 一致性：匯出對象為**已完成**月名單分派之 result 快照（run 完成後 ob_monthly_run_result 不再異動）→ 各頁
    *   間免快照隔離即穩定，故不需 transaction（PG 之 tx 僅為 cursor 生命週期所需）。
    */
   private async cursorRowsMssql(query: ExportQuerySpec): Promise<Readable> {

@@ -14,7 +14,7 @@ import { ERROR_CODES } from '@/common/errors/error-codes';
  *   - 處長轄區 (PERSONNEL_RATIO_OUT_OF_SCOPE)
  *   - ob_dept_pct 不存在 → PERSONNEL_RATIO_DEPT_NOT_FOUND
  *   - 員工不存在 / 已離職 → RATIO_OUT_OF_RANGE
- *   - 月跑進行中 / 歷史月份 / 名單停用
+ *   - 月名單分派進行中 / 歷史月份 / 名單停用
  *   - F083 後端二次校驗 BONUS_PENALTY_TEMPLATE_INVALID
  */
 describe('PersonnelRatioService (F082 + F083)', () => {
@@ -258,7 +258,7 @@ describe('PersonnelRatioService (F082 + F083)', () => {
   });
 
   // TC-M03b-007
-  it('PUT 月跑進行中 → 拋例外', async () => {
+  it('PUT 月名單分派進行中 → 拋例外', async () => {
     runGuard.assertNoRunningRun.mockRejectedValue(new Error('ASSIGNMENT_RUN_ALREADY_RUNNING'));
     await expect(
       svc.setPersonnelRatios('L1', { deptCode: 'XTC0', employees: [] }, validActor, '202605'),

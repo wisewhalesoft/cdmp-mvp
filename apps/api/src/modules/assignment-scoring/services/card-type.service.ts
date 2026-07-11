@@ -35,7 +35,7 @@ import { isUuid } from '@/common/uuid.util';
  * 對應 entity：ob_card_type（Iter 1）
  *
  * 設計重點：
- *   - 月跑鎖：assertNotLocked(runRepo, 'card-type-crud') → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
+ *   - 月名單分派鎖：assertNotLocked(runRepo, 'card-type-crud') → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
  *   - PROD_KIND 業務驗證：assertProdKindActive（F070 AC-5 / F071 AC-6）
  *   - F070 createCardType：透過 DataSource.transaction 同步寫入 ob_card_type +
  *     ob_levelcard_version（v1）+ audit log；任一失敗整體 rollback
@@ -328,7 +328,7 @@ export class CardTypeService {
     input: CreateCardTypeInput,
     actor: ActorContext,
   ): Promise<CreateCardTypeResult> {
-    // BR-5：月跑鎖
+    // BR-5：月名單分派鎖
     await assertNotLocked(this.runRepo, 'card-type-crud');
 
     // BR-2：cardType 唯一性（status='active' 範圍）
@@ -444,7 +444,7 @@ export class CardTypeService {
     input: UpdateCardTypeInput,
     actor: ActorContext,
   ): Promise<UpdateCardTypeResult> {
-    // BR-5：月跑鎖
+    // BR-5：月名單分派鎖
     await assertNotLocked(this.runRepo, 'card-type-crud');
 
     // AC-5：cardType 存在性（限定 active）
@@ -548,7 +548,7 @@ export class CardTypeService {
     confirmCascade: boolean | undefined,
     actor: ActorContext,
   ): Promise<DeleteCardTypeResult> {
-    // BR-5：缺 confirmCascade=true → 422（先於月跑鎖檢查，與 spec AC-5 一致）
+    // BR-5：缺 confirmCascade=true → 422（先於月名單分派鎖檢查，與 spec AC-5 一致）
     if (confirmCascade !== true) {
       throw new UnprocessableEntityException({
         error: CARD_TYPE_ERROR_CODES.CARD_TYPE_CASCADE_NOT_CONFIRMED,
@@ -556,7 +556,7 @@ export class CardTypeService {
       });
     }
 
-    // BR-7：月跑鎖
+    // BR-7：月名單分派鎖
     await assertNotLocked(this.runRepo, 'card-type-crud');
 
     // AC-7：cardType 存在性

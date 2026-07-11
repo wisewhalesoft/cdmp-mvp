@@ -36,12 +36,12 @@ import { SystemService } from '@/modules/system/system.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 
 /**
- * F061~F067 — 月跑觸發 + 歷史 + 詳情 + 摘要 + 匯出 + 比對 Controller
+ * F061~F067 — 月名單分派觸發 + 歷史 + 詳情 + 摘要 + 匯出 + 比對 Controller
  *
  * 路由前綴：`/api/v1/assignment/runs`
  *
  * 路由列表：
- *   - POST   /                          F061 觸發月跑（DirectorGuard）
+ *   - POST   /                          F061 觸發月名單分派（DirectorGuard）
  *   - GET    /                          F065 歷史清單（DirectorOrSectionChief）
  *   - GET    /compare?runA=&runB=       F067 比對差異（DirectorOrSectionChief）
  *   - GET    /:runId                    F062 進度頁（DirectorOrSectionChief）
@@ -69,7 +69,7 @@ export class AssignmentRunController {
   ) {}
 
   // -------------------------------------------------------------------------
-  // F061 / F097 — POST 觸發月跑
+  // F061 / F097 — POST 觸發月名單分派
   //
   // F097（forward-only，生效日期 = F097 部署日）：本 handler 以使用者選定之「目標分派月」
   // （dto.workYm）作為 AssignmentRun.project_workym，不再以 new Date() 自算執行月。
@@ -130,7 +130,7 @@ export class AssignmentRunController {
   }
 
   // -------------------------------------------------------------------------
-  // F065 — GET 月跑歷史清單
+  // F065 — GET 月名單分派歷史清單
   // -------------------------------------------------------------------------
 
   @Get()
@@ -140,7 +140,7 @@ export class AssignmentRunController {
   }
 
   // -------------------------------------------------------------------------
-  // F061 Phase 2 — GET 月跑前置條件就緒度（必須在 :runId 之前）
+  // F061 Phase 2 — GET 月名單分派前置條件就緒度（必須在 :runId 之前）
   // -------------------------------------------------------------------------
 
   @Get('readiness')
@@ -183,7 +183,7 @@ export class AssignmentRunController {
   }
 
   // -------------------------------------------------------------------------
-  // F062 — GET 單一月跑詳情（進度）
+  // F062 — GET 單一月名單分派詳情（進度）
   // -------------------------------------------------------------------------
 
   @Get(':runId')
@@ -262,7 +262,7 @@ export class AssignmentRunController {
   }
 
   // -------------------------------------------------------------------------
-  // F062 Phase 2 — POST 取消月跑（director only）
+  // F062 Phase 2 — POST 取消月名單分派（director only）
   // -------------------------------------------------------------------------
 
   @Post(':runId/cancel')

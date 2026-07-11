@@ -19,14 +19,14 @@ export interface ActorUser {
  *   - F074 v2.1 BR-1（轄區判定改用 ob_emphire 反查）
  *   - F077 v1.4 BR-4（list-definition 處長過濾）
  *   - F082 v1.5 BR-3 / BR-14（personnel ratio 處長過濾）
- *   - F063 v1.1 BR-6 / F064 v1.1 / F066 v1.1 / F067 v1.1（月跑後報表 emplid 過濾，沿用 created_by）
+ *   - F063 v1.1 BR-6 / F064 v1.1 / F066 v1.1 / F067 v1.1（月名單分派後報表 emplid 過濾，沿用 created_by）
  *
  * 兩種 scope 機制並存：
  *   - **getScopeDeptCode(userId)**（v2.1 新增）：透過 `users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職`
  *     反查 dept_code。給「需操作或檢視名單／個別比例設定」之 feature 使用（F077 / F082 / F088 / F089）。
  *     避免 chicken-and-egg（首次 GET 時 ob_empl_set 為空 → 無轄區資料 → 處長看不到任何東西）。
  *   - **getScopeEmplIds(userId)**（舊 API）：依 `ob_empl_set.created_by = currentUserId` 取得 emplid。
- *     只給「月跑後的指派結果報表」用（F063/F064/F066/F067），因該情境下 ob_empl_set 必然已有資料。
+ *     只給「月名單分派後的指派結果報表」用（F063/F064/F066/F067），因該情境下 ob_empl_set 必然已有資料。
  */
 @Injectable()
 export class SectionChiefScopeService {

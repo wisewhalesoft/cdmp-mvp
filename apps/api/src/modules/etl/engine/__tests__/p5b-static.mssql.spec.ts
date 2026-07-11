@@ -123,7 +123,7 @@ describe('P5b STATIC — 事實鎖定', () => {
     }
   });
 
-  it('STATIC-006（★發現 5 修正）：pooldata_list field_mapping 僅 score 未映射；其餘 6 個月跑欄位皆有映射', () => {
+  it('STATIC-006（★發現 5 修正）：pooldata_list field_mapping 僅 score 未映射；其餘 6 個月名單分派欄位皆有映射', () => {
     const targets = new Set<string>(fm1('pooldata_list').data.mappings.map((m: any) => m.targetColumn));
     // 測試設計 ★發現 5 宣稱 7 欄皆不在 field_mapping；經 etl-pipelines.json 逐一核對，實際僅 score 未映射。
     expect(targets.has('score')).toBe(false);
@@ -199,7 +199,7 @@ describe('P5b 決策關卡 — impl log 文件守門', () => {
     expect(readImplLog()).toMatch(/CDMP_P5B/);
   });
 
-  it('★發現 5（doc）：impl log 記錄 field_mapping 6 個月跑欄位映射修正', () => {
+  it('★發現 5（doc）：impl log 記錄 field_mapping 6 個月名單分派欄位映射修正', () => {
     expect(readImplLog()).toMatch(/★發現\s*5|發現 5|assignday|score/);
   });
 });

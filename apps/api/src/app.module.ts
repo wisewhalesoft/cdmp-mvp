@@ -120,7 +120,7 @@ const ALL_ENTITIES = [
             password: configService.get<string>('DB_PASSWORD'),
             database: configService.get<string>('DB_NAME', 'CDMP'),
             // P6c / I-MSSQL-REQ-TIMEOUT-01：tedious requestTimeout 預設僅 15s，對百萬列 ETL
-            //   extract/load（raw→core）與月跑等長操作遠遠不足（PG node-postgres 預設無 statement
+            //   extract/load（raw→core）與月名單分派等長操作遠遠不足（PG node-postgres 預設無 statement
             //   timeout，故 PG 從不逾時）。此連線亦跑 ETL pipeline（API 程序），故須放大。env
             //   DB_MSSQL_REQUEST_TIMEOUT 覆蓋（預設 1hr；用 truthy 值避免 mssql 對 0 做 falsy-coalescing 退回預設）。
             requestTimeout: Number(

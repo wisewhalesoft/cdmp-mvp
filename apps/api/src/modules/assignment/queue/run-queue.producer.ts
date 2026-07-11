@@ -7,7 +7,7 @@ import {
 } from './run-queue.constants';
 
 /**
- * F098 / AD-E07-28 P1：月跑入列 producer（cdmp-api 側）。
+ * F098 / AD-E07-28 P1：月名單分派入列 producer（cdmp-api 側）。
  *
  * `AssignmentRunService.triggerRun` 在 INSERT pending run + 寫 audit 後呼叫 `send`，
  * 將 `{ runId, ym }` 入列至自建 T-SQL `queue_job` 佇列，立即回 202（不在 API 程序跑 pipeline）。
@@ -31,7 +31,7 @@ export class RunQueueProducer {
   ) {}
 
   /**
-   * 將月跑 job 入列。回傳 jobId（DB `NEWID()`）。
+   * 將月名單分派 job 入列。回傳 jobId（DB `NEWID()`）。
    *
    * @throws 入列失敗（DB 不可用等）會向上拋；triggerRun 須據此回錯誤、不留孤兒 pending
    *         （TS-F098-OQ-001 / OQ-F098-01）。

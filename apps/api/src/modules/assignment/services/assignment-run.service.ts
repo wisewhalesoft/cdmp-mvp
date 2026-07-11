@@ -73,12 +73,12 @@ const PROGRESS_STAGE_NAMES = [
 ] as const;
 
 /**
- * AssignmentRunService — F061 月跑觸發 + F062/F065/F066 查詢
+ * AssignmentRunService — F061 月名單分派觸發 + F062/F065/F066 查詢
  *
  * 三大流程：
  *   - triggerRun(ym, actorId)：前置 → INSERT pending → audit RUN → 入列 pg-boss job（F098 P1，回 202）
- *   - listRuns({ ym? })：歷史月跑清單（F065）
- *   - getRunById(runId)：單一月跑詳情（F062 / F066）
+ *   - listRuns({ ym? })：歷史月名單分派清單（F065）
+ *   - getRunById(runId)：單一月名單分派詳情（F062 / F066）
  *
  * 前置條件（spec AC-1）：
  *   1. AssignmentRunGuardService.assertNoRunningRun(ym) — 同月併發保護（409）
@@ -101,7 +101,7 @@ export class AssignmentRunService {
     private readonly runGuard: AssignmentRunGuardService,
     private readonly readiness: MonthlyRunReadinessService,
     /**
-     * F098 / AD-E07-28 P1：月跑入列 producer。triggerRun 改為「INSERT pending → 入列 → 回 202」，
+     * F098 / AD-E07-28 P1：月名單分派入列 producer。triggerRun 改為「INSERT pending → 入列 → 回 202」，
      * 不再於 API 程序內呼叫 runPipeline（I-TRIGGER-01）。
      * @Optional：少數舊 unit test harness 未提供 producer（其 triggerRun 測試會自行提供 fake）。
      */
@@ -117,7 +117,7 @@ export class AssignmentRunService {
   ) {}
 
   /**
-   * F061 v1.2 AC-1 + AC-2 + AC-6 / F097 AC-14：觸發月跑。
+   * F061 v1.2 AC-1 + AC-2 + AC-6 / F097 AC-14：觸發月名單分派。
    *
    * F097（生效日期 = F097 部署日）：`ym` 參數即使用者選定之「目標分派月」（target_work_ym），
    * 由 controller 自 dto.workYm 傳入並通過格式驗證 + 過去月 guard；本服務直接寫入
@@ -184,7 +184,7 @@ export class AssignmentRunService {
           {
             status: 'failed',
             finished_at: new Date(),
-            error_message: '月跑入列失敗，請重新觸發',
+            error_message: '月名單分派入列失敗，請重新觸發',
           },
         );
         throw err;
@@ -205,7 +205,7 @@ export class AssignmentRunService {
   }
 
   /**
-   * F065：月跑歷史清單（可選 ym 過濾）
+   * F065：月名單分派歷史清單（可選 ym 過濾）
    */
   async listRuns(opts: { ym?: string } = {}): Promise<RunSummary[]> {
     const qb = this.runRepo
@@ -242,7 +242,7 @@ export class AssignmentRunService {
   }
 
   /**
-   * F062 / F066：單一月跑詳情
+   * F062 / F066：單一月名單分派詳情
    *
    * @throws 404 ASSIGNMENT_RUN_NOT_FOUND
    */
@@ -320,7 +320,7 @@ export class AssignmentRunService {
   }
 
   /**
-   * F062 Phase 2：使用者取消月跑
+   * F062 Phase 2：使用者取消月名單分派
    *
    * 規則：
    *   - 僅 status='pending' 或 'running' 可取消

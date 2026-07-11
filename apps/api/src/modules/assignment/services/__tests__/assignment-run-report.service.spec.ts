@@ -294,7 +294,7 @@ describe('AssignmentRunReportService — F063 / F064 / F067', () => {
     });
 
     it('TC-M05-SUMMARY-005：config-only 部門（actualCount=0）排除於 deptSummary', async () => {
-      // 部門 D99 於 ob_dept_pct 有設定比例，但本次月跑無任何實際分派（actualCount=0）。
+      // 部門 D99 於 ob_dept_pct 有設定比例，但本次月名單分派無任何實際分派（actualCount=0）。
       // 「未分派部門」對使用者無意義（其 deviation 恆為 -configRatio 之假警示），須排除。
       const run = await seedRun(env.runRepo);
       await seedSnap(env, run.run_id, 'config', {

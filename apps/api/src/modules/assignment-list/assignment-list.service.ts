@@ -23,7 +23,7 @@ import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.e
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
-// F095 / AD-E07-26 §26.5：與 F091 月跑共用同一 trigger pure utility（read-time 推導，無新 DB 欄位）
+// F095 / AD-E07-26 §26.5：與 F091 月名單分派共用同一 trigger pure utility（read-time 推導，無新 DB 欄位）
 import { deriveAppliedSpecialRules } from '@/modules/assignment/stage1/special-rules';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { isUuid } from '@/common/uuid.util';
@@ -544,7 +544,7 @@ export class AssignmentListService {
       for (const u of users) creatorNameById.set(u.id, u.name);
     }
 
-    // 月跑鎖：assertNoRunningRun 失敗即視為 locked
+    // 月名單分派鎖：assertNoRunningRun 失敗即視為 locked
     let locked = false;
     try {
       await this.assignmentRunGuard.assertNoRunningRun(ym);
@@ -635,7 +635,7 @@ export class AssignmentListService {
     projectWorkym: string;
     warnings?: ListResponseWarning[];
   }> {
-    // 1. BR / spec AC-6：月跑鎖（最頂層）
+    // 1. BR / spec AC-6：月名單分派鎖（最頂層）
     await this.assignmentRunGuard.assertNoRunningRun();
 
     // 1b. US-144 / §18.12.5 step 1：載入系統固定欄位（best_case）一次，
@@ -799,7 +799,7 @@ export class AssignmentListService {
     updatedAt: Date;
     warnings?: ListResponseWarning[];
   }> {
-    // 1. 月跑鎖（優先）
+    // 1. 月名單分派鎖（優先）
     await this.assignmentRunGuard.assertNoRunningRun();
 
     // 2. 名單存在性
@@ -1253,7 +1253,7 @@ export class AssignmentListService {
    *
    * 唯讀端點：
    *   - 不攔截 LIST_HISTORICAL_READONLY（歷史月份可開啟）
-   *   - 不攔截 ASSIGNMENT_RUN_ALREADY_RUNNING（月跑中可開啟）
+   *   - 不攔截 ASSIGNMENT_RUN_ALREADY_RUNNING（月名單分派中可開啟）
    *   - 不攔截 FeatureFlagGuard（為展示用唯讀資料）
    *
    * 處長轄區隔離（US-131 AC-4）：
@@ -1400,7 +1400,7 @@ export class AssignmentListService {
       deptRatios,
       personnelRatios,
       auditTrail,
-      // F095：依 list_nm 讀時推導套用之系統特例規則（與 F091 月跑共用 deriveAppliedSpecialRules）
+      // F095：依 list_nm 讀時推導套用之系統特例規則（與 F091 月名單分派共用 deriveAppliedSpecialRules）
       appliedSpecialRules: deriveAppliedSpecialRules(entity.list_nm),
     };
   }

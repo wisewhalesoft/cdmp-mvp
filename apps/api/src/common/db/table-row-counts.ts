@@ -9,7 +9,7 @@ const SAFE_IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
  * - MSSQL：`sys.partitions.rows`（維護於 DML，對使用者表為精確值；大表亦毫秒回，避免 7.9M 全掃）。
  * - SQLite（測試）：逐表 `COUNT(*)`（測試資料量小）。
  *
- * 查無之表回 0。用於 ETL 目標表現況顯示 + 月跑準備度「空表」檢查（0 = 表為空 / 未載入）。
+ * 查無之表回 0。用於 ETL 目標表現況顯示 + 月名單分派準備度「空表」檢查（0 = 表為空 / 未載入）。
  */
 export async function getTableRowCounts(
   ds: DataSource,

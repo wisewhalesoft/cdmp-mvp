@@ -4,7 +4,7 @@
  *   - TS-F054-004：新增 CONTRACT_YEARS 2 個區間 → 201；column status=active；score 2 筆
  *   - TS-F054-005：audit_log 記 CREATE / before=null / after.columnName='CONTRACT_YEARS'
  *   - TS-F054-006：column_name 已存在於 active 版本 → 422 SCORING_COLUMN_DUPLICATE
- *   - AC-5：月跑鎖 → 409 SCORING_VERSION_LOCKED
+ *   - AC-5：月名單分派鎖 → 409 SCORING_VERSION_LOCKED
  *   - AC-6：body 內 scores 區間重疊 → 422 SCORING_RANGE_OVERLAP
  */
 
@@ -183,7 +183,7 @@ describe('AssignmentScoringService — F054 createDimension', () => {
     expect(scoreRepo.save).not.toHaveBeenCalled();
   });
 
-  it('AC-5：月跑鎖 → 409 SCORING_VERSION_LOCKED', async () => {
+  it('AC-5：月名單分派鎖 → 409 SCORING_VERSION_LOCKED', async () => {
     runRepo.findOne.mockResolvedValue({ run_id: 'r1', status: 'running' });
 
     await expect(
@@ -267,7 +267,7 @@ describe('AssignmentScoringService — F054 createDimension', () => {
       // 當 createDimension 產生 audit_log 時，after_value 需含：
       //   - card_type：'H'
       //   - column_name：'CONTRACT_YEARS'
-      // 注意：run_id / rule_violated / violated_row_count 為月跑計分稽核欄位
+      // 注意：run_id / rule_violated / violated_row_count 為月名單分派計分稽核欄位
       //   屬於 AssignmentRunPipelineService 寫入，非 createDimension 負責
       //   此 describe 標記為 F061 v1.3 協調對齊點
       'audit_log after_value 含 card_type / column_name（F061 v1.3 欄位對齊）',

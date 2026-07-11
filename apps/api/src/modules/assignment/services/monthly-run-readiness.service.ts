@@ -40,7 +40,7 @@ export interface ReadinessResult {
   etlStatus: EtlStatusMap;
   /**
    * 4 張來源表是否皆有資料（rowCount>0）。false → 有空表（log 可能 completed 但表被清空/未載入），
-   * 月跑會靜默算錯（如 ob_calendar 空→試算 0；ob_arreturndf_min_cap 空→H 卡分數偏低）→ 應擋月跑。
+   * 月名單分派會靜默算錯（如 ob_calendar 空→試算 0；ob_arreturndf_min_cap 空→H 卡分數偏低）→ 應擋月名單分派。
    */
   sourcesAllHaveData: boolean;
   /** rowCount=0 之來源表清單（供前端明確提示）。 */
@@ -65,9 +65,9 @@ const TARGET_TABLE_TO_KEY: Record<string, keyof EtlStatusMap> = {
 };
 
 /**
- * MonthlyRunReadinessService（F088 §5.2 / F061 月跑前置條件 v1.2 Phase 2）
+ * MonthlyRunReadinessService（F088 §5.2 / F061 月名單分派前置條件 v1.2 Phase 2）
  *
- * 計算指定 workYm 的「月跑就緒度」摘要。
+ * 計算指定 workYm 的「月名單分派就緒度」摘要。
  *
  * BR-5：`totalActiveLists` 計算 `status = 'active'` 且 `stage != 'draft'` 之名單；
  *       `readyCount` 計算其中 `stage = 'ready'` 者；`allReady = readyCount === totalActiveLists`。
@@ -127,7 +127,7 @@ export class MonthlyRunReadinessService {
 
     const etlStatus = await this.calculateEtlStatus();
 
-    // 空來源表 guard：log 可能 completed 但表被清空/未載入 → 月跑靜默算錯。以 target 表反查回報空表。
+    // 空來源表 guard：log 可能 completed 但表被清空/未載入 → 月名單分派靜默算錯。以 target 表反查回報空表。
     const emptySourceTables = (
       Object.entries(TARGET_TABLE_TO_KEY) as Array<[string, keyof EtlStatusMap]>
     )
@@ -173,7 +173,7 @@ export class MonthlyRunReadinessService {
     };
 
     // 各來源目標表真實筆數（metadata 快速查；獨立於 pipeline log —— 抓「log 為 completed 但表被清空/
-    //   未載入」之矛盾，正是 ob_calendar/ob_arreturndf_min_cap 被 E2E 清表致月跑/試算靜默壞的根因）。
+    //   未載入」之矛盾，正是 ob_calendar/ob_arreturndf_min_cap 被 E2E 清表致月名單分派/試算靜默壞的根因）。
     const counts = await getTableRowCounts(
       this.dataSource,
       Object.keys(TARGET_TABLE_TO_KEY),

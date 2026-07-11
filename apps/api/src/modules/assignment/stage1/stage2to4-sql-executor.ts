@@ -43,7 +43,7 @@ export interface Stage2to4ListContext {
   cardVersion: number | null;
   activeColumns: ObLevelcardColumn[];
   scoreRows: ObLevelcardScore[];
-  /** 月跑工作年月（YYYYMM 字串）。 */
+  /** 月名單分派工作年月（YYYYMM 字串）。 */
   ym: string;
 }
 

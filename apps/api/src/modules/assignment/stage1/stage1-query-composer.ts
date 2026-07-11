@@ -384,7 +384,7 @@ function buildCategoricalFragment(
 
   // §18.5 路徑 A / B 共用映射（F049 v1.2 AC-4 欄位映射表）：
   //   case_status → ob_pool_data.list_type（ob_pool_data 無 case_status 欄位）。
-  //   與路徑 B PATH_B_MAPPING 一致，確保 estimate 與月跑 Stage 1 逐欄位相同。
+  //   與路徑 B PATH_B_MAPPING 一致，確保 estimate 與月名單分派 Stage 1 逐欄位相同。
   const poolDataCol = PATH_A_COLUMN_MAPPING[cond.columnName] ?? cond.columnName;
 
   const paramName = `cat${paramIdx}`;

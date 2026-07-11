@@ -111,7 +111,7 @@ export class AssignmentScoringController {
    * F106 §5.2：PUT /api/v1/assignment/scoring/dimensions/:columnName/enable
    *
    * 重新啟用停用（inactive）的計分維度，行為完全對稱於 disable（同 class guard +
-   * @RequireDirector() + @RequireFeatureFlag；月跑鎖 / cardType 範圍鎖 / 404 語意相同，
+   * @RequireDirector() + @RequireFeatureFlag；月名單分派鎖 / cardType 範圍鎖 / 404 語意相同，
    * 僅狀態方向相反 inactive → active，audit action='ENABLE'）。
    */
   @Put('dimensions/:columnName/enable')

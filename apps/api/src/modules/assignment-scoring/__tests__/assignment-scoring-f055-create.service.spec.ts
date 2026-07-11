@@ -11,7 +11,7 @@
  *   - TS-F055-C06：允許 gap 場景 → 成功（既有 A=80~999，新增 C=0~50）
  *   - TS-F055-C07：空 levels 新增第一筆 → 成功
  *   - TS-F055-C08：scoreE < scoreS → 422 VALIDATION_ERROR
- *   - TS-F055-C09：月跑 pending/running → 409 SCORING_VERSION_LOCKED
+ *   - TS-F055-C09：月名單分派 pending/running → 409 SCORING_VERSION_LOCKED
  *   - TS-F055-C10：audit_log entity_id='{cardType}|{cardVersion}|{cardLevel}',
  *                  before_value=null, after_value 含 scoreS/scoreE
  *   - TS-F055-C11：BR-9 regression — DELETE A 後 POST A 應成功（dedup 僅針對當前存活紀錄）
@@ -329,9 +329,9 @@ describe('AssignmentScoringService — F055 createCardLevel (v1.5 §5.4)', () =>
     expect(levelRepo.save).not.toHaveBeenCalled();
   });
 
-  // ===== 月跑鎖（AC-8e / BR-3） =====
+  // ===== 月名單分派鎖（AC-8e / BR-3） =====
 
-  it('TS-F055-C09a：月跑 pending → 409 SCORING_VERSION_LOCKED', async () => {
+  it('TS-F055-C09a：月名單分派 pending → 409 SCORING_VERSION_LOCKED', async () => {
     runRepo.findOne.mockResolvedValue({ status: 'pending' });
     setActiveVersion('H', 1);
 
@@ -348,7 +348,7 @@ describe('AssignmentScoringService — F055 createCardLevel (v1.5 §5.4)', () =>
     expect(levelRepo.save).not.toHaveBeenCalled();
   });
 
-  it('TS-F055-C09b：月跑 running → 409 SCORING_VERSION_LOCKED', async () => {
+  it('TS-F055-C09b：月名單分派 running → 409 SCORING_VERSION_LOCKED', async () => {
     runRepo.findOne.mockResolvedValue({ status: 'running' });
     setActiveVersion('H', 1);
 

@@ -7,7 +7,7 @@
  *   - TS-F056-D02：刪除 fallback (M5, null) → 200，audit entity_id = 'M5|'
  *   - TS-F056-D03：找不到對應紀錄 → 404 TIER_MAPPING_NOT_FOUND
  *   - TS-F056-D04：找不到 fallback (cardLevel=null) 對應紀錄 → 404 TIER_MAPPING_NOT_FOUND
- *   - TS-F056-D05：月跑鎖 → 409 SCORING_VERSION_LOCKED
+ *   - TS-F056-D05：月名單分派鎖 → 409 SCORING_VERSION_LOCKED
  *   - TS-F056-D06：audit_log 結構 — action='DELETE'、before_value 含 tierLevel、after_value=null
  */
 
@@ -189,7 +189,7 @@ describe('AssignmentScoringService — F056 deleteTierMapping', () => {
     }
   });
 
-  it('TS-F056-D05：月跑鎖 → 409 SCORING_VERSION_LOCKED', async () => {
+  it('TS-F056-D05：月名單分派鎖 → 409 SCORING_VERSION_LOCKED', async () => {
     runRepo.findOne.mockResolvedValue({ status: 'pending' });
 
     try {

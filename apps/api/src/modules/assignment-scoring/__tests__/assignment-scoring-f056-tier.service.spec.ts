@@ -12,7 +12,7 @@
  *   - TS-F056-007：body 內同一 PK 重複 → 422 TIER_LEVEL_DUPLICATE
  *   - TS-F056-008：audit_log entity_id 含分隔符 '{cardType}|{cardLevel}'
  *   - TS-F056-009：fallback (card_level=null) UPSERT 允許
- *   - TS-F056-010/011：月跑鎖 → 409
+ *   - TS-F056-010/011：月名單分派鎖 → 409
  *
  * POST /tier-mapping (§5.3，單筆 INSERT)
  *   - TS-F056-012：正常新增 → 201
@@ -21,7 +21,7 @@
  *   - TS-F056-015：card_level 'AB'（>1 字元）→ 422 CARD_LEVEL_NOT_FOUND_IN_VERSION（BR-9）
  *   - TS-F056-016：fallback (M5, null) 新增 → 201（不觸發 CARD_LEVEL_NOT_FOUND_IN_VERSION）
  *   - TS-F056-017：fallback (M3, null) 過渡期 → 201
- *   - TS-F056-018：月跑鎖 → 409
+ *   - TS-F056-018：月名單分派鎖 → 409
  *
  * 邊界
  *   - BE-F056-001：PUT listNm 省略 → 保留現有
@@ -302,7 +302,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     expect(levelRepo.findOne).not.toHaveBeenCalled();
   });
 
-  it('TS-F056-010：PUT 月跑鎖 pending → 409 SCORING_VERSION_LOCKED', async () => {
+  it('TS-F056-010：PUT 月名單分派鎖 pending → 409 SCORING_VERSION_LOCKED', async () => {
     runRepo.findOne.mockResolvedValue({ status: 'pending' });
     await expect(
       service.updateTierMapping(
@@ -312,7 +312,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     ).rejects.toBeInstanceOf(ConflictException);
   });
 
-  it('TS-F056-011：PUT 月跑鎖 running → 409', async () => {
+  it('TS-F056-011：PUT 月名單分派鎖 running → 409', async () => {
     runRepo.findOne.mockResolvedValue({ status: 'running' });
     await expect(
       service.updateTierMapping(
@@ -454,7 +454,7 @@ describe('AssignmentScoringService — F056 tier-mapping', () => {
     expect(result.cardLevel).toBeNull();
   });
 
-  it('TS-F056-018：POST 月跑鎖 → 409', async () => {
+  it('TS-F056-018：POST 月名單分派鎖 → 409', async () => {
     runRepo.findOne.mockResolvedValue({ status: 'running' });
     await expect(
       service.createTierMapping(

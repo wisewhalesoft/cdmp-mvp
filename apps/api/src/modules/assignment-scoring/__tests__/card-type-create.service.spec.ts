@@ -10,7 +10,7 @@
  *   TC-F070-03：audit_log CREATE 寫入（同 tx）
  *   TC-F070-04：cardType 重複 → 422 CARD_TYPE_DUPLICATE
  *   TC-F070-09：prodKind 不在啟用期間內 → 422 VALIDATION_ERROR
- *   TC-F070-10/11：月跑鎖 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
+ *   TC-F070-10/11：月名單分派鎖 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -213,7 +213,7 @@ describe('CardTypeService — F070 createCardType', () => {
     }
   });
 
-  it('TC-F070-10：月跑 pending → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
+  it('TC-F070-10：月名單分派 pending → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
     runRepo.findOne.mockResolvedValue({ run_id: 'r1', status: 'pending' });
 
     await expect(
@@ -226,7 +226,7 @@ describe('CardTypeService — F070 createCardType', () => {
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 
-  it('TC-F070-11：月跑 running → 409 ASSIGNMENT_RUN_ALREADY_RUNNING（錯誤碼正確）', async () => {
+  it('TC-F070-11：月名單分派 running → 409 ASSIGNMENT_RUN_ALREADY_RUNNING（錯誤碼正確）', async () => {
     runRepo.findOne.mockResolvedValue({ run_id: 'r2', status: 'running' });
 
     try {

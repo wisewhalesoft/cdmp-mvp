@@ -5,7 +5,7 @@
  *   - TS-F106-002：audit_log 記 ENABLE，entity_type='ob_levelcard_column'，
  *                  before.status='inactive' / after.status='active'，entity_id='{cardType}|{cardVersion}|{columnName}'
  *   - TS-F106-003（BR-3）：對已 active 維度 enable → 404 SCORING_COLUMN_NOT_FOUND（findOne 過濾 inactive 找不到）
- *   - TS-F106-004（AC-5）：月跑鎖 → 409 SCORING_VERSION_LOCKED
+ *   - TS-F106-004（AC-5）：月名單分派鎖 → 409 SCORING_VERSION_LOCKED
  *   - TS-F106-005：不存在的 column → 404 SCORING_COLUMN_NOT_FOUND
  *   - TS-F106-006：findOne 過濾必含 status='inactive'（方向相反 disable）
  *   - TS-F106-007（§5.3 EQ）：disable → enable → disable 往返後狀態 / audit 軌跡逐項對稱
@@ -150,7 +150,7 @@ describe('AssignmentScoringService — F106 enableDimension', () => {
     expect(auditRepo.create).not.toHaveBeenCalled();
   });
 
-  it('TS-F106-004（AC-5）：月跑鎖 → 409 SCORING_VERSION_LOCKED', async () => {
+  it('TS-F106-004（AC-5）：月名單分派鎖 → 409 SCORING_VERSION_LOCKED', async () => {
     runRepo.findOne.mockResolvedValue({ run_id: 'r1', status: 'running' });
 
     await expect(

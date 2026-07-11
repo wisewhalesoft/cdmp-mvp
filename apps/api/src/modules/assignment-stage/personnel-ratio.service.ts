@@ -594,7 +594,7 @@ export class PersonnelRatioService {
    *        - mssql   ：sp_getapplock @LockOwner='Transaction'；回傳碼 -1 逾時 → 降級 no-op、其餘錯誤碼 rethrow
    *        - other（sqlite 測試 infra）：跳過鎖，直接做偵測+推進
    *        逾時降級皆：catch 不 rethrow、autoAdvanced=false、不帶 failReason、tx 照常 commit（[1]~[3] 寫入保留）
-   *   [4b] tx 內月跑 guard（runGuard.isRunning() 回 boolean）→ true 則 autoAdvanced=false +
+   *   [4b] tx 內月名單分派 guard（runGuard.isRunning() 回 boolean）→ true 則 autoAdvanced=false +
    *        autoAdvanceFailReason='ASSIGNMENT_RUN_ALREADY_RUNNING'、跳過後續（PUT 仍 200，不 rollback）
    *   [4c] assertAllDeptsSumEquals100WithMgr（讀 tx 內 [1]~[3] 剛寫入的 ob_empl_set）；
    *        未完成 → 拋 422，由本方法 catch 轉為 autoAdvanced=false（不帶 failReason）
@@ -632,9 +632,9 @@ export class PersonnelRatioService {
       return noAdvance;
     }
 
-    // [4b] tx 內月跑 guard（輕量版，回 boolean）
+    // [4b] tx 內月名單分派 guard（輕量版，回 boolean）
     if (await this.runGuard.isRunning()) {
-      this.logger.log(`auto-advance 偵測到月跑進行中，listNo=${listNo}，跳過推進（PUT 仍 200）`);
+      this.logger.log(`auto-advance 偵測到月名單分派進行中，listNo=${listNo}，跳過推進（PUT 仍 200）`);
       return {
         autoAdvanced: false,
         newStage: null,

@@ -5,7 +5,7 @@
  *   - TS-F054-008：audit_log 記 DISABLE，entity_type='ob_levelcard_column'，before.status='active' / after.status='inactive'
  *   - TS-F054-009：disable 後 status 已是 inactive（跨 F053 GET 不再回傳）— 由 e2e 串聯驗
  *   - BE-F054-003：重複 disable 已 inactive 維度 → 404 SCORING_COLUMN_NOT_FOUND（findOne 過濾 active）
- *   - AC-5：月跑鎖 → 409 SCORING_VERSION_LOCKED
+ *   - AC-5：月名單分派鎖 → 409 SCORING_VERSION_LOCKED
  *   - 不存在的 column → 404 SCORING_COLUMN_NOT_FOUND
  */
 
@@ -150,7 +150,7 @@ describe('AssignmentScoringService — F054 disableDimension', () => {
     expect(auditRepo.create).not.toHaveBeenCalled();
   });
 
-  it('AC-5：月跑鎖 → 409 SCORING_VERSION_LOCKED', async () => {
+  it('AC-5：月名單分派鎖 → 409 SCORING_VERSION_LOCKED', async () => {
     runRepo.findOne.mockResolvedValue({ run_id: 'r1', status: 'running' });
 
     await expect(

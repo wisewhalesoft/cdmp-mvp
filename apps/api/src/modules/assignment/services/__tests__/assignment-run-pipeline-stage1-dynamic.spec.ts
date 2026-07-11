@@ -441,7 +441,7 @@ describe('AssignmentRunPipelineService Stage 1 動態 SQL — Phase 5b', () => {
   // -------------------------------------------------------------------------
 
   describe('波 7 — _backfill_empty 名單 skip + result summary (§18.5.2)', () => {
-    it('ITP-005 / IT-M01-016：_backfill_empty 名單 skip 不撈案件，月跑不 fail', async () => {
+    it('ITP-005 / IT-M01-016：_backfill_empty 名單 skip 不撈案件，月名單分派不 fail', async () => {
       const listNo = 'OB202605005';
       await seedCommonFixtures(env, listNo);
       await seedList(env.listRepo, {
@@ -457,7 +457,7 @@ describe('AssignmentRunPipelineService Stage 1 動態 SQL — Phase 5b', () => {
       const run = await seedRun(env.runRepo);
       await env.service.runPipeline(run.run_id, YM);
 
-      // 月跑整體不 fail
+      // 月名單分派整體不 fail
       const after = await env.runRepo.findOne({ where: { run_id: run.run_id } });
       expect(after?.status).toBe('completed');
 
@@ -504,7 +504,7 @@ describe('AssignmentRunPipelineService Stage 1 動態 SQL — Phase 5b', () => {
       expect(lists[0].reason).toBe('EMPTY_CONDITIONS');
     });
 
-    it('ITP-007：1 skip + 1 正常名單 → 正常名單仍跑、skip 名單登記、月跑 completed', async () => {
+    it('ITP-007：1 skip + 1 正常名單 → 正常名單仍跑、skip 名單登記、月名單分派 completed', async () => {
       const listNoOk = 'OB202605007';
       const listNoSkip = 'OB202605008';
       await seedCommonFixtures(env, listNoOk);

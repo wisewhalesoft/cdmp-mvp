@@ -16,7 +16,7 @@ import { dateColumnType, longTextColumnType, longTextColumnLength, nvarcharColum
  * 10s 逾時（STAGE0_ESTIMATE_TIMEOUT → 物化失敗、試算頁顯示 0）。
  *
  * 複合索引 (assignday, custo_no)：assignday 前綴支援視窗 range scan，custo_no 隨後
- * 供 DISTINCT／NOT EXISTS anti-join 覆蓋（dev 實測估算 10s→5s）。月跑去重亦受惠。
+ * 供 DISTINCT／NOT EXISTS anti-join 覆蓋（dev 實測估算 10s→5s）。月名單分派去重亦受惠。
  *
  * ⚠️ Entity 必須與 migration 保持一致（m297）：任一邊改動，另一邊同步修。
  */
@@ -413,7 +413,7 @@ export class ObPoolDataList {
   @Column({ name: 'is_cr', type: 'varchar', length: 1, nullable: true })
   is_cr: string | null;
 
-  // F055 preview / 月跑 Stage 2（AD-E07-10）：fn_calc_tier_level 寫入計分結果。
+  // F055 preview / 月名單分派 Stage 2（AD-E07-10）：fn_calc_tier_level 寫入計分結果。
   // 對齊架構文件 L3408 `UPDATE ob_pool_data_list pdl SET score = calc.score`。
   @Column({ name: 'score', type: 'integer', nullable: true })
   score: number | null;
@@ -421,11 +421,11 @@ export class ObPoolDataList {
   // F090 v2.0 / AD-E07-25 §25.3（DP-AD25-1 方案 A，單源化）：標記 ETL 載入批次。
   // 值域單一化為 'etl_load'（取代 v1.0 之 'etl_legacy' / 'monthly_run' 雙值）：
   //   'etl_load' → E07-OBPOOLDATA_LIST-Load 載入的 legacy 派案歷史（去重查詢用，單一來源）
-  // ob_pool_data_list 自 v2.0 起為 ETL 單一來源；本系統月跑提案結果改寫入
+  // ob_pool_data_list 自 v2.0 起為 ETL 單一來源；本系統月名單分派提案結果改寫入
   // ob_monthly_run_result（F094），不再寫入本表。
   // 廢止值域（不再作為現行寫入值）：
   //   'etl_legacy'  → v1.0 過渡值，已由 'etl_load' 取代
-  //   'monthly_run' → 月跑改寫 ob_monthly_run_result（F094），不再寫入本表
+  //   'monthly_run' → 月名單分派改寫 ob_monthly_run_result（F094），不再寫入本表
   //   NULL          → migration 前既有資料，由 ETL 全量覆寫自然淘汰（DP-AD25-5）
   // ⚠️ 與 migration 1711360000291 保持一致：任一邊改動，另一邊同步修
   @Column({ name: 'data_source', type: 'varchar', length: 20, nullable: true })

@@ -11,7 +11,7 @@
  *   - JOINMISS（emphire join-miss fallback + WARNING 彙總）
  *   - OVERDUE（逾期天數恆空保留欄）
  *   - STREAM（CSV PassThrough 逐列、xlsx/CSV 共用 producer、靜態 NoOffset）
- *   - STATUS（月跑未完成阻擋 422）
+ *   - STATUS（月名單分派未完成阻擋 422）
  *   - AUDIT（after_value 含 4 欄）
  *   - SCOPE（無轄區 → 僅表頭；scope WHERE 注入靜態）
  *   - STATIC（loadAllPayloads 不被 export 呼叫 / EXPORT_HEADER_V2 常數 / getSummary 仍讀 snapshot）
@@ -711,7 +711,7 @@ describe('F064 v2.0 — 匯出分派結果（23 欄）SQLite/Unit', () => {
   });
 
   // -------------------------------------------------------------------------
-  // STATUS — 月跑未完成阻擋
+  // STATUS — 月名單分派未完成阻擋
   // -------------------------------------------------------------------------
   describe('STATUS', () => {
     it.each(['pending', 'running', 'failed'])(

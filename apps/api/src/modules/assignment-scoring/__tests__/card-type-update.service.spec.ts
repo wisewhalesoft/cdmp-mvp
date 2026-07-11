@@ -9,7 +9,7 @@
  *   TC-F071-04：audit_log UPDATE 含 before/after
  *   TC-F071-07：cardType 不存在 → 404 CARD_TYPE_NOT_FOUND
  *   TC-F071-08：prodKind 不在啟用期間內 → 422 VALIDATION_ERROR
- *   TC-F071-09/10：月跑鎖 → 409
+ *   TC-F071-09/10：月名單分派鎖 → 409
  *   TC-F071-14：BR-4 ob_levelcard_version.card_name 不同步
  *   BE-F071-002：只更新 prodKind（cardName 不變）
  */
@@ -167,7 +167,7 @@ describe('CardTypeService — F071 updateCardType', () => {
     ).rejects.toThrow(UnprocessableEntityException);
   });
 
-  it('TC-F071-09：月跑鎖 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
+  it('TC-F071-09：月名單分派鎖 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
     runRepo.findOne.mockResolvedValue({ run_id: 'r1', status: 'pending' });
 
     try {

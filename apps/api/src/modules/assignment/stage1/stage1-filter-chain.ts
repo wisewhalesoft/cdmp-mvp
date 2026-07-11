@@ -11,7 +11,7 @@
  *   ⑤ 特例 DELETE     applySpecialDeletes() 內部      ← 新增（AC-4~AC-6 / SP L89~L108）
  *
  * 設計原則（AD-E07-23）：純函式群組 + 一個 async 主入口 `executeStage1Chain`，
- * 供月跑（dryRun:false，寫入 + 回傳完整案件列）與 F092 dry-run（dryRun:true，COUNT 唯讀）共用同一套實作，
+ * 供月名單分派（dryRun:false，寫入 + 回傳完整案件列）與 F092 dry-run（dryRun:true，COUNT 唯讀）共用同一套實作，
  * 消除 estimate / run 雙軌 drift。
  *
  * 模組歸屬（AD-E07-23 §23.5）：`executeStage1Chain` 設計為「接受 repo 參數的 async 純函式」
@@ -93,7 +93,7 @@ export interface ExecuteStage1ChainOptions {
  * 故先以 parseInt 轉換（與 stage1-query-composer path B caseyear 處理風格一致）。
  *
  * 邊界（AC-1 / BR-4）：
- *   - start / end / interval 任一缺值（null / '' / 非數字）→ 回 null（skip）+ warning（不阻擋月跑）
+ *   - start / end / interval 任一缺值（null / '' / 非數字）→ 回 null（skip）+ warning（不阻擋月名單分派）
  *   - interval <= 0 → 回 null（防 infinite loop）+ warning
  *   - 生成集合為空 → 回 null（skip）
  *
@@ -164,7 +164,7 @@ export function buildMonthCntFragment(
  *
  * @param pool   欄位篩選 + month_cnt + 去重後的案件列
  * @param list   名單定義（讀 list_nm 觸發條件）
- * @param workdt 月跑工作日 PROJECT_WORKYM+'01'（年以上規則取當年）
+ * @param workdt 月名單分派工作日 PROJECT_WORKYM+'01'（年以上規則取當年）
  * @returns 套用所有特例 DELETE 後保留的案件列
  */
 export function applySpecialDeletes(
@@ -345,7 +345,7 @@ export async function queryRecentAssignedCustoNos(
 // ---------------------------------------------------------------------------
 
 /**
- * Stage 1 完整篩選鏈主入口（月跑 + F092 dry-run 共用）。
+ * Stage 1 完整篩選鏈主入口（月名單分派 + F092 dry-run 共用）。
  *
  * 執行順序（AC-8 / 對齊 SP）：
  *   ① 欄位篩選（buildStage1WhereConditions）→ EMPTY_CONDITIONS 直接 skip 回傳

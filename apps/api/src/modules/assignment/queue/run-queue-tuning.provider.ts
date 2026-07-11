@@ -1,20 +1,20 @@
 import { Provider } from '@nestjs/common';
 
 /**
- * 月跑自建 T-SQL 佇列（queue_job）之調校參數與 DI token。
+ * 月名單分派自建 T-SQL 佇列（queue_job）之調校參數與 DI token。
  *
  * （原 pg-boss.provider.ts；PG 全面遷移後 pg-boss 已移除，本檔僅保留 driver-agnostic 的佇列調校設定，
  *  由 RunQueueConsumer 輪詢 loop / OrphanReaper / MssqlQueueExpiryReaper 共用。）
  *
- * orphan 偵測 / 輪詢週期之閾值（OQ-F098-02）：預設值保守設於「明顯大於最長月跑執行時間 + 安全邊際」，
+ * orphan 偵測 / 輪詢週期之閾值（OQ-F098-02）：預設值保守設於「明顯大於最長月名單分派執行時間 + 安全邊際」，
  * 並讓 env 可調；測試環境以極短值注入（不等真實逾時）。
  */
 export const RUN_QUEUE_TUNING = Symbol('RUN_QUEUE_TUNING');
 
 export interface RunQueueTuning {
   /**
-   * job expiration（秒）。月跑最壞可達數十分鐘，預設保守設 4 小時（14400s），
-   * 遠大於最長月跑以免誤殺執行中 run（claimNext 據此判定逾期可重領）。
+   * job expiration（秒）。月名單分派最壞可達數十分鐘，預設保守設 4 小時（14400s），
+   * 遠大於最長月名單分派以免誤殺執行中 run（claimNext 據此判定逾期可重領）。
    */
   jobExpireInSeconds: number;
   /**

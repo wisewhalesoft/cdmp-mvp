@@ -11,7 +11,7 @@
  *   TC-F072-06：audit_log DELETE 含 cascade 摘要
  *   TC-F072-09/10：缺 confirmCascade → 422 CARD_TYPE_CASCADE_NOT_CONFIRMED
  *   TC-F072-13：cardType 不存在 → 404
- *   TC-F072-14/15：月跑鎖 → 409
+ *   TC-F072-14/15：月名單分派鎖 → 409
  *   TC-F072-19：ob_tier card_level=NULL fallback 列也被刪除（NULL PK delete regression guard）
  *   BE-F072-001：cardType 無下游 → cascade 全 0 但 ob_card_type 仍被刪除
  */
@@ -192,9 +192,9 @@ describe('CardTypeService — F072 deletePreview + deleteCardTypeCascade', () =>
     expect(dataSource.transaction).not.toHaveBeenCalled();
   });
 
-  // ===== DELETE 月跑鎖 =====
+  // ===== DELETE 月名單分派鎖 =====
 
-  it('TC-F072-14/15：月跑鎖 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
+  it('TC-F072-14/15：月名單分派鎖 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
     runRepo.findOne.mockResolvedValue({ run_id: 'r1', status: 'running' });
 
     try {

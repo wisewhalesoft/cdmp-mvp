@@ -376,7 +376,7 @@ describe('F051 v2.1 updateList integration (Phase 5a 波7)', () => {
   // -----------------------------------------------------------------
   // UL-010 / TS-F051-010
   // -----------------------------------------------------------------
-  it('UL-010 / TS-F051-010：月跑 running + stage=draft → 409 優先', async () => {
+  it('UL-010 / TS-F051-010：月名單分派 running + stage=draft → 409 優先', async () => {
     const listNo = await seedList(env.listRepo, { list_no: 'OB202605005' });
     const now = new Date();
     await env.runRepo.save(

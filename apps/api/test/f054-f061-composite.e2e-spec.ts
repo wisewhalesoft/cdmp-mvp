@@ -15,11 +15,11 @@
  *      - 稽核失敗時 GET /assignment-runs/:runId → status='failed'，errorDetail 含 issues
  *
  *   C. warning_summary 回傳（F061 v1.3 AC-8）
- *      - 月跑完成後 GET /assignment-runs/:runId → response.reportPayload.warningSummary 存在
+ *      - 月名單分派完成後 GET /assignment-runs/:runId → response.reportPayload.warningSummary 存在
  *      - warningSummary.issueCount === 0（無警告）或 > 0（有警告）
  *
  *   D. audit_log 新欄位（F061 v1.3 AC-9）
- *      - 月跑計分後 assignment_audit_log 含 run_id / card_type / column_name
+ *      - 月名單分派計分後 assignment_audit_log 含 run_id / card_type / column_name
  *      - rule_violated / violated_row_count 在有違規時非 null
  *
  * 前置條件（tdd-implementation）：
@@ -76,7 +76,7 @@ const DIRECTOR_USER = {
 // TODO（tdd-implementation）：補齊 createTestApp()
 //   - 複製 assignment-scoring.e2e-spec.ts 的 createTestApp pattern
 //   - 新增 ObLevelcardColumn（match_type 欄位版本）到 entities 清單
-//   - 新增 AssignmentRun entities 如有月跑測試
+//   - 新增 AssignmentRun entities 如有月名單分派測試
 // ============================================================
 
 describe('F054/F061 v1.3 Composite E2E', () => {
@@ -157,11 +157,11 @@ describe('F054/F061 v1.3 Composite E2E', () => {
 
     it.todo(
       // TODO（tdd-implementation）：
-      // Precondition：月跑鎖（ob 或 assignment_run status=running）
+      // Precondition：月名單分派鎖（ob 或 assignment_run status=running）
       // Act：POST /runs/run
       // Assert：HTTP 409，error='SCORING_VERSION_LOCKED'
       //         不建立新 run（run count 不增加）
-      '月跑鎖存在 → POST /runs/run 409 SCORING_VERSION_LOCKED',
+      '月名單分派鎖存在 → POST /runs/run 409 SCORING_VERSION_LOCKED',
     );
   });
 
@@ -172,20 +172,20 @@ describe('F054/F061 v1.3 Composite E2E', () => {
   describe('C. warning_summary（F061 v1.3 AC-8）', () => {
     it.todo(
       // TODO（tdd-implementation）：
-      // Precondition：月跑正常完成（稽核通過，無警告）
+      // Precondition：月名單分派正常完成（稽核通過，無警告）
       // Assert：GET /runs/:runId → response.reportPayload.warningSummary 存在
       //         warningSummary.issueCount === 0
       //         warningSummary.issues === []
-      '月跑無警告 → reportPayload.warningSummary.issueCount=0',
+      '月名單分派無警告 → reportPayload.warningSummary.issueCount=0',
     );
 
     it.todo(
       // TODO（tdd-implementation）：
-      // Precondition：月跑完成但有 COMPOSITE 維度缺基線（警告非阻斷）
+      // Precondition：月名單分派完成但有 COMPOSITE 維度缺基線（警告非阻斷）
       // Assert：reportPayload.warningSummary.issueCount > 0
       //         issues[0].type === 'COMPOSITE_MISSING_BASELINE'
       //         run.status 仍為 'completed'（警告不阻斷完成）
-      '月跑有警告（COMPOSITE 缺基線）→ reportPayload.warningSummary.issueCount>0，status 仍 completed',
+      '月名單分派有警告（COMPOSITE 缺基線）→ reportPayload.warningSummary.issueCount>0，status 仍 completed',
     );
   });
 
@@ -196,16 +196,16 @@ describe('F054/F061 v1.3 Composite E2E', () => {
   describe('D. audit_log 新欄位（F061 v1.3 AC-9）', () => {
     it.todo(
       // TODO（tdd-implementation）：
-      // Precondition：月跑完成後查 assignment_audit_log WHERE action='RUN'
+      // Precondition：月名單分派完成後查 assignment_audit_log WHERE action='RUN'
       // Assert：每筆 log 含 run_id（非 null）
       //         含 card_type（如 'H'）
       //         含 column_name（維度名稱或 null，依寫入時機）
-      '月跑後 audit_log action=RUN 含 run_id 與 card_type',
+      '月名單分派後 audit_log action=RUN 含 run_id 與 card_type',
     );
 
     it.todo(
       // TODO（tdd-implementation）：
-      // Precondition：月跑時有計分規則被違反（rule_violated 場景）
+      // Precondition：月名單分派時有計分規則被違反（rule_violated 場景）
       // Assert：audit_log 含 rule_violated 非 null、violated_row_count > 0
       '有規則違反時 audit_log 含 rule_violated 與 violated_row_count',
     );

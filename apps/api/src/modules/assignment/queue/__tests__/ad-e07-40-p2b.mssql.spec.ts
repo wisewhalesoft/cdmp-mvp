@@ -2,7 +2,7 @@
  * AD-E07-40 P2b — 端對端（真實 MSSQL）：Producer/Consumer 輪詢 loop 全鏈路 drain。
  *
  * 覆蓋測試設計 §五 E2E（5 案例）：
- *   E2E-001 觸發月跑 → worker 輪詢撿到 → stub pipeline → assignment_run.status=completed
+ *   E2E-001 觸發月名單分派 → worker 輪詢撿到 → stub pipeline → assignment_run.status=completed
  *   E2E-002 業務失敗路徑 → status=failed；queue_job.state=completed（retry=0，佇列層不卡）
  *   E2E-003 連續 send 3 筆 → 單一 worker 輪詢 loop 逐筆 drain 全部至終態
  *   E2E-004 send→pipeline 實際被呼叫之延遲量測（觀察性，非嚴格阻擋）

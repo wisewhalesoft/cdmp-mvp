@@ -36,7 +36,7 @@ function flattenConstraints(errs: ValidationError[]): string[] {
 
 function baseCreate(overrides: Partial<any> = {}) {
   return {
-    listNm: '車貸月跑名單',
+    listNm: '車貸月名單分派名單',
     listPeriodStart: 1,
     listPeriodEnd: 6,
     listInterval: 1,

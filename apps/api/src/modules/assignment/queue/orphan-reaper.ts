@@ -26,7 +26,7 @@ export const ORPHAN_ERROR_MESSAGE = 'worker 中斷，請重新觸發';
  * + 定期掃描，將逾時殭屍 run 標為 'failed' + error_message='worker 中斷，請重新觸發'。
  *
  * 偵測**不新增** schema 欄位（OQ-AD28-02）：靠「running/pending 持續時間 > 閾值」+ pg-boss job
- * expiration。閾值 `orphanThresholdMs` 可注入（OQ-F098-02），預設明顯大於最長月跑時間以免誤殺
+ * expiration。閾值 `orphanThresholdMs` 可注入（OQ-F098-02），預設明顯大於最長月名單分派時間以免誤殺
  * 執行中 run（TS-F098-ORPHAN-003/004 守此邊界）。
  *
  * OQ-F098-01（採納 = 涵蓋）：一併掃 `pending` 且超過閾值仍無對應 job 者（入列失敗孤兒）。

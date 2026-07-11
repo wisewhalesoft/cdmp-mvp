@@ -986,7 +986,7 @@
   },
   {
     "name": "電銷名單歷史資料 ETL",
-    "description": "F090 v2.0 / AD-E07-25 §25.3（單源化）：raw OBPOOLDATA_LIST → ob_pool_data_list（partition-replace，非 fullMode）。DELETE WHERE data_source=etl_load 後 INSERT，每列填 data_source=etl_load（單一來源批次標記）；fullMode 仍 false，引擎層不 TRUNCATE（BR-3）。月跑改寫 ob_monthly_run_result（F094），本表為 ETL 單一來源",
+    "description": "F090 v2.0 / AD-E07-25 §25.3（單源化）：raw OBPOOLDATA_LIST → ob_pool_data_list（partition-replace，非 fullMode）。DELETE WHERE data_source=etl_load 後 INSERT，每列填 data_source=etl_load（單一來源批次標記）；fullMode 仍 false，引擎層不 TRUNCATE（BR-3）。月名單分派改寫 ob_monthly_run_result（F094），本表為 ETL 單一來源",
     "version": 1,
     "step_count": 3,
     "status": "active",

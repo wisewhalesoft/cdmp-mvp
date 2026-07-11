@@ -18,7 +18,7 @@ import { ERROR_CODES, ERROR_MESSAGES } from '../errors/error-codes';
  *   - request.user.businessRole === 'director' → allow
  *   - 其餘 → 403 AUTH_FORBIDDEN（部長專屬功能，不揭露範圍）
  *
- * 適用範圍（spec L468）：M02 全部端點含 GET、M06 寫入、月跑觸發、名單 CRUD、
+ * 適用範圍（spec L468）：M02 全部端點含 GET、M06 寫入、月名單分派觸發、名單 CRUD、
  *   M03a / M03c / M03d Rollback。
  *
  * 必須 chain 在 AuthGuard 之後（依賴 request.user 已注入）。

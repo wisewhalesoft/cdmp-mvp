@@ -64,7 +64,7 @@ export function mssqlAllDigits(x: string): string {
  * MSSQL 整年年齡表達式，參考日 = **今日** `CAST(SYSDATETIME() AS DATE)`
  * （對齊 PG `EXTRACT(YEAR FROM age(dob))` / JS `calcAgeYears(dob, new Date())`）。
  *
- * 🔴 與 P3a `mssqlAgeExpr` 之差異：本處參考日為執行當下今日（非月跑工作月 `@ccWorkdt`）——
+ * 🔴 與 P3a `mssqlAgeExpr` 之差異：本處參考日為執行當下今日（非月名單分派工作月 `@ccWorkdt`）——
  *    Stage 2 計分 AGE 依「今日」，跨月重跑同 dob 得同年齡（AGESCORE-META-001 守門）。
  *
  * 引數順序（dob 為 start）：`DATEDIFF(YEAR, dob, today) - CASE 未達今年生日 THEN 1 ELSE 0 END`。
@@ -219,7 +219,7 @@ export function resolveColumnSourceMssql(
     default: {
       // 🔴 I-MSSQL-DYNAMIC-FALLBACK-01：SQL 生成前 schema 檢查（大寫目錄查詢由呼叫端完成）。
       //   命中真實欄位 → 直接欄位參照（NUMERIC(18,4) 明確精度，FALLBACK-006）；
-      //   幽靈欄位（不存在）→ 生成期字面 0（非執行期動態；BR-F103-08 不阻擋月跑）。
+      //   幽靈欄位（不存在）→ 生成期字面 0（非執行期動態；BR-F103-08 不阻擋月名單分派）。
       const key = columnName.toLowerCase();
       if (existingColumns.has(key)) {
         return {

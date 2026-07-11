@@ -90,7 +90,7 @@ async function buildEnv(): Promise<Env> {
 
 function baseDto(overrides: Partial<any> = {}) {
   return {
-    listNm: '車貸月跑名單',
+    listNm: '車貸月名單分派名單',
     listPeriodStart: 1,
     listPeriodEnd: 6,
     listInterval: 1,
@@ -702,10 +702,10 @@ describe('F050 v2.1 createList integration (Phase 5a 波6)', () => {
   });
 
   // -----------------------------------------------------------------
-  // CL-019 / TS-F050-020：月跑執行中 → 409
+  // CL-019 / TS-F050-020：月名單分派執行中 → 409
   // -----------------------------------------------------------------
 
-  it('CL-019 / TS-F050-020：月跑 running → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
+  it('CL-019 / TS-F050-020：月名單分派 running → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
     const now = new Date();
     await env.runRepo.save(
       env.runRepo.create({
@@ -794,10 +794,10 @@ describe('F050 v2.1 createList integration (Phase 5a 波6)', () => {
   });
 
   // -----------------------------------------------------------------
-  // CL-023 / TS-F050-024：月跑優先於 stage（service 層只測 assertNoRunningRun 第一）
+  // CL-023 / TS-F050-024：月名單分派優先於 stage（service 層只測 assertNoRunningRun 第一）
   // -----------------------------------------------------------------
 
-  it('CL-023 / TS-F050-024：月跑 running + 無效 conditions → 409 優先', async () => {
+  it('CL-023 / TS-F050-024：月名單分派 running + 無效 conditions → 409 優先', async () => {
     const now = new Date();
     await env.runRepo.save(
       env.runRepo.create({

@@ -424,7 +424,7 @@ describe('P3d STATIC — 靜態守門（capture，恆執行）', () => {
 // ===========================================================================
 // DISPATCH — 第四步接線（method source scan + strategy，恆執行）+ 真庫 DoD
 // ===========================================================================
-describe('P3d DISPATCH — CR 前置接線 mssql 月跑鏈路', () => {
+describe('P3d DISPATCH — CR 前置接線 mssql 月名單分派鏈路', () => {
   const mssqlMethodSrc = (
     AssignmentRunPipelineService.prototype as unknown as {
       executeStage2to3PushdownMssql: (...a: unknown[]) => unknown;

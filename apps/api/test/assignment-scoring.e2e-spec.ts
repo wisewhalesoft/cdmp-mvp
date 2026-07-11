@@ -689,7 +689,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.body.error).toBe('SCORING_COLUMN_NOT_FOUND');
     });
 
-    it('TS-F106-004（AC-5）：月跑鎖時 enable → 409 SCORING_VERSION_LOCKED', async () => {
+    it('TS-F106-004（AC-5）：月名單分派鎖時 enable → 409 SCORING_VERSION_LOCKED', async () => {
       await seedHWithAccountAge();
       await request(app.getHttpServer())
         .put('/api/v1/assignment/scoring/dimensions/ACCOUNT_AGE/disable?cardType=H')
@@ -718,7 +718,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
     });
 
-    // ---- 月跑鎖 ----
+    // ---- 月名單分派鎖 ----
 
     it('TS-F054-010：assignment_run.status=pending 時 PUT → 409 SCORING_VERSION_LOCKED', async () => {
       await seedHWithAccountAge();
@@ -1024,7 +1024,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.status).toBe(200);
     });
 
-    // ---- 月跑鎖 ----
+    // ---- 月名單分派鎖 ----
 
     it('TS-F055-007：assignment_run.status=pending 時 PUT → 409', async () => {
       await seedHWithLevels();
@@ -1253,7 +1253,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(logs.filter((l) => l.action === 'DELETE')).toHaveLength(0);
     });
 
-    it('TS-F055-D11：月跑 pending 時 DELETE → 409 SCORING_VERSION_LOCKED', async () => {
+    it('TS-F055-D11：月名單分派 pending 時 DELETE → 409 SCORING_VERSION_LOCKED', async () => {
       await seedHWithLevels();
       await ds.getRepository(AssignmentRun).save({
         run_id: '11111111-1111-1111-1111-1111110055d11',
@@ -1539,7 +1539,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(dbLevels).toHaveLength(1);
     });
 
-    it('TS-F055-P07：月跑 pending → 409 SCORING_VERSION_LOCKED（AC-8e）', async () => {
+    it('TS-F055-P07：月名單分派 pending → 409 SCORING_VERSION_LOCKED（AC-8e）', async () => {
       await seedHActiveVersionOnly();
       await ds.getRepository(AssignmentRun).save({
         run_id: 'bbbb1111-1111-1111-1111-1111110097aaa',
@@ -1818,7 +1818,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       });
     });
 
-    it('TS-F056-010：PUT 月跑鎖 pending → 409', async () => {
+    it('TS-F056-010：PUT 月名單分派鎖 pending → 409', async () => {
       await ds.getRepository(AssignmentRun).save({
         run_id: 'bbbb1111-1111-1111-1111-111111111111',
         project_workym: '202604',
@@ -1837,7 +1837,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.body.error).toBe('SCORING_VERSION_LOCKED');
     });
 
-    it('TS-F056-011：PUT 月跑鎖 running → 409', async () => {
+    it('TS-F056-011：PUT 月名單分派鎖 running → 409', async () => {
       await ds.getRepository(AssignmentRun).save({
         run_id: 'bbbb2222-2222-2222-2222-222222222222',
         project_workym: '202604',
@@ -1948,7 +1948,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.body.cardLevel).toBeNull();
     });
 
-    it('TS-F056-018：POST 月跑鎖 → 409', async () => {
+    it('TS-F056-018：POST 月名單分派鎖 → 409', async () => {
       await ds.getRepository(AssignmentRun).save({
         run_id: 'bbbb3333-3333-3333-3333-333333333333',
         project_workym: '202604',
@@ -2117,7 +2117,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.body.error).toBe('TIER_MAPPING_NOT_FOUND');
     });
 
-    it('TS-F056-D10：月跑 running 時 DELETE → 409 SCORING_VERSION_LOCKED', async () => {
+    it('TS-F056-D10：月名單分派 running 時 DELETE → 409 SCORING_VERSION_LOCKED', async () => {
       await ds.getRepository(ObTier).save({
         card_type: 'H', card_level: 'A', tier_level: 'T1', list_nm: null,
       } as any);
@@ -2594,7 +2594,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.body.error).toBe('VALIDATION_ERROR');
     });
 
-    it('TC-F070-10/11：月跑 running → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
+    it('TC-F070-10/11：月名單分派 running → 409 ASSIGNMENT_RUN_ALREADY_RUNNING', async () => {
       await seedProdKinds();
       // 依 memory feedback_assignment_run_e2e_seed：須含 4 個 NOT NULL 欄位
       await ds.getRepository(AssignmentRun).save({
@@ -2735,7 +2735,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.body.error).toBe('VALIDATION_ERROR');
     });
 
-    it('TC-F071-09：月跑鎖 → 409', async () => {
+    it('TC-F071-09：月名單分派鎖 → 409', async () => {
       await seedH();
       await ds.getRepository(AssignmentRun).save({
         run_id: 'r1' as any,
@@ -2859,7 +2859,7 @@ describe('AssignmentScoring E2E (/api/v1/assignment/scoring/*)', () => {
       expect(res.body.error).toBe('CARD_TYPE_NOT_FOUND');
     });
 
-    it('TC-F072-14/15：月跑鎖 → 409', async () => {
+    it('TC-F072-14/15：月名單分派鎖 → 409', async () => {
       await seedX();
       await ds.getRepository(AssignmentRun).save({
         run_id: 'r1' as any,

@@ -110,8 +110,8 @@ export class TargetLoadHandler implements NodeExecutor {
     // fullMode 仍為 false → 引擎層不 TRUNCATE 全表（BR-3，保留表結構/索引）。
     //   1. DELETE FROM target WHERE "<partitionColumn>" = '<partitionValue>'
     //   2. INSERT 並對每列填 partitionValue（SELECT 加 '<value>' AS "<col>"）
-    // v2.0 單源化：ob_pool_data_list 為 ETL 單一來源，月跑提案改寫 ob_monthly_run_result（F094），
-    // 本表不再混入月跑資料；partition DELETE（data_source='etl_load'）等效全量覆寫
+    // v2.0 單源化：ob_pool_data_list 為 ETL 單一來源，月名單分派提案改寫 ob_monthly_run_result（F094），
+    // 本表不再混入月名單分派資料；partition DELETE（data_source='etl_load'）等效全量覆寫
     // （殘留 'monthly_run' / NULL 舊列由全量覆寫自然淘汰，DP-AD25-5）。
     // 歷史限定（ASSIGNDAY < 本月第一天，DP-AD21-1）由 extract 層 sourceFilter 處理，
     // 非本 handler；handler 只負責 per-partition 截斷與標記。

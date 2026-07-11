@@ -121,7 +121,7 @@ export async function runStage1SqlInsert(
 
 /**
  * estimate 路徑：SELECT COUNT(*) FROM ob_pool_data o WHERE <core>（與 run 共用同一 core）。
- * core.skip（EMPTY_CONDITIONS）→ 回 0（不執行 COUNT，與月跑 skip 一致）。
+ * core.skip（EMPTY_CONDITIONS）→ 回 0（不執行 COUNT，與月名單分派 skip 一致）。
  */
 export async function estimateStage1SqlCount(
   manager: EntityManager,

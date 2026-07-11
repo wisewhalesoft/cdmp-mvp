@@ -1,5 +1,5 @@
 // 對應 migration: 1711360000120-CreateE07AssignmentTables.ts
-// AD-E07-7：月跑 Stage 進度獨立表（取代 JSONB 方案）
+// AD-E07-7：月名單分派 Stage 進度獨立表（取代 JSONB 方案）
 
 import { Entity, PrimaryGeneratedColumn, Column, Index, JoinColumn, ManyToOne } from 'typeorm';
 import { AssignmentRun } from './assignment-run.entity';

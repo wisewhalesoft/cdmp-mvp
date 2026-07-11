@@ -40,7 +40,7 @@ describe('AssignmentScoringService — F056 v1.5 TIER_LEVEL 列舉約束（AC-8�
   const actor = { userId: 'sm-uuid', ipAddress: '127.0.0.1' };
 
   beforeEach(async () => {
-    // 預設：所有前置驗證 (cardType / cardLevel / 月跑鎖 / 互斥) 都通過，
+    // 預設：所有前置驗證 (cardType / cardLevel / 月名單分派鎖 / 互斥) 都通過，
     // 讓 TIER_LEVEL 列舉檢查成為唯一阻擋點
     cardTypeRepo = {
       findOne: vi.fn().mockResolvedValue({

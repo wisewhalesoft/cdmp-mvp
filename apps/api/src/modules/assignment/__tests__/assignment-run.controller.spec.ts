@@ -315,7 +315,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       serviceMock.getRunById.mockRejectedValueOnce(
         new NotFoundException({
           error: ERROR_CODES.ASSIGNMENT_RUN_NOT_FOUND,
-          message: '找不到指定的月跑紀錄',
+          message: '找不到指定的月名單分派紀錄',
         }),
       );
       const res = await request(app.getHttpServer()).get(
@@ -421,7 +421,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       reportMock.exportResult.mockRejectedValueOnce(
         new UnprocessableEntityException({
           error: ERROR_CODES.ASSIGNMENT_RUN_NOT_COMPLETED,
-          message: '月跑尚未完成，結果摘要不可用',
+          message: '月名單分派尚未完成，結果摘要不可用',
         }),
       );
       const res = await request(app.getHttpServer()).get(
@@ -547,7 +547,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       reportMock.compareRuns.mockRejectedValueOnce(
         new UnprocessableEntityException({
           error: ERROR_CODES.ASSIGNMENT_RUN_NOT_COMPARABLE,
-          message: '僅 completed 狀態的月跑可比對',
+          message: '僅 completed 狀態的月名單分派可比對',
         }),
       );
       const res = await request(app.getHttpServer()).get(
@@ -652,7 +652,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       serviceMock.cancelRun.mockRejectedValueOnce(
         new NotFoundException({
           error: ERROR_CODES.ASSIGNMENT_RUN_NOT_FOUND,
-          message: '找不到指定的月跑紀錄',
+          message: '找不到指定的月名單分派紀錄',
         }),
       );
       const res = await request(app.getHttpServer()).post(
@@ -668,7 +668,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       serviceMock.cancelRun.mockRejectedValueOnce(
         new UnprocessableEntityException({
           error: ERROR_CODES.ASSIGNMENT_RUN_NOT_CANCELLABLE,
-          message: '月跑當前狀態不允許取消',
+          message: '月名單分派當前狀態不允許取消',
         }),
       );
       const res = await request(app.getHttpServer()).post(

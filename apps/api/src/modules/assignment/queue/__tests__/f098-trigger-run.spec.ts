@@ -300,6 +300,6 @@ describe('F098 triggerRun 改入列（不在 API 程序跑 pipeline）', () => {
     expect(pendings).toHaveLength(0);
     const failed = all.filter((r) => r.status === 'failed');
     expect(failed.length).toBeGreaterThan(0);
-    expect(failed[0].error_message).toBe('月跑入列失敗，請重新觸發');
+    expect(failed[0].error_message).toBe('月名單分派入列失敗，請重新觸發');
   });
 });

@@ -1,5 +1,5 @@
 /**
- * AssignmentRunService — F061 月跑觸發 service unit tests
+ * AssignmentRunService — F061 月名單分派觸發 service unit tests
  *
  * 對應 spec：
  *   - F061 v1.2 AC-1：前置條件 → calculateReadiness → 失敗 422 ASSIGNMENT_RUN_PRECHECK_FAILED
@@ -146,7 +146,7 @@ describe('AssignmentRunService', () => {
   });
 
   describe('triggerRun', () => {
-    it('AC-2：所有名單 stage=ready → 建立 pending 月跑並寫 audit log', async () => {
+    it('AC-2：所有名單 stage=ready → 建立 pending 月名單分派並寫 audit log', async () => {
       await seedList(env.listRepo, 'OB202605001', 'ready');
       await seedList(env.listRepo, 'OB202605002', 'ready');
 

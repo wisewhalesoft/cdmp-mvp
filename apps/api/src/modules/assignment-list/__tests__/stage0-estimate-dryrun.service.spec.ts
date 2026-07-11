@@ -271,14 +271,14 @@ describe('F092 Stage0EstimateService dry-run 完整鏈升級', () => {
   // =========================================================================
   describe('二、Dry-run ≡ run 一致性', () => {
     // ---- TS-F092-EQ-001（PG 全規則精確一致）：本專案無 PG TestContainer → DEFERRED ----
-    it.skip('TS-F092-EQ-001（DEFERRED — 需真實 PostgreSQL TestContainer）：全規則觸發名單 dry-run count ≡ 月跑案件數', () => {
+    it.skip('TS-F092-EQ-001（DEFERRED — 需真實 PostgreSQL TestContainer）：全規則觸發名單 dry-run count ≡ 月名單分派案件數', () => {
       // 需 PG TC + ob_pool_data 30 筆混合 month_cnt + ob_pool_data_list 5 筆去重 seed
       // + list_nm='中結強案年資特催' 全特殊 DELETE 觸發。
       // 本專案 package 未裝 PG TC；以下 SQLite 子集（EQ-SQLITE）替代驗證同鏈一致性。
     });
 
     // ---- EQ-SQLITE：同一名單 dry-run count === run cases.length（同鏈一致性子集，SQLite）----
-    it('TS-F092-EQ-001-SQLITE：同名單 dry-run count === 月跑 cases.length（同鏈一致性，含去重 + month_cnt）', async () => {
+    it('TS-F092-EQ-001-SQLITE：同名單 dry-run count === 月名單分派 cases.length（同鏈一致性，含去重 + month_cnt）', async () => {
       await seedActiveList(env.listRepo, 'OB202606EQ', {
         list_nm: '一般名單',
         prod_kind: '01',

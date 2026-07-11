@@ -7,7 +7,7 @@
  *   - TS-F061-INT-003：ALL_SCORES_EMPTY 偵測
  *   - TS-F061-INT-004：COMPOSITE 缺基線（level1=null 不存在）警告
  *   - TS-F061-INT-005：稽核服務不觸發 fn_calc_tier_level（純資料表掃描）
- *   - TS-F061-INT-006：稽核失敗時不拋 exception（spec BR-13：不阻擋月跑）
+ *   - TS-F061-INT-006：稽核失敗時不拋 exception（spec BR-13：不阻擋月名單分派）
  *   - TS-F061-INT-007：每維度每 rule_violated 寫一筆彙總 audit log（不寫 appl_no 明細）
  *
  * 設計決策：
@@ -151,7 +151,7 @@ describe('ScoringIntegrityCheckService — F061 v1.3 計分完整性稽核', () 
   });
 
   describe('TS-F061-INT-006：稽核失敗回傳值供 caller 設定 run status', () => {
-    it('稽核失敗時不拋 exception（BR-13：不阻擋月跑）', async () => {
+    it('稽核失敗時不拋 exception（BR-13：不阻擋月名單分派）', async () => {
       columnRepo.find.mockResolvedValue([
         { card_type: 'H', card_version: 1, column_name: 'BAD_DIM',
           status: 'active', match_type: null },

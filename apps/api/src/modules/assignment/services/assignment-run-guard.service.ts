@@ -7,12 +7,12 @@ import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 /**
  * AssignmentRunGuardService（AD-E07 v3.0 / architecture-spec.md §E07 元件清單 / 決議 #6）
  *
- * 月跑並發守衛集中實作。所有 E07 寫入 service method 最頂層呼叫 `assertNoRunningRun(workYm?)`，
- * 確保「月跑執行中時不可變更任何 E07 設定 / 名單 / 比例」。
+ * 月名單分派並發守衛集中實作。所有 E07 寫入 service method 最頂層呼叫 `assertNoRunningRun(workYm?)`，
+ * 確保「月名單分派執行中時不可變更任何 E07 設定 / 名單 / 比例」。
  *
  * 觸發條件：assignment_run.status IN ('pending', 'running')
  * 失敗回應：409 ConflictException + ASSIGNMENT_RUN_ALREADY_RUNNING
- * 解除阻擋：月跑結束（status = 'completed' / 'failed'）後自動解除
+ * 解除阻擋：月名單分派結束（status = 'completed' / 'failed'）後自動解除
  *
  * 對應 spec：F050 v2.0, F051, F052, F078, F079, F080, F081, F082 v1.3, F083, F084, F085, F086, F087, F089
  */
@@ -26,7 +26,7 @@ export class AssignmentRunGuardService {
   ) {}
 
   /**
-   * 守衛：當有 pending / running 月跑時拒絕進入。
+   * 守衛：當有 pending / running 月名單分派時拒絕進入。
    *
    * @param workYm 可選，限定特定月份；未提供則檢查全部月份（最嚴格）
    */
@@ -49,7 +49,7 @@ export class AssignmentRunGuardService {
   }
 
   /**
-   * 輕量版月跑守衛（F084 v2.0 auto-advance tx 內使用 / AD-E07-19 §19.3.3 [4b]）。
+   * 輕量版月名單分派守衛（F084 v2.0 auto-advance tx 內使用 / AD-E07-19 §19.3.3 [4b]）。
    *
    * 與 assertNoRunningRun() 區分（測試設計 §6.3 警告 4）：
    *   - assertNoRunningRun()：tx 外呼叫，有 pending/running 即**拋 409**（PUT 整體失敗）
@@ -58,7 +58,7 @@ export class AssignmentRunGuardService {
    * 兩者是不同的 contract，不可互換。
    *
    * @param workYm 可選，限定特定月份；未提供則檢查全部月份（最嚴格）
-   * @returns 有 pending / running 月跑時為 true，否則 false
+   * @returns 有 pending / running 月名單分派時為 true，否則 false
    */
   async isRunning(workYm?: string): Promise<boolean> {
     const where: Record<string, unknown> = {

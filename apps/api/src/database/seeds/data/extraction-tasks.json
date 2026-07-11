@@ -8,7 +8,7 @@
     "sourceTable": "OBPOOLDATA",
     "rawTableName": "raw_6d58393b",
     "schedule": "0 2 1 * *",
-    "description": "案件池每月 1 號 02:00 全量抓取（月跑前，AD-E07-12）"
+    "description": "案件池每月 1 號 02:00 全量抓取（月名單分派前，AD-E07-12）"
   },
   {
     "id": "e1e951d7-45e2-40c2-931e-93158ca253b6",
@@ -41,7 +41,7 @@
     "sourceTable": "OB_ARRETURNDF_MIN_CAP",
     "rawTableName": "raw_970da79c",
     "schedule": "0 2 1 * *",
-    "description": "ARRETURNDF 累積未償本金彙總每月 1 號 02:00 全量抓取（月跑前，fn_calc_tier_level 計分依賴，AD-E07-12 / AD-E07-10）"
+    "description": "ARRETURNDF 累積未償本金彙總每月 1 號 02:00 全量抓取（月名單分派前，fn_calc_tier_level 計分依賴，AD-E07-12 / AD-E07-10）"
   },
   {
     "id": "33dc3771-bae0-4303-9fb3-aff2cd5ad72e",
@@ -56,9 +56,9 @@
       "column": "ASSIGNDAY",
       "operator": "<",
       "valueExpr": "currentMonthFirstDay",
-      "_comment": "F090 / AD-E07-21 DP-AD21-1 歷史限定：ASSIGNDAY < 本月第一天，排除本月資料以消除與月跑並發衝突。此欄位於 extract 設定僅供文件參照；實際過濾於 E07-OBPOOLDATA_LIST-Load pipeline 的 raw_data_extract node.sourceFilter 套用"
+      "_comment": "F090 / AD-E07-21 DP-AD21-1 歷史限定：ASSIGNDAY < 本月第一天，排除本月資料以消除與月名單分派並發衝突。此欄位於 extract 設定僅供文件參照；實際過濾於 E07-OBPOOLDATA_LIST-Load pipeline 的 raw_data_extract node.sourceFilter 套用"
     },
-    "description": "F090 / AD-E07-21：legacy 派案歷史表 OBPOOLDATA_LIST 全量抓取（建議月跑前 1 號 01:00 執行，早於 OBPOOLDATA 02:00；BR-6 不可於月跑 Stage 1 進行中執行）"
+    "description": "F090 / AD-E07-21：legacy 派案歷史表 OBPOOLDATA_LIST 全量抓取（建議月名單分派前 1 號 01:00 執行，早於 OBPOOLDATA 02:00；BR-6 不可於月名單分派 Stage 1 進行中執行）"
   },
   {
     "id": "9dd0eca5-d1fb-4cda-b702-2ddd9497aef5",

@@ -2,7 +2,7 @@
  * 特例 DELETE 規則 — 單一來源 trigger pure utility（F091 v2.0 + F095 共用）
  *
  * 依 SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list`（Node.js UTF-16LE 解碼後 ground truth）定義
- * 月跑 Stage 1 之特例排除規則觸發條件。**月跑實際套用（F091 `applyListNmSpecialDeletes`）與
+ * 月名單分派 Stage 1 之特例排除規則觸發條件。**月名單分派實際套用（F091 `applyListNmSpecialDeletes`）與
  * 前端唯讀呈現（F095 `deriveAppliedSpecialRules`）必須共用本檔之 trigger 判斷**，避免 UI / run drift
  * （AD-E07-26 §26.5 注意段 / F091 AC-7 / F095 AC-3）。
  *
@@ -104,7 +104,7 @@ const RULE_META: Record<
  * 依 `list_nm` 讀時推導本名單套用之特例排除規則清單（F095 AC-1 / AC-2，read-time derivation）。
  *
  * 推導順序對齊 SP（AD-E07-26 §26.5 偽碼）：fraud → motorcycle → xiaozi → year-above。
- * **與 F091 月跑 `applyListNmSpecialDeletes` 共用同一 `matchesSpecialRule` 判斷**（保證一致）。
+ * **與 F091 月名單分派 `applyListNmSpecialDeletes` 共用同一 `matchesSpecialRule` 判斷**（保證一致）。
  * 純函式：相同輸入永遠相同輸出，無 DB / async 依賴（DP-AD26-3 不新建 DB 欄位）。
  *
  * `R-FRAUD-WHITEBOARD` 無條件恆存（F095 AC-5 / BR-4），故回傳陣列永不為空。

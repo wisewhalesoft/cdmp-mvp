@@ -30,7 +30,7 @@ import {
   DecodeEntry,
   getDecodeForColumn,
 } from '@/modules/assignment/stage1/scoring-decode.constants';
-// F055 preview（本次修正）：重用月跑 Stage 2 計分下推（單一真源，F104 已對齊 legacy SP）。
+// F055 preview（本次修正）：重用月名單分派 Stage 2 計分下推（單一真源，F104 已對齊 legacy SP）。
 import { buildStage2ScoreExpr } from '@/modules/assignment/stage1/stage2to4-sql-builder';
 // F055 MSSQL gap（GAP 1）：Stage 2 計分下推之 MSSQL 平行版 + fallback 欄位 schema 檢查
 //   （AD-E07-42 P3b；已與 PG 版逐列等價，供 previewCardLevels MSSQL 分支重用，非另造公式）。
@@ -44,8 +44,8 @@ import { fetchPoolDataColumnsMssql } from '@/modules/assignment/stage1/stage2to4
  * TIER_LEVEL 對應（ob_tier）查詢與覆寫式編輯。
  *
  * 商業規則摘要：
- *   - 覆寫式設計（無草稿、無 rollback；歷史靠月跑 snapshot）
- *   - 寫入前檢查月跑鎖：`assignment_run.status IN ('pending','running')` → 409 SCORING_VERSION_LOCKED
+ *   - 覆寫式設計（無草稿、無 rollback；歷史靠月名單分派 snapshot）
+ *   - 寫入前檢查月名單分派鎖：`assignment_run.status IN ('pending','running')` → 409 SCORING_VERSION_LOCKED
  *   - 寫入後寫 assignment_audit_log（actor_id=req.user.userId）
  *   - F056 fallback：CARD_LEVEL=NULL 表示「不分等級」的對應規則（M5/M3/HC/C3）
  */
@@ -505,7 +505,7 @@ export class AssignmentScoringService {
     input: UpdateDimensionsInput,
     actor: ActorContext,
   ): Promise<UpdateDimensionsResult> {
-    // BR-4：月跑鎖
+    // BR-4：月名單分派鎖
     await this.assertNotLocked();
 
     // F054 v1.2 AC-7 / BR-7：cardType 範圍鎖
@@ -836,7 +836,7 @@ export class AssignmentScoringService {
   //
   // 對應 spec：F106 §5.2 / §5.3 對稱性對照表 / BR-2 / BR-3 / BR-5
   //   行為完全對稱於 disableDimension，僅狀態方向相反：
-  //     1. assertNotLocked()（月跑鎖 → 409 SCORING_VERSION_LOCKED）
+  //     1. assertNotLocked()（月名單分派鎖 → 409 SCORING_VERSION_LOCKED）
   //     2. assertCardTypeActive()（範圍鎖 → 404 CARD_TYPE_NOT_FOUND）
   //     3. findOne(status='inactive')；找不到（含對已 active 維度啟用，BR-3）→ 404 SCORING_COLUMN_NOT_FOUND
   //     4. status='inactive' → 'active'，save
@@ -969,12 +969,12 @@ export class AssignmentScoringService {
     }
 
     // F055 §5.2 / AC-3：preview 以「現行 ob_pool_data 套用該 cardType active 計分設定即時計分」
-    //   後，再依前端傳入的新門檻分桶試算分佈（非重呼 fn_calc_tier_level、非讀月跑 snapshot）。
+    //   後，再依前端傳入的新門檻分桶試算分佈（非重呼 fn_calc_tier_level、非讀月名單分派 snapshot）。
     //
     // ⚠️ F094 死欄修正（本次）：舊實作分桶 `ob_pool_data_list.score IS NOT NULL`，但自 F094 起
-    //   月跑計分結果改寫入 `ob_monthly_run_result.score`，`ob_pool_data_list.score` 恆為 NULL
+    //   月名單分派計分結果改寫入 `ob_monthly_run_result.score`，`ob_pool_data_list.score` 恆為 NULL
     //   → preview 各等級永遠回 0（bug）。且舊實作無 cardType 維度（等級碼／分數區間本為 per-card_type，
-    //   須以該 cardType 的計分卡設定算分才有意義）。改為重用月跑 Stage 2 計分下推
+    //   須以該 cardType 的計分卡設定算分才有意義）。改為重用月名單分派 Stage 2 計分下推
     //   （buildStage2ScoreExpr；F104 已對齊 legacy SP，維持單一真源，避免重造公式導致靜默偏差），
     //   對每列 ob_pool_data 以該 cardType active version 之 active 計分維度即時算分。
     //
@@ -982,7 +982,7 @@ export class AssignmentScoringService {
     //   全表 hydrate 進 Node（heap OOM → 進程崩潰 → 整頁 API 500，違反 CLAUDE.md 巨量資料鐵則）。
     //   一律 SQL 下推：單一 GROUP BY 聚合僅回各等級 COUNT，記憶體佔用與資料量脫鉤。
     //
-    // ⚠️ DB_TYPE：計分下推（LATERAL / customer_core LEFT JOIN / to_jsonb）為 PG 專用，與月跑
+    // ⚠️ DB_TYPE：計分下推（LATERAL / customer_core LEFT JOIN / to_jsonb）為 PG 專用，與月名單分派
     //   Stage 2（runStage2and3Sql）同源；SQLite e2e 不具代表性（沿用既有 PG-only 認定）。
     //
     // BR-2 快取（本次新增）：改快取「分數 histogram」（level 無關），之後每次改門檻皆純記憶體重新分桶。
@@ -997,7 +997,7 @@ export class AssignmentScoringService {
       return { distribution };
     }
 
-    // 取該 cardType 之 active 計分版本（對齊 createCardLevel / 月跑 pipeline：status='active'）。
+    // 取該 cardType 之 active 計分版本（對齊 createCardLevel / 月名單分派 pipeline：status='active'）。
     const version = await this.versionRepo.findOne({
       where: { card_type: input.cardType as any, status: 'active' as any },
     });
@@ -1039,14 +1039,14 @@ export class AssignmentScoringService {
         },
       });
 
-      // 重用月跑 Stage 2 計分下推（單一真源；回傳 score 純量表達式 + 命名參數 :sc_*）。
+      // 重用月名單分派 Stage 2 計分下推（單一真源；回傳 score 純量表達式 + 命名參數 :sc_*）。
       //
       // GAP 1（MSSQL 遷移）：本 preview 原僅 PG（LATERAL / ::int / to_jsonb / POSIX regex），對 MSSQL
       //   執行即 500。改依「執行本查詢之連線方言」分派——PG 沿用 buildStage2ScoreExpr（SQL byte-identical
-      //   不動）；MSSQL 重用月跑 Stage 2 MSSQL 下推 buildStage2ScoreExprMssql（AD-E07-42 P3b，已與 PG
+      //   不動）；MSSQL 重用月名單分派 Stage 2 MSSQL 下推 buildStage2ScoreExprMssql（AD-E07-42 P3b，已與 PG
       //   逐列等價：`~ '^[0-9]+$'` → `NOT LIKE '%[^0-9]%'` + TRY_CAST、to_jsonb 動態 fallback → 生成前查
       //   INFORMATION_SCHEMA.COLUMNS 之 schema 檢查）。非 pg/mssql（sqlite 單元測試）沿用 PG 分支
-      //   （此 SQL 從不對 sqlite 執行；與月跑 stage2to4-sql-executor 之 PG-only 認定一致）。
+      //   （此 SQL 從不對 sqlite 執行；與月名單分派 stage2to4-sql-executor 之 PG-only 認定一致）。
       const isMssql =
         this.poolDataListRepo.manager.connection.options?.type === 'mssql';
 
@@ -1081,7 +1081,7 @@ export class AssignmentScoringService {
         ? 'LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no'
         : '';
 
-      // histogram 查詢：對每列即時計分（cast INT，與月跑同式），依 score 聚合 COUNT（level 無關）。
+      // histogram 查詢：對每列即時計分（cast INT，與月名單分派同式），依 score 聚合 COUNT（level 無關）。
       //   NULL 分數（該列無從計分）以 `WHERE s.score IS NOT NULL` 排除——語意等同舊實作之
       //   `WHERE bucket IS NOT NULL`（NULL score → 所有 WHEN UNKNOWN → 不計入任何桶）；亦避免
       //   in-memory `Number(null)===0` 誤落入含 0 之桶。
@@ -1231,7 +1231,7 @@ export class AssignmentScoringService {
   // =========================
   //
   // 對應 spec：F055 v1.3 §5.3 / AC-6 / AC-7 / BR-5 / BR-6
-  //   1. 月跑鎖（BR-3）：assignment_run pending/running → 409 SCORING_VERSION_LOCKED
+  //   1. 月名單分派鎖（BR-3）：assignment_run pending/running → 409 SCORING_VERSION_LOCKED
   //   2. 複合 PK 紀錄存在性檢查：不存在 → 404 CARD_LEVEL_RECORD_NOT_FOUND
   //   3. cascade reference check（BR-6）：ob_tier 仍引用 (cardType, cardLevel) → 409 CARD_LEVEL_REFERENCED
   //      - fallback 對應（card_level IS NULL）不算引用，因 NULL 與本表的具體 cardLevel 字串不同
@@ -1314,8 +1314,8 @@ export class AssignmentScoringService {
   //
   // 對應 spec：F055 v1.5 §5.4 / AC-8 ~ AC-8f / BR-1 / BR-7 / BR-8 / BR-9
   //
-  //   驗證順序（依 spec §5.4 寫入語意；月跑鎖前置以對齊既有 deleteCardLevel/updateCardLevels 慣例）：
-  //     0. 月跑鎖（BR-3）：assignment_run pending/running → 409 SCORING_VERSION_LOCKED
+  //   驗證順序（依 spec §5.4 寫入語意；月名單分派鎖前置以對齊既有 deleteCardLevel/updateCardLevels 慣例）：
+  //     0. 月名單分派鎖（BR-3）：assignment_run pending/running → 409 SCORING_VERSION_LOCKED
   //     1. cardType 範圍鎖（BR-7）：ob_card_type.status=active → 404 CARD_TYPE_NOT_FOUND
   //     2. scoreE >= scoreS 業務驗證 → 422 VALIDATION_ERROR
   //        （cardLevel 格式 ^[A-Z]$ 已由 DTO @Matches 處理，HTTP 422 由 NestJS ValidationPipe 拋出）
@@ -1329,7 +1329,7 @@ export class AssignmentScoringService {
     input: CreateCardLevelInput,
     actor: ActorContext,
   ): Promise<CreateCardLevelResult> {
-    // 0. 月跑鎖（BR-3）
+    // 0. 月名單分派鎖（BR-3）
     await this.assertNotLocked();
 
     // 1. cardType 範圍鎖（BR-7）
@@ -1488,7 +1488,7 @@ export class AssignmentScoringService {
     input: UpdateTierMappingInput,
     actor: ActorContext,
   ): Promise<UpdateTierMappingResult> {
-    // BR-5：月跑鎖（保留既有錯誤碼 SCORING_VERSION_LOCKED）
+    // BR-5：月名單分派鎖（保留既有錯誤碼 SCORING_VERSION_LOCKED）
     await this.assertNotLocked();
 
     // v1.5 AC-9：cardType 範圍鎖
@@ -1661,7 +1661,7 @@ export class AssignmentScoringService {
   // =========================
   //
   // 對應 spec：F056 v1.4 §5.4 / AC-6 / AC-7 / BR-11
-  //   1. 月跑鎖（BR-5）：assignment_run pending/running → 409 SCORING_VERSION_LOCKED
+  //   1. 月名單分派鎖（BR-5）：assignment_run pending/running → 409 SCORING_VERSION_LOCKED
   //   2. 對應紀錄存在性檢查：不存在（含 fallback NULL）→ 404 TIER_MAPPING_NOT_FOUND
   //   3. hard delete（BR-11）：直接從 ob_tier 移除紀錄
   //   4. audit log：action='DELETE', entity_type='ob_tier',
@@ -1853,11 +1853,11 @@ export class AssignmentScoringService {
   }
 
   // =========================
-  // 共用：月跑鎖 / audit log
+  // 共用：月名單分派鎖 / audit log
   // =========================
 
   /**
-   * 檢查月跑鎖（pending/running 期間禁止修改）。
+   * 檢查月名單分派鎖（pending/running 期間禁止修改）。
    * 觸發時拋 409 SCORING_VERSION_LOCKED。
    */
   protected async assertNotLocked(): Promise<void> {

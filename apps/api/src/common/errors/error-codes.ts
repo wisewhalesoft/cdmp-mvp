@@ -102,9 +102,9 @@ export const ERROR_CODES = {
   ASSIGNMENT_LIST_INACTIVE: 'ASSIGNMENT_LIST_INACTIVE',
   ASSIGNMENT_LIST_ALREADY_INACTIVE: 'ASSIGNMENT_LIST_ALREADY_INACTIVE',
   LIST_HISTORICAL_READONLY: 'LIST_HISTORICAL_READONLY',
-  // E07 M04 月跑（F061 / F049 / error-handling.md#assignment-errors）
+  // E07 M04 月名單分派（F061 / F049 / error-handling.md#assignment-errors）
   ASSIGNMENT_RUN_PRECHECK_FAILED: 'ASSIGNMENT_RUN_PRECHECK_FAILED',
-  // F097：月跑 workYm 格式錯誤（沿用既有碼，擴充適用至 POST /runs body）/ 過去月 guard（新增）
+  // F097：月名單分派 workYm 格式錯誤（沿用既有碼，擴充適用至 POST /runs body）/ 過去月 guard（新增）
   WORK_YM_INVALID_FORMAT: 'WORK_YM_INVALID_FORMAT',
   RUN_WORKYM_PAST: 'RUN_WORKYM_PAST',
   NO_READY_LIST_FOUND: 'NO_READY_LIST_FOUND',
@@ -241,18 +241,18 @@ export const ERROR_MESSAGES = {
   ASSIGNMENT_LIST_INACTIVE: '已停用名單不可編輯',
   ASSIGNMENT_LIST_ALREADY_INACTIVE: '名單已處於停用狀態，無需重複操作',
   LIST_HISTORICAL_READONLY: '歷史月份資料為唯讀，不可修改',
-  // E07 M04 月跑
-  ASSIGNMENT_RUN_PRECHECK_FAILED: '月跑前置條件檢查失敗',
+  // E07 M04 月名單分派
+  ASSIGNMENT_RUN_PRECHECK_FAILED: '月名單分派前置條件檢查失敗',
   // F097
   WORK_YM_INVALID_FORMAT: '作業月份格式錯誤，需為 6 位 YYYYMM（月份 01~12）',
-  RUN_WORKYM_PAST: '不可對已開始或過去的作業月觸發月跑',
-  NO_READY_LIST_FOUND: '本月無 stage=ready 的名單可執行月跑',
+  RUN_WORKYM_PAST: '不可對已開始或過去的作業月觸發月名單分派',
+  NO_READY_LIST_FOUND: '本月無 stage=ready 的名單可執行月名單分派',
   STAGE0_ESTIMATE_TIMEOUT: '試算查詢逾時，請稍後再試',
-  ASSIGNMENT_RUN_NOT_FOUND: '找不到指定的月跑紀錄',
-  ASSIGNMENT_RUN_NOT_CANCELLABLE: '月跑當前狀態不允許取消（僅 pending / running 可取消）',
+  ASSIGNMENT_RUN_NOT_FOUND: '找不到指定的月名單分派紀錄',
+  ASSIGNMENT_RUN_NOT_CANCELLABLE: '月名單分派當前狀態不允許取消（僅 pending / running 可取消）',
   // E07 M05 快照歷史
-  ASSIGNMENT_RUN_NOT_COMPLETED: '月跑尚未完成，結果摘要不可用',
-  ASSIGNMENT_RUN_NOT_COMPARABLE: '僅 completed 狀態的月跑可比對',
+  ASSIGNMENT_RUN_NOT_COMPLETED: '月名單分派尚未完成，結果摘要不可用',
+  ASSIGNMENT_RUN_NOT_COMPARABLE: '僅 completed 狀態的月名單分派可比對',
   EXPORT_FILE_EXPIRED: '檔案產生逾時，請稍後再試或聯繫 IT',
   EXPORT_FORMAT_NOT_SUPPORTED: '匯出格式不支援，目前僅支援 csv',
   // E07 M06 POOLDATA 白名單與可選值（F075 / F076 v1.3 / 2026-05-17）

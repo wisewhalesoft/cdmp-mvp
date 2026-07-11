@@ -1,5 +1,5 @@
 /**
- * F098 / AD-E07-28 §9.3：月跑取消專用例外。
+ * F098 / AD-E07-28 §9.3：月名單分派取消專用例外。
  *
  * 由 worker 內 `CancellationPoller` 於可中斷邊界（list 與 list 之間 / Stage 與 Stage 之間）
  * 偵測 `assignment_run.status` 已被 `cancelRun` 標為 'failed' 時拋出，使 pipeline 提早結束、
@@ -14,7 +14,7 @@ export class RunCancelledException extends Error {
   readonly runId: string;
 
   constructor(runId: string) {
-    super(`月跑 run=${runId} 已被使用者取消，pipeline 於可中斷邊界提早結束`);
+    super(`月名單分派 run=${runId} 已被使用者取消，pipeline 於可中斷邊界提早結束`);
     this.name = 'RunCancelledException';
     this.runId = runId;
     // 維持 instanceof 在 transpile（swc / ts）後仍正確

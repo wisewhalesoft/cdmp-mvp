@@ -9,7 +9,7 @@ import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
 
 /**
- * MonthlyRunReadinessService（F088 §5.2 / F061 月跑前置條件）
+ * MonthlyRunReadinessService（F088 §5.2 / F061 月名單分派前置條件）
  *
  * calculateReadiness(workYm) → {
  *   workYm, totalActiveLists, readyCount, notReadyLists, allReady,
@@ -121,7 +121,7 @@ describe('MonthlyRunReadinessService', () => {
     expect(res.totalActiveLists).toBe(1);
   });
 
-  it('當月有 running 月跑 → monthlyRunStatus = "running"', async () => {
+  it('當月有 running 月名單分派 → monthlyRunStatus = "running"', async () => {
     listRepo.find.mockResolvedValue([
       { list_no: 'L1', list_nm: 'A', stage: 'ready', status: 'active', project_workym: '202605' },
     ]);

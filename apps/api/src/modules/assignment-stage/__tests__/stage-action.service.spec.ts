@@ -12,7 +12,7 @@ import { ERROR_CODES } from '@/common/errors/error-codes';
  * 重點：
  *   - 推進 / Rollback / 核准 / 拒絕分支 oneshot 覆蓋
  *   - F087 reject reason 必填 / 長度檢查
- *   - 月跑 / 歷史月份 / 已停用 / 非預期 stage 攔截
+ *   - 月名單分派 / 歷史月份 / 已停用 / 非預期 stage 攔截
  *   - cleanup function 影響 deletedXxxCount 回傳
  */
 describe('StageActionService', () => {
@@ -255,8 +255,8 @@ describe('StageActionService', () => {
     }
   });
 
-  // 月跑進行中
-  it('月跑進行中 → 立刻拋例外，不繼續執行', async () => {
+  // 月名單分派進行中
+  it('月名單分派進行中 → 立刻拋例外，不繼續執行', async () => {
     runGuard.assertNoRunningRun.mockRejectedValue(new Error('ASSIGNMENT_RUN_ALREADY_RUNNING'));
     listRepo.findOne.mockResolvedValue(okList('approval'));
     await expect(svc.approveToReady('L1', actor, '202605')).rejects.toThrow();

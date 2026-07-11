@@ -688,7 +688,7 @@ describe('Stage0EstimateService.computeDeptEstimate（F049 v2.0 Part B）', () =
   // =====================================================================
   // 九、INVAR — 不變量
   // =====================================================================
-  describe('INVAR — 估算 ≡ 月跑 不變量（I-RUN-EST-01）', () => {
+  describe('INVAR — 估算 ≡ 月名單分派 不變量（I-RUN-EST-01）', () => {
     it('TS-F049-INVAR-001：days 工作日集合 ≡ computeWorkingDayRatios 輸出（不分叉 ratio 來源）', async () => {
       await seedMay2026Calendar(env.calRepo);
       await seedList(env.listRepo, 'LIST-A', 1000);

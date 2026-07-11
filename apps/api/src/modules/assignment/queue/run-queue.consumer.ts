@@ -23,7 +23,7 @@ import {
 } from './run-queue.constants';
 
 /**
- * F098 / AD-E07-28 P1 / AC-2：月跑 worker 消費者（cdmp-worker 程序）。
+ * F098 / AD-E07-28 P1 / AC-2：月名單分派 worker 消費者（cdmp-worker 程序）。
  *
  * 自建 T-SQL 佇列 pull 模型（AD-E07-40 §4；PG 全面遷移後 pg-boss 已移除）：
  *  `startMssqlPolling` → `setInterval` → `pollOnce` → `claimNext`。每 tick `TOP(1)` 領一筆
