@@ -130,7 +130,7 @@ INSERT INTO pooldata_field_option (...) VALUES
 |---|---|---|
 | **v2.0 B1** business_role 整合 | DONE | AD-E07-v3.0-P1-B1-business-role-impl.md |
 | **v2.0 B2** RBAC 替換 + M01 CRUD | DONE | AD-E07-v3.0-P1-B2-rbac-replace-m01-crud-impl.md + supplementary |
-| **v2.0 B4** monthly-run 月跑 + stage0 estimate + pipeline v2 + snapshot | DONE | AD-E07-v3.0-P1-B4-* 系列 |
+| **v2.0 B4** monthly-run 月名單分派 + stage0 estimate + pipeline v2 + snapshot | DONE | AD-E07-v3.0-P1-B4-* 系列 |
 | **v2.0 B6** snapshot history + xlsx export | DONE | AD-E07-v3.0-P1-B6-snapshot-history-impl.md + F064-v2.0-B6-xlsx-export-impl.md |
 | **v2.0 補 FeatureFlagGuard 全套用** | **DONE（本輪）** | 本檔 |
 | **v2.0 補 m24 BEST_CASE/SPEC_TP seed** | **DONE（本輪）** | 本檔 |
@@ -144,7 +144,7 @@ INSERT INTO pooldata_field_option (...) VALUES
 **P0 共用基礎建設**（AD-E07-v3.0-P0-shared-infra-impl.md）：
 - `DirectorGuard` / `SectionChiefGuard` / `DirectorOrSectionChiefGuard` 三 Guard 體系
 - `FeatureFlagGuard` + `@RequireFeatureFlag` 裝飾器（503 FEATURE_NOT_ENABLED）
-- `AssignmentRunGuardService.assertNoRunningRun()` 月跑互斥
+- `AssignmentRunGuardService.assertNoRunningRun()` 月名單分派互斥
 - `SectionChiefScopeService` 處長轄區過濾
 - `PersonnelRatioValidationService` / `RatioValidationService` / `StageTransitionService`
 - m14 `business_role` migration + 錯誤碼 `E07_ROLE_NOT_ASSIGNED` / `E07_REQUIRES_DIRECTOR` / `FEATURE_NOT_ENABLED`
@@ -152,7 +152,7 @@ INSERT INTO pooldata_field_option (...) VALUES
 **P1 B1~B6** 業務功能：
 - B1：business_role 整合（廢 is_sales_manager / e07_role 正交雙欄）
 - B2：M01 名單 CRUD（F048/F050/F051/F052/F077）+ Director 寫入 + DirectorOrSectionChief 讀取
-- B4：M03 月跑（F061~F067）+ stage0 估算（F049）+ pipeline v2 + snapshot
+- B4：M03 月名單分派（F061~F067）+ stage0 估算（F049）+ pipeline v2 + snapshot
 - B5：POOLDATA 白名單 + 可選值（F075/F076 含 m22 seed）
 - B6：snapshot history + xlsx 匯出（F064 50k 筆 streaming + F067 mismatch 3-sheet）
 
@@ -174,7 +174,7 @@ INSERT INTO pooldata_field_option (...) VALUES
 - E07 後端已全綠且穩定，可進入前端對接：
   - `/scoring-config`、`/assignment-codes`、`/assignment-runs`、`/pooldata-fields` 等管理頁
   - `/assignment-lists` M01 名單 CRUD 與五階段流程操作 UI
-  - 月跑進度 / 結果摘要 / 匯出 / 比對頁
+  - 月名單分派進度 / 結果摘要 / 匯出 / 比對頁
 - 參考 `/prototypes/28-scoring-config.html` 等 prototype 與 ui-ux-design-overview.md
 
 **2.（可選）git commit v2.0**

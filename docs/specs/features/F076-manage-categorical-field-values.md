@@ -49,7 +49,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
 ## 1. 功能摘要
 
-為 F075 白名單中 `field_type = categorical` 之欄位維護可選值列表（`option_value` + `option_label`），並支援停用 / 啟用。新名單定義表單之多選元件只呈現啟用值；停用值「不回溯」既有名單條件，月跑讀取直接讀 `ob_list_definition.filter_conditions` JSONB。
+為 F075 白名單中 `field_type = categorical` 之欄位維護可選值列表（`option_value` + `option_label`），並支援停用 / 啟用。新名單定義表單之多選元件只呈現啟用值；停用值「不回溯」既有名單條件，月名單分派讀取直接讀 `ob_list_definition.filter_conditions` JSONB。
 
 **範圍**：
 - 新建 `pooldata_field_option` 表，欄位包含 `column_name`（FK → `pooldata_field_whitelist`）、`option_value`、`option_label`、`is_active`、`deactivation_reason`（軟停用原因 ENUM，詳見 §5.0），複合唯一鍵 `(column_name, option_value)`
@@ -129,15 +129,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 - **When** 確認 Modal（含「停用原因」textarea，**必填**、最大 200 字）後執行
 - **Then** 系統呼叫 `PATCH /api/v1/pooldata-fields/{columnName}/options/{optionValue}/deactivate`，body `{ "isActive": false, "reason": "<200 字內說明>" }`
 - **And** 該 `option_value` 之 `is_active` 設為 false、`deactivation_reason = 'manual'`，**立即**從新名單定義多選元件選項中消失
-- **And** 已在**現有**名單定義條件中選取此值的設定**不受影響**（不回溯）；月跑遇到引用 inactive 值僅產生警告 `WHITELIST_OPTION_INACTIVE`（詳 [error-handling.md#assignment-run-warnings](../error-handling.md#assignment-run-warnings)）
+- **And** 已在**現有**名單定義條件中選取此值的設定**不受影響**（不回溯）；月名單分派遇到引用 inactive 值僅產生警告 `WHITELIST_OPTION_INACTIVE`（詳 [error-handling.md#assignment-run-warnings](../error-handling.md#assignment-run-warnings)）
 - **And** reason 為空字串、>200 字、或欄位缺失 → 後端回 422 `VALIDATION_ERROR`（field: `reason`）
 - **And** 操作寫入 `assignment_audit_log`（`action = 'DISABLE'`、details 含 `reason`、`deactivationReason = 'manual'`）
 
-### AC-7：停用可選值不中斷月跑
+### AC-7：停用可選值不中斷月名單分派
 
 - **Given** 名單 `OB202604010` 之 prod_kind 條件含 `02`；部長停用 prod_kind 之 `02`
-- **When** 觸發月跑（F061 / F081），月跑 Stage 1 讀取 `OB202604010` 之篩選條件
-- **Then** 月跑仍正確以 `prod_kind INCLUDE ['02', ...]` 過濾 OBPOOLDATA，月跑完成不報錯
+- **When** 觸發月名單分派（F061 / F081），月名單分派 Stage 1 讀取 `OB202604010` 之篩選條件
+- **Then** 月名單分派仍正確以 `prod_kind INCLUDE ['02', ...]` 過濾 OBPOOLDATA，月名單分派完成不報錯
 
 ### AC-8：部長 / Admin 重新啟用已停用的可選值
 
@@ -302,7 +302,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 | BR-1 | **複合唯一鍵 `(column_name, option_value)`**：DB 加 UNIQUE index；衝突回 409 `POOLDATA_OPTION_DUPLICATE` |
 | BR-2 | **僅 categorical 欄位**：寫入 / GET 前須先檢查 `pooldata_field_whitelist.field_type = 'categorical'`，否則回 400 `POOLDATA_OPTION_FIELD_TYPE_INVALID` |
 | BR-3 | **不支援硬刪除**：MVP 僅支援軟刪除（`is_active = false`）；硬刪除待 OQ-103-03 決議 |
-| BR-4 | **停用後不回溯**：月跑 Stage 1 讀取 `ob_list_definition.filter_conditions` 時，**不 join** `pooldata_field_option` 做有效性驗證；既有條件即使可選值停用仍可正確過濾 |
+| BR-4 | **停用後不回溯**：月名單分派 Stage 1 讀取 `ob_list_definition.filter_conditions` 時，**不 join** `pooldata_field_option` 做有效性驗證；既有條件即使可選值停用仍可正確過濾 |
 | BR-5 | **角色矩陣**：寫入端點（POST / PATCH）限 `admin` 或 `business_role = 'director'`；GET 開放至 `business_role = 'section_chief'`；對應 `DirectorGuard` 與 `DirectorOrSectionChiefGuard` |
 | BR-6 | **F075 白名單前置**：本 Feature 之可選值掛載於 F075 已存在之 categorical 欄位；若白名單欄位被停用（`is_active = false`），本 Feature 操作不受影響（可選值仍可維護） |
 | BR-7 | **稽核失敗不 rollback**：沿用 F050 v2.0 BR-11 |
@@ -388,7 +388,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
 
 | ID | Prototype 來源 | 延後原因 | 解決方案 |
 |---|---|---|---|
-| F076-M5 | 37b L345-354 archived 欄位 UI 區塊（含「歷史保留（已非 categorical）」徽章、不可新增 options 提示） | (1) 需新 backend endpoint 或 N+1 query 全部 listFields + listOptions 才能識別 archived 欄位；(2) MVP 範圍內 F051 既有 `?includeInactive=true` 查詢已能滿足名單編輯端 inactive option label 顯示需求；(3) archived 區塊純為「讀取展示」，非月跑必須 | 待 OQ 開啟後評估；具體方案為「新增 backend endpoint `GET /api/v1/pooldata-fields/archived`」或「Frontend N+1 query loop」二擇一 |
+| F076-M5 | 37b L345-354 archived 欄位 UI 區塊（含「歷史保留（已非 categorical）」徽章、不可新增 options 提示） | (1) 需新 backend endpoint 或 N+1 query 全部 listFields + listOptions 才能識別 archived 欄位；(2) MVP 範圍內 F051 既有 `?includeInactive=true` 查詢已能滿足名單編輯端 inactive option label 顯示需求；(3) archived 區塊純為「讀取展示」，非月名單分派必須 | 待 OQ 開啟後評估；具體方案為「新增 backend endpoint `GET /api/v1/pooldata-fields/archived`」或「Frontend N+1 query loop」二擇一 |
 
 ## 8. 依賴關係
 
@@ -431,13 +431,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-20
   - POST 不存在欄位 → 404 `POOLDATA_FIELD_NOT_FOUND`
   - 部長 PATCH `isActive = false` → 200 OK + 稽核 `DISABLE`
   - 部長 PATCH `isActive = true`（重新啟用）→ 200 OK + 稽核 `ENABLE`
-  - 停用後新名單表單不顯示該值；既有名單月跑不受影響（AC-7 場景）
+  - 停用後新名單表單不顯示該值；既有名單月名單分派不受影響（AC-7 場景）
 - 前端關鍵測試案例：
   - 處長頁面**無**任何操作按鈕
   - 部長頁面顯示新增 / 停用 / 啟用按鈕
   - numeric / date 欄位無「管理可選值」連結
   - caseyear `99` 顯示輔助說明文字
-- E2E：F075 新增 RISK_LEVEL categorical → F076 維護 4 個可選值（3 啟用 + 1 停用）→ F050 新名單表單顯示 3 個值 → 月跑既有名單條件含已停用值仍正常執行
+- E2E：F075 新增 RISK_LEVEL categorical → F076 維護 4 個可選值（3 啟用 + 1 停用）→ F050 新名單表單顯示 3 個值 → 月名單分派既有名單條件含已停用值仍正常執行
 
 ## 11. 實作 Checklist
 

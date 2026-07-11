@@ -21,7 +21,7 @@ sequenceDiagram
         G->>SVC: enableDimension(cardType, columnName, actor)
 
         SVC->>SVC: assertNotLocked()
-        alt 月跑執行中 pending/running
+        alt 月名單分派執行中 pending/running
             SVC-->>FE: 409 SCORING_VERSION_LOCKED（前端：分派執行中無法修改）
         else 未鎖定
             SVC->>SVC: assertCardTypeActive(cardType)

@@ -1,7 +1,7 @@
 ---
 type: implementation-log
 feature_id: AD-E07-v3.0-P1-B4
-feature_name: E07 重構 P1 B4 — M03 月跑觸發 + Stage 0 試算（F049 / F061 / F062 / F065 / F066）
+feature_name: E07 重構 P1 B4 — M03 月名單分派觸發 + Stage 0 試算（F049 / F061 / F062 / F065 / F066）
 status: complete
 last_updated: 2026-05-17
 agent_id: a9f450ab696ef17d9
@@ -9,15 +9,15 @@ agent_id: a9f450ab696ef17d9
 
 # AD-E07 v3.0 P1 B4 — Implementation Log
 
-承接 P1 B3（spec-writer F055 v1.6 收尾），實作 spec-writer v2 計畫之 P1 B4 範圍：M04 月跑觸發 + Stage 0 試算。
+承接 P1 B3（spec-writer F055 v1.6 收尾），實作 spec-writer v2 計畫之 P1 B4 範圍：M04 月名單分派觸發 + Stage 0 試算。
 
 ## 範圍
 
 | Spec | 功能 | Guard |
 |---|---|---|
 | F049 v1.0 | Stage 0 每日估算 + 單一 LIST_NO 試算 | DirectorGuard |
-| F061 v1.2 | 觸發分派月跑 | DirectorGuard |
-| F062 / F065 / F066 | 月跑進度 / 歷史清單 / 快照詳情 | DirectorOrSectionChiefGuard |
+| F061 v1.2 | 觸發分派月名單分派 | DirectorGuard |
+| F062 / F065 / F066 | 月名單分派進度 / 歷史清單 / 快照詳情 | DirectorOrSectionChiefGuard |
 
 > F063 / F064 / F067（結果摘要 / 匯出 / 比對）依賴 `assignment_run_snapshot` 寫入，列入 B5+。本批次完成 month-run record + audit log 與背景 pipeline hook（spec AC-3 setImmediate placeholder），Stage 1~4 pipeline 與快照原子寫入待後續批次補實作。
 
@@ -93,7 +93,7 @@ agent_id: a9f450ab696ef17d9
 
 ## 提示下一步（P1 B5 — M04 白名單）
 
-依 spec-writer v2 計畫，B5 範圍應為「M04 月跑白名單 / 重跑控制」。建議承接：
+依 spec-writer v2 計畫，B5 範圍應為「M04 月名單分派白名單 / 重跑控制」。建議承接：
 
 1. **完成 Stage 1~4 pipeline**（F061 AC-3 / AC-4）：實作 `kickoffPipeline` 內容，串接 fn_calc_tier_level + 三份快照原子寫入
 2. **F062 進度回報**：在 pipeline 各 stage 完成時 INSERT `assignment_run_stage_log`

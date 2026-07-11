@@ -41,7 +41,7 @@ feature: F097 作業月語意統一
 | **取得方式（前端）** | 前端透過 `GET /api/v1/system/current-work-ym` 取得，**不得在前端自行 `new Date()`** 計算。 |
 | **OVERRIDE 支援** | 環境變數 `OVERRIDE_CURRENT_WORK_YM=YYYYMM` 可覆蓋（測試 / 災難復原），格式驗證失敗時退回 `new Date()`。 |
 | **用途** | 判定名單歷史/未來/唯讀（F077 BR-3）；月份範圍 ± 12 計算（F077 BR-2）；衍生 `target_work_ym` 的預設值。 |
-| **不做什麼** | 不直接用於月跑觸發的 `project_workym`（那是 `target_work_ym` 的職責）。 |
+| **不做什麼** | 不直接用於月名單分派觸發的 `project_workym`（那是 `target_work_ym` 的職責）。 |
 | **對應 F077** | F077 AC-3（`current_work_ym` 計算規則，以 F077 為單一權威）；F097 後由 US-143 更新 F077 §7 說明。 |
 
 ---
@@ -56,9 +56,9 @@ feature: F097 作業月語意統一
 | **定義** | 使用者正在作業的目標月份（YYYYMM），代表「名單要分派去的那個月」。通常是下個月（5 月準備 6 月名單）。 |
 | **預設值** | **`current_work_ym + 1`**（下個月）。由前端共享狀態（`AssignmentWorkYmContext`）初始化並提供。 |
 | **來源** | 使用者透過 top-bar MonthPicker 選定。初始值由後端 `SystemService.getDefaultTargetWorkYm()` 邏輯對應（`current_work_ym + 1`）。 |
-| **共享狀態實作** | 前端 **React Context**（`AssignmentWorkYmContext`），Provider（`AssignmentWorkYmProvider`）掛載於 assignment 區段 layout 元件。涵蓋四頁：名單定義（M01）/ 準備完成摘要（M03d）/ Stage 0 試算（F049）/ 月跑觸發（F061）。 |
-| **不涵蓋的頁面** | 月跑歷史頁（F065 `run-history`）：維持獨立 local state（查詢任意月歷史 run，語意不同）。下游結果頁（F062 進度 / F063 摘要 / F066 快照 / F067 比對）：不加 MonthPicker，月份來源為 `run.project_workym`。 |
-| **用途** | 名單篩選、Stage 0 估算、月跑觸發 → 寫入 `AssignmentRun.project_workym`。 |
+| **共享狀態實作** | 前端 **React Context**（`AssignmentWorkYmContext`），Provider（`AssignmentWorkYmProvider`）掛載於 assignment 區段 layout 元件。涵蓋四頁：名單定義（M01）/ 準備完成摘要（M03d）/ Stage 0 試算（F049）/ 月名單分派觸發（F061）。 |
+| **不涵蓋的頁面** | 月名單分派歷史頁（F065 `run-history`）：維持獨立 local state（查詢任意月歷史 run，語意不同）。下游結果頁（F062 進度 / F063 摘要 / F066 快照 / F067 比對）：不加 MonthPicker，月份來源為 `run.project_workym`。 |
+| **用途** | 名單篩選、Stage 0 估算、月名單分派觸發 → 寫入 `AssignmentRun.project_workym`。 |
 | **合法範圍** | `current_work_ym ± 12`（共 25 月，對齊 F077 BR-2）。 |
 | **對應 story** | US-137（共享 Context 建立）、US-138（觸發頁 MonthPicker）、US-139（後端接受）。 |
 
@@ -70,7 +70,7 @@ feature: F097 作業月語意統一
 |---|---|
 | **DB 欄位名稱** | `project_workym`（`assignment_run` 資料表）|
 | **不改名理由** | 欄位語意本就正確（「名單作業月份」），歷史問題出在預設值錯誤（餵了執行月而非目標月）。欄位名稱維持不動避免 migration 風險。 |
-| **語意（F097 後）** | 此次月跑所服務的**目標分派月份**（= `target_work_ym`），由使用者選定，寫入於月跑觸發時。 |
+| **語意（F097 後）** | 此次月名單分派所服務的**目標分派月份**（= `target_work_ym`），由使用者選定，寫入於月名單分派觸發時。 |
 | **語意（F097 前，歷史資料）** | 歷史 run 記錄的 `project_workym` 儲存的是「執行月」（`new Date()` 當時的月份），與目標月語意不同。見 forward-only 政策。 |
 | **API 回傳欄位名** | `projectWorkym`（camelCase，前端 TypeScript interface）|
 | **對應 story** | US-139 AC-7（寫入正確月份）、US-141（下游頁讀取）。 |
@@ -95,8 +95,8 @@ feature: F097 作業月語意統一
 | 欄位 | 內容 |
 |---|---|
 | **識別碼** | past-month guard（技術術語）；中文可說「過去月保護」 |
-| **定義** | 後端 `POST /api/v1/assignment/runs` 的前置保護邏輯：若 `workdt`（= `target_work_ym` 的 1 號）< 今天（server 時鐘），則拒絕觸發月跑，回 422 `RUN_WORKYM_PAST`。 |
-| **邊界規則** | 使用 **`>=`**（`workdt >= today`）：即目標月 1 號當天（如 6 月 1 日跑 6 月月跑）合法通過。對應 SP `@WORKDT < getdate()` 的等價移植。 |
+| **定義** | 後端 `POST /api/v1/assignment/runs` 的前置保護邏輯：若 `workdt`（= `target_work_ym` 的 1 號）< 今天（server 時鐘），則拒絕觸發月名單分派，回 422 `RUN_WORKYM_PAST`。 |
+| **邊界規則** | 使用 **`>=`**（`workdt >= today`）：即目標月 1 號當天（如 6 月 1 日跑 6 月月名單分派）合法通過。對應 SP `@WORKDT < getdate()` 的等價移植。 |
 | **錯誤碼** | `RUN_WORKYM_PAST`（422 Unprocessable Entity，待新增至 `error-handling.md`）。 |
 | **ground-truth** | `reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql` L24-34：`IF ISNULL(@IS_ASSIGNED,'N')='Y' OR @WORKDT < getdate() BEGIN RETURN END`（UTF-16LE 解碼驗證）。 |
 | **對應 story** | US-139 AC-3/4/5。 |
@@ -134,8 +134,8 @@ feature: F097 作業月語意統一
 |---|---|
 | **識別碼** | 共享月份狀態（中文）；shared month state（英文） |
 | **實作方式（已拍板）** | **React Context（`AssignmentWorkYmContext`）**，Provider（`AssignmentWorkYmProvider`）掛載於 assignment 區段的 layout 元件。不使用 Zustand / Redux / URL query param。 |
-| **涵蓋頁面** | （1）名單定義頁（`list-definition`，F048/F077）；（2）準備完成摘要頁（`ready-summary`，F088）；（3）Stage 0 試算頁（`stage0-estimate`，F049）；（4）月跑觸發頁（`trigger-run`，F061）。 |
-| **不涵蓋頁面** | 月跑歷史頁（`run-history`，F065）：獨立 local state。下游結果頁（進度 / 摘要 / 快照 / 比對）：不加 MonthPicker，月份來自 `run.project_workym`。 |
+| **涵蓋頁面** | （1）名單定義頁（`list-definition`，F048/F077）；（2）準備完成摘要頁（`ready-summary`，F088）；（3）Stage 0 試算頁（`stage0-estimate`，F049）；（4）月名單分派觸發頁（`trigger-run`，F061）。 |
+| **不涵蓋頁面** | 月名單分派歷史頁（`run-history`，F065）：獨立 local state。下游結果頁（進度 / 摘要 / 快照 / 比對）：不加 MonthPicker，月份來自 `run.project_workym`。 |
 | **Context 提供的值** | `currentWorkYm`（系統錨點月）、`targetWorkYm`（作業月，預設下月）、`setTargetWorkYm`（更新 setter）。 |
 | **初始化流程** | Provider 掛載時呼叫 `GET /api/v1/system/current-work-ym` → 取得 `currentWorkYm` → 計算 `targetWorkYm = currentWorkYm + 1` → 存入 Context。 |
 | **對應 story** | US-137（完整規格）。 |

@@ -1,6 +1,6 @@
 ---
 spec-id: F103
-title: 月跑計分引擎欄位來源修正（ADD_UN_CAPITAL 補 JOIN + 通用 fallback + PROJECT_TP 衍生 + 移除 COMMISSION 死碼 + JS oracle 補齊 customer_core + 202606 重跑驗收）
+title: 月名單分派計分引擎欄位來源修正（ADD_UN_CAPITAL 補 JOIN + 通用 fallback + PROJECT_TP 衍生 + 移除 COMMISSION 死碼 + JS oracle 補齊 customer_core + 202606 重跑驗收）
 feature-id: F103
 source-story: US-156 / US-157 / US-158
 epic: E07
@@ -13,7 +13,7 @@ blocked-by: F100, F101
 related: F100, F101, F102, F064, F067
 ---
 
-# F103: 月跑計分引擎欄位來源修正
+# F103: 月名單分派計分引擎欄位來源修正
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-24
 
@@ -21,7 +21,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-24
 >
 > **v1.0（2026-06-24）**：依 3 個已核可 user story（US-156 PG 下推逐欄稽核 + ADD_UN_CAPITAL 補齊 / US-157 JS oracle 補齊 customer_core / US-158 202606 重跑 tier spread 驗收）落地。引擎兩條路徑（PG 下推 `buildStage2ScoreExpr` + JS oracle `computeScore`/`resolveColumnValue`）須**完全對齊** [AD-E07-10-L](../architecture-spec.md)（`architecture-spec.md` §4063–4093 映射規則表，line 4074–4091 完整 column_name→來源+缺值 default 表）。兩路徑須 JS↔SQL 等價（EQ DoD，`stage2to4-sql-builder.spec.ts`）。
 >
-> **OQ 裁定（已和使用者確認，寫進本 spec）**：OQ-156-02 通用 fallback **納入本輪、不留債**（§6 BR-F103-04）；OQ-158-02 資料品質根因 **納入本輪、不推延**（§4 AC-12）；OQ-158-01 tier spread 驗收為**定性**（§4 AC-11）；OQ-156-01 幽靈欄位＝通用 fallback 取不到值靜默 +0 + log、不阻擋月跑（§6 BR-F103-08）；OQ-157-01 AGE＝JS 與 PG 統一演算法確保 EQ（§6 BR-F103-09）。
+> **OQ 裁定（已和使用者確認，寫進本 spec）**：OQ-156-02 通用 fallback **納入本輪、不留債**（§6 BR-F103-04）；OQ-158-02 資料品質根因 **納入本輪、不推延**（§4 AC-12）；OQ-158-01 tier spread 驗收為**定性**（§4 AC-11）；OQ-156-01 幽靈欄位＝通用 fallback 取不到值靜默 +0 + log、不阻擋月名單分派（§6 BR-F103-08）；OQ-157-01 AGE＝JS 與 PG 統一演算法確保 EQ（§6 BR-F103-09）。
 >
 > **刻意未動（邊界，交 system-architect）**：不撰寫架構決策文件（AD-* / `architecture-spec.md`）；不撰寫 production / test 程式碼 / migration / docker；`computeScore` 函式簽章設計（SCHEMA GAP-157-01）、JS oracle 取 `ob_arreturndf_min_cap` 之資料流（SCHEMA GAP-157-02）、SQLite 測試 customer_core mock 策略（OQ-157-02）皆列為**架構師 OQ**（§12），附建議。AD-E07-10-L 已是 system-architect 既有權威映射表，本 feature **對齊**它、不修改它（如稽核發現 AD 本身落差，列入 §12 交 architect 修正）。
 
@@ -42,7 +42,7 @@ Stage 2 計分引擎有兩條平行路徑：
 
 | 路徑 | 入口 | 環境 | 計分欄位取值 |
 |------|------|------|-------------|
-| PG 下推 SQL | `buildStage2ScoreExpr` → `resolveColumnSource`（`stage2to4-sql-builder.ts`） | 正式月跑（`DB_TYPE='postgres'`） | switch case 回 SQL 表達式 |
+| PG 下推 SQL | `buildStage2ScoreExpr` → `resolveColumnSource`（`stage2to4-sql-builder.ts`） | 正式月名單分派（`DB_TYPE='postgres'`） | switch case 回 SQL 表達式 |
 | JS oracle | `computeScore` → `resolveColumnValue`（`assignment-run-pipeline.service.ts`） | 單元測試 golden path / 非 PG 環境 | switch case 回 JS 值 |
 
 兩路徑現行皆**未完全對齊** [AD-E07-10-L](../architecture-spec.md)（`architecture-spec.md` line 4074–4091）映射規則表，導致 Stage 2 計分系統性低估、card_level / tier 退化為單一值。本 feature 將兩路徑**完全對齊 AD-E07-10-L**，涵蓋下列六項修正：
@@ -54,19 +54,19 @@ Stage 2 計分引擎有兩條平行路徑：
 5. **JS oracle 補齊 customer_core（US-157）**：`resolveColumnValue` 現行僅處理 `LIST_MONTH`/`PROJECT_TP`/`CAR_YEAR`/`COMMISSION`（死碼），其餘走 default 回 `''`（含全部 customer_core 欄位 + ADD_UN_CAPITAL）→ 不計分。補齊 CUS_SEX / AGE / CAREA_NO1 / CAREA_NO2 / CELLULAR / EDUCAT_BACK / HPOST_NUM_NM / CPOST_NUM_NM / CO_NUM_NM / LOAN_RATE + ADD_UN_CAPITAL，達 JS↔SQL EQ 等價。
 6. **逐欄稽核 + 202606 重跑驗收（US-156 / US-158）**：產出全 card_type（H/S/S5/E/E5/M）逐欄稽核清單（§8），確認每個 active 欄依 AD-E07-10-L 取到正確來源且實際計分；dev 重跑 202606 驗證 card_level 不全 D、tier 含 T1/T2（定性），若仍異常則本輪內根因（引擎 vs customer_core 資料品質）。
 
-**純後端**：本 feature 為月跑 pipeline 內計分邏輯修正，**無新前端頁、無新錯誤碼**。
+**純後端**：本 feature 為月名單分派 pipeline 內計分邏輯修正，**無新前端頁、無新錯誤碼**。
 
 ## 2. 使用者故事
 
 **As a** 業務主管（Sales Director）
-**I want** 月跑 Stage 2 計分引擎（PG 下推 + JS oracle 兩條路徑）依 AD-E07-10-L 對每個 active 計分欄取到正確來源並實際計分，補齊 ADD_UN_CAPITAL 與全部 customer_core 客戶屬性欄位、移除 COMMISSION 死碼、並對未 hardcode 的 pool 欄位提供通用 fallback
+**I want** 月名單分派 Stage 2 計分引擎（PG 下推 + JS oracle 兩條路徑）依 AD-E07-10-L 對每個 active 計分欄取到正確來源並實際計分，補齊 ADD_UN_CAPITAL 與全部 customer_core 客戶屬性欄位、移除 COMMISSION 死碼、並對未 hardcode 的 pool 欄位提供通用 fallback
 **So that** 最終 card_level / tier 分佈能反映客戶真實屬性，重跑 202606 後不再因系統低估使全部案件退化為最低 tier（D / T3），而能呈現與 legacy 應有 T1/T2/T3 一致之 spread，讓下游 Stage 3/4 比例分派與匯出有意義
 
 ## 3. 前置條件
 
 - [F100](F100-stage2-4-sql-pushdown-scoring.md) Stage 2 計分引擎（`buildStage2ScoreExpr` + `customer_core` LEFT JOIN）已交付（本 feature 在其上補 `ob_arreturndf_min_cap` JOIN + 通用 fallback）。
 - [F101](F101-stage3-4-proportional-assignment.md) Stage 3/4 比例分派以 `ob_monthly_run_result.tier_level` 分組（本 feature 修正 Stage 2 之 tier_level 後，Stage 3/4 分組結果隨之改變）。
-- **ADD_UN_CAPITAL ETL 前置依賴（AD line 4093）**：`ob_arreturndf_min_cap` ETL 同步須於月跑前完成；若該表為空，所有案件 `ADD_UN_CAPITAL` fallback 為 0，計分結果偏差。已查證：ETL 重做後對 pool 覆蓋 ~100%（§10）。
+- **ADD_UN_CAPITAL ETL 前置依賴（AD line 4093）**：`ob_arreturndf_min_cap` ETL 同步須於月名單分派前完成；若該表為空，所有案件 `ADD_UN_CAPITAL` fallback 為 0，計分結果偏差。已查證：ETL 重做後對 pool 覆蓋 ~100%（§10）。
 - `customer_core` ETL 已重做，對 pool ~100% 覆蓋；TEST_* 污染欄已清（§10）。
 - `customer_core` 依 AD-E06-1 **不建 TypeORM entity**，PG 路徑以 raw SQL LEFT JOIN；JOIN key = `ob_pool_data.custo_no = customer_core.source_customer_no`。
 - 兩條計分路徑須 JS↔SQL 等價（EQ DoD 測試 `stage2to4-sql-builder.spec.ts`）。
@@ -103,7 +103,7 @@ Stage 2 計分引擎有兩條平行路徑：
 #### AC-6（PG 下推計分 SQL 無映射錯誤的幽靈欄位）
 - **Given** 稽核後之 `resolveColumnSource`（含通用 fallback）
 - **When** 以任意 card_type 執行 `buildStage2ScoreExpr`
-- **Then** 每個 active 欄要麼有明確 hardcode SQL 表達式、要麼經 AC-2 通用 fallback 取值；若通用 fallback 亦取不到值（`to_jsonb(o)` 無此 key，即 AD 無映射且 pool 無此欄＝幽靈欄位），則靜默貢獻 +0 並 log warning（BR-F103-08），不阻擋月跑
+- **Then** 每個 active 欄要麼有明確 hardcode SQL 表達式、要麼經 AC-2 通用 fallback 取值；若通用 fallback 亦取不到值（`to_jsonb(o)` 無此 key，即 AD 無映射且 pool 無此欄＝幽靈欄位），則靜默貢獻 +0 並 log warning（BR-F103-08），不阻擋月名單分派
 
 #### AC-7（CAREA_NO1 / CAREA_NO2 語意確認）
 - **Given** `CAREA_NO1` / `CAREA_NO2` 之 AD-E07-10-L 來源為 `(customer_core.home_phone IS NOT NULL)::int` / `(customer_core.contact_phone IS NOT NULL)::int`（電話有無 → 0 or 1），score rows level2_s/level2_e = {0,0} / {1,1}
@@ -113,7 +113,7 @@ Stage 2 計分引擎有兩條平行路徑：
 ### US-157：JS oracle 補齊 customer_core 欄位
 
 #### AC-8（resolveColumnValue 補齊全部 customer_core 欄位）
-- **Given** 月跑 JS oracle 路徑（`DB_TYPE != 'postgres'` 或單元測試環境）呼叫 `computeScore`
+- **Given** 月名單分派 JS oracle 路徑（`DB_TYPE != 'postgres'` 或單元測試環境）呼叫 `computeScore`
 - **When** active 欄含 CUS_SEX / AGE / CAREA_NO1 / CAREA_NO2 / CELLULAR / EDUCAT_BACK / HPOST_NUM_NM / CPOST_NUM_NM / CO_NUM_NM / LOAN_RATE
 - **Then** `resolveColumnValue` 對上述每欄回傳符合 AD-E07-10-L 語意之值（非空字串 `''`），且與 PG `resolveColumnSource` 表達式等價（對照表見 §8）；CUS_SEX→`gender ?? '3'`、CAREA_NO1→`home_phone ? 1 : 0`（對應 PG `(cc.home_phone IS NOT NULL)::int`）、AGE→統一演算法（BR-F103-09）、EDUCAT_BACK / *_NUM_NM→字串直接取（缺值 `''`）、LOAN_RATE→`pool.loan_rate ?? 0`
 
@@ -131,7 +131,7 @@ Stage 2 計分引擎有兩條平行路徑：
 
 #### AC-11（重跑 202606 後 card_level / tier 分佈定性合理，OQ-158-01 定性）
 - **Given** US-156 / US-157 修正已部署到 dev；`ob_arreturndf_min_cap` 與 `customer_core` ETL 已就緒（覆蓋 ~100%）
-- **When** 在 dev 環境觸發 202606 月跑並查詢 `ob_monthly_run_result`（`GROUP BY card_level, tier_level`）
+- **When** 在 dev 環境觸發 202606 月名單分派並查詢 `ob_monthly_run_result`（`GROUP BY card_level, tier_level`）
 - **Then** card_level 分佈出現至少 2 種值（不再 100% 為 D）；tier_level 含至少部分 `'T1'` 或 `'T2'`（T3 非唯一值）；分佈方向與 legacy 202606 大致一致（T1 佔比 > 0%、T3 非 100%）；**定性驗收**，因案件集不完全相同允許數量差異，但不允許 T1/T2 全部消失（OQ-158-01）
 
 #### AC-12（重跑後仍異常時本輪根因，OQ-158-02 納入、不推延）
@@ -174,7 +174,7 @@ Stage 2 計分引擎有兩條平行路徑：
 
 - **BR-F103-01（ADD_UN_CAPITAL LEFT JOIN）**：PG 下推當任一 active 欄為 `ADD_UN_CAPITAL` 時，於 Stage 2 計分查詢注入 `LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no`（LEFT JOIN，無對應案件 fallback 0 分，不掉列）；表達式 `COALESCE(ar.add_un_capital, 0)`。JOIN 別名固定 `ar`，避免與 `o`（pool）/ `cc`（customer_core）衝突。無 active ADD_UN_CAPITAL 欄則不注入 JOIN（避免無謂查詢）。
 
-- **BR-F103-02（ADD_UN_CAPITAL ETL 前置依賴，AD line 4093）**：`ADD_UN_CAPITAL` 維度僅在 `ob_arreturndf_min_cap` ETL 同步資料就緒時有意義。月跑前置檢核應確認 `OB_ARRETURNDF_MIN_CAP` ETL 已同步；若該表為空，所有案件 `ADD_UN_CAPITAL` fallback 為 0，計分偏差。本 feature 不實作 ETL（ETL 已重做、覆蓋 ~100%，§10），但 spec 明示此前置依賴為月跑必要檢核項。
+- **BR-F103-02（ADD_UN_CAPITAL ETL 前置依賴，AD line 4093）**：`ADD_UN_CAPITAL` 維度僅在 `ob_arreturndf_min_cap` ETL 同步資料就緒時有意義。月名單分派前置檢核應確認 `OB_ARRETURNDF_MIN_CAP` ETL 已同步；若該表為空，所有案件 `ADD_UN_CAPITAL` fallback 為 0，計分偏差。本 feature 不實作 ETL（ETL 已重做、覆蓋 ~100%，§10），但 spec 明示此前置依賴為月名單分派必要檢核項。
 
 - **BR-F103-03（PROJECT_TP 衍生）**：`PROJECT_TP` 取值規則為「若 `spec_name LIKE '%專案%'` 則 LEVEL1 衍生為 `'A'`，否則取 `COALESCE(spec_tp, '01')`」（AD line 4088）。PG 與 JS 兩路徑須等價實作此衍生。
 
@@ -186,7 +186,7 @@ Stage 2 計分引擎有兩條平行路徑：
 
 - **BR-F103-07（JS↔SQL EQ 等價，DoD 門檻）**：兩路徑修正後計分結果須等價（EQ DoD）。`stage2to4-sql-builder.spec.ts` EQ 群組測試（含 ADD_UN_CAPITAL / 全 customer_core / 通用 fallback / PROJECT_TP 衍生）為硬性 DoD，未通過不得上線。
 
-- **BR-F103-08（幽靈欄位處置，OQ-156-01 裁定）**：若某 active `column_name` 既不在 AD-E07-10-L hardcode 映射、通用 fallback 亦取不到值（`to_jsonb(o)` 無此 key、且非 customer_core / arreturndf）＝幽靈欄位，則靜默貢獻 +0 並 `logger.warn`（含 column_name + card_type，供稽核），**不阻擋月跑**。理由：避免管理者自訂 card 或 dump 未涵蓋之 card_type 引用未知欄時整支月跑中斷。
+- **BR-F103-08（幽靈欄位處置，OQ-156-01 裁定）**：若某 active `column_name` 既不在 AD-E07-10-L hardcode 映射、通用 fallback 亦取不到值（`to_jsonb(o)` 無此 key、且非 customer_core / arreturndf）＝幽靈欄位，則靜默貢獻 +0 並 `logger.warn`（含 column_name + card_type，供稽核），**不阻擋月名單分派**。理由：避免管理者自訂 card 或 dump 未涵蓋之 card_type 引用未知欄時整支月名單分派中斷。
 
 - **BR-F103-09（AGE 統一演算法，OQ-157-01 裁定）**：JS 與 PG 兩路徑 AGE 計算採**同一演算法**確保 EQ。AD line 4080 為 PG `EXTRACT(YEAR FROM age(date_of_birth))`（精確到月，未過生日者不計當年）。JS 路徑須對齊此精確語意（依當前日期判斷是否已過生日），**不得**用 `getFullYear() 差` 之近似法（會與 PG 差 1 歲、破壞 EQ）。實作細節（JS 端是否以同一日期基準計算）由 tdd 依此規則落地，EQ 測試驗證。
 
@@ -260,7 +260,7 @@ Stage 2 計分引擎有兩條平行路徑：
 > 以下需動 `computeScore` 函式簽章 / 資料流 / 測試 mock 策略，屬架構決策範疇。spec-writer 附建議預設值，由 system-architect 裁定後 tdd 落地。
 
 - **架構師 OQ-1（SCHEMA GAP-157-01：computeScore 簽章）**：`computeScore` 現行無 customer_core 參數。補齊 JS oracle customer_core 取值需決定：(a) 擴充函式簽章加 `customerCore?: CustomerCore` 參數，或 (b) 呼叫端（pipeline `scoredPool` map，line ~624）pre-fetch 後將客戶屬性 merge 至 pool 物件自訂欄位。
-  **建議＝(b) 呼叫端 pre-fetch merge**：JS oracle 僅單元測試 / 非 PG 環境使用（正式月跑走 PG 下推），呼叫端已逐 list 迴圈 pool；以 batch 查 customer_core（by custo_no 集合）後 merge 至 pool wrapper，可同時涵蓋 ADD_UN_CAPITAL（GAP-157-02），且不改 `computeScore` 純函式簽章對既有測試衝擊最小。`resolveColumnValue` 改讀 merge 後物件之擴充欄位。
+  **建議＝(b) 呼叫端 pre-fetch merge**：JS oracle 僅單元測試 / 非 PG 環境使用（正式月名單分派走 PG 下推），呼叫端已逐 list 迴圈 pool；以 batch 查 customer_core（by custo_no 集合）後 merge 至 pool wrapper，可同時涵蓋 ADD_UN_CAPITAL（GAP-157-02），且不改 `computeScore` 純函式簽章對既有測試衝擊最小。`resolveColumnValue` 改讀 merge 後物件之擴充欄位。
 
 - **架構師 OQ-2（SCHEMA GAP-157-02：JS oracle 取 arreturndf 資料流）**：JS oracle 無 `ob_arreturndf_min_cap` 存取路徑。ADD_UN_CAPITAL JS 取值需決定資料流：(a) `computeScore` 另傳 `arCapital?: number`，或 (b) 呼叫端 batch 查 `ob_arreturndf_min_cap`（by appl_no 集合）後 merge 至 pool wrapper。
   **建議＝(b) 與 OQ-1 同一 merge 流程**：呼叫端 batch 查 arreturndf（by appl_no）併入同一 pool wrapper 擴充欄位（如 `__add_un_capital`），`resolveColumnValue` 統一從 wrapper 讀。單一 pre-fetch merge 同時解 OQ-1 + OQ-2，資料流一致、易測。

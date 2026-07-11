@@ -47,12 +47,12 @@
 - **When** API 請求送出
 - **Then** 所有寫入操作的 `card_type` 欄位值**固定為 Tab 1 當前選中的 CARD_TYPE**，後端不接受 request 中傳入不一致的 card_type
 
-### AC-5：月跑執行中禁止修改（資料鎖）
+### AC-5：月名單分派執行中禁止修改（資料鎖）
 
-- **Given** 目前有月跑正在執行（`assignment_run` status IN ('pending', 'running')）
+- **Given** 目前有月名單分派正在執行（`assignment_run` status IN ('pending', 'running')）
 - **When** 業務主管嘗試進入 Tab 4 編輯模式
 - **Then** 編輯功能全部停用，頁面顯示「分派執行中，無法修改計分設定」提示
-- **And** 月跑完成後，編輯功能自動恢復可用
+- **And** 月名單分派完成後，編輯功能自動恢復可用
 
 ### AC-6：未選中 CARD_TYPE 時的提示
 
@@ -67,7 +67,7 @@
 - CARD_LEVEL 設定資料：`reference/TableSchema/OB/OBLEVELCARD_LEVEL.sql`（AppDB：`ob_levelcard_level`）
 - 計分分數資料：`reference/TableSchema/OB/OBLEVELCARD_SCORE.sql`（AppDB：`ob_levelcard_score`）
 - **CARD_TYPE 篩選脈絡**：由 Tab 1（US-093）的選中狀態提供，API 請求帶入 `cardType` query param；F055 spec 的 API 設計需反映此變更
-- **覆寫式編輯**：與 US-073 一致，無草稿版本機制；舊設定透過月跑快照（US-086）查詢
+- **覆寫式編輯**：與 US-073 一致，無草稿版本機制；舊設定透過月名單分派快照（US-086）查詢
 - 預覽影響計算需載入 `ob_pool_data` 現有客戶的評分分佈（可非即時，允許最多 1 分鐘的快取）
 - `CARD_LEVEL` 有效值依 `ob_levelcard_level` 中選中 CARD_TYPE 的實際等級為準（不硬編碼 A/B/C/D）
 
@@ -101,7 +101,7 @@
 - **When**：業務主管將 B 級下限改為 85（高於 A 級）
 - **Then**：顯示驗證錯誤，不允許儲存
 
-### TC-074-05：月跑執行中禁止修改
+### TC-074-05：月名單分派執行中禁止修改
 
 - **Given**：`assignment_run` 有 status = 'running' 的紀錄
 - **When**：業務主管切換至 Tab 4
@@ -112,7 +112,7 @@
 ## 依賴關係
 
 - **Blocked By**：US-072（需先了解計分版本結構）、US-093（CARD_TYPE 選中狀態來源）
-- **Blocks**：US-075（TIER 對應的 CARD_LEVEL 有效值來源）、US-081（月跑的等級劃分依賴此設定）
+- **Blocks**：US-075（TIER 對應的 CARD_LEVEL 有效值來源）、US-081（月名單分派的等級劃分依賴此設定）
 
 ---
 
@@ -123,7 +123,7 @@
 - [ ] 門檻重疊驗證邏輯測試
 - [ ] 預覽影響計算測試
 - [ ] S5 僅 A/B 兩級的不硬編碼測試（TC-074-02）
-- [ ] 月跑執行中資料鎖保護測試
+- [ ] 月名單分派執行中資料鎖保護測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新
@@ -134,5 +134,5 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **對應 Spec**：F055（編輯 CARD_LEVEL 分級門檻）
-- **相關 Stories**：US-072（查看計分設定）、US-073（編輯計分維度）、US-093（Tab 1 CARD_TYPE 選中狀態）、US-075（TIER_LEVEL 對應）、US-081（觸發月跑）
+- **相關 Stories**：US-072（查看計分設定）、US-073（編輯計分維度）、US-093（Tab 1 CARD_TYPE 選中狀態）、US-075（TIER_LEVEL 對應）、US-081（觸發月名單分派）
 - **Reference**：`reference/TableSchema/OB/OBLEVELCARD_LEVEL.sql`、`reference/TableSchema/OB/OBLEVELCARD_SCORE.sql`

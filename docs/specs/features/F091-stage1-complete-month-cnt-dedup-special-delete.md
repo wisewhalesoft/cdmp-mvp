@@ -15,16 +15,16 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 
-> ⚠️ **PRODUCTION 行為變更警告（必讀）**：本 feature 是「Stage 1 精確化工程」中**唯一改變 production 月跑分派案件數**的階段，且 v2.0 進一步**修正特例 DELETE 觸發條件之 high-severity bug**。依 [AD-E07-23 DP-AD23-2](../architecture-spec.md) 與 [AD-E07-26 DP-AD26-1](../architecture-spec.md)，本變更**無 feature flag 保護，deploy 後立即生效於所有環境（含 production）**，與 [F094](F094-monthly-run-result-table.md)（Phase A 結果表切換）同批 deploy。修正後各類名單之過濾案件數將顯著改變。**Phase A PR merge 前須完成 deploy 前業務知會 + 各類名單案件數差異驗收**（見 §13）。
+> ⚠️ **PRODUCTION 行為變更警告（必讀）**：本 feature 是「Stage 1 精確化工程」中**唯一改變 production 月名單分派案件數**的階段，且 v2.0 進一步**修正特例 DELETE 觸發條件之 high-severity bug**。依 [AD-E07-23 DP-AD23-2](../architecture-spec.md) 與 [AD-E07-26 DP-AD26-1](../architecture-spec.md)，本變更**無 feature flag 保護，deploy 後立即生效於所有環境（含 production）**，與 [F094](F094-monthly-run-result-table.md)（Phase A 結果表切換）同批 deploy。修正後各類名單之過濾案件數將顯著改變。**Phase A PR merge 前須完成 deploy 前業務知會 + 各類名單案件數差異驗收**（見 §13）。
 >
 > **v2.0（2026-05-27 / AD-E07-26 特例規則 SP 落差修正 + AD-E07-25 去重上界升級）**：依 [architecture-spec.md AD-E07-26 v1.1](../architecture-spec.md)（全 DP Resolved）落地三項變更：
 > 1. **特例 DELETE 觸發條件 SP 修正（high-severity bug fix）**：v1.0 之觸發關鍵字（「中結強案」/「中結」/「年資」+ `spec_name LIKE '%滿%'`）為 **mojibake 誤判**，與 SP 實際完全不符。經 Node.js UTF-16LE 解碼確認 SP 真實觸發為「**期中機車**」/「**期中**」/「**年以上**」，排除條件含 `spec_name LIKE '%小資%'`（非「滿」）。本輪改為 SP 正確版（§4 AC-3~AC-6 / §5.3）。
 > 2. **去重上界升級（AD-E07-25 DP-AD25-4）**：去重視窗上界由固定 `workdt − 1 日` 改為 `MIN(MAX(ob_pool_data_list.assignday), workdt − 1 日)`（NULL 退化 `workdt − 1 日`）。
 > 3. **year_produ 比較補 `parseInt`（AD-E07-26 DP-AD26-2）**：`R-YEAR-ABOVE` 改用 `parseInt(year_produ ?? '1900') < workdt.getFullYear() − 15` 數值比較，與 `deal_num` / `payt_term` 之 `Number()` 風格一致。
 >
-> **v1.0（2026-05-26 / Stage 1 精確化工程 Phase 2）**：補齊月跑 Stage 1 三步驟（MONTH_CNT 期別過濾 + 近 3 個月去重 + 特例 DELETE），封裝為共用 `Stage1FilterChain`。**v1.0 之特例 DELETE 觸發關鍵字（中結強案 / 中結 / 年資）已於 v2.0 修正為 SP 正確版（期中機車 / 期中 / 年以上），見上方 v2.0 第 1 項**。
+> **v1.0（2026-05-26 / Stage 1 精確化工程 Phase 2）**：補齊月名單分派 Stage 1 三步驟（MONTH_CNT 期別過濾 + 近 3 個月去重 + 特例 DELETE），封裝為共用 `Stage1FilterChain`。**v1.0 之特例 DELETE 觸發關鍵字（中結強案 / 中結 / 年資）已於 v2.0 修正為 SP 正確版（期中機車 / 期中 / 年以上），見上方 v2.0 第 1 項**。
 >
-> **Phase 邊界**：本 feature 改變月跑 Stage 1 行為。依賴 [F090](F090-obpooldata-list-etl.md)（已載入 `ob_pool_data_list` legacy 歷史）；v2.0 之去重上界與結果落點與 [F094](F094-monthly-run-result-table.md)（結果改寫 `ob_monthly_run_result`）同屬 Phase A 同批 deploy；[F092](F092-stage1-dry-run-estimate.md)（dry-run 升級）依賴本 feature 之 `Stage1FilterChain`；[F095](F095-applied-special-rules-readonly.md)（前端唯讀呈現）與本 feature 之 trigger 判斷共用同一 pure utility。
+> **Phase 邊界**：本 feature 改變月名單分派 Stage 1 行為。依賴 [F090](F090-obpooldata-list-etl.md)（已載入 `ob_pool_data_list` legacy 歷史）；v2.0 之去重上界與結果落點與 [F094](F094-monthly-run-result-table.md)（結果改寫 `ob_monthly_run_result`）同屬 Phase A 同批 deploy；[F092](F092-stage1-dry-run-estimate.md)（dry-run 升級）依賴本 feature 之 `Stage1FilterChain`；[F095](F095-applied-special-rules-readonly.md)（前端唯讀呈現）與本 feature 之 trigger 判斷共用同一 pure utility。
 >
 > **刻意未動（邊界）**：不變更 `architecture-spec.md`（AD-E07-22 / AD-E07-25 / AD-E07-26 為權威，由 system-architect 維護）、不變更 `data-model.md`（所需欄位全部已存在，AD-E07-26 §26.5 已確認本輪不新建任何 DB 欄位）；不撰寫 code / test（由 tdd-implementation 落地）；結果表落點切換之資料契約見 [F094](F094-monthly-run-result-table.md)（本檔僅引用）。
 
@@ -40,24 +40,24 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 
 ## 1. 功能摘要
 
-補齊月跑 Stage 1 案件挑選鏈，使其與原系統 SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list` 逐步驟對齊。現行 Stage 1 僅實作「欄位篩選」（`buildStage1WhereConditions()`，路徑 A/B）；本 feature 補入並修正 SP 中之三步驟：
+補齊月名單分派 Stage 1 案件挑選鏈，使其與原系統 SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list` 逐步驟對齊。現行 Stage 1 僅實作「欄位篩選」（`buildStage1WhereConditions()`，路徑 A/B）；本 feature 補入並修正 SP 中之三步驟：
 
 1. **MONTH_CNT 期別過濾**：依名單 `list_period_start` / `list_period_end` / `list_interval` 生成期別集合，過濾 `month_cnt`。
 2. **近 3 個月已派案去重**：排除 `custo_no` 出現在 `ob_pool_data_list`（去重視窗）的案件；**去重上界 v2.0 升級為 `MIN(MAX(assignday), workdt − 1 日)`**（AD-E07-25 DP-AD25-4）。
 3. **特例 DELETE（SP 修正版）**：依名單 `list_nm` 字串比對（**期中機車 / 期中 / 年以上**，v2.0 修正前為誤判之中結強案 / 中結 / 年資），以及詐騙白牌（`list_type='01' AND spec_name LIKE '%白牌%'`，無條件），排除特定案件。
 
-三步驟與既有欄位篩選一起封裝為 `Stage1FilterChain`（純函式群組 + 一個 async 主入口 `executeStage1Chain`），供月跑（`dryRun: false`，寫入 [F094](F094-monthly-run-result-table.md) `ob_monthly_run_result` + 回傳完整案件列）與 F092 dry-run（`dryRun: true`，COUNT 唯讀）共用同一套實作。
+三步驟與既有欄位篩選一起封裝為 `Stage1FilterChain`（純函式群組 + 一個 async 主入口 `executeStage1Chain`），供月名單分派（`dryRun: false`，寫入 [F094](F094-monthly-run-result-table.md) `ob_monthly_run_result` + 回傳完整案件列）與 F092 dry-run（`dryRun: true`，COUNT 唯讀）共用同一套實作。
 
 ## 2. 使用者故事
 
 **As a** 業務部長 / 分派維運人員
-**I want** 月跑 Stage 1 完整且正確地套用原系統的期別過濾、近 3 個月去重與特例業務排除規則（依 SP 真實規範：期中機車 / 期中小資 / 年以上 / 詐騙白牌）
+**I want** 月名單分派 Stage 1 完整且正確地套用原系統的期別過濾、近 3 個月去重與特例業務排除規則（依 SP 真實規範：期中機車 / 期中小資 / 年以上 / 詐騙白牌）
 **So that** 分派結果不含不符期別、近期已派、或業務規則排除之案件，與原系統行為一致；且過去因觸發關鍵字誤判（中結 / 年資）導致的錯誤排除被修正
 
 ## 3. 前置條件
 
 - [F090](F090-obpooldata-list-etl.md)（Phase 1）已完成：`ob_pool_data_list` 含 legacy 派案歷史，否則 AC-2 近 3 個月去重永遠回空集合
-- [F094](F094-monthly-run-result-table.md)（Phase A 結果表）已建立 `ob_monthly_run_result`：月跑 Stage 1 寫入目標自本 feature 起改為該表（與本 feature 同批 deploy）
+- [F094](F094-monthly-run-result-table.md)（Phase A 結果表）已建立 `ob_monthly_run_result`：月名單分派 Stage 1 寫入目標自本 feature 起改為該表（與本 feature 同批 deploy）
 - 既有 `buildStage1WhereConditions()`（欄位篩選，路徑 A/B）可用
 - `ob_pool_data` / `ob_pool_data_list` 之特例 DELETE / 去重所需欄位均已存在（AD-E07-26 §26.5 已確認本輪不新建欄位）
 - `ob_list_definition.list_nm`（特例 trigger 判斷來源）/ `list_period_start` / `list_period_end` / `list_interval` 一級欄位可用
@@ -72,7 +72,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 - **When** Stage 1 執行該名單之案件挑選
 - **Then** 生成期別集合 `months = [list_period_start, list_period_start + list_interval, ...]`（步進 `list_interval`，`<= list_period_end`）
 - **And** 對 `ob_pool_data` 加上 fragment `"month_cnt" IN (:...monthCntVals)`，以 `AND` 連接至既有欄位篩選 fragments
-- **And**（邊界）`list_period_start` / `list_period_end` / `list_interval` 任一為 NULL → **skip 此 fragment（不過濾 month_cnt）並記 warning**（不阻擋月跑）
+- **And**（邊界）`list_period_start` / `list_period_end` / `list_interval` 任一為 NULL → **skip 此 fragment（不過濾 month_cnt）並記 warning**（不阻擋月名單分派）
 - **And**（邊界）`list_interval <= 0` → skip + warning（防 infinite loop）
 - **And**（邊界）生成的 `months` 為空集合 → skip
 
@@ -141,9 +141,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 >
 > **⚠️ v2.0 修正**：v1.0 誤以「年資」為觸發且採字串比較（mojibake）。**v2.0 修正觸發為「年以上」並補 `parseInt` 數值比較**（4 位數字字串與數值比較等效，但 `parseInt` 防禦性更佳；AD-E07-26 §26.2 / DP-AD26-2）。
 
-### AC-7：三步驟封裝為共用 `Stage1FilterChain`（供月跑 + F092 dry-run + F095 trigger 推導共用）
+### AC-7：三步驟封裝為共用 `Stage1FilterChain`（供月名單分派 + F092 dry-run + F095 trigger 推導共用）
 
-- **Given** 月跑 Stage 1、F092 dry-run、F095 前端唯讀推導需共用同一 trigger 判斷邏輯（避免 estimate / run / UI 三軌 drift）
+- **Given** 月名單分派 Stage 1、F092 dry-run、F095 前端唯讀推導需共用同一 trigger 判斷邏輯（避免 estimate / run / UI 三軌 drift）
 - **When** 實作三步驟
 - **Then** 三步驟與既有 `buildStage1WhereConditions()` 一起封裝為 `Stage1FilterChain`（[AD-E07-23 §23.2](../architecture-spec.md)）：
   - `buildStage1WhereConditions(list)` — 既有欄位篩選（路徑 A/B），**不變更**
@@ -151,7 +151,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
   - `applyListNmSpecialDeletes(pool, list, workdt)` — **v2.0 修正 3 條 trigger 關鍵字 + parseInt**（AC-3~AC-6，應用層 array filter）
   - `computeDedupWindow(workdt, poolDataListRepo)` — v2.0 升級去重上界（AC-2）
   - `executeStage1Chain(list, workdt, poolRepo, poolDataListRepo, { dryRun })` — 主入口
-- **And** 月跑 `runStage1ForList()` 改為呼叫 `executeStage1Chain(..., { dryRun: false })`，取得完整案件列（`cases`，型別為 `Partial<ObMonthlyRunResult>[]`，見 [F094](F094-monthly-run-result-table.md)）
+- **And** 月名單分派 `runStage1ForList()` 改為呼叫 `executeStage1Chain(..., { dryRun: false })`，取得完整案件列（`cases`，型別為 `Partial<ObMonthlyRunResult>[]`，見 [F094](F094-monthly-run-result-table.md)）
 - **And** **trigger 判斷須提取為 pure utility**（如 `matchesSpecialRule(listNm, ruleId)` / `deriveAppliedSpecialRules(listNm)`），供 `applyListNmSpecialDeletes`（本 feature）與 [F095 `deriveAppliedSpecialRules`](F095-applied-special-rules-readonly.md) **共用同一份判斷**（AD-E07-26 §26.5 注意段，避免不同步）
 - **And**（架構建議）`Stage1FilterChain` 提取為獨立 Injectable（`Stage1FilterChainService`），避免模組循環依賴（[AD-E07-23 §23.5](../architecture-spec.md)）
 
@@ -164,7 +164,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 
 ## 5. 資料契約
 
-> 本 feature **不新增 entity 欄位、不新增 migration**（AD-E07-26 §26.5 已確認本輪不新建任何 DB 欄位）。月跑寫入目標表 `ob_monthly_run_result` 之 schema 見 [F094 §5](F094-monthly-run-result-table.md)（本 feature 僅引用其型別）。
+> 本 feature **不新增 entity 欄位、不新增 migration**（AD-E07-26 §26.5 已確認本輪不新建任何 DB 欄位）。月名單分派寫入目標表 `ob_monthly_run_result` 之 schema 見 [F094 §5](F094-monthly-run-result-table.md)（本 feature 僅引用其型別）。
 
 ### 5.1 `Stage1FilterChain` 主入口契約（概念）
 
@@ -213,9 +213,9 @@ interface Stage1ChainResult {
 |---|---|
 | BR-1 | **忠實複刻、不優化合併**（AD-E07-26 §26.4）：特例 DELETE 依 SP 順序逐條套用，機車期中（AC-4）與期中小資（AC-5）即使對同一「期中機車」名單雙重套用亦不合併 |
 | BR-2 | **去重上界 v2.0 升級**（DP-AD25-4）：`assigndayEnd = MIN(MAX(ob_pool_data_list.assignday), workdt − 1 日)`，NULL 退化 `workdt − 1 日`；不建 `OBASSIGNSET` ETL；精確上界列為 OQ-STAGE1-02 follow-up |
-| BR-3 | **去重來源單源化**：去重查詢 `ob_pool_data_list` 不加 `data_source` 過濾；單源化後本表僅含 `'etl_load'`（[F090 v2.0](F090-obpooldata-list-etl.md) / AD-E07-25）；月跑提案已改寫 `ob_monthly_run_result`（[F094](F094-monthly-run-result-table.md)）不再混入本表 |
+| BR-3 | **去重來源單源化**：去重查詢 `ob_pool_data_list` 不加 `data_source` 過濾；單源化後本表僅含 `'etl_load'`（[F090 v2.0](F090-obpooldata-list-etl.md) / AD-E07-25）；月名單分派提案已改寫 `ob_monthly_run_result`（[F094](F094-monthly-run-result-table.md)）不再混入本表 |
 | BR-4 | **MONTH_CNT skip 不阻擋**：`list_period_*` 任一 NULL 或 `list_interval <= 0` → skip month_cnt fragment + warning，名單仍依其餘條件挑案（不整筆 skip） |
-| BR-5 | **單一篩選鏈 + trigger pure utility**（AD-E07-23 §23.1 / AD-E07-26 §26.5）：月跑、F092 dry-run、F095 前端推導共用 `Stage1FilterChain` 與同一份 trigger 判斷 pure utility，禁止三處各寫一套 |
+| BR-5 | **單一篩選鏈 + trigger pure utility**（AD-E07-23 §23.1 / AD-E07-26 §26.5）：月名單分派、F092 dry-run、F095 前端推導共用 `Stage1FilterChain` 與同一份 trigger 判斷 pure utility，禁止三處各寫一套 |
 | BR-6 | **既有 `EMPTY_CONDITIONS` skip 保留**：欄位篩選無有效條件 → skip 該名單（不受本 feature 影響） |
 | BR-7 | **應用層去重 / 特例 DELETE**：去重與特例 DELETE 因需查 `ob_pool_data_list`（async）或字串比對，於應用層 array filter 執行（非純 SQL fragment），對齊 [AD-E07-22 §22.3 / §22.4](../architecture-spec.md) |
 | BR-8 | **trigger mojibake bug fix（v2.0）**：特例 DELETE 觸發關鍵字以 SP UTF-16LE 解碼結果為準（期中機車 / 期中 / 年以上 / 小資 / 白牌），**禁止沿用 v1.0 之誤判關鍵字（中結 / 強案 / 年資 / 滿）**；TDD 須以 mock `list_nm` 含正確中文驗證觸發（[記憶 feedback_mock_real_system_contract]）|
@@ -233,7 +233,7 @@ interface Stage1ChainResult {
 
 ## 8. 相依性
 
-- **Blocked By**：[F090](F090-obpooldata-list-etl.md)（Phase 1，`ob_pool_data_list` legacy 歷史）、[F094](F094-monthly-run-result-table.md)（Phase A，月跑寫入目標 `ob_monthly_run_result`）、既有 `buildStage1WhereConditions()` / `AssignmentRunPipelineService`
+- **Blocked By**：[F090](F090-obpooldata-list-etl.md)（Phase 1，`ob_pool_data_list` legacy 歷史）、[F094](F094-monthly-run-result-table.md)（Phase A，月名單分派寫入目標 `ob_monthly_run_result`）、既有 `buildStage1WhereConditions()` / `AssignmentRunPipelineService`
 - **Blocks**：[F092](F092-stage1-dry-run-estimate.md)（dry-run 複用 `Stage1FilterChain`）、[F095](F095-applied-special-rules-readonly.md)（共用 trigger pure utility）
 - **同批 deploy（Phase A）**：[F094](F094-monthly-run-result-table.md)（結果表切換）、[F095](F095-applied-special-rules-readonly.md)（前端唯讀 API）
 
@@ -244,7 +244,7 @@ interface Stage1ChainResult {
 - 既有實作：`apps/api/src/modules/assignment/stage1/stage1-filter-chain.ts`（`applyListNmSpecialDeletes`，**v2.0 待修正 trigger + parseInt**）、`assignment-run-pipeline.service.ts`（`runStage1ForList`）
 - 資料模型：[data-model.md](../data-model.md)（`ob_pool_data` / `ob_pool_data_list` / `ob_monthly_run_result`）
 - 錯誤處理：[error-handling.md#assignment-errors](../error-handling.md#assignment-errors)
-- 相關功能：[F090](F090-obpooldata-list-etl.md)、[F092](F092-stage1-dry-run-estimate.md)、[F094](F094-monthly-run-result-table.md)、[F095](F095-applied-special-rules-readonly.md)、[F061](F061-trigger-assignment-run.md)（月跑觸發）、[F049](F049-stage0-daily-estimate.md)、[F088](F088-ready-stage-summary.md)
+- 相關功能：[F090](F090-obpooldata-list-etl.md)、[F092](F092-stage1-dry-run-estimate.md)、[F094](F094-monthly-run-result-table.md)、[F095](F095-applied-special-rules-readonly.md)、[F061](F061-trigger-assignment-run.md)（月名單分派觸發）、[F049](F049-stage0-daily-estimate.md)、[F088](F088-ready-stage-summary.md)
 
 ## 10. 測試覆蓋率要求
 
@@ -259,8 +259,8 @@ interface Stage1ChainResult {
   - **regression（bug fix 防回退）**：`list_nm` 含「中結」「強案」「年資」之名單**不再**觸發任何特例 DELETE（除詐騙白牌無條件）；`spec_name 含「滿」`（無「小資」）不被 R-PERIOD-XIAOZI 排除
   - 機車期中 + 期中小資雙重套用：`list_nm` 同含「期中」「機車」時兩規則皆套用（不合併，BR-1）
   - **trigger pure utility 一致性**：`applyListNmSpecialDeletes` 與 [F095 `deriveAppliedSpecialRules`](F095-applied-special-rules-readonly.md) 對同一 `list_nm` 推導之 `appliedRuleIds` 完全一致
-  - `Stage1FilterChain` 月跑模式 vs dry-run 模式對同一 fixture 回相同 count（F092 前置）
-  - regression：既有欄位篩選 + `EMPTY_CONDITIONS` skip 行為不破壞；月跑寫入目標為 `ob_monthly_run_result`（[F094](F094-monthly-run-result-table.md)）
+  - `Stage1FilterChain` 月名單分派模式 vs dry-run 模式對同一 fixture 回相同 count（F092 前置）
+  - regression：既有欄位篩選 + `EMPTY_CONDITIONS` skip 行為不破壞；月名單分派寫入目標為 `ob_monthly_run_result`（[F094](F094-monthly-run-result-table.md)）
 - mock 契約注意（[記憶 feedback_mock_real_system_contract]）：`list_nm` 字串比對之 mock 須含**真實中文**（期中 / 機車 / 小資 / 年以上 / 白牌，**非** v1.0 之中結 / 強案 / 滿 / 年資）與大小寫 / 編碼一致；`assignday` mock 須為 yyyyMMdd 字串格式
 
 ## 11. 假設
@@ -282,15 +282,15 @@ interface Stage1ChainResult {
 
 ## 13. Production 影響標注（⚠️ 重點）
 
-- **本 Phase（F091）是改變 production 月跑分派案件數的階段**（[AD-E07-26 DP-AD26-1](../architecture-spec.md)），與 [F094](F094-monthly-run-result-table.md)（結果表切換）同批 deploy（Phase A）。
+- **本 Phase（F091）是改變 production 月名單分派案件數的階段**（[AD-E07-26 DP-AD26-1](../architecture-spec.md)），與 [F094](F094-monthly-run-result-table.md)（結果表切換）同批 deploy（Phase A）。
 - **無 feature flag、deploy 後立即生效於所有環境（含 production）**（DP-AD23-2 / DP-AD26-1）。v2.0 之 trigger 修正屬 **high-severity bug fix**，將顯著改變各類名單之過濾案件數：
   - 含「**中結**」「**強案**」「**年資**」之名單：v1.0 錯誤套用之 payt_term / appl_no / 車齡過濾將**移除**（這些名單分派案件數**增加**）
   - 含「**期中機車**」「**期中小資**」「**年以上**」之名單：v1.0 漏掉之過濾改為正確套用（這些名單分派案件數**減少**）
   - 詐騙白牌（無條件）與 MONTH_CNT 期別過濾 + 近 3 個月去重之新增過濾：分派案件數整體**減少**
 - **風險管控（無 flag 版本，[AD-E07-26 DP-AD26-1](../architecture-spec.md)）**：
   1. **Deploy 前業務知會 + 案件數差異驗收（必要）**：Phase A PR merge 前，業務主管須已知悉本次 deploy 將改變各類名單的分派案件數方向（如上），並於 staging/dev 完成各類名單案件數差異驗收。
-  2. **部署前 dry-run 驗證（建議）**：[F092](F092-stage1-dry-run-estimate.md) 完成後，於 staging/dev 執行完整月跑 dry-run，比對 deploy 前後（v1.0 vs v2.0）案件數差異，依名單 `list_nm` 分類確認過濾量符合業務預期。
+  2. **部署前 dry-run 驗證（建議）**：[F092](F092-stage1-dry-run-estimate.md) 完成後，於 staging/dev 執行完整月名單分派 dry-run，比對 deploy 前後（v1.0 vs v2.0）案件數差異，依名單 `list_nm` 分類確認過濾量符合業務預期。
   3. **無 flag 回滾**：一旦 deploy，無法透過 flag 回滾；若結果不符預期，須提交 hotfix PR 回退（移除 MONTH_CNT fragment + 去重 + 特例 DELETE filter，或回退 trigger 關鍵字）。此為明確接受之 trade-off。
-- **不影響範圍**：Stage 2（計分）、Stage 3/4（部門/人員分配）讀取 Stage 1 寫入後之結果，為下游消費；API endpoint 簽名不變（改動在 service / pure function 層）。月跑寫入目標表切換之影響見 [F094 §13](F094-monthly-run-result-table.md)。
+- **不影響範圍**：Stage 2（計分）、Stage 3/4（部門/人員分配）讀取 Stage 1 寫入後之結果，為下游消費；API endpoint 簽名不變（改動在 service / pure function 層）。月名單分派寫入目標表切換之影響見 [F094 §13](F094-monthly-run-result-table.md)。
 </content>
 </invoke>

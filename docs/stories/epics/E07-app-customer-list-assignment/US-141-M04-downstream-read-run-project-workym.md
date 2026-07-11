@@ -13,7 +13,7 @@
 ## User Story
 
 **As a** 業務部長（Director）或 處長（Section Chief）
-**I want** 月跑進度、結果摘要、快照詳情、比對差異等結果頁自動顯示該筆 run 所服務的分派作業月份，而不需要再另外選月份
+**I want** 月名單分派進度、結果摘要、快照詳情、比對差異等結果頁自動顯示該筆 run 所服務的分派作業月份，而不需要再另外選月份
 **So that** 查看歷史 run 結果時，月份資訊來自 run 記錄本身，不會因共享狀態改變而混淆，單一真實來源清楚
 
 ---
@@ -30,14 +30,14 @@ F097 確認：這四頁**不加 top-bar MonthPicker**，不納入共享 `target_
 
 ### AC-1：結果頁月份資訊來自 `run.project_workym`
 
-- **Given** 使用者進入月跑進度頁（`/assignment/run-progress?runId=xxx`）、結果摘要頁、快照詳情頁、或比對差異頁
+- **Given** 使用者進入月名單分派進度頁（`/assignment/run-progress?runId=xxx`）、結果摘要頁、快照詳情頁、或比對差異頁
 - **When** 頁面載入並呼叫 `GET /api/v1/assignment/runs/:runId`
 - **Then** 月份資訊從 response 的 `project_workym` 取得，而非從共享 `target_work_ym` Context 取得
 - **And** 即使使用者在其他頁面切換了共享 `target_work_ym`，此四頁顯示的月份不受影響
 
 ### AC-2：結果頁不顯示 MonthPicker
 
-- **Given** 月跑進度頁、結果摘要頁、快照詳情頁、比對差異頁
+- **Given** 月名單分派進度頁、結果摘要頁、快照詳情頁、比對差異頁
 - **When** 頁面載入
 - **Then** 頁面**不出現**月份切換器（MonthPicker）元件
 - **And** 月份以靜態標籤顯示（例：「分派作業月份：2026年06月」）
@@ -58,7 +58,7 @@ F097 確認：這四頁**不加 top-bar MonthPicker**，不納入共享 `target_
 
 ### AC-5：run-history 頁月份 local state 不受影響
 
-- **Given** 月跑歷史頁（`/assignment/run-history`，F065）有獨立 local MonthPicker
+- **Given** 月名單分派歷史頁（`/assignment/run-history`，F065）有獨立 local MonthPicker
 - **When** 使用者在歷史頁選取查詢月份
 - **Then** 此選取不影響共享 `target_work_ym` Context（已於 US-137 AC-4 規定）
 - **And** 此 story 確認歷史頁從 run 清單進入各結果頁時，月份標籤來源為 `run.project_workym`（而非歷史頁當時選取的查詢月份）

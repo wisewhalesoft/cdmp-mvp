@@ -29,7 +29,7 @@ last_updated: 2026-05-14
 | 主要測試層 | API Integration（Supertest + SQLite in-memory）、Frontend Unit（React Testing Library） |
 | PROD_KIND join 策略 | 後端 join ob_card_type.prod_kind → ob_code_df WHERE tbl_id='PROD_KIND' 取 tbl_desc1；seed 需同時建立 ob_code_df 啟用期間內紀錄 |
 | 清單排序驗證 | seed 故意打亂插入順序（M / H / S），驗證 API 回傳依 card_type 升冪（E / H / M / S 等） |
-| 月跑鎖狀態 | GET 端點不受月跑鎖影響；僅前端 UI 需依月跑狀態 disabled 按鈕 |
+| 月名單分派鎖狀態 | GET 端點不受月名單分派鎖影響；僅前端 UI 需依月名單分派狀態 disabled 按鈕 |
 | 空清單場景 | ob_card_type 無任何 active 紀錄時 GET 回傳 200 空陣列（非 404） |
 
 ---
@@ -86,7 +86,7 @@ last_updated: 2026-05-14
 | TC-F069-06 | PROD_KIND info banner 顯示且含「前往 M06」連結 | AC-4 | Frontend Unit | stub GET /card-types 回傳任意清單 | 渲染 Tab 1 | 頁面含有 banner 元素，文字含「產品類別（PROD_KIND）由 M06 基礎代碼維護管理」；banner 中有 href 指向 M06 路由的連結元素 |
 | TC-F069-07 | 每列 prodKind 以 badge 形式顯示 | AC-4 | Frontend Unit | stub GET /card-types 回傳 H（prodKind='01'，prodKindName='汽車'） | 渲染 Tab 1 | H 列中存在 badge 元素，文字含 '01' 與 '汽車' |
 | TC-F069-09 | 清單為空時顯示空狀態提示 | AC-5 | Frontend Unit | stub GET /card-types 回傳空陣列 [] | 渲染 Tab 1 | 頁面顯示「目前尚未設定任何計分卡類型」文字；不顯示表格列；「新增計分卡類型」按鈕存在 |
-| TC-F069-10 | 月跑鎖定時新增 / 編輯 / 停用按鈕 disabled | AC-6 | Frontend Unit | stub GET /card-types 回傳 [H]；stub assignment_run status='running'（或 isLocked=true prop 注入） | 渲染 Tab 1 | 「新增計分卡類型」按鈕 disabled=true；H 列的「編輯」按鈕 disabled=true；H 列的「停用」按鈕 disabled=true；頁面顯示「分派執行中，無法修改計分設定」提示 |
+| TC-F069-10 | 月名單分派鎖定時新增 / 編輯 / 停用按鈕 disabled | AC-6 | Frontend Unit | stub GET /card-types 回傳 [H]；stub assignment_run status='running'（或 isLocked=true prop 注入） | 渲染 Tab 1 | 「新增計分卡類型」按鈕 disabled=true；H 列的「編輯」按鈕 disabled=true；H 列的「停用」按鈕 disabled=true；頁面顯示「分派執行中，無法修改計分設定」提示 |
 
 ---
 
@@ -141,7 +141,7 @@ VALUES
 | TC-F069-03~05（Frontend Unit 選中狀態） | 高 | React Testing Library；selectedCardType context 可由 wrapper 注入；spy onCardTypeChange 確認呼叫 |
 | TC-F069-06（banner 連結） | 高 | RTL getByText + getByRole('link')；連結 href 格式依路由設計調整 |
 | TC-F069-07（badge） | 高 | RTL getByText 搜尋 badge 內容 |
-| TC-F069-10（月跑鎖定 UI） | 高 | isLocked prop 直接注入；不依賴真實 assignment_run 狀態 |
+| TC-F069-10（月名單分派鎖定 UI） | 高 | isLocked prop 直接注入；不依賴真實 assignment_run 狀態 |
 | BE-F069-001（prodKindName=null） | 高 | seed ob_code_df 不含對應 prod_kind 值，驗證 API 回傳 null |
 
 ---

@@ -713,8 +713,8 @@ last_updated: 2026-07-09
 
 ---
 
-### TS-MSSQL-P4F-REG-005：既有月跑相關套件（F098~F109）不受影響
-- **Related Requirement**：範圍界定（code_decode 僅影響 customer_core ETL pipeline，非月跑 pipeline）
+### TS-MSSQL-P4F-REG-005：既有月名單分派相關套件（F098~F109）不受影響
+- **Related Requirement**：範圍界定（code_decode 僅影響 customer_core ETL pipeline，非月名單分派 pipeline）
 - **Test Type**：Regression
 - **Expected Result**：F098~F109 pg.spec/mssql.spec 套件行為不變
 

@@ -71,8 +71,8 @@ enriched 暫存表與去重暫存表於 `startTransaction` **之前**建立；�
 雙連線手動編排（連線 A `BEGIN`→`TRUNCATE`→未提交；連線 B 同時 `SELECT COUNT(*)`）真庫實測：
 
 - **結果 = 分支 (b)（鎖based，符合 `docker/mssql-init.sql` 無 RCSI 之推測）**：連線 B 被阻塞 **~712ms**（直到連線 A `COMMIT` 才返回），返回 `count=5`（**永不讀到空表**）。
-- **架構師 §7.2 之 MSSQL 版精確化（ISO-003 記錄性，交 architect/業務）**：MSSQL 標準 Read Committed（無 `READ_COMMITTED_SNAPSHOT`）下，其他 session 於載入期間**不會讀到空表，但會被短暫阻塞等待**（而非 PG MVCC 之「立即讀到舊資料、無感知」）。核心論證（不會讀到空表）成立，但「等待」是月跑排程/其他查詢可感知之體感差異。
-- **與既有效能基準之張力（供業務評估，非本文件裁定）**：project memory 記載「月跑改 worker 抽離後 API 8–34ms」。ETL 全量載入期間，觸及同一被載入表的並行查詢會阻塞至該表 INSERT 交易 commit 為止；小 fixture 為次秒級，7.8M 列規模之阻塞時間需以真實資料量測（見 SCOPE-005 風險記錄）。若阻塞達秒級且業務不可接受，可評估對 CDMP_P5B/生產庫啟用 `READ_COMMITTED_SNAPSHOT`（使 MSSQL 行為對稱 PG，讀者立即讀舊快照不阻塞）——此為獨立 DB 設定決策，記錄供 architect/業務參考。
+- **架構師 §7.2 之 MSSQL 版精確化（ISO-003 記錄性，交 architect/業務）**：MSSQL 標準 Read Committed（無 `READ_COMMITTED_SNAPSHOT`）下，其他 session 於載入期間**不會讀到空表，但會被短暫阻塞等待**（而非 PG MVCC 之「立即讀到舊資料、無感知」）。核心論證（不會讀到空表）成立，但「等待」是月名單分派排程/其他查詢可感知之體感差異。
+- **與既有效能基準之張力（供業務評估，非本文件裁定）**：project memory 記載「月名單分派改 worker 抽離後 API 8–34ms」。ETL 全量載入期間，觸及同一被載入表的並行查詢會阻塞至該表 INSERT 交易 commit 為止；小 fixture 為次秒級，7.8M 列規模之阻塞時間需以真實資料量測（見 SCOPE-005 風險記錄）。若阻塞達秒級且業務不可接受，可評估對 CDMP_P5B/生產庫啟用 `READ_COMMITTED_SNAPSHOT`（使 MSSQL 行為對稱 PG，讀者立即讀舊快照不阻塞）——此為獨立 DB 設定決策，記錄供 architect/業務參考。
 
 ## 五、CLEANUPTXN — catch 先 rollback 再 re-throw（MUST-FIX）
 
@@ -151,6 +151,6 @@ target_load 之測試**；此為 handler 契約擴張之必要連帶修正，非
 
 - **PG 側交易測試 DEFERRED**：本機無 5433（postgres-test）且 dev PG（5432）依裁示全程唯讀勿寫 → PGTXN gated 全 skip（非偽綠，degradable）。PG 修法已落地（兩引擎對稱、STATIC-003）+ tsc 乾淨 + degradable 測試就緒，待專用 PG 庫（P5B_PG_DB）可用即可揭露 PG 側逐案實跑。PG「交易中止毒化連線 + rollback-before-rethrow」為既確立之 PG 語意，程式已正確處理。
 - **XACT_ABORT ON 未採用**：真庫實證非正確性所需（見 §三），且污染連線池狀態；改以顯式 rollback 統一兩引擎語意。
-- **ISO-002 結果 = 分支 (b)（鎖based 阻塞）**：已 §四 記錄，交 architect/業務評估月跑期間查詢阻塞可接受度（非本文件裁定）。
+- **ISO-002 結果 = 分支 (b)（鎖based 阻塞）**：已 §四 記錄，交 architect/業務評估月名單分派期間查詢阻塞可接受度（非本文件裁定）。
 - **7.8M 列規模交易日誌/鎖行為未以生產級資料量測**：非兩難、不阻擋 DoD（架構師已裁定 (a) 為必要修法），記錄為切換前建議量測項（見 SCOPE-005）。
 - **無新增依賴、無 git commit、未動記憶檔、未動 P5i/P5e**（守角色）。

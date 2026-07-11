@@ -35,7 +35,7 @@ last_updated: 2026-07-08
 | File Path | Change | 說明 |
 |-----------|--------|------|
 | `apps/api/src/app.module.ts` | modified | mssql 分支 `options` 加 `useUTC: true`（主應用連線）|
-| `apps/api/src/worker-app.module.ts` | modified | mssql 分支 `options` 加 `useUTC: true`（**worker＝月跑 Stage 4 ASSIGNDAY 讀 ob_calendar 之生產路徑**）|
+| `apps/api/src/worker-app.module.ts` | modified | mssql 分支 `options` 加 `useUTC: true`（**worker＝月名單分派 Stage 4 ASSIGNDAY 讀 ob_calendar 之生產路徑**）|
 | `apps/api/src/database/data-source.ts` | modified | mssql 分支 `options` 加 `useUTC: true`（CLI migration:run 連線）|
 | `apps/api/src/database/seeds/seed-connection.ts` | modified | mssql 分支 `options` 加 `useUTC: true`（seed 腳本連線）|
 | `apps/api/scripts/mssql-monthrun-diff-p5c.ts` | modified | P5c 比對 script 自建 DataSource `options` 加 `useUTC: true`（繞過主應用 forRootAsync，須自補以驗證修法）|

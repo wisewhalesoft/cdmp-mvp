@@ -50,7 +50,7 @@ spec_version: "1.4"
 
 | 項目 | 內容 |
 |------|------|
-| Given | H active 版本，A 級 [243,999]，B 級 [214,242]，C 級 [185,213]，D 級 [0,184]；無月跑鎖；SM Token |
+| Given | H active 版本，A 級 [243,999]，B 級 [214,242]，C 級 [185,213]，D 級 [0,184]；無月名單分派鎖；SM Token |
 | When | 呼叫 PUT，將 A 級改為 [250,999]，B 級改為 [214,249]，C/D 不變 |
 | Then | HTTP 200；response.updatedLevels=4；DB 中 A 級 score_s=250、score_e=999；audit_log 記錄修改前後值 |
 
@@ -62,7 +62,7 @@ spec_version: "1.4"
 | When | 呼叫 `GET /api/v1/assignment/scoring/card-levels/preview?cardType=H&levels=[encoded]` |
 | Then | HTTP 200；distribution 為 JSONB 物件，各等級數值加總等於 ob_pool_data 中 CARD_TYPE='H' 的總筆數 |
 
-### AC-4：月跑執行中禁止修改
+### AC-4：月名單分派執行中禁止修改
 
 | 項目 | 內容 |
 |------|------|
@@ -74,7 +74,7 @@ spec_version: "1.4"
 
 | 項目 | 內容 |
 |------|------|
-| Given | 無月跑鎖；SM Token |
+| Given | 無月名單分派鎖；SM Token |
 | When | PUT 傳入 A 級 score_e=80，B 級 score_s=65（B.score_s ≤ A.score_e，重疊） |
 | Then | HTTP 422，SCORING_RANGE_OVERLAP；訊息含「等級 B 下限 65 與等級 A 上限 80 重疊」；DB 中原有資料不變 |
 
@@ -88,14 +88,14 @@ spec_version: "1.4"
 |----|------|---------|---------|---------|------|---------|
 | TS-F055-001 | 查詢 H 型（4 級）CARD_LEVEL 門檻 | AC-1 | Integration | ob_levelcard_level(H,v1) 4 筆（A/B/C/D）；SM Token | GET /api/v1/assignment/scoring/card-levels?cardType=H&cardVersion=1 | HTTP 200；levels 陣列長度=4；各筆含 cardLevel / scoreS / scoreE |
 | TS-F055-002 | 查詢 S5 型（2 級）CARD_LEVEL 門檻 | AC-1（等級數不一致） | Integration | ob_levelcard_level(S5,v1) 2 筆（A/B）；SM Token | GET /api/v1/assignment/scoring/card-levels?cardType=S5&cardVersion=1 | HTTP 200；levels 陣列長度=2（僅 A/B）；不硬編碼 4 級 |
-| TS-F055-003 | 正常儲存 H 型 4 級門檻修改 | AC-2 | Integration | H active 版本，初始 A:[243,999]、B:[214,242]、C:[185,213]、D:[0,184]；無月跑鎖；SM Token | PUT card-levels（A 改為 [250,999]，B 改為 [214,249]，C/D 不變） | HTTP 200；updatedLevels=4；DB 中 A 級 score_s=250；card_version 仍為 1 |
-| TS-F055-004 | 正常儲存 S5 型 2 級門檻修改 | AC-2（等級數） | Integration | S5 active 版本，A/B 兩級；無月跑鎖；SM Token | PUT card-levels（只傳 2 筆 levels，A/B） | HTTP 200；updatedLevels=2；DB 中 S5 的 A/B 更新正確 |
-| TS-F055-005 | PUT 依三欄複合鍵定位更新（驗證不用 surrogate id） | AC-2, spec 5.1 | Integration | H active 版本，B 級有 surrogate id=999；無月跑鎖；SM Token | PUT 不傳 id，只傳 cardLevel='B'、scoreS=220、scoreE=242 | HTTP 200；DB 中 card_level='B' 對應列 score_s=220（以三欄定位，非 id） |
+| TS-F055-003 | 正常儲存 H 型 4 級門檻修改 | AC-2 | Integration | H active 版本，初始 A:[243,999]、B:[214,242]、C:[185,213]、D:[0,184]；無月名單分派鎖；SM Token | PUT card-levels（A 改為 [250,999]，B 改為 [214,249]，C/D 不變） | HTTP 200；updatedLevels=4；DB 中 A 級 score_s=250；card_version 仍為 1 |
+| TS-F055-004 | 正常儲存 S5 型 2 級門檻修改 | AC-2（等級數） | Integration | S5 active 版本，A/B 兩級；無月名單分派鎖；SM Token | PUT card-levels（只傳 2 筆 levels，A/B） | HTTP 200；updatedLevels=2；DB 中 S5 的 A/B 更新正確 |
+| TS-F055-005 | PUT 依三欄複合鍵定位更新（驗證不用 surrogate id） | AC-2, spec 5.1 | Integration | H active 版本，B 級有 surrogate id=999；無月名單分派鎖；SM Token | PUT 不傳 id，只傳 cardLevel='B'、scoreS=220、scoreE=242 | HTTP 200；DB 中 card_level='B' 對應列 score_s=220（以三欄定位，非 id） |
 | TS-F055-006 | PUT 成功後 audit_log 記錄 UPDATE 含 before/after | AC-2 | Integration | 同 TS-F055-003 成功後 | 查詢 assignment_audit_log 最新一筆 | action='UPDATE'；before_value 含 A 級舊 score_s=243；after_value 含 A 級新 score_s=250 |
 | TS-F055-007 | assignment_run status='pending' 時 PUT 回 409 | AC-4, BR-3 | Integration | assignment_run(status='pending')；SM Token | PUT /api/v1/assignment/scoring/card-levels | HTTP 409，SCORING_VERSION_LOCKED |
 | TS-F055-008 | assignment_run status='running' 時 PUT 回 409 | AC-4, BR-3 | Integration | assignment_run(status='running')；SM Token | PUT /api/v1/assignment/scoring/card-levels | HTTP 409，SCORING_VERSION_LOCKED |
-| TS-F055-009 | 門檻重疊（B.score_s ≤ A.score_e）回 422 | AC-5, BR-1 | Integration | 無月跑鎖；SM Token | PUT 傳入 A:[81,100]、B:[65,80]（B.score_s=65 < A.score_s=81，兩等級 overlap） | HTTP 422，SCORING_RANGE_OVERLAP；DB 原資料不變 |
-| TS-F055-010 | 相鄰等級合法（score_e+1=下一級 score_s） | AC-5, BR-1 | Integration | 無月跑鎖；SM Token | PUT 傳入 A:[81,100]、B:[61,80]（80+1=81，剛好相鄰） | HTTP 200；不回 SCORING_RANGE_OVERLAP |
+| TS-F055-009 | 門檻重疊（B.score_s ≤ A.score_e）回 422 | AC-5, BR-1 | Integration | 無月名單分派鎖；SM Token | PUT 傳入 A:[81,100]、B:[65,80]（B.score_s=65 < A.score_s=81，兩等級 overlap） | HTTP 422，SCORING_RANGE_OVERLAP；DB 原資料不變 |
+| TS-F055-010 | 相鄰等級合法（score_e+1=下一級 score_s） | AC-5, BR-1 | Integration | 無月名單分派鎖；SM Token | PUT 傳入 A:[81,100]、B:[61,80]（80+1=81，剛好相鄰） | HTTP 200；不回 SCORING_RANGE_OVERLAP |
 | TS-F055-011 | 未登入回 401 | 第 5.2 節 | Integration | 無 Token | PUT /api/v1/assignment/scoring/card-levels | HTTP 401，AUTH_TOKEN_MISSING |
 | TS-F055-012 | 非 Sales Manager 回 403 | 第 5.2 節 | Integration | is_sales_manager=false 的 Token | PUT /api/v1/assignment/scoring/card-levels | HTTP 403，AUTH_FORBIDDEN |
 
@@ -112,7 +112,7 @@ spec_version: "1.4"
 |----|------|---------|---------|---------|------|---------|
 | TS-F055-015 | S5（2 級）門檻表格只渲染 A/B 兩列 | AC-1（等級數） | Frontend Unit | stub API 回傳 S5 levels 2 筆（A/B） | 渲染 CARD_LEVEL 門檻 Tab | 表格只有 2 列（A 與 B）；不顯示 C/D；無空白行 |
 | TS-F055-016 | H（4 級）門檻表格渲染 A/B/C/D 四列 | AC-1 | Frontend Unit | stub API 回傳 H levels 4 筆（A/B/C/D） | 渲染 CARD_LEVEL 門檻 Tab | 表格有 4 列；等級依序顯示 |
-| TS-F055-017 | 月跑執行中儲存按鈕 disabled | AC-4 | Frontend Unit | isLocked=true | 渲染頁面 | 「儲存門檻」按鈕 disabled=true；DOM 中按鈕存在但不可點擊 |
+| TS-F055-017 | 月名單分派執行中儲存按鈕 disabled | AC-4 | Frontend Unit | isLocked=true | 渲染頁面 | 「儲存門檻」按鈕 disabled=true；DOM 中按鈕存在但不可點擊 |
 | TS-F055-018 | 門檻修改後 preview 分佈即時更新（debounce） | AC-3 | Frontend Unit | stub GET preview 回傳已知 distribution；isLocked=false | 修改 A 級 scoreS 欄位（觸發 debounce 300ms 後） | preview 區顯示新的 distribution 數字；更新前後數字不同 |
 | TS-F055-019 | 重疊錯誤提示顯示於問題等級列（紅色邊框） | AC-5 | Frontend Unit | stub PUT 回傳 HTTP 422 SCORING_RANGE_OVERLAP | 點擊儲存 | 問題等級（B 級）的 scoreS 輸入框顯示紅色邊框；錯誤訊息顯示於該列旁 |
 | TS-F055-020 | 門檻儲存成功後顯示成功提示 | AC-2 | Frontend Unit | stub PUT 回傳 HTTP 200 | 點擊「儲存門檻」 | 頁面顯示儲存成功提示（toast 或 inline） |
@@ -153,7 +153,7 @@ VALUES
 -- 假設 100 筆 H 型客戶：A 級 20 筆（score >= 243）、B 級 40 筆（214-242）、C 級 30 筆（185-213）、D 級 10 筆（0-184）
 -- 實際 seed 需配合 ob_pool_data 的具體 schema（此處為示意）
 
--- 月跑鎖 fixture（TS-F055-007 / 008 分別使用）
+-- 月名單分派鎖 fixture（TS-F055-007 / 008 分別使用）
 INSERT INTO assignment_run (run_ym, status, created_at) VALUES ('202604', 'pending', NOW());
 INSERT INTO assignment_run (run_ym, status, created_at) VALUES ('202604', 'running', NOW());
 ```
@@ -199,8 +199,8 @@ INSERT INTO assignment_run (run_ym, status, created_at) VALUES ('202604', 'runni
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TS-F055-022 | DELETE /card-levels/:cardLevel 正常刪除等級 | AC-6（v1.4） | Integration | ob_card_type(H active)；ob_levelcard_level(H, v1, D 等級存在)；無月跑鎖；SM Token | DELETE /api/v1/assignment/scoring/card-levels/D?cardType=H | HTTP 200；DB ob_levelcard_level WHERE card_type='H' AND card_level='D' 無紀錄（實體刪除）；ob_levelcard_level 其他等級（A/B/C）不受影響 |
-| TS-F055-023 | DELETE 等級時月跑執行中回 409 | AC-6（v1.4） | Integration | assignment_run(run_id='r1', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；SM Token | DELETE /api/v1/assignment/scoring/card-levels/D?cardType=H | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
+| TS-F055-022 | DELETE /card-levels/:cardLevel 正常刪除等級 | AC-6（v1.4） | Integration | ob_card_type(H active)；ob_levelcard_level(H, v1, D 等級存在)；無月名單分派鎖；SM Token | DELETE /api/v1/assignment/scoring/card-levels/D?cardType=H | HTTP 200；DB ob_levelcard_level WHERE card_type='H' AND card_level='D' 無紀錄（實體刪除）；ob_levelcard_level 其他等級（A/B/C）不受影響 |
+| TS-F055-023 | DELETE 等級時月名單分派執行中回 409 | AC-6（v1.4） | Integration | assignment_run(run_id='r1', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；SM Token | DELETE /api/v1/assignment/scoring/card-levels/D?cardType=H | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
 | TS-F055-024 | DELETE 不存在的等級回 404 | AC-6（v1.4） | Integration | ob_card_type(H active)；ob_levelcard_level 無 H/Z；SM Token | DELETE /api/v1/assignment/scoring/card-levels/Z?cardType=H | HTTP 404；errorCode='CARD_LEVEL_NOT_FOUND' |
 | TS-F055-025 | GET / PUT 傳不存在的 cardType 回 404 | AC-7（v1.4） | Integration | ob_card_type 無 'NOTEXIST'；SM Token | GET /api/v1/assignment/scoring/card-levels?cardType=NOTEXIST | HTTP 404；errorCode='CARD_TYPE_NOT_FOUND' |
 

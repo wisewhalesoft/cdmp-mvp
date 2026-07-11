@@ -266,7 +266,7 @@ last_updated: 2026-05-20
   - 名單 condition_payload = `[]`（空陣列）且 `_backfill_empty = true`
   - 名單 stage = ready
 - **步驟**：
-  1. 觸發月跑，此名單進入 Stage 1 排程
+  1. 觸發月名單分派，此名單進入 Stage 1 排程
   2. 觀察 Stage 1 執行行為與 log 輸出
   3. 查詢 assignment_run 紀錄
 - **預期結果**：
@@ -281,9 +281,9 @@ last_updated: 2026-05-20
 
 - **關聯需求**：OQ-TEST-002 解答 / result summary schema
 - **測試類型**：Positive / Integration
-- **前置條件**：同 IT-M01-016，月跑包含 1 個 _backfill_empty 名單 + 1 個正常名單
+- **前置條件**：同 IT-M01-016，月名單分派包含 1 個 _backfill_empty 名單 + 1 個正常名單
 - **步驟**：
-  1. 觸發月跑完成
+  1. 觸發月名單分派完成
   2. GET assignment_run result summary API
 - **預期結果**：
   - result summary JSON 中，_backfill_empty 名單條目：`{ list_id: "...", status: "skipped", reason: "EMPTY_CONDITIONS" }`
@@ -372,7 +372,7 @@ last_updated: 2026-05-20
   - Composer 對該 condition 條目執行 **skip**（不生成對應 SQL fragment）
   - Logger.warn 含 `INVALID_COLUMN_NAME` 識別碼及非法 columnName 值
   - Stage 1 整體仍繼續執行（非法條件被 skip，其餘合法條件正常生成 SQL）
-  - **不因非法 columnName 拋出 500 或中斷月跑**
+  - **不因非法 columnName 拋出 500 或中斷月名單分派**
 
 ---
 

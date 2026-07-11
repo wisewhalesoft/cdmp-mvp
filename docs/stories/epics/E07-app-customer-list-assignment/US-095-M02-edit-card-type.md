@@ -46,7 +46,7 @@
 - **When** 業務主管點擊「儲存」
 - **Then** 未填欄位顯示「此欄位為必填」提示，不送出 API 請求
 
-### AC-5：月跑執行中禁止編輯
+### AC-5：月名單分派執行中禁止編輯
 
 - **Given** 目前 `assignment_run` 有 status IN ('pending', 'running') 的紀錄
 - **When** 業務主管在 Tab 1 查看清單
@@ -61,7 +61,7 @@
 - **不可修改欄位**：`card_type`（系統 join key，影響 ob_levelcard_version / ob_levelcard_column / ob_levelcard_score / ob_levelcard_level / ob_tier 所有下游表）
 - **API**：`PUT /api/v1/assignment/scoring/card-types/:cardType`（詳見 F071 §5）
 - **ob_levelcard_version 的 card_name 欄位**：ob_levelcard_version 表中亦有 card_name 欄位，編輯 ob_card_type 時是否同步更新 ob_levelcard_version 中對應的 card_name，由 spec-writer / system-architect 於 F071 中確認業務規則
-- **錯誤碼**：`CARD_TYPE_NOT_FOUND`（404）— 操作的 CARD_TYPE 不存在；`SCORING_VERSION_LOCKED`（409）— 月跑執行中
+- **錯誤碼**：`CARD_TYPE_NOT_FOUND`（404）— 操作的 CARD_TYPE 不存在；`SCORING_VERSION_LOCKED`（409）— 月名單分派執行中
 
 ---
 
@@ -85,7 +85,7 @@
 - **When**：點擊「儲存」
 - **Then**：card_name 欄位下方顯示「此欄位為必填」，不送 API
 
-### TC-095-04：月跑執行中編輯按鈕 disabled
+### TC-095-04：月名單分派執行中編輯按鈕 disabled
 
 - **Given**：`assignment_run` 有 status = 'running' 的紀錄
 - **When**：業務主管查看 Tab 1
@@ -105,7 +105,7 @@
 - [ ] 驗收標準全部通過
 - [ ] 代碼欄位不可修改驗證通過（TC-095-02）
 - [ ] 稽核日誌寫入驗證通過（TC-095-01）
-- [ ] 月跑鎖定保護測試通過（TC-095-04）
+- [ ] 月名單分派鎖定保護測試通過（TC-095-04）
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新

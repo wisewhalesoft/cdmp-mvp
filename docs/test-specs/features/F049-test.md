@@ -21,11 +21,11 @@ last_updated: 2026-06-29
 
 # F049：Stage 0 試算頁業務化重設計（v2.0）— 測試設計
 
-> **v1.4 測試設計更新（2026-05-26 / estimate 升級為完整 Stage 1 dry-run，對齊 F092）**：F049 v1.4 / [F092](../../specs/features/F092-stage1-dry-run-estimate.md) 將 per-list estimate 由「欄位篩選版 COUNT」升級為「完整 Stage 1 鏈 dry-run COUNT（≡ 月跑案件數）」。本版**僅更新 TS-F049-EST-010**（整合層）：原預期固定值 `≈ 241,978`（欄位篩選版上界）已過時 → 改為「dry-run COUNT === 月跑 Stage 1（不再 assert 固定值）；完整鏈後 COUNT ≤ 241,978；dev `ob_pool_data_list` 空時去重不減、但 month_cnt / 特殊 DELETE 仍可能減」，並標記為 **Integration DEFERRED**（需真實 PG + ob_pool_data_list seed）。完整鏈三步驟（month_cnt / 去重 / 特殊 DELETE）之單元測試由 F091-test 覆蓋，本檔不重複。其餘案例群組（CAL / V13F / EST-001~009）不變。
+> **v1.4 測試設計更新（2026-05-26 / estimate 升級為完整 Stage 1 dry-run，對齊 F092）**：F049 v1.4 / [F092](../../specs/features/F092-stage1-dry-run-estimate.md) 將 per-list estimate 由「欄位篩選版 COUNT」升級為「完整 Stage 1 鏈 dry-run COUNT（≡ 月名單分派案件數）」。本版**僅更新 TS-F049-EST-010**（整合層）：原預期固定值 `≈ 241,978`（欄位篩選版上界）已過時 → 改為「dry-run COUNT === 月名單分派 Stage 1（不再 assert 固定值）；完整鏈後 COUNT ≤ 241,978；dev `ob_pool_data_list` 空時去重不減、但 month_cnt / 特殊 DELETE 仍可能減」，並標記為 **Integration DEFERRED**（需真實 PG + ob_pool_data_list seed）。完整鏈三步驟（month_cnt / 去重 / 特殊 DELETE）之單元測試由 F091-test 覆蓋，本檔不重複。其餘案例群組（CAL / V13F / EST-001~009）不變。
 >
 > **v1.3 測試設計追加（2026-05-26）**：新增「後端 `calculateDailyEstimate` 千分位 ratio + calendarSource 三模式」案例群組（TS-F049-CAL-001 ~ TS-F049-CAL-009）及「前端元件對齊 prototype」案例群組（TS-F049-V13F-001 ~ TS-F049-V13F-009）。後端群組驗證 Design A contract（total-agnostic、全日期回傳、SUM(ratioPerMille)=1000）；前端群組驗證自動選第一筆、calendarSource 切換重呼 API、無寫死 9500、bar `w-full`、跳過日灰 bar 等 prototype 對齊項。詳見 F049 v1.3 AC-1/AC-2/AC-3/AC-4-Default/§5.1/§8.1/§13。
 >
-> **v1.2 測試設計追加（2026-05-26）**：新增「後端 Stage 0 per-list 試算篩選邏輯」案例群組（TS-F049-EST-001 ~ TS-F049-EST-009），驗證 `estimateListCount` / `buildPoolCountQuery` 修正後行為 —— 改為複用月跑 Stage 1 之 `buildStage1WhereConditions()` 演算法，確保 `IN` 多值、欄位映射（caseyear → year_cnt、case_status → list_type）、wildcard、EMPTY_CONDITIONS 均正確，並保留原有 404 / 逾時 regression 驗證。詳見 F049 v1.2 AC-4 篩選機制對照表 / BR-5 / §7。
+> **v1.2 測試設計追加（2026-05-26）**：新增「後端 Stage 0 per-list 試算篩選邏輯」案例群組（TS-F049-EST-001 ~ TS-F049-EST-009），驗證 `estimateListCount` / `buildPoolCountQuery` 修正後行為 —— 改為複用月名單分派 Stage 1 之 `buildStage1WhereConditions()` 演算法，確保 `IN` 多值、欄位映射（caseyear → year_cnt、case_status → list_type）、wildcard、EMPTY_CONDITIONS 均正確，並保留原有 404 / 逾時 regression 驗證。詳見 F049 v1.2 AC-4 篩選機制對照表 / BR-5 / §7。
 >
 > **v1.1 測試設計範圍（2026-05-21）**：本文件覆蓋 F049 v1.1 核心變更 —— Ready 欄頂 CTA Banner 為 Stage 0 試算頁（secondary「試算」按鈕）之唯一入口（GAP-G3 / US-132）。
 > v1.0 既有估算邏輯（GET API / 估算公式 / 試算逾時 / Pool 警示門檻）之業務邏輯不在 v1.1 變更範圍內；如需驗證業務邏輯，對應測試見既有 F049 後端 Unit / Integration test。
@@ -80,7 +80,7 @@ last_updated: 2026-06-29
 | TS-F049-EST-007 | 1 | 高 | Unit | numeric BETWEEN / date BETWEEN fragment 驗證 |
 | TS-F049-EST-008 | 1 | 高 | Unit | 路徑 B legacy fallback；SQLite in-memory seed + COUNT 驗證 |
 | TS-F049-EST-009 | 1 | 高 | Unit | 404 / timeout regression；現有測試架構延伸 |
-| TS-F049-EST-010 | 1 | 低（需真實 DB）| Integration（**DEFERRED**）| 完整鏈 dry-run COUNT === 月跑 Stage 1（F092 AC-3）；COUNT ≤ 241,978（去重+month_cnt+特殊 DELETE 後更少，不再 assert 固定值）；CI 需 PostgreSQL TestContainer + ob_pool_data_list seed |
+| TS-F049-EST-010 | 1 | 低（需真實 DB）| Integration（**DEFERRED**）| 完整鏈 dry-run COUNT === 月名單分派 Stage 1（F092 AC-3）；COUNT ≤ 241,978（去重+month_cnt+特殊 DELETE 後更少，不再 assert 固定值）；CI 需 PostgreSQL TestContainer + ob_pool_data_list seed |
 
 ### 前端元件案例群組自動化就緒度（v1.3 新增）
 
@@ -112,14 +112,14 @@ last_updated: 2026-06-29
 - **前置條件**：
   - MSW stub `GET /api/v1/system/current-work-ym` → `{ currentWorkYm: '202605', isHistorical: false }`
   - MSW stub `GET /api/v1/assignment/lists?ym=202605` → `stageCounts: { ..., ready: 2 }`，且 `lists` 含 2 筆 `stage='ready'` 名單
-  - MSW stub assignment_run → `{ status: 'idle' }`（無執行中月跑）
+  - MSW stub assignment_run → `{ status: 'idle' }`（無執行中月名單分派）
 - **步驟**：
   1. render `<ListKanbanPage />`（或對應 Kanban 元件）
   2. 等待渲染完成
   3. 驗證 Ready 欄頂 CTA Banner
 - **預期結果**：
   - Ready 欄頂存在 CTA Banner 元素
-  - Banner 含主按鈕（觸發月跑，文字如「執行月跑」）
+  - Banner 含主按鈕（觸發月名單分派，文字如「執行月名單分派」）
   - Banner 含 secondary「試算」按鈕（白底藍邊，含 calculator icon 或對應 class）
   - 兩個按鈕均非 disabled 狀態
 
@@ -155,18 +155,18 @@ last_updated: 2026-06-29
 
 ---
 
-### TS-F049-CTA-004：月跑執行中 → Banner 改琥珀色 disabled；主按鈕與 secondary 按鈕均 disabled
+### TS-F049-CTA-004：月名單分派執行中 → Banner 改琥珀色 disabled；主按鈕與 secondary 按鈕均 disabled
 
-- **關聯需求**：F049 v1.1 §8（月跑鎖中 Banner disabled）/ F048 v2.0 AC-4 / F077 v1.3 BR-7 C-2
+- **關聯需求**：F049 v1.1 §8（月名單分派鎖中 Banner disabled）/ F048 v2.0 AC-4 / F077 v1.3 BR-7 C-2
 - **測試類型**：Positive / Component（RTL）
 - **前置條件**：
   - MSW stub `stageCounts.ready = 2`（Banner 應渲染）
-  - MSW stub assignment_run → `{ status: 'running' }`（月跑執行中）
+  - MSW stub assignment_run → `{ status: 'running' }`（月名單分派執行中）
 - **步驟**：
-  1. render `<ListKanbanPage />` 呈現月跑執行中狀態
+  1. render `<ListKanbanPage />` 呈現月名單分派執行中狀態
   2. 驗證 Ready 欄頂 CTA Banner
 - **預期結果**：
-  - Banner 元素存在（DOM 存在，月跑鎖不移除 Banner，改 disabled 樣式）
+  - Banner 元素存在（DOM 存在，月名單分派鎖不移除 Banner，改 disabled 樣式）
   - 主按鈕 disabled（`toBeDisabled()`）
   - secondary「試算」按鈕 disabled（`toBeDisabled()`）
   - Banner 呈現琥珀色 disabled 樣式（有對應 CSS class 或 aria-disabled）
@@ -177,7 +177,7 @@ last_updated: 2026-06-29
 
 - **關聯需求**：F049 v1.1 AC-Banner-Entry / US-132 AC-3
 - **測試類型**：Positive / Component（RTL）
-- **前置條件**：`stageCounts.ready ≥ 1`；非歷史月份；無月跑鎖
+- **前置條件**：`stageCounts.ready ≥ 1`；非歷史月份；無月名單分派鎖
 - **步驟**：
   1. render `<ListKanbanPage />`
   2. 點擊 secondary「試算」按鈕
@@ -198,14 +198,14 @@ last_updated: 2026-06-29
 | TS-F049-CAL-003~009（all 模式 + ratio + 邊界）| 高 | SQLite in-memory 或純函式；無外部依賴 |
 | TS-F049-V13F-001~009（前端 v1.3 元件）| 高 | RTL + MSW stub；純前端邏輯；`computeAdE07Distribution` 可純函式測試 |
 | TS-F049-EST-001~009（後端試算篩選邏輯 Unit） | 高 | `buildStage1WhereConditions` 純函式 + SQLite in-memory；無外部依賴 |
-| TS-F049-EST-010（整合層完整鏈 dry-run ≡ 月跑 COUNT 驗證；**DEFERRED**） | 低 | 需 PostgreSQL + 真實 ob_pool_data + ob_pool_data_list seed；僅 CI 環境可行 |
+| TS-F049-EST-010（整合層完整鏈 dry-run ≡ 月名單分派 COUNT 驗證；**DEFERRED**） | 低 | 需 PostgreSQL + 真實 ob_pool_data + ob_pool_data_list seed；僅 CI 環境可行 |
 
 ---
 
 ## 二、後端 Stage 0 per-list 試算篩選邏輯
 
 > **設計依據**：F049 v1.2 AC-4 篩選機制對照表 / BR-5 / §7「名單無有效篩選條件」
-> **修正背景**：v1.2 之前 `buildPoolCountQuery` 以 `=` 比對多值欄位（如 `prod_kind='01$$N'`）且欄位映射錯誤（`caseyear` 查的是 4 位數西元年欄位而非 `year_cnt`），導致 4 個 ready 名單估算全為 0。修法：`estimateListCount` 改為呼叫 `buildStage1WhereConditions(def)`，複用月跑 Stage 1 演算法。
+> **修正背景**：v1.2 之前 `buildPoolCountQuery` 以 `=` 比對多值欄位（如 `prod_kind='01$$N'`）且欄位映射錯誤（`caseyear` 查的是 4 位數西元年欄位而非 `year_cnt`），導致 4 個 ready 名單估算全為 0。修法：`estimateListCount` 改為呼叫 `buildStage1WhereConditions(def)`，複用月名單分派 Stage 1 演算法。
 > **測試策略**：
 > - TS-F049-EST-001 ~ TS-F049-EST-007：直接呼叫 `buildStage1WhereConditions()` 純函式，驗證回傳的 `where` / `params` / `skipReason`（不需 DB）。
 > - TS-F049-EST-008：以 SQLite in-memory 驗證路徑 B legacy fallback 的 `$$` split + COUNT 行為。
@@ -337,7 +337,7 @@ last_updated: 2026-06-29
   1. 呼叫 `estimateListCount(listNo)`
   2. 驗證回傳 `{ listNo, count: 0 }`（不是 5）
 - **預期結果**：
-  - `count === 0`（與月跑 Stage 1 skip 該名單行為一致）
+  - `count === 0`（與月名單分派 Stage 1 skip 該名單行為一致）
   - HTTP 200（非錯誤，spec §7）
 
 ---
@@ -471,13 +471,13 @@ last_updated: 2026-06-29
 
 ---
 
-### TS-F049-EST-010：Integration — 真實 ob_pool_data 完整鏈 dry-run COUNT 與 Stage 1 月跑結果一致（OB202605004 基準）
+### TS-F049-EST-010：Integration — 真實 ob_pool_data 完整鏈 dry-run COUNT 與 Stage 1 月名單分派結果一致（OB202605004 基準）
 
-> **更新（對齊 F049 v1.4 / F092 完整鏈 dry-run）**：estimate 自 [F092](../../specs/features/F092-stage1-dry-run-estimate.md) 起改為**完整 Stage 1 鏈 dry-run**（`executeStage1Chain({ dryRun: true })`，含 MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE），不再是「欄位篩選版」。故原預期值 `≈ 241,978`（欄位篩選版上界）**已過時**：完整鏈後 COUNT 會 **≤ 該值**（被 month_cnt / 去重 / 特殊 DELETE 進一步過濾）。本案例核心驗收改為「dry-run COUNT === 月跑 Stage 1 案件數（同一鏈，[F092 AC-3](../../specs/features/F092-stage1-dry-run-estimate.md)）」，不再 assert 固定數字。
+> **更新（對齊 F049 v1.4 / F092 完整鏈 dry-run）**：estimate 自 [F092](../../specs/features/F092-stage1-dry-run-estimate.md) 起改為**完整 Stage 1 鏈 dry-run**（`executeStage1Chain({ dryRun: true })`，含 MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE），不再是「欄位篩選版」。故原預期值 `≈ 241,978`（欄位篩選版上界）**已過時**：完整鏈後 COUNT 會 **≤ 該值**（被 month_cnt / 去重 / 特殊 DELETE 進一步過濾）。本案例核心驗收改為「dry-run COUNT === 月名單分派 Stage 1 案件數（同一鏈，[F092 AC-3](../../specs/features/F092-stage1-dry-run-estimate.md)）」，不再 assert 固定數字。
 >
 > **標記：Integration DEFERRED**（需真實 PostgreSQL + ob_pool_data + ob_pool_data_list seed；單元層由 F091 三步驟純函式 / SQLite 覆蓋，見 F091-test）。
 
-- **關聯需求**：F049 v1.4 AC-4 / BR-6「試算複用完整 Stage 1 鏈 `executeStage1Chain({dryRun:true})`，dry-run COUNT 精確 ≡ 月跑 Stage 1 案件數」；[F092 AC-3](../../specs/features/F092-stage1-dry-run-estimate.md)
+- **關聯需求**：F049 v1.4 AC-4 / BR-6「試算複用完整 Stage 1 鏈 `executeStage1Chain({dryRun:true})`，dry-run COUNT 精確 ≡ 月名單分派 Stage 1 案件數」；[F092 AC-3](../../specs/features/F092-stage1-dry-run-estimate.md)
 - **測試類型**：Positive / Integration
 - **測試層**：Integration（PostgreSQL TestContainer；需真實 ob_pool_data + ob_pool_data_list seed）— **DEFERRED（需真實 PG，CI 環境才可行）**
 - **自動化就緒度**：低（需 CI PostgreSQL）；建議在 E2E 或特定 integration suite 中執行；單元層以 F091 三步驟純函式 / SQLite 替代
@@ -494,10 +494,10 @@ last_updated: 2026-06-29
   - ob_pool_data_list 去重歷史（[F090](../../specs/features/F090-obpooldata-list-etl.md) ETL）：dev / CI 可能為空 → 去重不減（見下方備註）
 - **步驟**：
   1. 呼叫 `estimateListCount('OB202605004')`（內部走 `executeStage1Chain({ dryRun: true })`），記錄 `estimateCount`
-  2. 獨立執行 Stage 1 月跑 pipeline（`executeStage1Chain({ dryRun: false })`）對同一名單，取得實際 `stage1Count`
+  2. 獨立執行 Stage 1 月名單分派 pipeline（`executeStage1Chain({ dryRun: false })`）對同一名單，取得實際 `stage1Count`
   3. 比較兩個數值
 - **預期結果**：
-  - `estimateCount === stage1Count`（允許±0，確保 dry-run 與月跑完全一致 — 此為本案例核心驗收）
+  - `estimateCount === stage1Count`（允許±0，確保 dry-run 與月名單分派完全一致 — 此為本案例核心驗收）
   - `estimateCount` **不為 0**（regression guard：舊版欄位篩選實作全為 0 的缺陷已修正）
   - `estimateCount` **≤ 241,978**（241,978 為升級前欄位篩選版上界；完整鏈套 month_cnt / 去重 / 特殊 DELETE 後只會更少或相等，**不再 assert 等於固定值**）
 - **備註**：
@@ -1549,7 +1549,7 @@ threshold = 15（env var）
 
 ### TS-F049-INVAR-002：list_total 來自 stage0_estimate_count（F088 物化）或 fallback estimateListCount（同源）
 
-- **關聯需求**：F049 §22.1 I-RUN-EST-01（list_total 與月跑 Stage 1 同源）；AD-E07-v3.6 §5 階段 A
+- **關聯需求**：F049 §22.1 I-RUN-EST-01（list_total 與月名單分派 Stage 1 同源）；AD-E07-v3.6 §5 階段 A
 - **測試類型**：Positive（不變量）/ Unit（兩個子場景）
 - **測試層**：Unit（SQLite in-memory）
 

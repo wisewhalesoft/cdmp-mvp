@@ -90,7 +90,7 @@
 | E07 | [US-078](epics/E07-app-customer-list-assignment/US-078-M03-view-personnel-ratio.md) | 查看人員比例設定 | Must Have |
 | E07 | [US-079](epics/E07-app-customer-list-assignment/US-079-M03-edit-personnel-ratio.md) | 編輯人員比例設定 | Must Have |
 | E07 | [US-080](epics/E07-app-customer-list-assignment/US-080-M03-toggle-cr-reassignment.md) | 開關 CR 回分規則 | Must Have |
-| E07 | [US-081](epics/E07-app-customer-list-assignment/US-081-M04-trigger-assignment-run.md) | 觸發分派月跑 | Must Have |
+| E07 | [US-081](epics/E07-app-customer-list-assignment/US-081-M04-trigger-assignment-run.md) | 觸發分派月名單分派 | Must Have |
 | E07 | [US-082](epics/E07-app-customer-list-assignment/US-082-M04-view-run-progress.md) | 查看分派執行進度 | Must Have |
 | E07 | [US-083](epics/E07-app-customer-list-assignment/US-083-M04-view-run-result-summary.md) | 查看分派結果摘要 | Must Have |
 | E07 | [US-084](epics/E07-app-customer-list-assignment/US-084-M04-export-assignment-result.md) | 匯出分派結果 | Must Have |
@@ -113,7 +113,7 @@
 | E07 | [US-108](epics/E07-app-customer-list-assignment/US-108-M01-draft-advance-to-dept-ratio.md) | 草稿階段推進至部門比例設定 | Must Have |
 | E07 | [US-120](epics/E07-app-customer-list-assignment/US-120-M01-cr-storage-spec-correction.md) | CR 回分儲存位置 spec 落差修正 | Must Have |
 | E07 | [US-121](epics/E07-app-customer-list-assignment/US-121-M01-whitelist-condition-payload.md) | whitelist-driven 篩選條件驗證規則（condition_payload 為 source of truth）**（v2.1 新增）** | Must Have |
-| E07 | [US-122](epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md) | 月跑 Stage 1 動態 WHERE 條件執行（condition_payload 驅動）**（v2.1 新增）** | Must Have |
+| E07 | [US-122](epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md) | 月名單分派 Stage 1 動態 WHERE 條件執行（condition_payload 驅動）**（v2.1 新增）** | Must Have |
 | E07 | [US-123](epics/E07-app-customer-list-assignment/US-123-M01-backward-compat-list-read.md) | 舊名單 backward-compat 讀取（condition_payload IS NULL fallback）**（v2.1 新增）** | Must Have |
 | E07 | [US-124](epics/E07-app-customer-list-assignment/US-124-M06-deprecate-f068-merge-field-base.md) | F068（代碼維護 module）廢除與篩選欄位合併管理頁 **（v2.1 新增）** | Must Have |
 | E07 | [US-125](epics/E07-app-customer-list-assignment/US-125-M06-migrate-options-to-whitelist.md) | caseyear / case_status 可選值遷移至 pooldata_field_option **（v2.1 新增）** | Must Have |
@@ -135,7 +135,7 @@
 |--------|------|------|
 | NFR-001 | [安全性](non-functional/NFR-001-security.md) | 驗證、授權、資料加密 |
 | NFR-002 | [效能](non-functional/NFR-002-performance.md) | 回應時間、並發數、可用性 |
-| NFR-003 | [分派執行效能](non-functional/NFR-003-assignment-execution-perf.md) | 月跑端對端執行時間上限 |
+| NFR-003 | [分派執行效能](non-functional/NFR-003-assignment-execution-perf.md) | 月名單分派端對端執行時間上限 |
 | NFR-004 | [快照原子性](non-functional/NFR-004-snapshot-integrity.md) | 三份快照原子性寫入保證 |
 | NFR-005 | [結果準確性](non-functional/NFR-005-result-accuracy.md) | 新舊系統誤差 < 3% 可驗證 |
 
@@ -152,7 +152,7 @@
 - NFR-001、NFR-002
 
 ### Phase 1（新增）— 客戶名單分派（E07）
-重點：部長 / Admin 可獨立操作名單定義五階段流程、計分設定、分派比例、觸發月跑、匯出結果與查看歷史快照；處長僅可操作個別業務比例設定與準備完成查詢，IT 零介入
+重點：部長 / Admin 可獨立操作名單定義五階段流程、計分設定、分派比例、觸發月名單分派、匯出結果與查看歷史快照；處長僅可操作個別業務比例設定與準備完成查詢，IT 零介入
 
 - E07 全部 Stories（US-070 ~ US-092、US-097、US-100 ~ US-125，含 M03a/b/c/d 各子模組）
 - US-088 / US-089 已廢棄（由 US-106 取代），保留歷史記錄

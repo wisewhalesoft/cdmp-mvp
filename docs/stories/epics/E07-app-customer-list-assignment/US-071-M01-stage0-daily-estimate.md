@@ -13,7 +13,7 @@
 
 **As a** 業務主管
 **I want** 查看 Stage 0（每日電訪名單）的每日預估分派數量
-**So that** 可在觸發月跑前評估本月每日工作量配置是否合理，必要時調整比例設定
+**So that** 可在觸發月名單分派前評估本月每日工作量配置是否合理，必要時調整比例設定
 
 ---
 
@@ -44,7 +44,7 @@
 - **When** 業務主管點擊該名單列的「計算案件數量」按鈕（對應舊系統 OBZ020 DoCount 功能）
 - **Then** 系統依該 LIST_NO 的篩選條件（PROD_KIND、CASEYEAR、SPEC_TP、LIST_PERIOD_START/END、SETTLE_SRC 等）即時試算符合條件的案件數量
 - **And** 顯示試算結果：「符合條件案件數：N 筆」
-- **And** 此試算不執行實際月跑，不寫入任何分派結果，僅供估算參考
+- **And** 此試算不執行實際月名單分派，不寫入任何分派結果，僅供估算參考
 
 ---
 
@@ -53,7 +53,7 @@
 - Stage 0 每日估算邏輯參照：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql` 中 Stage 0 相關邏輯
 - Pool 資料來源：`reference/TableSchema/OB/OBPOOLDATA.sql`
 - 工作日曆（排除假日）：`reference/TableSchema/OB/OBCALENDAR.sql`；AppDB 對應表為 `ob_calendar`（CALENDAR_DATE / REST_FLG，REST_FLG=0 為工作日）。**資料來源：透過 E04 通用擷取任務定期從 OB DB 同步至 AppDB，E07 直接查詢 `ob_calendar`，不需額外維護。**
-- 估算僅為預覽，不寫入資料庫；實際件數以月跑執行結果為準
+- 估算僅為預覽，不寫入資料庫；實際件數以月名單分派執行結果為準
 
 ---
 
@@ -82,7 +82,7 @@
 ## 依賴關係
 
 - **Blocked By**：US-070（需先確認名單定義已就緒）
-- **Blocks**：US-081（估算完成後業務主管才會決定是否觸發月跑）
+- **Blocks**：US-081（估算完成後業務主管才會決定是否觸發月名單分派）
 
 ---
 
@@ -99,5 +99,5 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **NFR**：[NFR-003](../../non-functional/NFR-003-assignment-execution-perf.md)
-- **相關 Stories**：US-070（名單定義清單）、US-081（觸發月跑）
+- **相關 Stories**：US-070（名單定義清單）、US-081（觸發月名單分派）
 - **Reference**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`、`reference/TableSchema/OB/OBPOOLDATA.sql`、`reference/TableSchema/OB/OBCALENDAR.sql`

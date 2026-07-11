@@ -129,7 +129,7 @@ HTTP 登入：`POST /api/v1/auth/login`（admin@cdmp.test / P@ssw0rd123）→ **
 ## 7. 運行手冊位置
 
 `docs/deploy/mssql-cutover-runbook.md`（P6-0 版本閘 → P6a bootstrap → P6b env 切換 → P6c 首次 ETL 灌入
-→ P6d 正式月跑+F067 驗收 → P6e go-live checklist / point-of-no-return → P6f 觀察期後刪碼；附常用維運指令
+→ P6d 正式月名單分派+F067 驗收 → P6e go-live checklist / point-of-no-return → P6f 觀察期後刪碼；附常用維運指令
 與 env 對照表）。
 
 ## 8. 偏差與注意事項（Deviations / Notes）

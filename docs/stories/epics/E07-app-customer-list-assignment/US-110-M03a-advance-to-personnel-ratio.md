@@ -72,9 +72,9 @@
 - **Then** 頁面顯示部門比例（唯讀），無任何「編輯」「儲存」控件
 - **And** 若透過 API 嘗試修改部門比例，後端回 422（「只有部門比例設定階段才能修改部門比例」）
 
-### AC-6：月跑執行中禁止推進
+### AC-6：月名單分派執行中禁止推進
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 部長或 Admin 嘗試點擊「推進」按鈕
 - **Then** 推進按鈕為停用狀態，hover 顯示提示「分派執行中，無法推進」
 

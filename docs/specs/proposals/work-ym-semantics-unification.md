@@ -91,7 +91,7 @@ END
 | 概念 | 定義 | 來源 | 用途 |
 |---|---|---|---|
 | **`current_work_ym`**（系統錨點） | 真實日曆當月 | `new Date()`（+OVERRIDE） | 判定歷史/未來/唯讀、±12 範圍、衍生預設目標月。**唯一合法用 `new Date()` 之處** |
-| **`target_work_ym`**（作業月 / 目標分派月） | 使用者正在作業的那個月 | top-bar 選擇，**預設 = `current_work_ym + 1`** | 名單篩選、估算、月跑觸發 → 寫入 `AssignmentRun.project_workym` |
+| **`target_work_ym`**（作業月 / 目標分派月） | 使用者正在作業的那個月 | top-bar 選擇，**預設 = `current_work_ym + 1`** | 名單篩選、估算、月名單分派觸發 → 寫入 `AssignmentRun.project_workym` |
 
 下游頁（progress/summary/snapshot/compare）**不需** top-bar：它們是某筆 run 的結果，單一真實來源 = 該 run 的 `project_workym`。只要 run 觸發時把選定月寫進去，下游自動一致。
 
@@ -102,7 +102,7 @@ END
 - **D1**　前端建立**單一共享 `target_work_ym` 狀態**（Context 或 URL query），涵蓋 list-definitions / ready-summary / estimate / run。一處切換、全頁一致。
 - **D2**　**預設值 = `current_work_ym + 1`**（下個月）。`current_work_ym` 仍由 `new Date()` 算（F077 不變），只是預設選取改指向下月。
 - **D3**　**run 觸發改吃選定的 `target_work_ym`**：`trigger-run-page` 移除寫死 `currentWorkYm()`，改讀共享狀態；`POST /assignment/runs` 改接受 body `workYm`（取代忽略 `_dto` + server 端 `new Date()`）。
-- **D4**　**補 ground-truth guard**：`POST /runs` 套 SP `@WORKDT >= getdate()`（用 `>=`）→ 不可對已開始/過去的作業月跑名單。
+- **D4**　**補 ground-truth guard**：`POST /runs` 套 SP `@WORKDT >= getdate()`（用 `>=`）→ 不可對已開始/過去的作業月名單分派名單。
 - **D5**　**Stage 1 去重視窗自動對齊**：`workdt = parseWorkdt(project_workym)` 一旦帶的是目標（下）月，`[workdt-3月, workdt-1日]` 自然回到 SP 語意，`computeDedupWindow` 邏輯本身不需改（但見 R3）。
 - **D6**　**後端 `computeCurrentWorkYm()` 去重**：3+1 份收斂為單一 `SystemService.getCurrentWorkYm()`，新增 `getDefaultTargetWorkYm() = current + 1`。
 - **D7**　**語意正名**：概念層把「當月」正名「作業月 / 目標分派月」；UI top-bar label 改「分派作業月份」。DB 欄位 `project_workym` 維持不動（語意本就正確，只是預設值餵錯）。

@@ -7,25 +7,25 @@ flowchart TD
     Decision -->|核准| ApproveModal[F086 核准確認對話框<br/>顯示名單名稱 + Rollback 提示]
     Decision -->|拒絕| RejectModal[F087 拒絕對話框<br/>填寫拒絕原因 1~500 字必填]
 
-    ApproveModal -->|確認核准| ApprovePreCheck{F086 後端前置檢查<br/>DirectorGuard +<br/>assertStageEquals approval +<br/>歷史月份 + 月跑鎖}
-    RejectModal -->|確認拒絕| RejectPreCheck{F087 後端前置檢查<br/>DirectorGuard +<br/>assertStageEquals approval +<br/>歷史月份 + 月跑鎖 +<br/>rejectReason 校驗}
+    ApproveModal -->|確認核准| ApprovePreCheck{F086 後端前置檢查<br/>DirectorGuard +<br/>assertStageEquals approval +<br/>歷史月份 + 月名單分派鎖}
+    RejectModal -->|確認拒絕| RejectPreCheck{F087 後端前置檢查<br/>DirectorGuard +<br/>assertStageEquals approval +<br/>歷史月份 + 月名單分派鎖 +<br/>rejectReason 校驗}
 
     ApprovePreCheck -->|處長| Reject403A[403<br/>E07_FORBIDDEN_DIRECTOR_ONLY]
     ApprovePreCheck -->|stage 不符| Reject422A[422<br/>APPROVAL_INVALID_STAGE]
-    ApprovePreCheck -->|月跑中| Reject409A[409<br/>ASSIGNMENT_RUN_ALREADY_RUNNING]
+    ApprovePreCheck -->|月名單分派中| Reject409A[409<br/>ASSIGNMENT_RUN_ALREADY_RUNNING]
     ApprovePreCheck -->|歷史月份| Reject403H[403<br/>LIST_HISTORICAL_READONLY]
 
     RejectPreCheck -->|處長| Reject403R[403<br/>E07_FORBIDDEN_DIRECTOR_ONLY]
     RejectPreCheck -->|stage 不符| Reject422R[422<br/>APPROVAL_INVALID_STAGE]
     RejectPreCheck -->|拒絕原因為空| Reject422Empty[422<br/>APPROVAL_REJECT_REASON_REQUIRED]
     RejectPreCheck -->|拒絕原因 > 500 字| Reject422Long[422<br/>APPROVAL_REJECT_REASON_TOO_LONG]
-    RejectPreCheck -->|月跑中| Reject409R[409<br/>ASSIGNMENT_RUN_ALREADY_RUNNING]
+    RejectPreCheck -->|月名單分派中| Reject409R[409<br/>ASSIGNMENT_RUN_ALREADY_RUNNING]
     RejectPreCheck -->|歷史月份| Reject403HR[403<br/>LIST_HISTORICAL_READONLY]
 
     ApprovePreCheck -->|通過| ApproveTxn[F086 DB Transaction<br/>1. UPDATE stage = 'ready'<br/>2. INSERT assignment_approval<br/>   action = 'approve'<br/>3. INSERT assignment_audit_log<br/>   action = 'APPROVE_STAGE']
     RejectPreCheck -->|通過| RejectTxn[F087 DB Transaction<br/>1. UPDATE stage = 'personnel_ratio'<br/>2. DELETE FROM ob_empl_set<br/>   WHERE list_no 跨轄區清空<br/>3. INSERT assignment_approval<br/>   action = 'reject' + reject_reason<br/>4. INSERT assignment_audit_log<br/>   action = 'REJECT_STAGE']
 
-    ApproveTxn --> ApproveSuccess([名單進入<br/>stage = 'ready'<br/>出現於 F088 ready 清單<br/>F061 月跑可用])
+    ApproveTxn --> ApproveSuccess([名單進入<br/>stage = 'ready'<br/>出現於 F088 ready 清單<br/>F061 月名單分派可用])
     RejectTxn --> RejectSuccess([名單退回<br/>stage = 'personnel_ratio'<br/>個別業務比例已清空<br/>處長需重新設定])
 
     RejectSuccess --> BannerTrigger[/F087 BR-11<br/>banner 觸發機制：<br/>F082 GET response<br/>latestRejection 欄位/]

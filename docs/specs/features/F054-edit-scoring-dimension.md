@@ -28,7 +28,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 
 ## 1. 功能摘要
 
-提供業務部長針對「Tab 1 選中之 CARD_TYPE」新增、修改、停用計分維度，以及調整各維度的分數區間設定（`ob_levelcard_column` / `ob_levelcard_score`）。採覆寫式儲存（無草稿版本分岔）；月跑執行中禁止修改。歷史追溯透過每次月跑自動產生的 config 快照（F066）查詢。所有寫入操作之範圍均嚴格限定於 Tab 1 選中之 CARD_TYPE，跨 CARD_TYPE 寫入請求一律拒絕。
+提供業務部長針對「Tab 1 選中之 CARD_TYPE」新增、修改、停用計分維度，以及調整各維度的分數區間設定（`ob_levelcard_column` / `ob_levelcard_score`）。採覆寫式儲存（無草稿版本分岔）；月名單分派執行中禁止修改。歷史追溯透過每次月名單分派自動產生的 config 快照（F066）查詢。所有寫入操作之範圍均嚴格限定於 Tab 1 選中之 CARD_TYPE，跨 CARD_TYPE 寫入請求一律拒絕。
 
 每個維度具備明確之 `match_type`（`RANGE` / `CATEGORY` / `COMPOSITE`）以決定分數區間之比對邏輯；切換 `match_type` 時 service 層自動偵測差異並清空既有 `ob_levelcard_score` 列，避免新舊欄位語意衝突。
 
@@ -62,7 +62,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 
 - **Given** 某維度在 `ob_levelcard_column.status='active'` 但 `ob_levelcard_score` 為空（歷史殘留 / 已修復前的遺留資料）
 - **When** 編輯頁面載入該維度
-- **Then** 頁面該維度區塊顯示醒目提示「此維度尚未設定任何分數區間，月跑將無法計分」
+- **Then** 頁面該維度區塊顯示醒目提示「此維度尚未設定任何分數區間，月名單分派將無法計分」
 - **And** 提供「立即補設分數」入口，引導部長進入該維度的編輯流程
 - **And** 不阻擋編輯（業務部長可選擇先停用該維度或補設分數）
 
@@ -98,10 +98,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 - **Given** 業務部長點擊某維度的「停用」按鈕並確認
 - **When** 後端處理停用請求
 - **Then** 該維度於 `ob_levelcard_column.status` 欄位標記為 `'inactive'`（soft delete 機制；欄位定義由 migration `1711360000143-AddObLevelcardColumnStatus.ts` 補建，VARCHAR(10) NOT NULL DEFAULT 'active'）
-- **And** 不刪除既有資料；後續月跑 Stage 2 透過 `fn_calc_tier_level` 依 `status = 'active'` 過濾，停用維度不再參與計分
+- **And** 不刪除既有資料；後續月名單分派 Stage 2 透過 `fn_calc_tier_level` 依 `status = 'active'` 過濾，停用維度不再參與計分
 - **And** 寫入 `assignment_audit_log`（`action = 'DISABLE'`）
 
-### AC-5：月跑執行中禁止修改（資料鎖）
+### AC-5：月名單分派執行中禁止修改（資料鎖）
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
 - **When** 業務部長嘗試進入計分設定編輯模式
@@ -224,7 +224,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
-| 409 | SCORING_VERSION_LOCKED | 月跑執行中禁止修改 |
+| 409 | SCORING_VERSION_LOCKED | 月名單分派執行中禁止修改 |
 | 422 | SCORING_COLUMN_DUPLICATE | `column_name` 已存在於 active 版本 |
 | 422 | SCORING_RANGE_OVERLAP | 分數區間重疊（RANGE / COMPOSITE 同 level1 內） |
 | 422 | SCORING_CATEGORY_DUPLICATE | CATEGORY / COMPOSITE 模式同 column_name + 相同 level1（經 BR-9 規一化後）出現多筆 score 列（v1.3 新增） |
@@ -269,16 +269,16 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 | 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 404 | SCORING_COLUMN_NOT_FOUND | 指定的 `cardType + columnName` 不存在或已停用 |
 | 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.2 新增） |
-| 409 | SCORING_VERSION_LOCKED | 月跑執行中禁止修改 |
+| 409 | SCORING_VERSION_LOCKED | 月名單分派執行中禁止修改 |
 
 ## 6. 商業規則
 
 | 規則編號 | 說明 |
 |---|---|
-| BR-1 | 覆寫式編輯：無草稿版本、無 rollback；歷史追溯透過月跑自動產生的 `config` 快照（F066） |
+| BR-1 | 覆寫式編輯：無草稿版本、無 rollback；歷史追溯透過月名單分派自動產生的 `config` 快照（F066） |
 | BR-2 | `card_version` 寫入規則：覆寫式修改不遞增 `card_version`（OBLEVELCARD_VERSION dump 中 6 種 CARD_TYPE — H/S/E/S5/E5/M — 全部為 v1 為證）；新版本另行建立 `ob_levelcard_version` 紀錄屬未來範疇，本次不支援 |
 | BR-3 | 分數區間不可重疊；依 `match_type` 分流驗證（RANGE `[level2_s, level2_e]` 不重疊；CATEGORY 同 level1 唯一；COMPOSITE 同 level1 內 RANGE 規則 + (`level1`, `level2_s`, `level2_e`) 三元組唯一） |
-| BR-4 | 月跑鎖：`assignment_run.status IN ('pending', 'running')` 時 API 直接回傳 409 |
+| BR-4 | 月名單分派鎖：`assignment_run.status IN ('pending', 'running')` 時 API 直接回傳 409 |
 | BR-5 | 複雜計分邏輯（TIER_LEVEL 對應計算）由 PostgreSQL function 實作（AD-E07-3） |
 | BR-6 | `ob_levelcard_version.status` 欄位於遷移時補建（原 OBLEVELCARD_VERSION 無此欄位），初值由 `(SDATE <= 今日 < EDATE)` 計算；本功能仍以 `status = 'active'` 判斷 active 計分版本 |
 | BR-7 | **CARD_TYPE 範圍鎖**（v1.2 新增）：所有寫入操作之 `cardType` 必須對應 `ob_card_type.status = 'active'`；request body 中之 `cardType` 必須與 Tab 1 selectedCardType 一致；跨 CARD_TYPE 寫入請求一律拒絕（422 `CARD_TYPE_NOT_FOUND` 或 `VALIDATION_ERROR`） |
@@ -291,13 +291,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-18
 - 新增維度：開啟 Modal 表單，含 `match_type` 必選下拉（無預設值）；選定後 scores 編輯區依 match_type 動態顯示 level1 / level2_s / level2_e 欄位
 - 切換 match_type：UI 應於使用者於編輯介面改變 match_type 時，顯示「儲存後將清空既有分數區間」提示，提醒使用者影響範圍（行為由 service 層自動執行，無需前端 flag）
 - 停用維度：Modal 確認對話框
-- 月跑鎖定時：編輯 / 新增 / 停用按鈕全部 disabled
+- 月名單分派鎖定時：編輯 / 新增 / 停用按鈕全部 disabled
 - 歷史殘留 `ALL_SCORES_EMPTY`：見 AC-1b，於該維度區塊顯示醒目提示
 
 ## 8. 相依性
 
 - **Blocked By**：F053（需先查看現有設定）、F069（Tab 1 CARD_TYPE 選中狀態來源）、F070（新建 CARD_TYPE 後才能編輯其維度）
-- **Blocks**：F061（月跑 Stage 2 計分邏輯使用此設定）
+- **Blocks**：F061（月名單分派 Stage 2 計分邏輯使用此設定）
 
 ## 9. 交叉參考
 

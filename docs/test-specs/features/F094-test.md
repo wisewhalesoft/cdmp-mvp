@@ -1,7 +1,7 @@
 ---
 type: test-design-feature
 feature_id: F094
-feature_name: 月跑分派結果表 ob_monthly_run_result（單源化 Phase A）
+feature_name: 月名單分派結果表 ob_monthly_run_result（單源化 Phase A）
 priority: P0-MVP
 related_spec: /docs/specs/features/F094-monthly-run-result-table.md
 spec_version: "1.0"
@@ -11,13 +11,13 @@ covers:
 last_updated: 2026-05-27
 ---
 
-# F094：月跑分派結果表 ob_monthly_run_result（單源化 Phase A）— 測試設計
+# F094：月名單分派結果表 ob_monthly_run_result（單源化 Phase A）— 測試設計
 
-> ⚠️ **PRODUCTION 結構變更警告（必讀）**：本 feature 將月跑 Stage 1~4 之寫入 / 讀取目標由 `ob_pool_data_list`（`data_source='monthly_run'`）切換至新表 `ob_monthly_run_result`。**Stage 1 寫入切換（AC-2）與 Stage 3/4 讀取切換（AC-3）必須於同一 PR 完整完成**（AC-4），不可分批 deploy；與 F091 v2.0 + F095 同批 deploy（Phase A）。
+> ⚠️ **PRODUCTION 結構變更警告（必讀）**：本 feature 將月名單分派 Stage 1~4 之寫入 / 讀取目標由 `ob_pool_data_list`（`data_source='monthly_run'`）切換至新表 `ob_monthly_run_result`。**Stage 1 寫入切換（AC-2）與 Stage 3/4 讀取切換（AC-3）必須於同一 PR 完整完成**（AC-4），不可分批 deploy；與 F091 v2.0 + F095 同批 deploy（Phase A）。
 >
 > **測試設計重點**：
 > 1. Migration m292（表結構 / PK / FK / nullable assignday）up/down 正確性
-> 2. Stage 1 月跑寫入目標切換至本表（ob_pool_data_list 不再被寫入）
+> 2. Stage 1 月名單分派寫入目標切換至本表（ob_pool_data_list 不再被寫入）
 > 3. Stage 3/4 讀取目標切換至本表（與 Stage 1 落點一致）
 > 4. snapshot type=result 短期雙軌保留（AC-5，DP-AD25-3）
 > 5. FK ON DELETE CASCADE：assignment_run 刪除時自動清除對應 ob_monthly_run_result 列
@@ -50,7 +50,7 @@ last_updated: 2026-05-27
 |---|---|---|---|---|
 | TS-F094-MIG-001~003（migration m292）| 3 | 高（需 PG TC）| Integration | up/down / PK / FK CASCADE / nullable assignday |
 | TS-F094-ENT-001~002（entity 靜態）| 2 | 高 | Unit（靜態）| TIMESTAMP 欄位 / PK 複合鍵 |
-| TS-F094-ST1-001~003（Stage 1 寫入切換）| 3 | 高（需 PG TC）| Integration | 月跑寫入本表 / ob_pool_data_list 不被寫入 / run_id 關聯 |
+| TS-F094-ST1-001~003（Stage 1 寫入切換）| 3 | 高（需 PG TC）| Integration | 月名單分派寫入本表 / ob_pool_data_list 不被寫入 / run_id 關聯 |
 | TS-F094-ST34-001~002（Stage 3/4 讀取切換）| 2 | 高（需 PG TC）| Integration | Stage 3/4 讀本表 / CR+分派結果欄位更新 |
 | TS-F094-SN-001~002（snapshot 雙軌）| 2 | 高（混合）| Integration / Unit | snapshot type=result 仍寫 / collectCrCandidates 維持讀 snapshot |
 | TS-F094-FK-001~002（FK + CASCADE）| 2 | 高（需 PG TC）| Integration | assignment_run 刪除 → 本表列 CASCADE 清除 |
@@ -166,7 +166,7 @@ last_updated: 2026-05-27
 
 ---
 
-### TS-F094-ST1-001：月跑 Stage 1 寫入 ob_monthly_run_result（不再寫 ob_pool_data_list）
+### TS-F094-ST1-001：月名單分派 Stage 1 寫入 ob_monthly_run_result（不再寫 ob_pool_data_list）
 
 - **關聯需求**：F094 AC-2；F094 AC-4（同一 PR 完整切換）；AD-E07-25 §25.6 / §25.7 Phase A
 - **測試類型**：Positive / Integration（關鍵場景）
@@ -179,13 +179,13 @@ last_updated: 2026-05-27
   - `ob_pool_data` seed 足夠 Stage 1 挑案的案件（含 `month_cnt` 等必要欄位）
   - 建立一個 `assignment_run`（`run_id = 'test-run-001'`）
 - **步驟**：
-  1. 執行月跑 Stage 1（`executeStage1Chain({ dryRun: false })`）對某名單
+  1. 執行月名單分派 Stage 1（`executeStage1Chain({ dryRun: false })`）對某名單
   2. 查詢 `ob_monthly_run_result WHERE run_id = 'test-run-001'`，統計筆數
   3. 查詢 `ob_pool_data_list WHERE data_source = 'monthly_run'`，統計筆數
   4. 驗證 `ob_monthly_run_result` 每列含 `run_id`、`list_no`、`orgno`、`appl_no`（PK 四欄）
 - **預期結果**：
-  - `ob_monthly_run_result` 含月跑 Stage 1 提案列，`run_id = 'test-run-001'`，筆數 > 0
-  - `ob_pool_data_list WHERE data_source = 'monthly_run'` = **0 筆**（regression guard：月跑不再寫本表）
+  - `ob_monthly_run_result` 含月名單分派 Stage 1 提案列，`run_id = 'test-run-001'`，筆數 > 0
+  - `ob_pool_data_list WHERE data_source = 'monthly_run'` = **0 筆**（regression guard：月名單分派不再寫本表）
   - `ob_pool_data_list WHERE data_source = 'etl_load'` 仍為 3 筆（ETL 歷史未被影響）
   - 每列 `result_status = 'PENDING'`（初始值）
 - **DB 需求**：PostgreSQL TestContainer
@@ -199,7 +199,7 @@ last_updated: 2026-05-27
 - **測試層**：Integration（PostgreSQL TestContainer）
 - **前置條件**：同 ST1-001
 - **步驟**：
-  1. 執行月跑 Stage 1 後查詢一筆 `ob_monthly_run_result`
+  1. 執行月名單分派 Stage 1 後查詢一筆 `ob_monthly_run_result`
   2. 驗證 response 物件欄位集合
 - **預期結果**：
   - 包含 PK 四欄（`run_id` / `list_no` / `orgno` / `appl_no`）
@@ -239,7 +239,7 @@ last_updated: 2026-05-27
   - `ob_monthly_run_result` 含 Stage 1 寫入的提案列（run_id + list_no + 案件）
   - Stage 3 CR 回分邏輯已依 F094 改讀本表（不再讀 `ob_pool_data_list`）
 - **步驟**：
-  1. 執行月跑 Stage 3（CR 回分）
+  1. 執行月名單分派 Stage 3（CR 回分）
   2. 查詢 `ob_monthly_run_result WHERE run_id = :runId AND is_cr = true`，統計筆數
   3. 驗證 `cr_id`、`cr_nm` 欄位已填入
 - **預期結果**：
@@ -258,7 +258,7 @@ last_updated: 2026-05-27
   - `ob_monthly_run_result` 含 Stage 1 + Stage 3 完成後的提案列
   - Stage 4 分派邏輯已依 F094 改讀本表
 - **步驟**：
-  1. 執行月跑 Stage 4（部門 / 業務員分配）
+  1. 執行月名單分派 Stage 4（部門 / 業務員分配）
   2. 查詢 `ob_monthly_run_result WHERE run_id = :runId`，驗證 `dept_id` / `emplid` / `emplid_deptid` 欄位
 - **預期結果**：
   - `dept_id` / `emplid` / `emplid_deptid` 至少部分列非 NULL（Stage 4 寫入）
@@ -273,12 +273,12 @@ last_updated: 2026-05-27
 
 ---
 
-### TS-F094-SN-001：月跑完成後仍寫 assignment_run_snapshot type=result（雙軌保留）
+### TS-F094-SN-001：月名單分派完成後仍寫 assignment_run_snapshot type=result（雙軌保留）
 
-- **關聯需求**：F094 AC-5（「月跑 Stage 4 完成後仍寫 `assignment_run_snapshot`（type=result）作為稽核快照」）；DP-AD25-3
+- **關聯需求**：F094 AC-5（「月名單分派 Stage 4 完成後仍寫 `assignment_run_snapshot`（type=result）作為稽核快照」）；DP-AD25-3
 - **測試類型**：Positive / Integration
 - **測試層**：Integration（PostgreSQL TestContainer）
-- **前置條件**：完整月跑（Stage 1~4）已執行完畢
+- **前置條件**：完整月名單分派（Stage 1~4）已執行完畢
 - **步驟**：
   1. 查詢 `assignment_run_snapshot WHERE run_id = :runId AND type = 'result'`
   2. 確認快照存在
@@ -377,8 +377,8 @@ last_updated: 2026-05-27
 | TS-F094-MIG-001~002（migration up/down）| 高（需 PG TC）| PK / FK / CASCADE / nullable assignday |
 | TS-F094-MIG-003（SQLite no-op）| 高 | 靜態分析 |
 | TS-F094-ENT-001~002（entity 靜態）| 高 | dateColumnType + PK + FK grep |
-| TS-F094-ST1-001~003（Stage 1 寫入切換）| 高（需 PG TC）| 最關鍵：月跑不再寫 ob_pool_data_list；本表含 run_id 提案 |
-| TS-F094-ST34-001~002（Stage 3/4 讀取切換）| 高（需 PG TC）| 需月跑 Stage 1 先完成 seed |
+| TS-F094-ST1-001~003（Stage 1 寫入切換）| 高（需 PG TC）| 最關鍵：月名單分派不再寫 ob_pool_data_list；本表含 run_id 提案 |
+| TS-F094-ST34-001~002（Stage 3/4 讀取切換）| 高（需 PG TC）| 需月名單分派 Stage 1 先完成 seed |
 | TS-F094-SN-001~002（snapshot 雙軌）| 高（SN-001 PG TC / SN-002 靜態）| 雙軌保留驗證 |
 | TS-F094-FK-001~002（FK + CASCADE）| 高（需 PG TC）| 資料庫 FK 行為驗證 |
 | TS-F094-DEDUP-001（去重不讀本表）| 高 | mock + grep；無真實 DB 依賴 |

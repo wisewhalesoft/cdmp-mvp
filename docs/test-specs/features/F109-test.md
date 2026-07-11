@@ -245,7 +245,7 @@ related: [F100, F101, F102, F103, F104, F049]
 - **Related Requirement**：AC-7 / BR-7 / OQ-172-02
 - **Test Type**：Positive / Migration Integration
 - **Steps**：查詢 count + 值集合
-- **Expected Result**：count=22；含 `臺北市`/`臺中市`/`臺南市`/`臺東縣`（**必為「臺」字**，非「台北市」等「台」字形，防止與月跑 `LEFT(cpost_city,3)` 比對時因字形不一致而全數落空）；不含釣魚臺/南海諸/空白等邊界值（OQ-172-02 裁示不 seed）
+- **Expected Result**：count=22；含 `臺北市`/`臺中市`/`臺南市`/`臺東縣`（**必為「臺」字**，非「台北市」等「台」字形，防止與月名單分派 `LEFT(cpost_city,3)` 比對時因字形不一致而全數落空）；不含釣魚臺/南海諸/空白等邊界值（OQ-172-02 裁示不 seed）
 
 ---
 
@@ -564,7 +564,7 @@ related: [F100, F101, F102, F103, F104, F049]
 - **Related Requirement**：BR-5「決定性」/ AC-6 第 3 點
 - **Test Type**：Positive / PG Integration（**紅線**）
 - **Preconditions**：同一 `project_workym`（故 `workdt` 相同）；固定 `date_of_birth`
-- **Steps**：執行查詢兩次（模擬月跑重跑）
+- **Steps**：執行查詢兩次（模擬月名單分派重跑）
 - **Expected Result**：兩次計算之 age 值完全相同，入選案件集合完全相同（不隨執行日期時鐘漂移）
 
 ---
@@ -687,11 +687,11 @@ related: [F100, F101, F102, F103, F104, F049]
 
 ---
 
-### TS-F109-DEACT-002：既有名單 `OB202607001`（「性別 IN [1]」已固化）於欄位停用後觸發月跑 → 仍正確過濾，不報錯（TC-172-09）
+### TS-F109-DEACT-002：既有名單 `OB202607001`（「性別 IN [1]」已固化）於欄位停用後觸發月名單分派 → 仍正確過濾，不報錯（TC-172-09）
 - **Related Requirement**：AC-9 / TC-172-09 / I-CC-DATASOURCE-01
 - **Test Type**：Positive / PG Integration
 - **Preconditions**：名單 `OB202607001` 之 `condition_payload` 已含 `{columnName:'gender', dataSource:'customer_core', values:['1']}`（建立時已固化）；隨後 `gender.is_active` 改為 `false`
-- **Steps**：呼叫 `buildStage1Sql` / 觸發月跑該名單
+- **Steps**：呼叫 `buildStage1Sql` / 觸發月名單分派該名單
 - **Expected Result**：查詢正確組裝並執行（`customerCoreJoin` 非 null、`WHERE cc.gender IN ('1')` 生效）；不因欄位停用而拋錯或被跳過
 
 ---
@@ -700,8 +700,8 @@ related: [F100, F101, F102, F103, F104, F049]
 - **Related Requirement**：BR-9
 - **Test Type**：Positive / PG Integration
 - **Preconditions**：`gender` option `'1'` 之 `is_active=false`（可選值停用，非欄位停用）；既有名單條件含 `gender IN ['1']`
-- **Steps**：觸發月跑
-- **Expected Result**：月跑不阻擋，正確過濾；若既有機制產生 `WHITELIST_OPTION_INACTIVE` 警告則加入 `skipped_cases.warnings[]`（非硬性錯誤）
+- **Steps**：觸發月名單分派
+- **Expected Result**：月名單分派不阻擋，正確過濾；若既有機制產生 `WHITELIST_OPTION_INACTIVE` 警告則加入 `skipped_cases.warnings[]`（非硬性錯誤）
 
 ---
 
@@ -752,12 +752,12 @@ related: [F100, F101, F102, F103, F104, F049]
 
 ---
 
-### TS-F109-EQ-006：Stage 0 試算 count 與月跑 Stage 1 實際入選案件數一致（I-RUN-EST-01 延伸，三處消費一致 BR-10 具體化）
+### TS-F109-EQ-006：Stage 0 試算 count 與月名單分派 Stage 1 實際入選案件數一致（I-RUN-EST-01 延伸，三處消費一致 BR-10 具體化）
 - **Related Requirement**：BR-10 / spec §6.3 消費點對照表
 - **Test Type**：Positive / PG Integration（**DoD**）
 - **Preconditions**：含 customer_core 條件之名單
-- **Steps**：呼叫 `Stage0EstimateService.estimateListCount`（試算路徑）；另呼叫實際月跑 Stage 1 insert 後查詢 `ob_monthly_run_result` 該名單筆數
-- **Expected Result**：試算 count = 月跑實際入選案件數（三處消費一致最終驗證）
+- **Steps**：呼叫 `Stage0EstimateService.estimateListCount`（試算路徑）；另呼叫實際月名單分派 Stage 1 insert 後查詢 `ob_monthly_run_result` 該名單筆數
+- **Expected Result**：試算 count = 月名單分派實際入選案件數（三處消費一致最終驗證）
 
 ---
 
@@ -1054,7 +1054,7 @@ related: [F100, F101, F102, F103, F104, F049]
 |---|---|---|
 | 舊 `condition_payload` columnName 碰撞 | AD §10.1 | 理論上不存在（F109 前白名單僅 7 個 `ob_pool_data` 欄位，whitelist 驗證會拒絕不在白名單內的 columnName），已文件化為可接受風險，不需額外測試 |
 | `customer_core` 未來欄位命名碰撞（歧義引用） | AD §10.2 | 若 `customer_core` 未來新增與現行 7 個 `ob_pool_data` 白名單欄名相同之欄位，PG 會拋出 `column reference "..." is ambiguous` 編譯期錯誤（fail-loud，非本 AD 需防禦） |
-| JOIN 效能 EXPLAIN 觀察 | AD §10.4 | 建議 prod 上線後首次含 customer_core 條件之月跑人工 `EXPLAIN ANALYZE`，屬 post-deploy 觀察項，非自動化測試範圍（不納入本文件場景計數） |
+| JOIN 效能 EXPLAIN 觀察 | AD §10.4 | 建議 prod 上線後首次含 customer_core 條件之月名單分派人工 `EXPLAIN ANALYZE`，屬 post-deploy 觀察項，非自動化測試範圍（不納入本文件場景計數） |
 
 ### 待確認事項（非阻擋，供 tdd-implementation 落地時留意）
 

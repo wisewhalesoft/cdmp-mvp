@@ -180,7 +180,7 @@ private isPostgres(): boolean {
 - **Test Type**：Negative / Integration（真實 MSSQL）
 - **Preconditions**：MSSQL baseline（不含 `customer_core`）
 - **Steps**：以 `DB_TYPE=mssql` 呼叫改寫後 `prefetchScoringSources`（`custoNos.length>0`）
-- **Expected Result**：查詢拋出「invalid object name 'customer_core'」類錯誤 → 既有 `try/catch` graceful degrade 邏輯捕捉 → `ccMap` 為空 Map，**不拋出例外中斷月跑**（與現行 SQLite 分支行為結構相同）；**斷言重點是「捕捉到的是表不存在錯誤，非參數繫結/語法錯誤」**——若捕捉到的是 SQL 語法錯誤（如 `Incorrect syntax near '$1'`），代表具名參數轉換本身失敗，須視為本案例 FAIL，不可與「表不存在」錯誤混為一談
+- **Expected Result**：查詢拋出「invalid object name 'customer_core'」類錯誤 → 既有 `try/catch` graceful degrade 邏輯捕捉 → `ccMap` 為空 Map，**不拋出例外中斷月名單分派**（與現行 SQLite 分支行為結構相同）；**斷言重點是「捕捉到的是表不存在錯誤，非參數繫結/語法錯誤」**——若捕捉到的是 SQL 語法錯誤（如 `Incorrect syntax near '$1'`），代表具名參數轉換本身失敗，須視為本案例 FAIL，不可與「表不存在」錯誤混為一談
 
 ### TS-MSSQL-P1C-PARAM-004：SQLite 回歸——站點 1 改寫後於 SQLite 仍走既有 graceful degrade
 - **Test Type**：Regression

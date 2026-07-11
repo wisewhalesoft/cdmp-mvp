@@ -78,7 +78,7 @@ US-071 定義的 Stage 0 試算頁以「單一 LIST_NO 選取」為操作起點�
 - **Then** 系統**不**寫入 `ob_pool_data_list`、`assignment_run`、或任何分派紀錄
 - **And** 此行為與 F049 BR-1 / F092 AC-2 一致（estimate ≡ run invariant 保留於唯讀層）
 
-> **架構約束（非功能需求）**：每日 ratioPerMille 計算與月跑 Stage 4 ASSIGNDAY 共用同一 `computeWorkingDayRatios` 邏輯（AD-E07-29 §3.4 / I-RUN-EST-01）。本 Story 的彙總改動不得破壞此 invariant；spec-writer / 系統架構師確認聚合層僅在 ratio 計算之上新增加法，不修改底層 calendar 邏輯。
+> **架構約束（非功能需求）**：每日 ratioPerMille 計算與月名單分派 Stage 4 ASSIGNDAY 共用同一 `computeWorkingDayRatios` 邏輯（AD-E07-29 §3.4 / I-RUN-EST-01）。本 Story 的彙總改動不得破壞此 invariant；spec-writer / 系統架構師確認聚合層僅在 ratio 計算之上新增加法，不修改底層 calendar 邏輯。
 
 ---
 

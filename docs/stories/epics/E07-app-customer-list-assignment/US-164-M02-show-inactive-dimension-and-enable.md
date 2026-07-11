@@ -26,7 +26,7 @@
 - 後端有停用端點 `PUT /assignment/scoring/dimensions/:columnName/disable`（軟刪除 status→inactive），但**無對稱的「啟用」端點**。
 - 一旦維度被停用（不論是業務主動停用，或如 SALES_STS 因 seed/legacy 漂移被誤標 inactive），業務在設定頁看不到該維度、無從察覺、更無法自助復原。
 
-實害案例：H 卡 SALES_STS 維度（seed 與 legacy 皆應為 active）曾被誤標 inactive，導致月跑計分長期少一個維度，且因 UI 隱形而長期無人發現，最終靠 migration m302（`ActivateHSalesStsScoringColumn`）以資料庫遷移手動修回。本 Story 目標即消除此盲區：讓停用維度可見、可被啟用。
+實害案例：H 卡 SALES_STS 維度（seed 與 legacy 皆應為 active）曾被誤標 inactive，導致月名單分派計分長期少一個維度，且因 UI 隱形而長期無人發現，最終靠 migration m302（`ActivateHSalesStsScoringColumn`）以資料庫遷移手動修回。本 Story 目標即消除此盲區：讓停用維度可見、可被啟用。
 
 本 Story 與既有 US-073（編輯/新增/停用計分維度）為對稱補完——US-073 提供「停用」，本 Story 提供「顯示停用維度 + 重新啟用」。
 
@@ -53,7 +53,7 @@
 
 3. **API 現況**
    - `assignment-scoring.controller.ts`：有 `@Put('dimensions/:columnName/disable')`（L92-105）；**無 enable 端點**。
-   - `assignment-scoring.service.ts`：`getScoring()` 維度查詢過濾 `status='active'`（L399），且回傳的 `ScoringDimensionItem` **不含 status 欄位**（L412-426）。`disableDimension()` 寫入前有月跑鎖檢查 `assertNotLocked()`（L730），停用 → `status='inactive'` + 寫 `assignment_audit_log`（L759-766）。
+   - `assignment-scoring.service.ts`：`getScoring()` 維度查詢過濾 `status='active'`（L399），且回傳的 `ScoringDimensionItem` **不含 status 欄位**（L412-426）。`disableDimension()` 寫入前有月名單分派鎖檢查 `assertNotLocked()`（L730），停用 → `status='inactive'` + 寫 `assignment_audit_log`（L759-766）。
 
 4. **側欄導覽檢查（CLAUDE.md）**
    - 路由 `/assignment/scoring` 已存在於 `apps/web/src/App.tsx`（L197-200，render `ScoringConfigPage`）。
@@ -80,7 +80,7 @@
 - **When** 該 CARD_TYPE 的 active 版本下存在 inactive 維度
 - **Then** 回應 `dimensions[]` **同時包含 active 與 inactive 維度**
 - **And** 每個 dimension 物件**必含 `status` 欄位**（值為 `'active'` 或 `'inactive'`），前端不再依賴 `?? 'active'` 防禦性 fallback
-- **And** inactive 維度雖在清單顯示，但**不影響月跑計分**（計分引擎 / `fn_calc_tier_level` 仍只採 `status='active'` 維度，與既有行為一致——本 Story 只改「可見性與啟用」，不改「計分採計範圍」）
+- **And** inactive 維度雖在清單顯示，但**不影響月名單分派計分**（計分引擎 / `fn_calc_tier_level` 仍只採 `status='active'` 維度，與既有行為一致——本 Story 只改「可見性與啟用」，不改「計分採計範圍」）
 
 > Open Question OQ-2：是否以查詢參數（如 `?includeInactive=true`）控制回傳範圍，或一律回傳全部由前端過濾。建議「一律回傳全部 + status 欄位」（最簡、單一資料源、避免兩套查詢路徑），但若有其他 `getScoring` 消費端在意 payload 體積或語意，需 spec-writer 評估。交由下游與使用者拍板。
 
@@ -104,13 +104,13 @@
 
 > Open Question OQ-3：「啟用一個本已 active 的維度」應回 404（對稱於 disable 對已 inactive 回 404 的慣例）、還是冪等回 200？建議比照 disable 既有 contract（findOne 限定相反狀態 → 找不到回 404），以維持兩端點對稱與測試可預期性。交由 spec-writer / 使用者確認。
 
-### AC-5：月跑執行中禁止啟用 / 停用（資料鎖）
+### AC-5：月名單分派執行中禁止啟用 / 停用（資料鎖）
 
-- **Given** 目前有月跑正在執行（`assignment_run.status IN ('pending', 'running')`）
+- **Given** 目前有月名單分派正在執行（`assignment_run.status IN ('pending', 'running')`）
 - **When** 業務主管嘗試對某維度執行「啟用」（或「停用」）
 - **Then** 寫入被阻擋，後端回 `409 SCORING_VERSION_LOCKED`（沿用既有 `assertNotLocked()` 機制，與 disable 完全一致）
 - **And** 前端「啟用」/「停用」按鈕在鎖定期間 disabled，並顯示「分派執行中，無法修改計分設定」提示
-- **And** 月跑完成後，啟用 / 停用功能自動恢復可用
+- **And** 月名單分派完成後，啟用 / 停用功能自動恢復可用
 
 ### AC-6：權限——僅具寫入權限者可見並可操作「啟用」
 
@@ -156,10 +156,10 @@
 ## Definition of Done
 
 - [ ] AC-1 ~ AC-6 全部滿足
-- [ ] 後端 `getScoring` 回傳 active + inactive 維度且每維度含 `status`；新增 `enable` 端點對稱於 `disable`（含權限、feature flag、月跑鎖、audit log、404 語意）
+- [ ] 後端 `getScoring` 回傳 active + inactive 維度且每維度含 `status`；新增 `enable` 端點對稱於 `disable`（含權限、feature flag、月名單分派鎖、audit log、404 語意）
 - [ ] 前端 Tab 2 顯示 inactive 維度（狀態 chip + 列級弱化標記）並提供「啟用」入口；鎖定 / 權限行為正確
 - [ ] 計分引擎採計範圍未變更（inactive 仍不參與計分）之回歸驗證
-- [ ] Unit / 整合測試涵蓋：含 inactive 的查詢、啟用成功、重複啟用、404、月跑鎖 409、權限拒絕（>80% 覆蓋）
+- [ ] Unit / 整合測試涵蓋：含 inactive 的查詢、啟用成功、重複啟用、404、月名單分派鎖 409、權限拒絕（>80% 覆蓋）
 - [ ] `tsc --noEmit -p tsconfig.build.json` 乾淨（前後端）
 - [ ] OQ-1 ~ OQ-5 已由使用者 / 下游裁示並記錄於 spec
 - [ ] 設計意圖回寫原型之需求已交付 UI/UX 階段（本 Story 不改原型）

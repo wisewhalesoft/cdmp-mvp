@@ -364,7 +364,7 @@ last_updated: 2026-05-27
   2. 驗證 response
 - **預期結果**：
   - HTTP **422**，錯誤碼 `RUN_WORKYM_PAST`
-  - response `message` 表達「不可對已開始或過去的作業月觸發月跑」（或等效說明，對齊 error-handling.md）
+  - response `message` 表達「不可對已開始或過去的作業月觸發月名單分派」（或等效說明，對齊 error-handling.md）
 
 ---
 
@@ -611,7 +611,7 @@ last_updated: 2026-05-27
   - 初始 `targetWorkYm = '202606'`
 - **步驟**：
   1. 於「名單定義頁」MonthPicker 呼叫 `setTargetWorkYm('202607')`
-  2. 讀取其他三頁（準備完成摘要 / Stage 0 試算 / 月跑觸發）的 Context `targetWorkYm`
+  2. 讀取其他三頁（準備完成摘要 / Stage 0 試算 / 月名單分派觸發）的 Context `targetWorkYm`
 - **預期結果**：
   - 所有四頁 `targetWorkYm = '202607'`（Context 已同步）
 
@@ -619,7 +619,7 @@ last_updated: 2026-05-27
 
 ### TS-F097-CTX-004：`run-history` 頁 MonthPicker 不影響共享 `targetWorkYm`（獨立 local state）
 
-- **關聯需求**：AC-3（US-137 AC-4 / US-141 AC-5）；glossary §8（「月跑歷史頁（`run-history`，F065）：維持獨立 local state」）
+- **關聯需求**：AC-3（US-137 AC-4 / US-141 AC-5）；glossary §8（「月名單分派歷史頁（`run-history`，F065）：維持獨立 local state」）
 - **測試類型**：Negative / Component（RTL）
 - **測試層**：Component
 - **前置條件**：
@@ -664,7 +664,7 @@ last_updated: 2026-05-27
   1. render 「名單定義頁」，spy on 其 API fetch 呼叫
   2. render 「準備完成摘要頁」，spy on 其 API fetch
   3. render 「Stage 0 試算頁」，spy on 其 API fetch
-  4. render 「月跑觸發頁」，spy on readiness API fetch
+  4. render 「月名單分派觸發頁」，spy on readiness API fetch
   5. 驗證各頁 fetch URL / params 含 `ym=202606` 或等效
 - **預期結果**：
   - 四頁均以 `202606` 作為月份篩選參數（非各頁自行 `new Date()` 計算）
@@ -707,7 +707,7 @@ last_updated: 2026-05-27
   - spy on `POST /api/v1/assignment/runs`
   - 部長角色
 - **步驟**：
-  1. 點擊「啟動月跑」按鈕
+  1. 點擊「啟動月名單分派」按鈕
   2. 點擊 confirm modal 確認按鈕
   3. 驗證 `POST /api/v1/assignment/runs` 請求 body
 - **預期結果**：
@@ -716,14 +716,14 @@ last_updated: 2026-05-27
 
 ---
 
-### TS-F097-TRIGGER-003：confirm modal 標題顯示選定月份格式（「確認觸發 2026-06 月跑？」）
+### TS-F097-TRIGGER-003：confirm modal 標題顯示選定月份格式（「確認觸發 2026-06 月名單分派？」）
 
-- **關聯需求**：AC-6 And「confirm modal 標題顯示『確認觸發 2026-06 月跑？』（格式化自 `target_work_ym`，不顯示 `new Date()` 月份）」；F097 §5.1（`data-testid="confirm-trigger-modal"` 保留）
+- **關聯需求**：AC-6 And「confirm modal 標題顯示『確認觸發 2026-06 月名單分派？』（格式化自 `target_work_ym`，不顯示 `new Date()` 月份）」；F097 §5.1（`data-testid="confirm-trigger-modal"` 保留）
 - **測試類型**：Positive / Component（RTL）
 - **測試層**：Component
 - **前置條件**：Context `targetWorkYm = '202606'`；部長角色；readiness 通過（stub）
 - **步驟**：
-  1. 點擊「啟動月跑」按鈕
+  1. 點擊「啟動月名單分派」按鈕
   2. 驗證 confirm modal 內的標題文字
 - **預期結果**：
   - modal 標題含「2026-06」（格式化自 `targetWorkYm = '202606'`）
@@ -792,7 +792,7 @@ last_updated: 2026-05-27
 
 ---
 
-### TS-F097-DOWNSTREAM-001：月跑進度頁（F062）月份來自 `run.projectWorkym`，無 MonthPicker
+### TS-F097-DOWNSTREAM-001：月名單分派進度頁（F062）月份來自 `run.projectWorkym`，無 MonthPicker
 
 - **關聯需求**：AC-17 Then「月份取自 response 之 `project_workym`，非共享 `target_work_ym` Context」；「此四頁不出現 MonthPicker」
 - **測試類型**：Positive / Component（RTL）
@@ -883,7 +883,7 @@ last_updated: 2026-05-27
 - **測試層**：Component
 - **前置條件**：四頁均 render
 - **步驟**：
-  1. render 名單定義 / 準備完成摘要 / Stage 0 試算 / 月跑觸發四頁
+  1. render 名單定義 / 準備完成摘要 / Stage 0 試算 / 月名單分派觸發四頁
   2. 搜尋頁面文字是否含「作業年月」/ 「當月」/ 「本月」（指 MonthPicker 旁之標籤，非一般說明文字）
 - **預期結果**：
   - MonthPicker 附近標籤**不含**上述舊字串
@@ -933,7 +933,7 @@ last_updated: 2026-05-27
 
 ---
 
-### TS-F097-E2E-001：全流程端到端 — 四頁同步 → 觸發 6 月月跑 → 進度頁顯示 6 月
+### TS-F097-E2E-001：全流程端到端 — 四頁同步 → 觸發 6 月月名單分派 → 進度頁顯示 6 月
 
 - **關聯需求**：AC-1~AC-6、AC-8、AC-12~AC-14、AC-17（全鏈驗證）；F097 §12 E2E 描述
 - **測試類型**：Positive / E2E
@@ -946,13 +946,13 @@ last_updated: 2026-05-27
   1. 進入「名單定義頁」
   2. 確認 MonthPicker 顯示 `202606`（預設下月）
   3. 切換至「Stage 0 試算頁」，確認 `202606`
-  4. 切換至「月跑觸發頁」，確認 MonthPicker 顯示 `202606`
+  4. 切換至「月名單分派觸發頁」，確認 MonthPicker 顯示 `202606`
   5. 確認 readiness check URL 含 `?ym=202606`
-  6. 點擊「啟動月跑」
+  6. 點擊「啟動月名單分派」
   7. confirm modal 顯示「2026-06」
   8. 確認觸發，`POST /api/v1/assignment/runs` body 含 `{ workYm: '202606' }`
   9. DB 驗證 `assignment_run.project_workym = '202606'`
-  10. 進入月跑進度頁（F062）
+  10. 進入月名單分派進度頁（F062）
   11. 確認月份顯示 `202606`（從 `run.projectWorkym`）
   12. 返回「名單定義頁」切換月份至 `202608`
   13. 確認進度頁月份仍為 `202606`（不受共享狀態影響）

@@ -29,7 +29,7 @@ last_updated: 2026-05-14
 | 主要測試層 | API Integration（Supertest + SQLite in-memory）、Frontend Unit（React Testing Library） |
 | 級聯驗證策略 | 需在同一 TC 中逐一查詢 6 張表（ob_tier / ob_levelcard_score / ob_levelcard_level / ob_levelcard_column / ob_levelcard_version / ob_card_type）驗證筆數歸零；同時確認排除表（ob_pool_data_list / ob_list_definition）紀錄不變 |
 | Fallback NULL PK 刪除守護 | ob_tier 中 card_level=NULL 的 Fallback 紀錄必須透過 `repo.remove(entity)` 路徑執行；`repo.delete({card_level:null})` 的靜默 bug 應被 TC-F072-19 抓住（參見 `regression/M02-regression-guards.md`） |
-| 月跑鎖 seed 格式 | 所有月跑鎖 TC 必須 seed AssignmentRun 全部 4 個 NOT NULL 欄位（run_id / project_workym / triggered_by / created_at） |
+| 月名單分派鎖 seed 格式 | 所有月名單分派鎖 TC 必須 seed AssignmentRun 全部 4 個 NOT NULL 欄位（run_id / project_workym / triggered_by / created_at） |
 | delete-preview 與 DELETE 的數字對應 | 測試種子固定筆數（如 1/3/6/4/2）；delete-preview count 與實際 DELETE response deletedCascade count 均需驗證 |
 | ob_list_definition 警告不阻擋 | OQ-E07-30 決策：listDefinitionsAffected > 0 時警告但允許停用；DELETE 仍回 200 |
 
@@ -92,8 +92,8 @@ last_updated: 2026-05-14
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
 | TC-F072-13 | DELETE 不存在的 cardType 回 404 | AC-7 | Integration | ob_card_type 無 NOTEXIST；SM Token | DELETE /card-types/NOTEXIST?confirmCascade=true | HTTP 404；errorCode='CARD_TYPE_NOT_FOUND' |
-| TC-F072-14 | 月跑 pending 時 DELETE 回 409 | AC-8、BR-7 | Integration | assignment_run(run_id='r1', project_workym='202604', triggered_by='u1', created_at=NOW(), status='pending')；SM Token | DELETE /card-types/X?confirmCascade=true | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
-| TC-F072-15 | 月跑 running 時 DELETE 回 409 | AC-8、BR-7 | Integration | assignment_run(run_id='r2', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；SM Token | DELETE /card-types/X?confirmCascade=true | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
+| TC-F072-14 | 月名單分派 pending 時 DELETE 回 409 | AC-8、BR-7 | Integration | assignment_run(run_id='r1', project_workym='202604', triggered_by='u1', created_at=NOW(), status='pending')；SM Token | DELETE /card-types/X?confirmCascade=true | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
+| TC-F072-15 | 月名單分派 running 時 DELETE 回 409 | AC-8、BR-7 | Integration | assignment_run(run_id='r2', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；SM Token | DELETE /card-types/X?confirmCascade=true | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
 
 ### F. API Integration Tests — Transaction Rollback 守護
 
@@ -204,11 +204,11 @@ VALUES
 -- ob_list_definition（2 筆 active，供 listDefinitionsAffected 驗證）
 -- ob_pool_data_list（5 筆歷史，供排除項目驗證）
 
--- 月跑鎖 seed（TC-F072-14，pending；4 欄全填）
+-- 月名單分派鎖 seed（TC-F072-14，pending；4 欄全填）
 INSERT INTO assignment_run (run_id, project_workym, triggered_by, created_at, status)
 VALUES ('run-pending-f072', '202604', 'test-user-id', NOW(), 'pending');
 
--- 月跑鎖 seed（TC-F072-15，running；4 欄全填）
+-- 月名單分派鎖 seed（TC-F072-15，running；4 欄全填）
 INSERT INTO assignment_run (run_id, project_workym, triggered_by, created_at, status)
 VALUES ('run-running-f072', '202604', 'test-user-id', NOW(), 'running');
 ```

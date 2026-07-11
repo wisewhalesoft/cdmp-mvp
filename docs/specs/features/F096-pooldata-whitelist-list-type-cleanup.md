@@ -19,7 +19,7 @@ Priority: P1 | Status: Draft | Last Updated: 2026-05-27
 >
 > **背景**：`ob_list_definition.list_type` 為固定常數 `'01'`（對所有名單相同），不應作為使用者可選篩選欄位；期別篩選之正確欄位為 `ob_pool_data.list_type`（值域 `'01'~'04'`），由使用者輸入之 `case_status` 於 Stage 1 SQL 映射而來（[F050 v2.1](F050-create-list-definition.md) condition_payload 之 `case_status` 條目）。
 >
-> **Phase 對應**：屬單源化 / 清理工程之 **Phase B**（[AD-E07-25 §25.7](../architecture-spec.md) Phase B 群組之清理項）。為純資料 / 設定變更，不改變月跑案件數。
+> **Phase 對應**：屬單源化 / 清理工程之 **Phase B**（[AD-E07-25 §25.7](../architecture-spec.md) Phase B 群組之清理項）。為純資料 / 設定變更，不改變月名單分派案件數。
 >
 > **刻意未動（邊界）**：不變更 `architecture-spec.md`（AD-E07-26 §26.7 為權威）；不撰寫 code / test（由 tdd-implementation 落地）；不變更 `case_status` / `pooldata_field_option` 之既有設計（[F075 v1.6](F075-manage-pooldata-field-whitelist.md) / [F076 v1.6](F076-manage-categorical-field-values.md)）；本 feature 僅停用 `list_type` 一個白名單條目 + 澄清期別篩選路徑。
 
@@ -79,7 +79,7 @@ Priority: P1 | Status: Draft | Last Updated: 2026-05-27
 ### AC-4：既有名單之 list_type 條件相容處理
 
 - **Given** 既有名單之 `condition_payload` 可能含 `list_type` 條件（停用前建立）
-- **When** 該名單被讀取 / 月跑 Stage 1 執行
+- **When** 該名單被讀取 / 月名單分派 Stage 1 執行
 - **Then** 既有 `condition_payload` 中之 `list_type` 條件**仍可被 Stage 1 解析執行**（停用僅影響「新增條件時的 dropdown 可選項」，不影響既有已存條件之解析）
 - **And**（編輯防呆）若使用者於編輯頁嘗試**重新加入** `list_type` 條件，因 dropdown 已不列出而無法新增；後端 [F050/F051 v2.1 `CONDITION_COLUMN_NOT_IN_WHITELIST`](F050-create-list-definition.md) 校驗會攔截（`is_active=false` 視同不在白名單，defense-in-depth）
 
@@ -173,7 +173,7 @@ ob_pool_data.list_type IN ('01','02')   ← 實際 SQL 篩選欄位（唯一期�
 
 ## 13. Production 影響標注
 
-- **本 feature 為白名單設定變更，不改變月跑分派案件數**：停用僅影響「新增名單篩選條件時的 dropdown 可選項」，既有名單之 `condition_payload`（含可能的 `list_type` 條件）仍正常解析執行。
+- **本 feature 為白名單設定變更，不改變月名單分派案件數**：停用僅影響「新增名單篩選條件時的 dropdown 可選項」，既有名單之 `condition_payload`（含可能的 `list_type` 條件）仍正常解析執行。
 - 屬 **Phase B**（清理項，[AD-E07-25 §25.7](../architecture-spec.md) Phase B 群組）；可獨立於 Phase A 落地。
 - 唯一可見變化：名單篩選欄位 dropdown 不再出現 `list_type`；無前端 code 變更（available-columns 端點自動排除 `is_active=false`）。
 </content>

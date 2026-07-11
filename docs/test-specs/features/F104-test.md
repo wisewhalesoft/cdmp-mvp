@@ -18,7 +18,7 @@ related: [F100, F101, F102, F064, F067]
 >
 > **驗收紅線（Definition of Done）**：
 > 1. **EQ 群組**（BR-F104-15 / I-SCORE-EQ-01 延伸）：JS `computeScore` ↔ PG `buildStage2ScoreExpr` 生成 SQL，相同輸入下 score 完全相等（誤差 = 0）= 必須全綠，未過不得上線。§8 場景矩陣全覆蓋。
-> 2. **cus_sex NULL-safe cast**（BR-F104-13）：髒值 `'C'`/`'D'` 不得讓計分 SQL 拋例外（裸 `::int` 會掛掉整支月跑）= **高嚴重度行為紅線**。
+> 2. **cus_sex NULL-safe cast**（BR-F104-13）：髒值 `'C'`/`'D'` 不得讓計分 SQL 拋例外（裸 `::int` 會掛掉整支月名單分派）= **高嚴重度行為紅線**。
 > 3. **兩 default 分離**（BR-F104-13a）：計分欄 default=`3` 與分流 gating default=`'1'` 兩路徑一致、不混用 = EQ 子項必測。
 > 4. **per-card default 逐格**（AD-E07-33 矩陣）：每個 (column, cardType) 格子 + 「不啟用」格 = 覆蓋紅線。
 > 5. **`pnpm test` 全綠 + `tsc --noEmit -p tsconfig.build.json` 零錯誤**（AC-17）= 回歸門檻（vitest 不做型別檢查，必跑）。
@@ -248,7 +248,7 @@ related: [F100, F101, F102, F064, F067]
 ## 四、SAFE — cus_sex NULL-safe cast（BR-F104-13，**高嚴重度**）
 
 > **設計依據**：F104 spec §6 BR-F104-13/13a；§13（dev 髒值已查證 'C'/'D'/'8'/'9'/空）；AD-E07-34；§11 測試覆蓋 (c)/(d)。
-> **核心**：裸 `cc.cus_sex::int` 對 'C' 拋 `invalid input syntax for type integer` → **整支月跑 SQL 失敗**。本群組為「不拋例外」行為紅線。
+> **核心**：裸 `cc.cus_sex::int` 對 'C' 拋 `invalid input syntax for type integer` → **整支月名單分派 SQL 失敗**。本群組為「不拋例外」行為紅線。
 
 ### TS-F104-SAFE-001：PG — cus_sex='C' 計分 SQL 不拋例外（CUS_SEX range 計分）
 - **Related Requirement**：BR-F104-13 / **高嚴重度**
@@ -257,14 +257,14 @@ related: [F100, F101, F102, F064, F067]
 - **Steps**：
   1. `await expect(pushdown(L)).resolves.not.toThrow()`
   2. 查 score：safe-cast 'C'→NULL→COALESCE 3 → 命中 `[3,3]` 區間（若有）
-- **Expected Result**：**SQL 不拋例外**；'C' 計分值=3；月跑繼續
+- **Expected Result**：**SQL 不拋例外**；'C' 計分值=3；月名單分派繼續
 
 ### TS-F104-SAFE-002：PG — cus_sex='C' 五欄分流 SQL 不拋例外（gating）
 - **Related Requirement**：BR-F104-13 / BR-F104-13a
 - **Test Type**：Boundary / PG Integration
 - **Preconditions**：S 卡含 CAREA_NO1/AGE/EDUCAT_BACK；seed cc cus_sex='C'、carea_no1='02'。
 - **Steps**：`await expect(pushdown(L)).resolves.not.toThrow()`；查 score
-- **Expected Result**：分流 gating SQL（`COALESCE(NULLIF(cc.cus_sex,''),'1')` + safe-cast）不拋例外；月跑繼續（取值依釘定語意，見 BRANCH-008）
+- **Expected Result**：分流 gating SQL（`COALESCE(NULLIF(cc.cus_sex,''),'1')` + safe-cast）不拋例外；月名單分派繼續（取值依釘定語意，見 BRANCH-008）
 
 ### TS-F104-SAFE-003：PG — 混合髒值批次（'C'/'D'/'8'/'9'/空/'1'/'3'）整批計分不拋例外
 - **Related Requirement**：BR-F104-13
@@ -648,9 +648,9 @@ related: [F100, F101, F102, F064, F067]
 - **Related Requirement**：AC-13
 - **Test Type**：Positive / PG Integration（人工驗收）
 - **Steps**：
-  1. 觸發 dev 202606 月跑（含 F104 修正）；確認無錯誤完成
+  1. 觸發 dev 202606 月名單分派（含 F104 修正）；確認無錯誤完成
   2. `SELECT card_level, COUNT(*) FROM ob_monthly_run_result WHERE run_id='<202606>' AND ... GROUP BY card_level`（card_type H/S）
-- **Expected Result**：月跑無錯誤；card_level distinct ≥ 3（不全為 D）；若 ≤2 啟動 AC-15
+- **Expected Result**：月名單分派無錯誤；card_level distinct ≥ 3（不全為 D）；若 ≤2 啟動 AC-15
 
 ### TS-F104-UPGR-002：tier spread 含 T1/T2（AC-14，定性）
 - **Related Requirement**：AC-14 / OQ-158-01
@@ -662,15 +662,15 @@ related: [F100, F101, F102, F064, F067]
 - **Related Requirement**：AC-16
 - **Test Type**：Positive / PG Integration（人工抽樣）
 - **Steps**：
-  1. 抽 10 筆個人客戶（cus_sex IN ('1','2')）在 H 名單之月跑結果
+  1. 抽 10 筆個人客戶（cus_sex IN ('1','2')）在 H 名單之月名單分派結果
   2. 手算 CAREA_NO1/NO2/CELLULAR 計分（presence 1/0）
   3. 比對 `ob_monthly_run_result.score` 對應貢獻
 - **Expected Result**：手算值與 DB score 一致（±0）；確認 cus_sex=1/2 不再使三欄取 0（推翻舊 default 行為）
 
-### TS-F104-UPGR-004：cus_sex 髒值案件月跑不中斷（BR-F104-13 prod 驗證）
+### TS-F104-UPGR-004：cus_sex 髒值案件月名單分派不中斷（BR-F104-13 prod 驗證）
 - **Related Requirement**：AC-13 / BR-F104-13
 - **Test Type**：Boundary / PG Integration（人工）
-- **Steps**：確認 dev 202606 pool 含 cus_sex 髒值客戶（'C'/'D'/'8' 等）；月跑完成無 `invalid input syntax for type integer` 錯誤
+- **Steps**：確認 dev 202606 pool 含 cus_sex 髒值客戶（'C'/'D'/'8' 等）；月名單分派完成無 `invalid input syntax for type integer` 錯誤
 - **Expected Result**：含髒值客戶之名單照常計分；無 cast 例外中斷
 
 ### TS-F104-UPGR-005：仍異常時本輪根因（AC-15，不推延）
@@ -808,7 +808,7 @@ related: [F100, F101, F102, F064, F067]
 |-------|------|------|------|
 | **OQ-TDS-F104-01（高，BLOCKER for BRANCH-008/SAFE-006/EQ-004 oracle）** | 髒值 cus_sex（'C'/'D' 等非數值非空）分流走向 = 個人 or 法人？**AD 自相矛盾**：line 4102 算式 → 法人（與 legacy SP `NOT IN('1','2')` 一致，test-designer 已 SP 查證）；line 4103 散文 → 個人（但其推導把 'C' 誤當空字串，**算術錯誤**）。`NULLIF('C','')='C'`（非 '1'），故算式正解為法人 | BRANCH-008/SAFE-006/EQ-004 之 expected；prod 髒值客戶（'C'5/'D'4/'8'6/'9'4/'A'/'B' 共約 21 筆，dev 已查證）分流結果 | **強烈建議釘「法人」**（legacy SP + AD 算式雙重佐證；line 4103 散文為筆誤）。請 architect 修正 AD line 4103 散文；本 test design oracle 已暫採「法人」（BRANCH-008/EQ-004）。**注意**：legacy 為純字串 `NOT IN('1','2')`，CDMP safe-cast 後須以 PG 三值邏輯處理（`NULL NOT IN(1,2)`=UNKNOWN，須 `COALESCE(...,法人)` 或 `IS DISTINCT FROM` 顯式落法人），JS 對稱 `Number.isInteger(g)&&(g===1||g===2)` 否則法人 |
 | OQ-TDS-F104-02（低） | EDUCAT_BACK PG range 比對走數值 or 字串 lexical？現行 builder L266 走 `Number()` 數值；補零字串恰等價，但語意不精確 | EDU-007 / RISK-F104-01；未來非數字 educat 破裂 | 建議 tdd 落地時 PG 與 JS 對齊單一型別（補零後字串比較最貼 legacy `BETWEEN '08' AND '99'`）；本輪數值等價可接受，記錄為技術債 |
-| OQ-TDS-F104-03（低） | BR-F104-16 未知 card_type fallback（H/S 基準 + warn）本輪是否需測試案例？ | 邊緣 card_type 月跑行為 | 建議補 1 unit 案例（未知 card → LIST_MONTH=25/LOAN_RATE=0/縣市不計分 + logger.warn）；非 DoD 紅線，列 tdd 補充 |
+| OQ-TDS-F104-03（低） | BR-F104-16 未知 card_type fallback（H/S 基準 + warn）本輪是否需測試案例？ | 邊緣 card_type 月名單分派行為 | 建議補 1 unit 案例（未知 card → LIST_MONTH=25/LOAN_RATE=0/縣市不計分 + logger.warn）；非 DoD 紅線，列 tdd 補充 |
 
 ### 架構師 OQ 衍生（已於 spec §10 處理，此處僅追蹤）
 

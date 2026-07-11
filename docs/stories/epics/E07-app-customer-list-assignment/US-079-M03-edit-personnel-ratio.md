@@ -48,9 +48,9 @@
 - **Then** 系統允許儲存（0% 視為有效值），該員工本月不分到任何名單
 - **And** 0% 人員仍顯示於清單，以便日後恢復
 
-### AC-4：月跑執行中禁止修改
+### AC-4：月名單分派執行中禁止修改
 
-- **Given** 目前有月跑正在執行
+- **Given** 目前有月名單分派正在執行
 - **When** 業務主管嘗試進入編輯模式
 - **Then** 編輯按鈕停用，提示「分派執行中，無法修改比例設定」
 
@@ -86,7 +86,7 @@
 - **When**：儲存
 - **Then**：儲存成功，EMP002 仍顯示於清單且比例為 0%
 
-### TC-079-04：月跑執行中鎖定
+### TC-079-04：月名單分派執行中鎖定
 
 - **Given**：AssignmentRun status = 'running'
 - **When**：業務主管嘗試編輯
@@ -97,7 +97,7 @@
 ## 依賴關係
 
 - **Blocked By**：US-078（查看人員比例設定）
-- **Blocks**：US-081（月跑需要人員比例已設定正確）
+- **Blocks**：US-081（月名單分派需要人員比例已設定正確）
 
 ---
 
@@ -106,7 +106,7 @@
 - [ ] 驗收標準全部通過
 - [ ] 動態加總驗證邏輯測試
 - [ ] 0% 人員儲存測試
-- [ ] 月跑執行中鎖定測試
+- [ ] 月名單分派執行中鎖定測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新
@@ -117,5 +117,5 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **NFR**：[NFR-005](../../non-functional/NFR-005-result-accuracy.md)
-- **相關 Stories**：US-078（查看人員比例）、US-081（觸發月跑）
+- **相關 Stories**：US-078（查看人員比例）、US-081（觸發月名單分派）
 - **Reference**：`reference/TableSchema/OB/OBEMPLSETMF.sql`、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st3_emplid.sql`

@@ -21,7 +21,7 @@
 
 **As a** 業務主管
 **I want** 編輯既有名單定義的篩選條件
-**So that** 在月跑前調整本月各 Stage 的名單條件，確保分派結果符合業務策略
+**So that** 在月名單分派前調整本月各 Stage 的名單條件，確保分派結果符合業務策略
 
 ---
 
@@ -56,9 +56,9 @@
 - **Then** 每列不顯示「編輯」按鈕，僅供唯讀查閱
 - **And** 直接訪問已停用名單的編輯 URL，系統返回 403 或跳轉回清單頁並提示「已停用名單不可編輯」
 
-### AC-5：月跑執行中禁止編輯
+### AC-5：月名單分派執行中禁止編輯
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 業務主管嘗試點擊任何名單的「編輯」按鈕
 - **Then** 編輯按鈕為停用狀態，滑鼠 hover 顯示提示「分派執行中，無法修改名單定義」
 
@@ -108,8 +108,8 @@
 - list_type（固定 `'01'` = 分派名單，後端自動填入，**業務主管不設定此欄位**；其業務語意已由 case_status 欄位替代）
 - PROJECT_WORKYM（當月，後端填入）
 - STATUS（不在表單中，由停用流程管理）
-- IS_ASSIGNED、ASSIGNED_DATE（月跑時回寫）
-- TOTAL_AMOUNT、RESERVED_AMOUNT（月跑時計算回寫）
+- IS_ASSIGNED、ASSIGNED_DATE（月名單分派時回寫）
+- TOTAL_AMOUNT、RESERVED_AMOUNT（月名單分派時計算回寫）
 - CASENUMBER、NAME、CASEYEARNM（後端填入 NULL，已捨棄欄位）
 - A_*、U_* audit 欄位（後端自動填入）
 
@@ -126,7 +126,7 @@
   - `SPEC_TP`：多選，例如 `02$$04$$05$$06$$11$$12`
   - `SETTLE_SRC`：多選，例如 `Y$$N`（含且不含）或 `Y`（僅含）
   - `case_status`：多選，例如 `01$$02$$03`，來源 OBMCODEDF TBL_ID='22'
-- 月跑中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
+- 月名單分派中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
 - 操作寫入 AssignmentAuditLog（待 system-architect 設計表結構）
 - 覆寫式更新對齊 A12 決策：無草稿、無版本分岔；需追溯歷史請查詢 AssignmentAuditLog
 - list_type 欄位語意說明：list_type 為系統固定值 `'01'`，**編輯表單完全不顯示，後端不接受前端傳入此值**；原系統「名單類型」欄位的業務語意已由 case_status 取代（詳見 US-088 技術備註「list_type vs case_status 語意分離說明」）。
@@ -187,7 +187,7 @@
 - [ ] case_status 多選值以 `$$` 分隔正確覆寫測試
 - [ ] LIST_PERIOD_END >= LIST_PERIOD_START 驗證測試
 - [ ] 已停用名單阻擋編輯測試
-- [ ] 月跑中資料鎖測試
+- [ ] 月名單分派中資料鎖測試
 - [ ] AssignmentAuditLog 寫入測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過

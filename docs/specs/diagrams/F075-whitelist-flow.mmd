@@ -52,7 +52,7 @@ flowchart TD
         WConfirm --> WUpdateExec
 
         WAction -->|"停用"| WDisable["UPDATE is_active=false<br/>+ 寫 audit_log UPDATE（before/after 對比）<br/>BR-4：不回溯既有名單條件"]
-        WDisable --> WNote[月跑 Stage 1 仍正常讀取既有條件]
+        WDisable --> WNote[月名單分派 Stage 1 仍正常讀取既有條件]
 
         WAction -->|"啟用"| WEnable[UPDATE is_active=true<br/>+ 寫 audit_log UPDATE]
     end

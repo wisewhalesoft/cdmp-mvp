@@ -34,7 +34,7 @@ source-feature-spec: F050-create-list-definition, F051-edit-list-definition
 本 Story 是 F050 v2.1 whitelist-driven 重構的核心驗證規則定義，為下列 Story 提供共用業務規則依據：
 
 - **US-106**（草稿階段建立名單）：建立時套用本 Story 定義的驗證規則
-- **US-122**（月跑 Stage 1 動態 WHERE）：月跑執行依本 Story 所定義的 condition_payload 語意組合查詢
+- **US-122**（月名單分派 Stage 1 動態 WHERE）：月名單分派執行依本 Story 所定義的 condition_payload 語意組合查詢
 - **US-123**（舊名單 backward-compat 讀取）：舊名單（condition_payload IS NULL）的例外處理
 
 **主要語意變更（相較於 v1.0 設計）**：
@@ -77,7 +77,7 @@ source-feature-spec: F050-create-list-definition, F051-edit-list-definition
 - **When** 任何使用者嘗試送出 condition_payload 修改請求（PUT / PATCH）
 - **Then** 後端回傳 422，`error_code: LIST_STAGE_TRANSITION_FORBIDDEN`（沿用既有錯誤碼，K1 約束）
 - **And** 此規則在任何 Rollback 操作完成後立即生效：名單 stage 回到 `draft` 後，condition_payload 重新開放寫入（K3 保留語意）
-- **And** 月跑執行中（AssignmentRun status = 'running'）時，即使名單為 draft，condition_payload 寫入一律被拒（月跑鎖定優先於 stage guard）
+- **And** 月名單分派執行中（AssignmentRun status = 'running'）時，即使名單為 draft，condition_payload 寫入一律被拒（月名單分派鎖定優先於 stage guard）
 
 > **業務意義（K1/K3/J7）**：五階段流程的完整性不因本次重構破壞。草稿之後的任何階段，篩選條件均為唯讀，防止條件在流程進行中被修改影響分派結果。
 
@@ -91,7 +91,7 @@ source-feature-spec: F050-create-list-definition, F051-edit-list-definition
 - **And** 前端顯示非阻擋式提示：「部分篩選條件的選項值已停用，請確認是否仍符合業務需求。受影響欄位：<欄位顯示名稱>」
 - **And** 使用者可忽略警告，名單仍正常儲存
 
-> **業務意義（C2）**：停用選項的月跑不回溯語意（見 US-103 AC-7）同樣延伸至儲存時。管理員停用某選項後，既有已選取該值的名單仍可正常月跑；本 AC 只是在儲存時提醒，不阻擋。
+> **業務意義（C2）**：停用選項的月名單分派不回溯語意（見 US-103 AC-7）同樣延伸至儲存時。管理員停用某選項後，既有已選取該值的名單仍可正常月名單分派；本 AC 只是在儲存時提醒，不阻擋。
 
 ---
 
@@ -165,7 +165,7 @@ source-feature-spec: F050-create-list-definition, F051-edit-list-definition
 ## 依賴關係
 
 - **Blocked By**：US-102（白名單欄位就緒，驗證需查詢白名單）、US-103（可選值就緒，INACTIVE 警示需查詢可選值）、US-125（case_status / caseyear 移入 pooldata_field_option，選項驗證才能覆蓋完整）、US-100（部長角色定義）
-- **Blocks**：US-106（修改版，建立/編輯名單的新 AC 依賴本 Story 定義的驗證規則）、US-122（月跑 Stage 1 的 condition_payload 讀取語意）
+- **Blocks**：US-106（修改版，建立/編輯名單的新 AC 依賴本 Story 定義的驗證規則）、US-122（月名單分派 Stage 1 的 condition_payload 讀取語意）
 
 ---
 
@@ -188,5 +188,5 @@ source-feature-spec: F050-create-list-definition, F051-edit-list-definition
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`（A1、A2、A3、B1~B3、C1~C3、G1~G4、J1、J7、J8、K1、K3）
-- **相關 Stories**：US-102（白名單欄位）、US-103（類別型可選值）、US-106（草稿建立名單，套用本 Story 規則）、US-122（月跑 Stage 1）、US-123（舊名單 fallback）、US-125（caseyear / case_status 選項遷移）
+- **相關 Stories**：US-102（白名單欄位）、US-103（類別型可選值）、US-106（草稿建立名單，套用本 Story 規則）、US-122（月名單分派 Stage 1）、US-123（舊名單 fallback）、US-125（caseyear / case_status 選項遷移）
 - **Feature Spec**：`docs/specs/features/F050-create-list-definition.md`（Phase 2 spec-writer 負責更新）、`docs/specs/features/F051-edit-list-definition.md`

@@ -1,7 +1,7 @@
 ---
 type: test-design-feature
 feature_id: F102
-feature_name: 月跑 CR 優先分派（失效清空 + CR 優先指派 + 扣量 + per-list cr_enabled 閘控 + 廢除全域旗標）
+feature_name: 月名單分派 CR 優先分派（失效清空 + CR 優先指派 + 扣量 + per-list cr_enabled 閘控 + 廢除全域旗標）
 priority: P0-MVP
 related_spec: /docs/specs/features/F102-cr-priority-assignment.md
 source_ad: /docs/specs/implementation-log/AD-E07-v3.3-f102-cr-priority-assignment.md
@@ -11,7 +11,7 @@ last_updated: 2026-06-12
 blocked_by: F101
 ---
 
-# F102：月跑 CR 優先分派 — 測試設計
+# F102：月名單分派 CR 優先分派 — 測試設計
 
 > ⚠️ **範圍**：本文件為測試設計（test design），**不含** production code、測試實作碼（spec 檔）、migration、entity 定義，由 tdd-implementation agent 承接落地。
 >
@@ -137,40 +137,40 @@ blocked_by: F101
 
 ---
 
-### TS-F102-GATE-004：混合 cr_enabled 名單同一月跑互不干擾（AC-3）
+### TS-F102-GATE-004：混合 cr_enabled 名單同一月名單分派互不干擾（AC-3）
 
 - **相關 AC**：AC-3 / BR-F102-01/02
 - **測試類型**：正向（混合名單）
 - **測試層**：PG Integration
 - **前置條件**：
-  - 同一月跑（run_id=R1）含 OB202606001（cr_enabled=true）與 OB202606002（cr_enabled=false）
+  - 同一月名單分派（run_id=R1）含 OB202606001（cr_enabled=true）與 OB202606002（cr_enabled=false）
   - OB202606001 工作集：10 筆案件，其中 3 筆有效 CR（ob_empl_set ration>0）
   - OB202606002 工作集：10 筆案件，其中 3 筆 Stage 1 帶入 is_cr='Y'
 - **步驟**：
-  1. 執行月跑完整流程（Stage 0–4）
+  1. 執行月名單分派完整流程（Stage 0–4）
   2. 分別查詢兩名單之 is_cr 分佈與 emplid 非空筆數
-  3. 驗證月跑最終 status
+  3. 驗證月名單分派最終 status
 - **期望結果**：
   - OB202606001：至少 3 筆 `is_cr = 'Y'`、`emplid = cr_id`（有效 CR 已指派）
   - OB202606002：**全 10 筆** `is_cr = 'N'`（強制清 N，無 is_cr='Y' 殘留）
-  - 月跑 `status = 'completed'`
+  - 月名單分派 `status = 'completed'`
   - 兩名單 Stage 3/4 比例分派結果互不污染（各自獨立 WHERE list_no = :listNo）
 
 ---
 
-### TS-F102-GATE-005：cr_enabled 月跑開始後鎖定（AC-4 / I-CR-SNAPSHOT-01）
+### TS-F102-GATE-005：cr_enabled 月名單分派開始後鎖定（AC-4 / I-CR-SNAPSHOT-01）
 
 - **相關 AC**：AC-4 / BR-F102-01 / I-CR-SNAPSHOT-01
 - **測試類型**：負向（快照鎖定）
 - **測試層**：Integration
-- **前置條件**：月跑 status='running'；月跑開始時 cr_enabled=true 已快照
+- **前置條件**：月名單分派 status='running'；月名單分派開始時 cr_enabled=true 已快照
 - **步驟**：
-  1. 月跑執行中，嘗試修改 ob_list_definition.cr_enabled = false
-  2. 修改被月跑鎖阻擋（沿用 US-107 / US-104 鎖定機制）
-  3. 驗證月跑繼續使用 cr_enabled=true 快照完成
+  1. 月名單分派執行中，嘗試修改 ob_list_definition.cr_enabled = false
+  2. 修改被月名單分派鎖阻擋（沿用 US-107 / US-104 鎖定機制）
+  3. 驗證月名單分派繼續使用 cr_enabled=true 快照完成
 - **期望結果**：
   - 修改被阻擋（HTTP 409 或對應錯誤碼）
-  - 月跑結果以 cr_enabled=true 執行（有 is_cr='Y' 案件）
+  - 月名單分派結果以 cr_enabled=true 執行（有 is_cr='Y' 案件）
   - 快照時機與 ob_dept_pct / ob_empl_set 一致（I-CR-SNAPSHOT-01）
 
 ---
@@ -752,7 +752,7 @@ blocked_by: F101
 
 ---
 
-### TS-F102-IDEM-003：月跑重觸發（per-list auto-commit + CR 步驟冪等）
+### TS-F102-IDEM-003：月名單分派重觸發（per-list auto-commit + CR 步驟冪等）
 
 - **相關 AC**：AC-10 / I-IDEM-01 延伸
 - **測試類型**：冪等（list 間中斷後重跑）
@@ -762,7 +762,7 @@ blocked_by: F101
 - **期望結果**：
   - L1 重跑後 CR 指派結果與第一次相同（is_cr='Y' 案件集合一致）
   - L2 結果正確（is_cr 全 N，不受 L1 重跑影響）
-  - 月跑最終 status = completed
+  - 月名單分派最終 status = completed
 
 ---
 
@@ -1036,15 +1036,15 @@ blocked_by: F101
 
 ---
 
-### TS-F102-UPGR-003：202606 重跑——ob_assign_config 廢棄不影響月跑（US-154）
+### TS-F102-UPGR-003：202606 重跑——ob_assign_config 廢棄不影響月名單分派（US-154）
 
 - **相關 AC**：AC-11/12 / US-154 AC-1~3
 - **測試類型**：負向（廢棄旗標不影響）
 - **測試層**：PG Integration
-- **前置條件**：`ob_assign_config` 存在 `cr_reassignment_enabled` 記錄（歷史存量）；月跑執行
-- **步驟**：執行月跑；確認月跑結果不受 ob_assign_config 影響
+- **前置條件**：`ob_assign_config` 存在 `cr_reassignment_enabled` 記錄（歷史存量）；月名單分派執行
+- **步驟**：執行月名單分派；確認月名單分派結果不受 ob_assign_config 影響
 - **期望結果**：
-  - 月跑 status = 'completed'
+  - 月名單分派 status = 'completed'
   - ob_assign_config.cr_reassignment_enabled 未被任何 service 讀取（AC-12 靜態掃描驗證）
   - CR 行為由 ob_list_definition.cr_enabled 唯一控制（BR-F102-03）
 
@@ -1094,7 +1094,7 @@ blocked_by: F101
 | AC-1 | cr_enabled=true 時執行 CR 前置步驟 | GATE-001 | GATE |
 | AC-2 | cr_enabled=false 跳過 + is_cr 強制清 N | GATE-002/003/006 | GATE |
 | AC-3 | 混合 cr_enabled 名單互不干擾 | GATE-004 | GATE |
-| AC-4 | cr_enabled 快照鎖定（月跑期間不受後續變更影響） | GATE-005 | GATE |
+| AC-4 | cr_enabled 快照鎖定（月名單分派期間不受後續變更影響） | GATE-005 | GATE |
 | AC-5 | 逾2年清空（嚴格小於邊界） | STEP1-001/002/003/004/005 | STEP1 |
 | AC-6 | 離職清空（resign_date < sysDate）+ 在職不清 | STEP2-001/002/003 | STEP2 |
 | AC-7 | 兩規則皆執行不短路 + 查無 ob_emphire 不清空 | STEP2-004/005 | STEP2 |
@@ -1131,7 +1131,7 @@ blocked_by: F101
 | JS↔SQL 日期比較不等價（timezone / string vs date 型別） | 高 | 步驟 1/2 均使用字串比較 'YYYY-MM-DD'（feedback_typeorm_between_timezone 教訓）；EQ-001/002 含邊界日期 |
 | collectCrCandidates 移除影響 F101 EMPL-005 等舊測試 | 中 | REG-001 / 本文件 §十二 明列需更新案例；tdd-implementation 須確認受影響測試後修改期望值 |
 | clearStage3Fields 提取後 F101 Stage 3/4 回歸（欄位清除範圍） | 中 | ORDER-002 / REG-003 驗證 is_cr 保留；F101 AC-4（IDEM-001）為回歸保護 |
-| ob_assign_config 保留造成誤讀（舊記錄存在） | 低 | DET-003 靜態掃描；UPGR-003 月跑驗收 |
+| ob_assign_config 保留造成誤讀（舊記錄存在） | 低 | DET-003 靜態掃描；UPGR-003 月名單分派驗收 |
 | CR 步驟後 Stage 3 比例分派件數 < 預期（CR 扣量過多） | 低-中 | DEDUCT-001/003 驗收（基數計算正確）；UPGR-001 驗收（≈1.9% 比例）；F067 差異報告量化 |
 
 ### 開放問題（全部已由 AD-E07-30 解決）

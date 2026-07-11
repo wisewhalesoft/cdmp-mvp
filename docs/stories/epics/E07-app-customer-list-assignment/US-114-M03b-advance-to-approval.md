@@ -32,7 +32,7 @@
 
 在下列情況下，手動「推進至簽核」按鈕保留為備用操作路徑：
 - `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` feature flag 為 off（此時退回 v1.x 手動推進行為）
-- stage = `personnel_ratio` 且所有部門均已完成（`allDeptsCompleted = true`），但 auto-advance 因其他原因未觸發（如月跑進行中導致 auto-advance 跳過）
+- stage = `personnel_ratio` 且所有部門均已完成（`allDeptsCompleted = true`），但 auto-advance 因其他原因未觸發（如月名單分派進行中導致 auto-advance 跳過）
 
 **Actor 說明**
 
@@ -44,7 +44,7 @@
 **既有邏輯沿用**
 
 - 全員離職部門（BR-8）：`ob_emphire` 無任何在職員工之部門，RATION 加總可 = 0%，不阻擋 auto-advance（沿用 F082 v1.3 決議 #1 全員離職短路邏輯，此處不新開規則）
-- 月跑並發守衛：auto-advance 偵測到月跑進行中時，跳過推進但**不 rollback 本次 PUT**（PUT 仍回 200）
+- 月名單分派並發守衛：auto-advance 偵測到月名單分派進行中時，跳過推進但**不 rollback 本次 PUT**（PUT 仍回 200）
 
 ---
 
@@ -83,13 +83,13 @@
 - **And** 第二筆進入時偵測到 `stage` 已為 `'approval'`，auto-advance 為 idempotent no-op，不重複寫稽核日誌
 - **And** 兩筆 PUT 本身均回 200；先到者 response 含 `autoAdvanced: true`，後到者 `autoAdvanced: false`（因 stage 已推進）
 
-### AC-5：Auto-Advance 因月跑 Guard 失敗，PUT 本身仍成功
+### AC-5：Auto-Advance 因月名單分派 Guard 失敗，PUT 本身仍成功
 
 - **Given** 名單 `stage = 'personnel_ratio'`，flag = on
-- **When** 某 PUT 完成後所有部門均達到完成條件，但 auto-advance 在偵測時遇到月跑 guard 阻擋（`assignment_run.status IN ('pending', 'running')`）
+- **When** 某 PUT 完成後所有部門均達到完成條件，但 auto-advance 在偵測時遇到月名單分派 guard 阻擋（`assignment_run.status IN ('pending', 'running')`）
 - **Then** PUT 本身仍回 200，**不因 auto-advance 失敗而 rollback**
 - **And** PUT response 含 `autoAdvanced: false`、`autoAdvanceFailReason: "ASSIGNMENT_RUN_ALREADY_RUNNING"`
-- **And** stage 維持 `'personnel_ratio'`；前端顯示 toast 提示「比例已儲存；因分派執行中，請待月跑完成後手動推進至簽核」
+- **And** stage 維持 `'personnel_ratio'`；前端顯示 toast 提示「比例已儲存；因分派執行中，請待月名單分派完成後手動推進至簽核」
 
 ### AC-6：最後完成部門時的使用者體驗
 
@@ -103,7 +103,7 @@
 - **Given** 名單 `stage = 'personnel_ratio'` 且所有部門均已完成設定（`allDeptsCompleted = true`）
 - **When** `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag = off，**或** auto-advance 因其他原因未觸發（如 AC-5 場景）
 - **Then** 部長 / Admin 看到可點擊的「推進至簽核」按鈕；處長若本部門已完成亦看到該按鈕
-- **And** 月跑進行中時，按鈕為 disabled，hover 顯示「分派執行中，無法推進」
+- **And** 月名單分派進行中時，按鈕為 disabled，hover 顯示「分派執行中，無法推進」
 - **And** 非 `personnel_ratio` 階段 / 已停用 / 歷史月份時，按鈕完全不渲染
 
 ### AC-8：Feature Flag Off — Auto-Advance 完全不執行
@@ -141,7 +141,7 @@
 - **PUT Response 新欄位**：`autoAdvanced: boolean`、`newStage: string | null`、`autoAdvanceFailReason?: string`
 - **稽核 metadata**：auto-advance 路徑寫入 `auto_advanced_by_completion: true`；手動 fallback 路徑不含此 metadata
 - **Feature Flag 名稱**：`ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL`；prod 預設 off；flag off 時 auto-advance 邏輯完全不執行
-- **月跑 Guard 失敗行為**：auto-advance 偵測到月跑進行中時跳過推進，PUT 本身不 rollback，response 含 `autoAdvanceFailReason`
+- **月名單分派 Guard 失敗行為**：auto-advance 偵測到月名單分派進行中時跳過推進，PUT 本身不 rollback，response 含 `autoAdvanceFailReason`
 - **不引入 Grace Period**：推進後如需修改，沿用 F085 Rollback 路徑
 
 ---
@@ -166,11 +166,11 @@
 - **When**：並發請求同時到達後端
 - **Then**：advisory lock 序列化；先到者 response 含 `autoAdvanced: true`；後到者 response 含 `autoAdvanced: false`（stage 已 = 'approval'）；稽核日誌只新增一筆 STAGE_ADVANCE
 
-### TC-114-04：PUT 觸發 auto-advance 但月跑進行中
+### TC-114-04：PUT 觸發 auto-advance 但月名單分派進行中
 
 - **Given**：AssignmentRun status = 'running'；此 PUT 後所有部門均完成；flag = on
 - **When**：處長執行 PUT
-- **Then**：PUT 回 200；stage 維持 'personnel_ratio'；response 含 `autoAdvanced: false`、`autoAdvanceFailReason: "ASSIGNMENT_RUN_ALREADY_RUNNING"`；前端 toast 提示「比例已儲存；因分派執行中，請待月跑完成後手動推進至簽核」
+- **Then**：PUT 回 200；stage 維持 'personnel_ratio'；response 含 `autoAdvanced: false`、`autoAdvanceFailReason: "ASSIGNMENT_RUN_ALREADY_RUNNING"`；前端 toast 提示「比例已儲存；因分派執行中，請待月名單分派完成後手動推進至簽核」
 
 ### TC-114-05：Feature Flag Off，PUT 不觸發推進
 
@@ -212,7 +212,7 @@
 - [ ] TC-114-01：最後部門完成自動推進（處長觸發，同一 tx 內執行）
 - [ ] TC-114-02：部門未全完成，PUT 成功但不推進
 - [ ] TC-114-03：並發 PUT advisory lock 序列化，只推進一次，稽核日誌不重複
-- [ ] TC-114-04：PUT 成功但 auto-advance 因月跑 guard 失敗，PUT 仍 200
+- [ ] TC-114-04：PUT 成功但 auto-advance 因月名單分派 guard 失敗，PUT 仍 200
 - [ ] TC-114-05：Feature Flag off，auto-advance 不執行，手動按鈕出現
 - [ ] TC-114-06：全員離職部門不阻擋 auto-advance（BR-8 短路）
 - [ ] TC-114-07：Fallback 手動推進（flag off 路徑），稽核不含 auto_advanced_by_completion

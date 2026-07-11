@@ -14,7 +14,7 @@
 
 **As a** 業務主管
 **I want** 維護選定計分卡類型（CARD_TYPE）的 TIER_LEVEL 對應設定，包含「標準規則（CARD_LEVEL 非空）」與「Fallback 規則（CARD_LEVEL 為空，不分等級）」兩種對應模式
-**So that** 確保月跑 Stage 2 計分結果能正確分群至外部系統使用的 TIER_LEVEL，避免後續分派與通報資料錯誤
+**So that** 確保月名單分派 Stage 2 計分結果能正確分群至外部系統使用的 TIER_LEVEL，避免後續分派與通報資料錯誤
 
 ---
 
@@ -110,7 +110,7 @@ v2 起，TIER_LEVEL 有效值由原本的後綴變體（T1M / T1HM / T32 / T51 �
 - **And** 刪除記錄寫入 `assignment_audit_log`（action='DELETE', entity_type='ob_tier', entity_id='{cardType}|{cardLevel ?? ""}', before_payload 含 tierLevel 值）
 - **And** 刪除 fallback 列時，API 接受 cardLevel 參數為省略或明確 null（不可傳空字串，以區別 Standard 的 CARD_LEVEL 操作）
 
-### AC-6：月跑執行中禁止修改
+### AC-6：月名單分派執行中禁止修改
 
 - **Given** 目前 `assignment_run` 有 status IN ('pending', 'running') 的紀錄
 - **When** 業務主管嘗試修改對應表
@@ -193,7 +193,7 @@ v2 起，TIER_LEVEL 有效值由原本的後綴變體（T1M / T1HM / T32 / T51 �
 - **When**：業務主管點擊刪除並確認
 - **Then**：`ob_tier` 移除 (M3, NULL)；稽核日誌 entity_id='M3|'（cardLevel 部份留空）
 
-### TC-075-07：月跑執行中禁止修改
+### TC-075-07：月名單分派執行中禁止修改
 
 - **Given**：`assignment_run` 有 status = 'running' 的紀錄
 - **When**：業務主管進入 Tab 5
@@ -222,7 +222,7 @@ v2 起，TIER_LEVEL 有效值由原本的後綴變體（T1M / T1HM / T32 / T51 �
 ## 依賴關係
 
 - **Blocked By**：US-074（CARD_LEVEL 有效值來源，Standard 規則的 CARD_LEVEL 下拉選單依據）、US-093（Tab 1 CARD_TYPE 選中狀態來源）
-- **Blocks**：US-081（月跑 Stage 2 讀取 `ob_tier` 做 TIER_LEVEL 推算）
+- **Blocks**：US-081（月名單分派 Stage 2 讀取 `ob_tier` 做 TIER_LEVEL 推算）
 
 ---
 
@@ -245,7 +245,7 @@ v2 起，TIER_LEVEL 有效值由原本的後綴變體（T1M / T1HM / T32 / T51 �
 - [ ] 複合 key 重複驗證（TC-075-03 / TC-075-04）
 - [ ] Standard / Fallback 互斥檢查測試通過（TC-075-09 / TC-075-10）
 - [ ] Tab 5 依 CARD_TYPE 篩選（TC-075-08）
-- [ ] 月跑鎖定保護（TC-075-07）
+- [ ] 月名單分派鎖定保護（TC-075-07）
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新
@@ -257,6 +257,6 @@ v2 起，TIER_LEVEL 有效值由原本的後綴變體（T1M / T1HM / T32 / T51 �
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **對應 Spec**：F056（編輯 TIER_LEVEL 對應表）
-- **相關 Stories**：US-074（CARD_LEVEL 門檻）、US-093（Tab 1 CARD_TYPE 選中狀態）、US-081（觸發月跑）
+- **相關 Stories**：US-074（CARD_LEVEL 門檻）、US-093（Tab 1 CARD_TYPE 選中狀態）、US-081（觸發月名單分派）
 - **Reference SP**：`reference/SP/Stage2_依照CardType分類TierLevel.sql`
 - **NFR**：[NFR-005](../../non-functional/NFR-005-result-accuracy.md)（結果準確性，TIER_LEVEL 推算必須與舊 SP 一致）

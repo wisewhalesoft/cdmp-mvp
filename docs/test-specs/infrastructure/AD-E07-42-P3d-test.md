@@ -5,7 +5,7 @@ feature_name: MSSQL 全面遷移 P3d — CR 優先分派 raw SQL 引擎移植（
 priority: P0-MVP
 related_spec:
   - /docs/specs/implementation-log/AD-E07-42-mssql-p3-raw-sql-engine.md（§2.4 CR 優先分派逐站點方言轉換清單、§4 EQ 等價測試策略、§5 P3d 範圍/DoD、§7 不變式 I-MSSQL-ENGINE-EQ-01）
-  - /docs/specs/implementation-log/AD-E07-42-P3c-impl.md（Stage 3/4 已完成落地事實：Blocking Issues「範圍外後續（P3d/P3e，非本輪）」段落明文記錄 `cr-priority-sql.ts`（3d CR 優先分派）之 mssql 化未移植、mssql 月跑之 CR 前置動態指派尚未接線；P3c DISPATCH-003 現行為刻意設計之負向守門，本文件為其正式閉環——翻轉為正向 MUST-FIX 要求）
+  - /docs/specs/implementation-log/AD-E07-42-P3c-impl.md（Stage 3/4 已完成落地事實：Blocking Issues「範圍外後續（P3d/P3e，非本輪）」段落明文記錄 `cr-priority-sql.ts`（3d CR 優先分派）之 mssql 化未移植、mssql 月名單分派之 CR 前置動態指派尚未接線；P3c DISPATCH-003 現行為刻意設計之負向守門，本文件為其正式閉環——翻轉為正向 MUST-FIX 要求）
   - apps/api/src/modules/assignment/stage1/cr-priority-sql.ts（`runCrPrioritySql`：crEnabled=false 分支 L61-72、步驟 1 逾2年清空 L80-93、步驟 2 離職清空 L95-110、步驟 3 CR 優先指派 L112-141，PG 現行實作，本文件全部站點逐行核對之基準）
   - apps/api/src/modules/assignment/stage1/cr-priority.ts（`applyCrPriority`/`computeCrSysDates`，JS golden oracle，純函式無 DB 依賴，EQ 群組比對基準）
   - apps/api/src/modules/assignment/stage1/stage3to4-ration-sql-mssql.ts（P3c 落地產物：UPDATE...FROM 重構手法「target 併入 FROM + join key 入 INNER JOIN ON、WHERE 僅保留 run_id/list_no 範圍限定」+ VALUES-CTE derived table 包裝手法，本文件 STEP2/STEP3 UPDATE...FROM 轉換直接沿用同一手法）
@@ -27,7 +27,7 @@ last_updated: 2026-07-08
 >
 > **★ test-designer 逐檔查證發現之關鍵事實（本文件測試設計之核心依據）**：
 >
-> 1. **🔴🔴 DISPATCH 核心缺口，P3c impl log 已白紙黑字記錄之已知缺口，本文件為其正式閉環**：test-designer 直接查證 `assignment-run-pipeline.service.ts:1123-1204` 之 `executeStage2to3PushdownMssql`（P3c 落地產物），確認其現行僅三步（① `runStage2and3SqlMssql` ② `clearStage3Fields` ③ `runStage3to4RationSqlMssql`），L1169-1170 明文註解「⚠️ 刻意**不**呼叫 PG-only 之 CR 前置下推（P3d 範圍；DISPATCH-003 負向守門）」。對照 PG 完整鏈路 `executeStage2to4Pushdown:1015-1104`（`runStage2and3Sql`→`clearStage3Fields`→`runCrPrioritySql`（L1061-1066）→`runStage3to4RationSql`，四步），mssql 路徑缺第三步。P3c `AD-E07-42-P3c-impl.md` Blocking Issues 段落已自陳「mssql 月跑之 CR 前置動態指派（cr_id 寫 emplid、失效清空）尚未接線（is_cr 由 Stage 1 帶入後保留、無 CR 重指派）」。本文件已將 P3c 之 DISPATCH-003（負向守門，MUST-FIX 要求「不呼叫」）**翻轉為正向 MUST-FIX 要求（DISPATCH-001，要求「必須呼叫」）**，逼實作方擴充呼叫鏈為四步，順序須對稱 PG 之 I-CR-ORDER-01（清除 → CR 前置 → 比例分派）。
+> 1. **🔴🔴 DISPATCH 核心缺口，P3c impl log 已白紙黑字記錄之已知缺口，本文件為其正式閉環**：test-designer 直接查證 `assignment-run-pipeline.service.ts:1123-1204` 之 `executeStage2to3PushdownMssql`（P3c 落地產物），確認其現行僅三步（① `runStage2and3SqlMssql` ② `clearStage3Fields` ③ `runStage3to4RationSqlMssql`），L1169-1170 明文註解「⚠️ 刻意**不**呼叫 PG-only 之 CR 前置下推（P3d 範圍；DISPATCH-003 負向守門）」。對照 PG 完整鏈路 `executeStage2to4Pushdown:1015-1104`（`runStage2and3Sql`→`clearStage3Fields`→`runCrPrioritySql`（L1061-1066）→`runStage3to4RationSql`，四步），mssql 路徑缺第三步。P3c `AD-E07-42-P3c-impl.md` Blocking Issues 段落已自陳「mssql 月名單分派之 CR 前置動態指派（cr_id 寫 emplid、失效清空）尚未接線（is_cr 由 Stage 1 帶入後保留、無 CR 重指派）」。本文件已將 P3c 之 DISPATCH-003（負向守門，MUST-FIX 要求「不呼叫」）**翻轉為正向 MUST-FIX 要求（DISPATCH-001，要求「必須呼叫」）**，逼實作方擴充呼叫鏈為四步，順序須對稱 PG 之 I-CR-ORDER-01（清除 → CR 前置 → 比例分派）。
 > 2. **🔴🔴 日期型別查證逆轉——appl_date 確實需要日期方言轉換（與 P3c ASSIGNDAY 查證結論相反，不可類推）**：P3c 曾查證 `ob_monthly_run_result.assignday` 為 `varchar(100)`、不需任何日期轉換，並記錄「該類轉換實際發生於 §2.1/§2.4 之他檔」。test-designer 本輪逐行查證 `1751884800000-MssqlBaselineSchema.ts`，確認 **`ob_monthly_run_result.appl_date` 型別為 `datetime2`（非 varchar）**，且來源 entity（`ob-monthly-run-result.entity.ts:91`）使用 `dateColumnType`（`column-types.ts`：PG=`timestamp`、MSSQL=`datetime2`），PG 側 `appl_date` 亦非 `date` 而是 `timestamp`。故 `cr-priority-sql.ts` 步驟 1 之 `appl_date < :twoYearsAgo::date` **確實是需要方言轉換的真實站點**（`CAST(:twoYearsAgo AS DATE)`），此點與 P3c 之查證方向相反，不可因「同專案前一切片查出日期欄位為 varchar 不需轉換」而類推假設本切片亦然——已獨立立 §七 DATECAST 群組記錄此逆轉發現，防止 tdd-implementation 誤植省略轉換。`ob_emphire.resign_date` 則確認為原生 `date` 型別（PG/MSSQL 皆是），與 `sysDate` 之 `:sysDate::date` 轉換屬低風險（DATE↔DATE 比對）。
 > 3. **🔴🔴 步驟 3 為本文件單一陳述式風險最高站點（AD §2.4 明文標示「建議此站點安排最高覆蓋率測試」）**：`runCrPrioritySql` 步驟 3（`cr-priority-sql.ts:112-141`）同時疊加三種轉換手法——CTE（`empl_set_ranked`/`first_dept`）+ 視窗函式（`ROW_NUMBER() OVER (PARTITION BY emplid ORDER BY deptid_m ASC)`）+ UPDATE...FROM 重構（PG「目標就地宣告別名」→ MSSQL「target 併入 FROM + join key 入 INNER JOIN ON」）。三者任一環節轉換錯誤皆可能連帶影響 I-DET-CR-01（決定性 deptid_m ASC 取第一筆）之正確性，已獨立立 §五 STEP3 群組並設計旗艦案例 STEP3-005。
 > 4. **🔴 查證推翻類推假設：`empl_set_ranked` CTE 不需要 P3c 式 VALUES-CTE derived table 包裝**：P3c `stage3to4-ration-sql.ts` 之三處 CTE（`dept_pct`/`empl_set`/`cal`）皆源自 PG `WITH x(cols) AS (VALUES ...)`（PG 專屬 CTE 直接接 VALUES 語法糖），需改寫為 `WITH x(cols) AS (SELECT * FROM (VALUES ...) AS v(cols))`。本文件之 `empl_set_ranked` CTE 主體為 `SELECT emplid, deptid_m, ROW_NUMBER() OVER (...) FROM ob_empl_set WHERE ...`——**直接對真實表 SELECT，非 PG VALUES 語法糖**，T-SQL CTE 本即要求主體為 SELECT，此站點**不需要**任何額外包裝改寫。已於 §一 GATE-006 記錄此查證結論，避免下游誤以為「凡是 CTE 皆需比照 P3c 手法包裝」而做多餘改寫。
@@ -113,13 +113,13 @@ last_updated: 2026-07-08
 
 ---
 
-## 二、DISPATCH — mssql 月跑鏈路第四步接線（🔴🔴 本文件核心缺口，P3c DISPATCH-003 之正式閉環，由負轉正）
+## 二、DISPATCH — mssql 月名單分派鏈路第四步接線（🔴🔴 本文件核心缺口，P3c DISPATCH-003 之正式閉環，由負轉正）
 
 ### TS-MSSQL-P3D-DISPATCH-001（🔴🔴 MUST-FIX，對現行未修改程式碼刻意設計為紅燈，P3c 負向守門於此翻轉為正向要求）：`executeStage2to3PushdownMssql` 須擴充呼叫 CR 前置分派
 - **Related Requirement**：§頂部查證發現 1；`assignment-run-pipeline.service.ts:1123-1204`（現行三步）；I-CR-ORDER-01
 - **Test Type**：Regression / MUST-FIX Gate
 - **Preconditions**：`env.DB_TYPE='mssql'`；Stage 1 已 INSERT 案件（含 `cr_id`/`cr_nm`/`is_cr`/`appl_date`）、Stage 2/3 已寫 `tier_level`（P3a/P3b/P3c 黑盒依賴）
-- **Steps**：以 `vi.spyOn` 掛在 `runCrPrioritySqlMssql`（或等效 tdd-implementation 命名之 mssql 版本函式，預期新檔 `cr-priority-sql-mssql.ts`）上，執行完整 mssql 月跑管線
+- **Steps**：以 `vi.spyOn` 掛在 `runCrPrioritySqlMssql`（或等效 tdd-implementation 命名之 mssql 版本函式，預期新檔 `cr-priority-sql-mssql.ts`）上，執行完整 mssql 月名單分派管線
 - **Expected Result**：`runCrPrioritySqlMssql` **應被呼叫**（現行未修改程式碼下必為紅燈——`executeStage2to3PushdownMssql` 現行僅三步，`clearStage3Fields` 後直接呼叫 `runStage3to4RationSqlMssql`，中間無 CR 前置呼叫），逼實作方將呼叫鏈擴充為對稱 PG `executeStage2to4Pushdown` 之四步（`runStage2and3SqlMssql`→`clearStage3Fields`→`runCrPrioritySqlMssql`→`runStage3to4RationSqlMssql`）
 
 ---
@@ -135,15 +135,15 @@ last_updated: 2026-07-08
 ### TS-MSSQL-P3D-DISPATCH-003（🔴 spy 驗證，MUST-FIX）：三分支互斥（postgres/mssql/其餘）CR 前置版本不誤觸對方
 - **Related Requirement**：同 P3a/P3b/P3c 已反覆出現之 DISPATCH 陷阱同型延伸；`resolveStage2to4Strategy`
 - **Test Type**：Regression / MUST-FIX Gate
-- **Steps**：以 `{postgres, mssql, undefined}` 三種 `DB_TYPE` 組合執行含 CR 前置之完整月跑鏈路，spy `runCrPrioritySql`（PG 版）／`runCrPrioritySqlMssql`（mssql 版）
+- **Steps**：以 `{postgres, mssql, undefined}` 三種 `DB_TYPE` 組合執行含 CR 前置之完整月名單分派鏈路，spy `runCrPrioritySql`（PG 版）／`runCrPrioritySqlMssql`（mssql 版）
 - **Expected Result**：`postgres` 呼叫 PG 版且僅呼叫 PG 版；`mssql` 呼叫 mssql 版且僅呼叫 mssql 版；兩者互斥，不重疊、不誤呼叫對方版本
 
 ---
 
-### TS-MSSQL-P3D-DISPATCH-004（DoD 核心觀察）：完整 mssql 月跑後 CR 案件 emplid/dept_id/is_cr 不再恆維持 Stage 1 帶入原值
+### TS-MSSQL-P3D-DISPATCH-004（DoD 核心觀察）：完整 mssql 月名單分派後 CR 案件 emplid/dept_id/is_cr 不再恆維持 Stage 1 帶入原值
 - **Related Requirement**：§頂部查證發現 1；P3c impl log「範圍外後續」段落之已知缺口解除驗證
 - **Test Type**：Regression（DoD 核心）
-- **Steps**：以 §五 STEP3 群組任一案例之 seed 資料（`cr_id` 有值 + `ob_empl_set` 有對應 ration），經完整 mssql 月跑管線（含本輪新接線之 CR 前置）執行
+- **Steps**：以 §五 STEP3 群組任一案例之 seed 資料（`cr_id` 有值 + `ob_empl_set` 有對應 ration），經完整 mssql 月名單分派管線（含本輪新接線之 CR 前置）執行
 - **Expected Result**：`ob_monthly_run_result` 讀回列之 `emplid`/`dept_id`/`emplid_deptid`/`is_cr` 四欄反映 CR 前置動態指派結果（P3c 當下之已知狀態為「is_cr 由 Stage 1 帶入後保留、無 CR 重指派」），至少存在因 CR 前置而改變之列且與 §十一 EQ 群組之 JS oracle 逐列相符
 
 ---
@@ -373,7 +373,7 @@ last_updated: 2026-07-08
 - **Test Type**：EQ
 - **Expected Result**：全案件 `is_cr='N'`、`emplid`/`dept_id`/`emplid_deptid=NULL`（步驟 1-3 未執行），JS 端與 MSSQL 端等價
 
-### TS-MSSQL-P3D-EQ-004（🔴🔴 DoD 核心跨切片旗艦，對稱 PG spec ASGD-CR-EQ）：含 CR 案件之完整四步 mssql 月跑鏈路端對端六元組+四元組聯合等價
+### TS-MSSQL-P3D-EQ-004（🔴🔴 DoD 核心跨切片旗艦，對稱 PG spec ASGD-CR-EQ）：含 CR 案件之完整四步 mssql 月名單分派鏈路端對端六元組+四元組聯合等價
 - **Related Requirement**：I-CR-DEDUCT-01/I-CR-ASSIGNDAY-01；`distributeStage3to4` 之 `crPreassigned` 參數；橋接 P3c EQ-005（先前手動模擬）與本輪真實機制
 - **Test Type**：EQ（DoD 核心旗艦，端對端）
 - **Steps**：混合 seed 非 CR 案件 + CR 案件（`cr_id` 有值，`ob_empl_set` 有對應 ration），經 §二 DISPATCH 擴充後之完整四步 mssql 鏈路（CR 前置 → Stage 3/4 比例分派）；JS 端以 `applyCrPriority` 產出 `crPreassigned` 後傳入 `distributeStage3to4`

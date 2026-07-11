@@ -267,7 +267,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | LIST_DRAFT_ADVANCE_BLOCKED_LEGACY_F059 | 500 | 系統偵測到 F059 舊路徑程式碼仍存在，無法執行 E07 重構批次 3 新流程；請聯繫 IT 確認部署完整性 | **原子性上線 gating（Invariant I-1）**：feature flag `ENABLE_E07_REFACTOR_PHASE3 = true` 但啟動時 / runtime 偵測到 F059 OBASSIGNSET 全域 CR 開關之程式碼路徑仍存在；F050 v2.0 / F078 端點一律拒絕；非典型業務錯誤，僅作為部署防呆。詳見 [F050 v2.0 §13](features/F050-create-list-definition.md#13-原子性上線約束invariant-i-1最高優先級) | F050 v2.0, F078 |
 | STAGE_ADVANCE_PRECONDITION_FAILED | 422 | 前置條件未達成：{description} | **通用「推進前置條件失敗」錯誤碼（v2.1 / 2026-05-15 / 批次 4 新增）**：用於描述「stage 推進操作」之前置條件驗證失敗，含 `details.reason` 與 stage-specific 細節欄位。F080（M03a → M03b）採此錯誤碼描述「部門比例為空（`dept_ratio_empty`）」與「部門比例加總不等於 100%（`dept_ratio_sum_not_100`，含 `details.actualSum`）」；後續 M03b/c/d 推進 spec 沿用此錯誤碼描述各階段前置條件失敗 | F080, 後續 M03b/c/d 推進 spec |
 | STAGE_ROLLBACK_BLOCKED | 422 | 當前階段不可 Rollback：{description} | **通用「Rollback 阻擋」錯誤碼（v2.1 / 2026-05-15 / 批次 4 新增；v2.2 / 2026-05-15 / 批次 5 沿用至 F085；v2.3 / 2026-05-15 / 批次 6 沿用至 F089）**：用於描述「stage Rollback 操作」之拒絕回應，含 `details.reason`：(1) `already_at_first_stage` — 草稿階段為流程第一階段，不可 Rollback（F081 BR-2）；(2) `wrong_source_stage` — 端點專屬 source stage 不匹配（如 F081 端點僅接受 `stage = 'dept_ratio'`、F085 端點僅接受 `stage = 'personnel_ratio'`、F089 端點僅接受 `stage = 'ready'`），含 `details.currentStage` / `details.expectedStage` | F081, F085, F089 |
-| MONTHLY_RUN_BLOCKED_LIST_NOT_READY | 422 | 以下 {N} 份 active 名單尚未就緒（stage != 'ready'），請先完成簽核：{listSummary} | **v1.0 / 2026-05-15 / 批次 6 新增（F061 v1.1 引入；OQ Q6.1=A 用戶決議落地）**：F061 月跑觸發前置條件 AC-1 第 2 項驗證失敗（任一 active 名單之 `stage != 'ready'`）；details 含 `notReadyLists` 陣列：`[{ listNo, listNm, currentStage, stageLabel }]`；草稿名單（`stage = 'draft'`）不計入此檢查（沿用 F088 BR-5 / F061 BR-5 「active 名單」定義）| F061 v1.1, F088 |
+| MONTHLY_RUN_BLOCKED_LIST_NOT_READY | 422 | 以下 {N} 份 active 名單尚未就緒（stage != 'ready'），請先完成簽核：{listSummary} | **v1.0 / 2026-05-15 / 批次 6 新增（F061 v1.1 引入；OQ Q6.1=A 用戶決議落地）**：F061 月名單分派觸發前置條件 AC-1 第 2 項驗證失敗（任一 active 名單之 `stage != 'ready'`）；details 含 `notReadyLists` 陣列：`[{ listNo, listNm, currentStage, stageLabel }]`；草稿名單（`stage = 'draft'`）不計入此檢查（沿用 F088 BR-5 / F061 BR-5 「active 名單」定義）| F061 v1.1, F088 |
 
 #### 簽核階段（M03c）{#assignment-approval-errors}
 
@@ -285,7 +285,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 |--------|------------|------|------|----------|
 | SCORING_VERSION_NOT_FOUND | 404 | 目前無生效的計分版本，請聯繫 IT 確認設定 | `ob_levelcard_version` 無 `status = 'active'` 紀錄 | F053 |
 | SCORING_COLUMN_NOT_FOUND | 404 | 指定的計分維度不存在或已停用 | `(card_type, card_version, column_name)` 組合不存在於 `ob_levelcard_column`；disable 端點限定 `status='active'`（找不到 → 404，含重複停用）；**F106 enable 端點限定 `status='inactive'`（找不到 → 404，含對已 active 維度重複啟用，對稱慣例）** | F054, F106 |
-| SCORING_VERSION_LOCKED | 409 | 分派執行中，無法修改計分設定 | 月跑 `pending` / `running` 期間嘗試修改計分設定（**F106 enable 端點沿用同一 `assertNotLocked()`，與 disable 一致**） | F054, F055, F056, F070, F071, F072, F106 |
+| SCORING_VERSION_LOCKED | 409 | 分派執行中，無法修改計分設定 | 月名單分派 `pending` / `running` 期間嘗試修改計分設定（**F106 enable 端點沿用同一 `assertNotLocked()`，與 disable 一致**） | F054, F055, F056, F070, F071, F072, F106 |
 | SCORING_COLUMN_DUPLICATE | 422 | 計分維度 column_name `{columnName}` 已存在於 active 版本 | 新增維度時 `column_name` 已存在於同 `card_type + card_version` 的 `status = 'active'` 紀錄 | F054 |
 | SCORING_RANGE_OVERLAP | 422 | 分數區間重疊，請調整條件值 | 分數區間或 CARD_LEVEL 門檻區間重疊 | F054, F055 |
 | SCORING_INVALID_MATCH_TYPE | 422 | 比對模式（match_type）值不合法，允許值：CATEGORY / RANGE / COMPOSITE | **v1.3 / 2026-05-18 新增（F054 v1.3）**：PUT `/scoring/dimensions` 請求傳入的 `matchType` 不在允許列表；`details` 含 `allowedValues: ['CATEGORY','RANGE','COMPOSITE']` | F054 v1.3 |
@@ -319,26 +319,26 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
 |--------|------------|------|------|----------|
-| ASSIGNMENT_RUN_ALREADY_RUNNING | 409 | 分派執行中（run_id: {currentRunId}），請等待完成後再觸發 | 同月已有 `status IN ('pending', 'running')` 紀錄時嘗試觸發新月跑，或於月跑執行中嘗試修改任何 E07 設定。**v1.12 / 2026-05-16 / 決議 #6 補備註**：由 `AssignmentRunGuardService.assertNoRunningRun(workYm?)` 集中拋出（assignment 模組底下，與 `StageTransitionService` 同層）；所有 E07 寫入 service method 最頂層呼叫此 guard；月跑結束（`status = 'completed'` / `'failed'`）後自動解除阻擋。套用範圍：F050 v2.0 / F051 / F052 / F078 / F079 / F080 / F081 / F082 v1.3 / F083（透過 F082 PUT）/ F084 / F085 / F086 / F087 / F089。**v1.16 / 2026-05-25 / F084 v2.0 auto-advance 補備註**：F084 v2.0 auto-advance 路徑（附著於 F082 PUT 同一 tx）偵測到月跑進行中時，**不回 409**、不 rollback 該次 PUT，而由 F082 PUT response 之 `autoAdvanceFailReason: "ASSIGNMENT_RUN_ALREADY_RUNNING"` 字串攜帶此碼語意，PUT 本身仍回 200（詳 [F084 §5.2 / BR-15](features/F084-advance-to-approval.md#52-auto-advance-觸發流程主路徑無獨立-endpoint)）；F084 手動 fallback 端點與其他 E07 寫入端點仍正常拋 409 | F048-F052, F054-F060, F061, F068, F078-F089 |
-| ASSIGNMENT_RUN_PRECHECK_FAILED | 422 | 前置條件未滿足：{details} | 月跑 Stage 0 前置條件檢查失敗（5 項任一未通過） | F061 |
-| RUN_WORKYM_PAST | 422 | 不可對已開始或過去的作業月觸發月跑 | **v1.16 / 2026-05-27 新增（F097 作業月語意統一 / US-139 AC-4）**：`POST /api/v1/assignment/runs` 過去月 guard——body `workYm` 對應之目標月 1 號（`workdt = workYm + '01'`）< server 今天時拒絕觸發。邊界採 `>=`（目標月 1 號當天合法可跑，對應 ground-truth SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql` L31 `@WORKDT < getdate() → RETURN` 之等價移植）；比對基準由 `SystemService.getCurrentWorkYm()` 計算（不依賴前端時鐘）。於 `AssignmentRunService.triggerRun()` 格式驗證後、`assertNoRunningRun` 前檢查。**注意**：`workYm` 缺省（未帶）回 400（缺必要欄位）；`workYm` 帶值但格式錯 / 月份非 01~12 回 422 `WORK_YM_INVALID_FORMAT`（見 `#assignment-list-errors`）；本碼僅用於「格式合法但月份已過去」之業務 guard | F097, F061 |
-| ASSIGNMENT_RUN_NOT_FOUND | 404 | 找不到該月跑紀錄或快照不完整 | `run_id` 不存在於 `assignment_run`，或 `assignment_run_snapshot` 三份快照不完整 | F062, F063, F064, F066, F067 |
-| ASSIGNMENT_RUN_NOT_COMPLETED | 422 | 月跑尚未完成，該操作不可用 | 對 `status != 'completed'` 的月跑執行結果查詢、匯出等操作 | F063, F064 |
-| ASSIGNMENT_RUN_NOT_COMPARABLE | 422 | 僅 completed 狀態的月跑可比對 | 比對操作的任一 `run_id` 非 `completed` 狀態 | F067 |
+| ASSIGNMENT_RUN_ALREADY_RUNNING | 409 | 分派執行中（run_id: {currentRunId}），請等待完成後再觸發 | 同月已有 `status IN ('pending', 'running')` 紀錄時嘗試觸發新月名單分派，或於月名單分派執行中嘗試修改任何 E07 設定。**v1.12 / 2026-05-16 / 決議 #6 補備註**：由 `AssignmentRunGuardService.assertNoRunningRun(workYm?)` 集中拋出（assignment 模組底下，與 `StageTransitionService` 同層）；所有 E07 寫入 service method 最頂層呼叫此 guard；月名單分派結束（`status = 'completed'` / `'failed'`）後自動解除阻擋。套用範圍：F050 v2.0 / F051 / F052 / F078 / F079 / F080 / F081 / F082 v1.3 / F083（透過 F082 PUT）/ F084 / F085 / F086 / F087 / F089。**v1.16 / 2026-05-25 / F084 v2.0 auto-advance 補備註**：F084 v2.0 auto-advance 路徑（附著於 F082 PUT 同一 tx）偵測到月名單分派進行中時，**不回 409**、不 rollback 該次 PUT，而由 F082 PUT response 之 `autoAdvanceFailReason: "ASSIGNMENT_RUN_ALREADY_RUNNING"` 字串攜帶此碼語意，PUT 本身仍回 200（詳 [F084 §5.2 / BR-15](features/F084-advance-to-approval.md#52-auto-advance-觸發流程主路徑無獨立-endpoint)）；F084 手動 fallback 端點與其他 E07 寫入端點仍正常拋 409 | F048-F052, F054-F060, F061, F068, F078-F089 |
+| ASSIGNMENT_RUN_PRECHECK_FAILED | 422 | 前置條件未滿足：{details} | 月名單分派 Stage 0 前置條件檢查失敗（5 項任一未通過） | F061 |
+| RUN_WORKYM_PAST | 422 | 不可對已開始或過去的作業月觸發月名單分派 | **v1.16 / 2026-05-27 新增（F097 作業月語意統一 / US-139 AC-4）**：`POST /api/v1/assignment/runs` 過去月 guard——body `workYm` 對應之目標月 1 號（`workdt = workYm + '01'`）< server 今天時拒絕觸發。邊界採 `>=`（目標月 1 號當天合法可跑，對應 ground-truth SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql` L31 `@WORKDT < getdate() → RETURN` 之等價移植）；比對基準由 `SystemService.getCurrentWorkYm()` 計算（不依賴前端時鐘）。於 `AssignmentRunService.triggerRun()` 格式驗證後、`assertNoRunningRun` 前檢查。**注意**：`workYm` 缺省（未帶）回 400（缺必要欄位）；`workYm` 帶值但格式錯 / 月份非 01~12 回 422 `WORK_YM_INVALID_FORMAT`（見 `#assignment-list-errors`）；本碼僅用於「格式合法但月份已過去」之業務 guard | F097, F061 |
+| ASSIGNMENT_RUN_NOT_FOUND | 404 | 找不到該月名單分派紀錄或快照不完整 | `run_id` 不存在於 `assignment_run`，或 `assignment_run_snapshot` 三份快照不完整 | F062, F063, F064, F066, F067 |
+| ASSIGNMENT_RUN_NOT_COMPLETED | 422 | 月名單分派尚未完成，該操作不可用 | 對 `status != 'completed'` 的月名單分派執行結果查詢、匯出等操作 | F063, F064 |
+| ASSIGNMENT_RUN_NOT_COMPARABLE | 422 | 僅 completed 狀態的月名單分派可比對 | 比對操作的任一 `run_id` 非 `completed` 狀態 | F067 |
 
-#### 月跑警告紀錄（非 HTTP 錯誤碼）{#assignment-run-warnings}
+#### 月名單分派警告紀錄（非 HTTP 錯誤碼）{#assignment-run-warnings}
 
-> **v1.11 / 2026-05-16 / 衍生補修新增**：以下「警告紀錄」為月跑流程內偵測到之非錯誤狀況，**不回傳 HTTP 錯誤碼**；月跑仍可正常 `status = 'completed'`，警告內容寫入 `assignment_run.report_payload` JSONB 欄位供前端展示。前端 F062 / F063 / F050 / F051 應依下列警告碼決定 UI 提示樣式（黃色 banner / toast / 輕量 inline 警示）。
+> **v1.11 / 2026-05-16 / 衍生補修新增**：以下「警告紀錄」為月名單分派流程內偵測到之非錯誤狀況，**不回傳 HTTP 錯誤碼**；月名單分派仍可正常 `status = 'completed'`，警告內容寫入 `assignment_run.report_payload` JSONB 欄位供前端展示。前端 F062 / F063 / F050 / F051 應依下列警告碼決定 UI 提示樣式（黃色 banner / toast / 輕量 inline 警示）。
 
 | 警告碼 | 觸發階段 | 訊息 | 說明 | 相關功能 |
 |--------|---------|------|------|----------|
-| RUN_REPORT_SKIPPED_CASES | F061 月跑 Stage 2 計分 | 月跑完成，但有 {skippedCaseCount} 筆案件因無對應計分卡（邊緣 CARD_TYPE）被跳過 | **v1.0 / 2026-05-16 / OQ-E07-29-A 落地（F061 v1.2 引入）**：Stage 2 遭遇無計分規則之邊緣 CARD_TYPE（如 HB / SEB / SEC），跳過該案件不拋錯；月跑仍 `status = 'completed'`；跳過案件清單儲存於 `assignment_run.report_payload.skippedCases[]` JSONB（結構詳見 [F061 BR-13](features/F061-trigger-assignment-run.md#6-商業規則)）；前端可於 F062 / F063 顯示黃色警示 banner，提供「查看跳過案件清單」展開連結 | F061 v1.2, F062, F063 |
-| WHITELIST_OPTION_INACTIVE | 月跑 Stage 1 預檢 / F050 / F051 名單儲存 | 名單條件引用之可選值「{optionValue}」（{columnName}）已被停用 | **v1.0 / 2026-05-16 / 衍生補修新增；v1.15 / 2026-05-20 引用版號更新**：F076 v1.5 將某 categorical 欄位之可選值軟停用（`is_active = false`）後，既有名單若引用 inactive 值，**月跑 Stage 1 不阻擋**（沿用 F076 v1.5 BR-4 不回溯規則）；可於月跑報告 `report_payload.warnings[]` 補 warning 條目，或於 F050 v2.1 / F051 v2.1 名單儲存時於 response body 附加 `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`（F050 v2.1 BR-9 / F051 v2.1 BR-12；非阻擋儲存）。**非 HTTP 錯誤碼**；前端應於名單編輯頁列出受影響條件值；後端不主動清理 `condition_payload` 之 inactive 值（由業務手動處理）| F076 v1.5, F050 v2.1, F051 v2.1, F061 |
-| SCORING_INTEGRITY_WARN | F061 月跑 Stage 2 前（`ScoringIntegrityCheckService`）| 計分設定完整性警告：{affectedCount} 個維度之 match_type 與 score 記錄不一致，月跑繼續但結果可能有誤 | **v1.3 / 2026-05-18 / F061 v1.3 新增（非 HTTP 錯誤碼）**：Stage 2 執行前，`ScoringIntegrityCheckService.checkAndWarn()` 稽核所有 active 版本之 `ob_levelcard_column` 與對應 `ob_levelcard_score`；若發現 `MATCH_TYPE_FIELD_MISMATCH`（match_type 與 level1 / level2_s 填值規則衝突）或 `CATEGORY_DUPLICATE`（同 column_name 下 level1 重複），**不拋錯、月跑繼續**；警告寫入：(a) `assignment_audit_log`（`action = 'SCORING_INTEGRITY_WARN'`，JSONB 含 issues 陣列）；(b) `assignment_run.report_payload.warningSummary.SCORING_INTEGRITY_WARN`（含 `affectedCount` + `details[]`）；前端 F062 / F063 結果頁於 `warningSummary.SCORING_INTEGRITY_WARN.affectedCount > 0` 時顯示黃色 integrity 警示 banner，提示業務人員至 M02 計分設定頁修正 | F061 v1.3, F062, F063, F054 |
+| RUN_REPORT_SKIPPED_CASES | F061 月名單分派 Stage 2 計分 | 月名單分派完成，但有 {skippedCaseCount} 筆案件因無對應計分卡（邊緣 CARD_TYPE）被跳過 | **v1.0 / 2026-05-16 / OQ-E07-29-A 落地（F061 v1.2 引入）**：Stage 2 遭遇無計分規則之邊緣 CARD_TYPE（如 HB / SEB / SEC），跳過該案件不拋錯；月名單分派仍 `status = 'completed'`；跳過案件清單儲存於 `assignment_run.report_payload.skippedCases[]` JSONB（結構詳見 [F061 BR-13](features/F061-trigger-assignment-run.md#6-商業規則)）；前端可於 F062 / F063 顯示黃色警示 banner，提供「查看跳過案件清單」展開連結 | F061 v1.2, F062, F063 |
+| WHITELIST_OPTION_INACTIVE | 月名單分派 Stage 1 預檢 / F050 / F051 名單儲存 | 名單條件引用之可選值「{optionValue}」（{columnName}）已被停用 | **v1.0 / 2026-05-16 / 衍生補修新增；v1.15 / 2026-05-20 引用版號更新**：F076 v1.5 將某 categorical 欄位之可選值軟停用（`is_active = false`）後，既有名單若引用 inactive 值，**月名單分派 Stage 1 不阻擋**（沿用 F076 v1.5 BR-4 不回溯規則）；可於月名單分派報告 `report_payload.warnings[]` 補 warning 條目，或於 F050 v2.1 / F051 v2.1 名單儲存時於 response body 附加 `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`（F050 v2.1 BR-9 / F051 v2.1 BR-12；非阻擋儲存）。**非 HTTP 錯誤碼**；前端應於名單編輯頁列出受影響條件值；後端不主動清理 `condition_payload` 之 inactive 值（由業務手動處理）| F076 v1.5, F050 v2.1, F051 v2.1, F061 |
+| SCORING_INTEGRITY_WARN | F061 月名單分派 Stage 2 前（`ScoringIntegrityCheckService`）| 計分設定完整性警告：{affectedCount} 個維度之 match_type 與 score 記錄不一致，月名單分派繼續但結果可能有誤 | **v1.3 / 2026-05-18 / F061 v1.3 新增（非 HTTP 錯誤碼）**：Stage 2 執行前，`ScoringIntegrityCheckService.checkAndWarn()` 稽核所有 active 版本之 `ob_levelcard_column` 與對應 `ob_levelcard_score`；若發現 `MATCH_TYPE_FIELD_MISMATCH`（match_type 與 level1 / level2_s 填值規則衝突）或 `CATEGORY_DUPLICATE`（同 column_name 下 level1 重複），**不拋錯、月名單分派繼續**；警告寫入：(a) `assignment_audit_log`（`action = 'SCORING_INTEGRITY_WARN'`，JSONB 含 issues 陣列）；(b) `assignment_run.report_payload.warningSummary.SCORING_INTEGRITY_WARN`（含 `affectedCount` + `details[]`）；前端 F062 / F063 結果頁於 `warningSummary.SCORING_INTEGRITY_WARN.affectedCount > 0` 時顯示黃色 integrity 警示 banner，提示業務人員至 M02 計分設定頁修正 | F061 v1.3, F062, F063, F054 |
 
 **前端展示建議**：
-- `RUN_REPORT_SKIPPED_CASES`：F062 進度頁完成後 / F063 結果摘要頁頂部，黃色 banner「⚠ 月跑完成，但有 N 筆案件被跳過」+「查看詳情」按鈕展開 `report_payload.skippedCases[]` 清單
-- `WHITELIST_OPTION_INACTIVE`：F050 / F051 名單編輯頁之篩選條件區塊，受影響條件值旁顯示「⚠ 已停用」標籤；F062 月跑完成後若有此警告，於結果摘要頁顯示「{N} 份名單之條件含已停用可選值（不影響月跑結果）」
+- `RUN_REPORT_SKIPPED_CASES`：F062 進度頁完成後 / F063 結果摘要頁頂部，黃色 banner「⚠ 月名單分派完成，但有 N 筆案件被跳過」+「查看詳情」按鈕展開 `report_payload.skippedCases[]` 清單
+- `WHITELIST_OPTION_INACTIVE`：F050 / F051 名單編輯頁之篩選條件區塊，受影響條件值旁顯示「⚠ 已停用」標籤；F062 月名單分派完成後若有此警告，於結果摘要頁顯示「{N} 份名單之條件含已停用可選值（不影響月名單分派結果）」
 
 ---
 
@@ -471,19 +471,19 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | 搜尋關鍵字不足 2 字元 | 422 | C360_SEARCH_MIN_LENGTH | 搜尋關鍵字至少需要 2 個字元 | 拒絕搜尋請求 |
 | 同月名單定義達 999 筆 | 422 | LIST_NO_LIMIT_EXCEEDED | 本月名單定義已達 999 筆上限 | 不新增紀錄 |
 | PROD_KIND + CARD_TYPE 組合重複 | 422 | LIST_NO_DUPLICATE | 相同產品類別與卡別的有效名單已存在 | 不新增/更新 |
-| 月跑執行中觸發新月跑或修改 E07 設定 | 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 分派執行中 | 拒絕請求 |
-| 月跑前置條件失敗 | 422 | ASSIGNMENT_RUN_PRECHECK_FAILED | 前置條件未滿足 | 顯示失敗項目清單 |
-| 月跑 `workYm` 對應目標月已過去（F097）| 422 | RUN_WORKYM_PAST | 不可對已開始或過去的作業月觸發月跑 | 拒絕觸發（邊界 `>=`，目標月 1 號當天合法）|
-| 月跑 `workYm` 帶值但格式錯 / 月份非 01~12（F097）| 422 | WORK_YM_INVALID_FORMAT | 作業月份格式錯誤，需為 6 位 YYYYMM | 拒絕請求 |
-| 月跑 `workYm` 缺省（未帶）（F097）| 400 | （通用缺必填）| 缺少必要欄位 workYm | 拒絕請求（無 new Date() fallback）|
+| 月名單分派執行中觸發新月名單分派或修改 E07 設定 | 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 分派執行中 | 拒絕請求 |
+| 月名單分派前置條件失敗 | 422 | ASSIGNMENT_RUN_PRECHECK_FAILED | 前置條件未滿足 | 顯示失敗項目清單 |
+| 月名單分派 `workYm` 對應目標月已過去（F097）| 422 | RUN_WORKYM_PAST | 不可對已開始或過去的作業月觸發月名單分派 | 拒絕觸發（邊界 `>=`，目標月 1 號當天合法）|
+| 月名單分派 `workYm` 帶值但格式錯 / 月份非 01~12（F097）| 422 | WORK_YM_INVALID_FORMAT | 作業月份格式錯誤，需為 6 位 YYYYMM | 拒絕請求 |
+| 月名單分派 `workYm` 缺省（未帶）（F097）| 400 | （通用缺必填）| 缺少必要欄位 workYm | 拒絕請求（無 new Date() fallback）|
 | 部門比例加總 ≠ 100%（F079，per-LIST_NO） | 422 | RATIO_SUM_NOT_100 | 部門比例加總需調整至 100%（容忍 ±0.01%） | 儲存按鈕停用 |
 | 個別業務比例加總 ≠ 100%（F082，per-DEPT） | 422 | PERSONNEL_RATIO_SUM_NOT_100 | 部門個別業務比例加總需調整至 100% | 該部門儲存按鈕停用 |
 | F082 寫入前部門尚未於 ob_dept_pct 配置 | 422 | PERSONNEL_RATIO_DEPT_NOT_FOUND | 部門尚未於部門比例設定階段配置 | 拒絕請求（防呆）|
 | 處長嘗試操作他人轄區業務員 RATION（F082） | 403 | PERSONNEL_RATIO_OUT_OF_SCOPE | 此業務員資料不屬於您的轄區 | 拒絕請求，前端按鈕不渲染 |
 | F082 PUT 帶 appliedTemplate 但加總超界 | 422 | BONUS_PENALTY_TEMPLATE_INVALID | 模板套用結果違反邊界 | 拒絕請求（前端 bug 防呆）|
-| 月跑 run_id 不存在 | 404 | ASSIGNMENT_RUN_NOT_FOUND | 找不到該月跑紀錄 | 拒絕請求 |
-| 月跑非 completed 狀態匯出/比對 | 422 | ASSIGNMENT_RUN_NOT_COMPLETED / ASSIGNMENT_RUN_NOT_COMPARABLE | 僅 completed 狀態可操作 | 按鈕停用 |
-| 計分設定月跑鎖定 | 409 | SCORING_VERSION_LOCKED | 分派執行中，無法修改計分設定 | 拒絕請求 |
+| 月名單分派 run_id 不存在 | 404 | ASSIGNMENT_RUN_NOT_FOUND | 找不到該月名單分派紀錄 | 拒絕請求 |
+| 月名單分派非 completed 狀態匯出/比對 | 422 | ASSIGNMENT_RUN_NOT_COMPLETED / ASSIGNMENT_RUN_NOT_COMPARABLE | 僅 completed 狀態可操作 | 按鈕停用 |
+| 計分設定月名單分派鎖定 | 409 | SCORING_VERSION_LOCKED | 分派執行中，無法修改計分設定 | 拒絕請求 |
 | 分數區間重疊 | 422 | SCORING_RANGE_OVERLAP | 分數區間重疊 | 不儲存 |
 | TIER 對應指向不存在的 CARD_LEVEL | 422 | CARD_LEVEL_NOT_FOUND_IN_VERSION | 指定的 CARD_LEVEL 不存在於 active 計分版本 | 不儲存（fallback `card_level IS NULL` 場景例外） |
 | 新增 CARD_LEVEL 代碼重複 | 422 | CARD_LEVEL_DUPLICATE | 等級代碼已存在於選中計分版本 | 不新增 |

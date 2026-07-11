@@ -9,7 +9,7 @@ supersedes: AD-E07-43-P5c-f067-draft.md（草稿，已整合 P5h/P5g 修法後�
 depends-on: [AD-E07-43-P5c-impl.md, AD-E07-43-P5h-impl.md, AD-E07-43-P5g-impl.md]
 ---
 
-# MSSQL 全面遷移 — PG vs MSSQL 月跑逐列比對業務簽核報告
+# MSSQL 全面遷移 — PG vs MSSQL 月名單分派逐列比對業務簽核報告
 
 > 本報告取代技術底稿 `AD-E07-43-P5c-f067-draft.md`。差異：assignday 缺陷（P5h）與 ATOMIC 資料完整性風險
 > （P5g）於底稿產出後已修復並重驗，本報告納入修法後最終結果。
@@ -18,9 +18,9 @@ depends-on: [AD-E07-43-P5c-impl.md, AD-E07-43-P5h-impl.md, AD-E07-43-P5g-impl.md
 
 ## ★ 範圍與方法聲明（務必先讀）
 
-- **基準＝真實 PostgreSQL 生產月跑 run 之逐列比對**（run `07944a82`，`project_workym=202607`，115,197 案），
+- **基準＝真實 PostgreSQL 生產月名單分派 run 之逐列比對**（run `07944a82`，`project_workym=202607`，115,197 案），
   **非 JS oracle 代理、非重驗 legacy SP**。PG 全程唯讀。
-- **I-MSSQL-SIGNOFF-GATE-01 條件 (a)**「MONTHRUN-DIFF 對至少一個完整生產規模月跑顯示 PG/MSSQL 結果一致」
+- **I-MSSQL-SIGNOFF-GATE-01 條件 (a)**「MONTHRUN-DIFF 對至少一個完整生產規模月名單分派顯示 PG/MSSQL 結果一致」
   **已被字面滿足**——本報告基於真實 PG↔MSSQL 執行結果比對，非測試設計時預設之 JS 代理路徑。
 - 兩側讀取同一份來源資料，案件集完全相同（onlyPG=0/onlyMSSQL=0），核心判定為**逐列精確相等**（0-diff 為
   基準值，非「分佈近似」）。
@@ -30,7 +30,7 @@ depends-on: [AD-E07-43-P5c-impl.md, AD-E07-43-P5h-impl.md, AD-E07-43-P5g-impl.md
 ## 1. 執行摘要
 
 MSSQL 全鏈技術驗收（P1-P4 driver/schema/佇列/ETL/Stage 1-4 raw SQL 引擎）與 cutover 前最終驗證（P5a-h）
-**已全數完成**。本報告確認：**MSSQL 版月跑結果與已核可之 PG 版逐列一致，兩項已知缺陷（assignday 日期
+**已全數完成**。本報告確認：**MSSQL 版月名單分派結果與已核可之 PG 版逐列一致，兩項已知缺陷（assignday 日期
 正規化、ETL 資料完整性風險）皆已修復並重驗通過**。
 
 **結論：具備進入正式 cutover 簽核之技術條件**，餘下事項為 3 項**待量測/待排程之非阻擋性 follow-up**
@@ -83,7 +83,7 @@ PG≡MSSQL 完全等價，此 5 案非引擎不符、亦非 P5h 修法所引入�
 | 項目 | 內容 |
 |---|---|
 | **根因** | TypeORM `SqlServerDriver` 於連線設定未顯式指定時間表示方式時，強制採用「本地時區」而非「世界標準時間（UTC）」解讀 MSSQL 日期欄位；PostgreSQL 驅動預設行為不同，不受影響 |
-| **修法** | 4 個資料庫連線設定進入點（主應用／worker／CLI／seed）各新增 1 行明確設定（`useUTC: true`），**未更動任何月跑核心運算程式碼** |
+| **修法** | 4 個資料庫連線設定進入點（主應用／worker／CLI／seed）各新增 1 行明確設定（`useUTC: true`），**未更動任何月名單分派核心運算程式碼** |
 | **驗證** | 198 案 + 9,376 案樣本，`assignday` 由 0% 一致率轉為 **100%（0-diff）**；全量 MSSQL 自動化測試（673 通過）零回歸；`tsc` 乾淨 |
 | **副帶效益** | 一併解決先前待業務裁示之「datetime2 時區 production 組態」懸案（P5d）——根因已定位於程式碼連線層，非需選擇時區組態，P5d 已隨 P5h 結案 |
 | **殘餘 follow-up（非阻擋，見 §7）** | 匯出功能中一處日期格式化程式碼（`assignment-run-report.service.ts::formatApplDate`）在特定時刻條件下仍有跨引擎顯示格式差異風險，屬匯出顯示層、非本報告 10 欄比對範圍，已記錄為獨立 follow-up |
@@ -119,7 +119,7 @@ PG≡MSSQL 完全等價，此 5 案非引擎不符、亦非 P5h 修法所引入�
 以下事項**不影響「MSSQL 忠實重現 PG」之核心結論**，但建議簽核時一併知悉：
 
 1. **7.8M 列生產規模之交易日誌／鎖阻塞未實測**：P5g 修法在測試規模下驗證正確，但真實生產資料量下，
-   單一大交易對 SQL Server 交易日誌成長、鎖持有時間（尤其月跑期間查詢阻塞秒數）尚未以生產級資料量測。
+   單一大交易對 SQL Server 交易日誌成長、鎖持有時間（尤其月名單分派期間查詢阻塞秒數）尚未以生產級資料量測。
    建議 cutover 前以生產規模資料做一次量測；若阻塞時間不可接受，可評估啟用 `READ_COMMITTED_SNAPSHOT`
    （使 MSSQL 讀取行為對稱 PG 之 MVCC 快照讀，非阻塞）。**非阻擋簽核**，建議列為 cutover 前置檢查項。
 2. **varchar/nvarchar 顯示欄位元組語意**（見 P5i 裁定，`AD-E07-43-mssql-p5-ci-signoff.md` §9）：

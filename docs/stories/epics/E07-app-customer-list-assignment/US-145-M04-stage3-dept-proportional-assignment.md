@@ -1,10 +1,10 @@
 ---
 last-updated: 2026-06-04
 version: v1.0
-change-summary: "新增 story：月跑 Stage 3 依（分處、名單、Tier）三維分組，按 ob_dept_pct.ration 比例分配電銷課；修復現有 placeholder 實作（所有案件指向 dept[0]）導致 OB202606001 emplid=NULL 的根本原因。"
+change-summary: "新增 story：月名單分派 Stage 3 依（分處、名單、Tier）三維分組，按 ob_dept_pct.ration 比例分配電銷課；修復現有 placeholder 實作（所有案件指向 dept[0]）導致 OB202606001 emplid=NULL 的根本原因。"
 ---
 
-# US-145：月跑 Stage 3 — 依電銷課比例分配案件（部門分配）
+# US-145：月名單分派 Stage 3 — 依電銷課比例分配案件（部門分配）
 
 > **Story ID**：US-145
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
@@ -12,14 +12,14 @@ change-summary: "新增 story：月跑 Stage 3 依（分處、名單、Tier）�
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：8
-> **Feature**：F101 月跑 Stage 3/4 真實比例分派
+> **Feature**：F101 月名單分派 Stage 3/4 真實比例分派
 
 ---
 
 ## User Story
 
 **As a** 業務主管
-**I want** 月跑 Stage 3 依各分處（`dept_id`）、名單（`list_no`）、Tier（`tier_level`）三維分組，按各電銷課的設定比例（`ob_dept_pct.ration`）將案件分配至對應電銷課
+**I want** 月名單分派 Stage 3 依各分處（`dept_id`）、名單（`list_no`）、Tier（`tier_level`）三維分組，按各電銷課的設定比例（`ob_dept_pct.ration`）將案件分配至對應電銷課
 **So that** 每間電銷課收到的案件量符合比例設定，所有案件均取得 `dept_id`，不再因 placeholder 邏輯只取 dept[0] 而導致後續 Stage 4 `emplid=NULL`
 
 ---
@@ -75,18 +75,18 @@ change-summary: "新增 story：月跑 Stage 3 依（分處、名單、Tier）�
 
 ### AC-5：Stage 3 執行前清除同月份 T1–T5 案件的前次電銷課分配
 
-- **Given** 月跑執行（含重跑情境）
+- **Given** 月名單分派執行（含重跑情境）
 - **When** Stage 3 開始
 - **Then** 同月份、T1–T5 全部 Tier 的 `ob_monthly_run_result` 中 `dept_id`、`emplid`、`assignday` 欄位清空
 - **And** `is_cr` 標記不受清空影響，保留原值
 
-### AC-6：ob_dept_pct 無對應資料時月跑不中斷，寫入 audit warning
+### AC-6：ob_dept_pct 無對應資料時月名單分派不中斷，寫入 audit warning
 
 - **Given** 某名單的 `ob_dept_pct` 無任何 ration>0 的記錄
 - **When** Stage 3 執行
-- **Then** 月跑**不中斷**，該名單該 Tier 所有案件 `dept_id` 保持 NULL
+- **Then** 月名單分派**不中斷**，該名單該 Tier 所有案件 `dept_id` 保持 NULL
 - **And** 寫入 `assignment_audit_log`（`event='STAGE3_NO_DEPT_RATION'`, `list_no`, `tier_level`）
-- **And** 月跑完成摘要頁（US-083）顯示對應警告
+- **And** 月名單分派完成摘要頁（US-083）顯示對應警告
 
 ---
 
@@ -124,13 +124,13 @@ change-summary: "新增 story：月跑 Stage 3 依（分處、名單、Tier）�
 
 - **Given**：名單 OB202606001 的 ob_dept_pct 無任何記錄
 - **When**：Stage 3 執行
-- **Then**：月跑繼續；`dept_id` = NULL；audit_log 含 `STAGE3_NO_DEPT_RATION`
+- **Then**：月名單分派繼續；`dept_id` = NULL；audit_log 含 `STAGE3_NO_DEPT_RATION`
 
 ---
 
 ## 依賴關係
 
-- **Blocked By**：US-109（部門比例設定 ob_dept_pct）、US-081（月跑觸發）
+- **Blocked By**：US-109（部門比例設定 ob_dept_pct）、US-081（月名單分派觸發）
 - **Blocks**：US-146（Stage 4 員工分配依賴 dept_id 已填入）
 
 ---

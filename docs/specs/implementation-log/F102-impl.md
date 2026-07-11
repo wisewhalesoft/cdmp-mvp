@@ -1,12 +1,12 @@
 ---
 type: implementation-log
 feature_id: F102
-feature_name: 月跑 CR 優先分派（失效清空 + CR 優先指派 + 扣量 + per-list cr_enabled 閘控 + 廢除全域旗標）
+feature_name: 月名單分派 CR 優先分派（失效清空 + CR 優先指派 + 扣量 + per-list cr_enabled 閘控 + 廢除全域旗標）
 status: complete
 last_updated: 2026-06-12
 ---
 
-# F102: 月跑 CR 優先分派 — Implementation Log
+# F102: 月名單分派 CR 優先分派 — Implementation Log
 
 ## v1.1（2026-06-12）— I-CR-ASSIGNDAY-01 bug 修正（live 202606 抓到）
 

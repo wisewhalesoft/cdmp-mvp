@@ -1,6 +1,6 @@
 ---
 spec-id: F101
-title: 月跑 Stage 3/4 真實比例分派（dept 比例分配 + empl 比例分配 + ASSIGNDAY 指派日，取代 F100 placeholder）
+title: 月名單分派 Stage 3/4 真實比例分派（dept 比例分配 + empl 比例分配 + ASSIGNDAY 指派日，取代 F100 placeholder）
 feature-id: F101
 source-story: US-145 / US-146 / US-149 / US-150 / US-151
 epic: E07
@@ -11,7 +11,7 @@ date: 2026-06-04
 status: Draft
 ---
 
-# F101: 月跑 Stage 3/4 真實比例分派
+# F101: 月名單分派 Stage 3/4 真實比例分派
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-04
 
@@ -46,7 +46,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-04
 ## 2. 使用者故事
 
 **As a** 業務主管 / 分派維運人員
-**I want** 月跑 Stage 3/4 依電銷課與員工的設定比例真實分派案件，並依工作日日曆均攤指派日，且結果可重現
+**I want** 月名單分派 Stage 3/4 依電銷課與員工的設定比例真實分派案件，並依工作日日曆均攤指派日，且結果可重現
 **So that** 每間電銷課 / 每位業務員收到的案件量符合比例設定、案件不在同一天到期，且消除「全員 emplid=NULL」缺陷，使案件能正確匯出給各業務員處理
 
 ## 3. 前置條件
@@ -102,7 +102,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-04
 
 #### AC-4：Stage 3 前清除前次分配（重跑安全）
 
-- **Given** 月跑執行（含重跑）
+- **Given** 月名單分派執行（含重跑）
 - **When** Stage 3 開始
 - **Then** 同月份 T1–T5 之 `dept_id` / `emplid` / `assignday` 清空；`is_cr` 保留（BR-F101-06）
 
@@ -110,9 +110,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-04
 
 - **Given** 某名單 / Tier 之 `ob_dept_pct` 無任何 ration>0 記錄
 - **When** Stage 3 執行
-- **Then** 月跑**不中斷**，該分組案件 `dept_id` 保持 NULL
-- **And** 寫入月跑警告（`event='STAGE3_NO_DEPT_RATION'`, `list_no`, `tier_level`）—— **警告寫入通道見 §5 schema gap / OQ-F101-05**
-- **And** 月跑完成摘要頁（US-083 / F063）顯示對應警告
+- **Then** 月名單分派**不中斷**，該分組案件 `dept_id` 保持 NULL
+- **And** 寫入月名單分派警告（`event='STAGE3_NO_DEPT_RATION'`, `list_no`, `tier_level`）—— **警告寫入通道見 §5 schema gap / OQ-F101-05**
+- **And** 月名單分派完成摘要頁（US-083 / F063）顯示對應警告
 
 ### Stage 4 — 員工比例分配
 
@@ -172,8 +172,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-04
 
 - **Given** Stage 3 將 50 件分配至 AI000，但 `ob_empl_set WHERE deptid_m='AI000' AND ration>0` 無記錄
 - **When** Stage 4 分配 AI000
-- **Then** 月跑**不中斷**，這 50 件 `emplid` 保持 NULL
-- **And** 寫入月跑警告（`event='STAGE4_NO_EMPL_WARN'`, `dept_id='AI000'`, `list_no`, `tier_level`, `case_count=50`，通道見 §5 / OQ-F101-05）
+- **Then** 月名單分派**不中斷**，這 50 件 `emplid` 保持 NULL
+- **And** 寫入月名單分派警告（`event='STAGE4_NO_EMPL_WARN'`, `dept_id='AI000'`, `list_no`, `tier_level`, `case_count=50`，通道見 §5 / OQ-F101-05）
 - **And** 摘要頁（US-083）顯示「人員分配警告」區塊
 
 ### Stage 4 — ASSIGNDAY 指派日
@@ -186,7 +186,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-04
 
 **BR-F101-16（estimate≡run，I-RUN-EST-01）**：Stage 0 試算與 Stage 4 ASSIGNDAY 使用同一個 `calculateDailyEstimate(ym)` 邏輯與同一份 `ob_calendar`；日曆未變更時，兩者各日期件數比例一致。
 
-**BR-F101-17（ob_calendar 無資料 fallback）**：當月無 `rest_flg='0'` 工作日時，`assignday` 保持 NULL，月跑**不中斷**，寫警告 `ASSIGNDAY_NO_CALENDAR_WARN`。
+**BR-F101-17（ob_calendar 無資料 fallback）**：當月無 `rest_flg='0'` 工作日時，`assignday` 保持 NULL，月名單分派**不中斷**，寫警告 `ASSIGNDAY_NO_CALENDAR_WARN`。
 
 **BR-F101-18（ob_assign_set 不引用）**：F101 **不查 `ob_assign_set`**（legacy SP 之 `OBASSIGNSET` 日曆來源由 `ob_calendar` + `calculateDailyEstimate` 取代）；`ob_assign_set` 為 vestigial（是否退役見 §12 OQ-F101-03）。
 
@@ -220,7 +220,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-04
 #### AC-16：estimate≡run 一致性（US-149 AC-6 / US-151 AC-2）
 
 - **Given** Stage 0 試算用 `calculateDailyEstimate(ym='202607')` 之 casedt 清單
-- **When** 月跑 Stage 4 計算同月 ASSIGNDAY
+- **When** 月名單分派 Stage 4 計算同月 ASSIGNDAY
 - **Then** 兩者工作日清單來自同一 `calculateDailyEstimate` 呼叫（或等效共享路徑）
 - **And** `ob_calendar` 未變更時，各日期比例一致（BR-F101-16）
 
@@ -228,7 +228,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-04
 
 - **Given** `ob_calendar` 該月無 `rest_flg='0'` 記錄
 - **When** Stage 4 計算 ASSIGNDAY
-- **Then** `calculateDailyEstimate` 返回空清單；`assignday` 保持 NULL；月跑狀態 `completed`（非 failed）
+- **Then** `calculateDailyEstimate` 返回空清單；`assignday` 保持 NULL；月名單分派狀態 `completed`（非 failed）
 - **And** 寫警告 `ASSIGNDAY_NO_CALENDAR_WARN`（`list_no`, `work_ym`，通道見 §5）
 
 #### AC-18：ob_assign_set 無引用（US-151 AC-3）
@@ -314,7 +314,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-04
 | **確定性可重現**（AC-2） | test-designer | 不同 run_id 兩次四元組集合相同；NEWID/random 靜態掃描為空 |
 | **simplified is_cr**（AC-8） | test-designer | is_cr Y/N 同池；無 CR 優先 / 超額移除；is_cr 值不變 |
 | **回歸保護 emplid≠NULL**（AC-10） | test-designer | automated；OB202606001 型 defaultEmpl=null 防護 |
-| **無 ration / 無員工 / 無 calendar fallback**（AC-5/11/17） | test-designer | 月跑不中斷；NULL 保持；警告寫入 skipped_cases.warnings[] + warning_summary |
+| **無 ration / 無員工 / 無 calendar fallback**（AC-5/11/17） | test-designer | 月名單分派不中斷；NULL 保持；警告寫入 skipped_cases.warnings[] + warning_summary |
 | **estimate≡run**（AC-16） | test-designer | 同 calculateDailyEstimate 來源；比例一致 |
 | **ob_assign_set 無引用**（AC-18） | test-designer | Grep 為空 |
 | 確定性鍵 / tier_level 來源 / 警告通道 schema | tdd-implementation | 對齊架構師 OQ-F101-01/05 裁示 |

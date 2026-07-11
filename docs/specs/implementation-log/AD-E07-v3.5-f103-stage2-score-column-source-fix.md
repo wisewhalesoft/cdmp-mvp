@@ -1,6 +1,6 @@
 ---
 ad-id: AD-E07-v3.5
-title: F103 月跑計分引擎欄位來源修正（Stage 2 Score Column Source Fix）
+title: F103 月名單分派計分引擎欄位來源修正（Stage 2 Score Column Source Fix）
 feature-id: F103
 source-stories: US-156 / US-157 / US-158
 epic: E07
@@ -11,7 +11,7 @@ status: approved
 author: system-architect
 ---
 
-# AD-E07-v3.5：F103 月跑計分引擎欄位來源修正
+# AD-E07-v3.5：F103 月名單分派計分引擎欄位來源修正
 
 ## Agent Loading Guide
 
@@ -31,7 +31,7 @@ Stage 2 計分引擎存在兩條平行路徑，兩條路徑皆**未完整對齊 
 
 | 路徑 | 入口函式 | 環境 | 現況缺漏 |
 |------|---------|------|---------|
-| PG 下推 SQL | `resolveColumnSource` → `buildStage2ScoreExpr` | 正式月跑（`DB_TYPE='postgres'`） | `ADD_UN_CAPITAL` 無 case → undefined → +0；`default` 回 undefined（無通用 fallback）；`PROJECT_TP` 衍生缺 `spec_name` 邏輯；`COMMISSION` 死碼殘留 |
+| PG 下推 SQL | `resolveColumnSource` → `buildStage2ScoreExpr` | 正式月名單分派（`DB_TYPE='postgres'`） | `ADD_UN_CAPITAL` 無 case → undefined → +0；`default` 回 undefined（無通用 fallback）；`PROJECT_TP` 衍生缺 `spec_name` 邏輯；`COMMISSION` 死碼殘留 |
 | JS oracle | `resolveColumnValue` → `computeScore` | 非 PG / 單元測試 golden path | 僅映射 `LIST_MONTH` / `PROJECT_TP` / `CAR_YEAR` / `COMMISSION`（死碼），其餘全回 `''` → 無法計分（含全部 customer_core 欄 + ADD_UN_CAPITAL） |
 
 現況後果：H 卡理論上界 255 分，實際 score 範圍 81–152（ADD_UN_CAPITAL +36 分 + customer_core 各欄全缺）→ 無案件達 card C 門檻（185）→ 全 card D → 全 T3，Stage 3/4 比例分派以 tier 分組失去意義。
@@ -49,7 +49,7 @@ AD-E07-10-L 映射表本身**正確**，已含所有需求欄位（含 `ADD_UN_C
 ### 2.1 整體原則
 
 - **對齊 AD-E07-10-L 為唯一目標**：所有修正皆以使兩路徑逐欄對齊 AD 映射表為準，不發明新映射。
-- **PG 下推為正式路徑，JS oracle 為 EQ 驗證路徑**：正式月跑走 PG；JS oracle 僅用於非 PG 環境（單元測試 / dev 非 PG）及 EQ DoD 驗證。
+- **PG 下推為正式路徑，JS oracle 為 EQ 驗證路徑**：正式月名單分派走 PG；JS oracle 僅用於非 PG 環境（單元測試 / dev 非 PG）及 EQ DoD 驗證。
 - **不改 `computeScore` 函式簽章**：採 OQ-1 建議 (b)，呼叫端 batch pre-fetch merge，維持純函式介面對既有測試最小衝擊。
 - **`Stage2ScoreSql` interface 擴充 `needsArCapital` flag**：沿用 `needsCustomerCore` 既有 pattern，正交擴充，呼叫端對稱處理。
 - **無 migration**：本 feature 純邏輯修正，不新增/修改資料表或 index（`ob_arreturndf_min_cap` PK 與 `customer_core` index 已於先前 ETL migration 建立）。
@@ -210,7 +210,7 @@ default:
 **安全性論據**：
 - `columnName` 來自 `ob_levelcard_column.column_name`（DB 管理者設定，非外部使用者輸入），不存在 SQL injection 風險。
 - `lower()` 確保大小寫一致（`ADD_UN_CAPITAL` → `add_un_capital`）。
-- 非數值文字（如 `'ABC'`）→ `cast numeric` 失敗 → `NULL` → `COALESCE` 取 0，不阻擋月跑（BR-F103-08）。
+- 非數值文字（如 `'ABC'`）→ `cast numeric` 失敗 → `NULL` → `COALESCE` 取 0，不阻擋月名單分派（BR-F103-08）。
 - category 維度（字串欄）已在 hardcode case 明確處理，不進入 default 分支；即使意外進入，`cast numeric` 會回 0，不匹配 category score row，結果等同 +0（無害）。
 
 #### (e) 在 `buildStage2ScoreExpr` 中追蹤 `needsArCapital`
@@ -528,7 +528,7 @@ export function calcAgeYears(dateOfBirth: Date, now: Date): number {
 | **I-SCORE-EQ-01** | JS oracle（`computeScore`）與 PG 下推（`buildStage2ScoreExpr` 生成 SQL）對相同輸入（pool + cc + arCap）之 score 結果**完全相等**（EQ DoD）；差異容許誤差 = 0（整數分）。 |
 | **I-SCORE-AR-JOIN-01** | PG 下推：有任一 active `ADD_UN_CAPITAL` 欄時，`needsArCapital=true`，executor 注入 `LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no`；無 active ADD_UN_CAPITAL 欄時，`needsArCapital=false`，不注入此 JOIN（避免無謂掃描）。 |
 | **I-SCORE-PREFETCH-01** | JS 路徑每個 list 恰好執行兩次 batch 查詢（customer_core / ob_arreturndf_min_cap 各一次 IN clause）；不得 per-row lookup（N+1 禁止）。 |
-| **I-SCORE-GHOST-01** | 幽靈欄位（`ob_pool_data` 不存在此 key 且非 AD-E07-10-L hardcode）→ 兩路徑皆靜默貢獻 +0 + `logger.warn`（含 column_name + card_type）；不拋例外、不阻擋月跑。 |
+| **I-SCORE-GHOST-01** | 幽靈欄位（`ob_pool_data` 不存在此 key 且非 AD-E07-10-L hardcode）→ 兩路徑皆靜默貢獻 +0 + `logger.warn`（含 column_name + card_type）；不拋例外、不阻擋月名單分派。 |
 | **I-SCORE-AGE-01** | JS `calcAgeYears()` 之年齡語意與 PG `EXTRACT(YEAR FROM age(date_of_birth))` **完全一致**（精確到月，本年生日未到者不計當年）；EQ 測試覆蓋「剛好生日當天」/ 「生日前一天」/ 「生日後一天」三個邊界。 |
 | **I-SCORE-COMMISSION-01** | `COMMISSION` 從兩路徑完全移除（`resolveColumnSource` switch + `resolveColumnValue` switch + `MAPPED_SCORING_COLUMNS` 集合）；若 active column 出現 COMMISSION（legacy dump 確認不會出現），走通用 fallback → +0。 |
 

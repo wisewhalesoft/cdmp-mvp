@@ -1,10 +1,10 @@
 ---
 last-updated: 2026-06-24
 version: v1.0
-change-summary: "新增 Story：月跑 Stage 2 計分欄位來源逐欄稽核——補 ADD_UN_CAPITAL / 移除 COMMISSION 死碼 / 驗證 CAREA_NO 語意 / 確認 PG 下推所有欄位均有效貢獻計分"
+change-summary: "新增 Story：月名單分派 Stage 2 計分欄位來源逐欄稽核——補 ADD_UN_CAPITAL / 移除 COMMISSION 死碼 / 驗證 CAREA_NO 語意 / 確認 PG 下推所有欄位均有效貢獻計分"
 ---
 
-# US-156：月跑 Stage 2 計分欄位來源逐欄稽核（PG 下推路徑）
+# US-156：月名單分派 Stage 2 計分欄位來源逐欄稽核（PG 下推路徑）
 
 > **Story ID**：US-156
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
@@ -12,21 +12,21 @@ change-summary: "新增 Story：月跑 Stage 2 計分欄位來源逐欄稽核—
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：8
-> **Feature**：F103 月跑計分引擎欄位來源修正
+> **Feature**：F103 月名單分派計分引擎欄位來源修正
 
 ---
 
 ## User Story
 
 **As a** 業務主管（Sales Director）
-**I want** 月跑 Stage 2 計分引擎在 PG 下推路徑中正確對每個 active 計分欄（`ob_levelcard_column`）取值並計分
+**I want** 月名單分派 Stage 2 計分引擎在 PG 下推路徑中正確對每個 active 計分欄（`ob_levelcard_column`）取值並計分
 **So that** 最終 card_level / tier 分佈能反映客戶真實屬性，與 legacy 系統應有的 T1/T2/T3 spread 一致，而非全部退化為最低 tier
 
 ---
 
 ## 背景說明
 
-月跑 Stage 2 走 PG 下推路徑時，計分 SQL 由 `buildStage2ScoreExpr`（`stage2to4-sql-builder.ts`）動態組裝。
+月名單分派 Stage 2 走 PG 下推路徑時，計分 SQL 由 `buildStage2ScoreExpr`（`stage2to4-sql-builder.ts`）動態組裝。
 其中 `resolveColumnSource` 函式依 `column_name` 回傳 SQL 表達式；若回傳 `undefined`，該欄位靜默貢獻 +0 分。
 
 目前已確認的問題：
@@ -99,7 +99,7 @@ change-summary: "新增 Story：月跑 Stage 2 計分欄位來源逐欄稽核—
 
 ## [OPEN QUESTION]
 
-- **OQ-156-01（關鍵）**：legacy dump 僅涵蓋 H/S/S5/E/E5/M 五類。若 CDMP dev DB `ob_levelcard_column` 中有 legacy dump 未列出的 card_type（例如管理者自行新增的 custom card），這些 card type 的計分欄若在 AD-E07-10-L 亦無映射，應「靜默 +0」還是「拋錯阻止月跑」？需業務拍板。
+- **OQ-156-01（關鍵）**：legacy dump 僅涵蓋 H/S/S5/E/E5/M 五類。若 CDMP dev DB `ob_levelcard_column` 中有 legacy dump 未列出的 card_type（例如管理者自行新增的 custom card），這些 card type 的計分欄若在 AD-E07-10-L 亦無映射，應「靜默 +0」還是「拋錯阻止月名單分派」？需業務拍板。
 - **OQ-156-02（輕度）**：AD-E07-10-L §4091 備註「其餘維度」以通用引擎 `to_jsonb(p_pool_data)` 取值。現行 PG 下推 `resolveColumnSource` 未實作此 fallback 通用邏輯（有 case 的才計分）。若 dev DB 有 `ob_levelcard_column` 欄位既不在 AD-E07-10-L 明確映射表、也不在通用引擎覆蓋範圍，需確認處理方式。
 
 ---

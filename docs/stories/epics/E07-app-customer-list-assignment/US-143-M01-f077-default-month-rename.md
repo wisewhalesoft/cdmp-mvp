@@ -51,7 +51,7 @@ F097 後四頁預設月改為 `target_work_ym`（= `current_work_ym + 1`），F0
 
 - **Given** F077 AC-3 描述 `current_work_ym` 的取得方式
 - **When** 更新
-- **Then** 補充：「`target_work_ym` = `current_work_ym + 1`（預設）；由前端 `AssignmentWorkYmContext` 管理，涵蓋四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月跑觸發）；月跑歷史頁維持獨立 local state」
+- **Then** 補充：「`target_work_ym` = `current_work_ym + 1`（預設）；由前端 `AssignmentWorkYmContext` 管理，涵蓋四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月名單分派觸發）；月名單分派歷史頁維持獨立 local state」
 
 ### AC-4：F077 BR-7 C-4 舊文字修正（既有瑕疵）
 

@@ -62,11 +62,11 @@
 - **When** 確認對話框確認後執行
 - **Then** 系統清空該 LIST_NO 所有部門的 RATION 設定（刪除或設為 NULL/0）
 - **And** 頁面顯示提示「已清除 {LIST_NM}（{LIST_NO}）的所有部門比例設定」
-- **And** 清除後，該 LIST_NO 在月跑時不套用任何部門比例設定，需由業務主管重新設定後再執行月跑
+- **And** 清除後，該 LIST_NO 在月名單分派時不套用任何部門比例設定，需由業務主管重新設定後再執行月名單分派
 
-### AC-6：月跑執行中禁止修改
+### AC-6：月名單分派執行中禁止修改
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 業務主管嘗試進入 per-LIST_NO 比例設定的編輯模式
 - **Then** 編輯按鈕為停用狀態，提示「分派執行中，無法修改比例設定」
 
@@ -79,10 +79,10 @@
 本 Story（US-091）管理的是各 LIST_NO 的部門比例設定，對應 OBMDEPTPCT（AppDB 遷移後為 `ob_dept_pct`，待 system-architect 確認映射）。每個 LIST_NO 各自擁有一組部門比例設定，各自須加總為 100%。
 
 - 部門比例表對應舊系統 OBZ020 M 區（per-LIST_NO 設定），schema 由 system-architect 確認
-- 月跑邏輯：Stage 2 部門分配時，讀取對應 LIST_NO 的部門比例設定；若該 LIST_NO 無設定，月跑前置條件驗證（US-081 AC-1）將阻擋執行
-- 「清除比例設定」後的行為需在月跑邏輯（US-081）中處理
+- 月名單分派邏輯：Stage 2 部門分配時，讀取對應 LIST_NO 的部門比例設定；若該 LIST_NO 無設定，月名單分派前置條件驗證（US-081 AC-1）將阻擋執行
+- 「清除比例設定」後的行為需在月名單分派邏輯（US-081）中處理
 - AssignmentAuditLog 寫入（待 system-architect 設計表結構）
-- 月跑中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
+- 月名單分派中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
 
 ---
 
@@ -111,7 +111,7 @@
 ## 依賴關係
 
 - **Blocked By**：US-070（需先有名單定義才有 LIST_NO 可設定）、US-088（新增名單後才能為其設定比例）
-- **Blocks**：US-081（月跑 Stage 2 需讀取各 LIST_NO 的部門比例；月跑前置條件驗證每個 active LIST_NO 均有部門比例設定）
+- **Blocks**：US-081（月名單分派 Stage 2 需讀取各 LIST_NO 的部門比例；月名單分派前置條件驗證每個 active LIST_NO 均有部門比例設定）
 
 ---
 
@@ -121,7 +121,7 @@
 - [ ] 動態加總驗證邏輯測試
 - [ ] RATION 輸入範圍驗證測試（0~100）
 - [ ] 清除比例設定測試（全部清空）
-- [ ] 月跑中資料鎖測試
+- [ ] 月名單分派中資料鎖測試
 - [ ] AssignmentAuditLog 寫入測試
 - [ ] 各 LIST_NO 比例設定互不干擾測試
 - [ ] 單元測試覆蓋率 ≥ 80%
@@ -134,5 +134,5 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **NFR**：[NFR-005](../../non-functional/NFR-005-result-accuracy.md)
-- **相關 Stories**：US-070（名單定義清單，入口）、US-081（月跑 Stage 2 使用 per-LIST_NO 比例）
+- **相關 Stories**：US-070（名單定義清單，入口）、US-081（月名單分派 Stage 2 使用 per-LIST_NO 比例）
 - **Reference**：`reference/TableSchema/OB/OBMLISTDF.sql`、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st2_dept.sql`（Stage 2 部門分配邏輯）

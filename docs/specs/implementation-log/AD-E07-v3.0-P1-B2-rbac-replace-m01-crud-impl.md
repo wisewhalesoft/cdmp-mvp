@@ -21,9 +21,9 @@ agent_id: continuation-of-a9559e6e16eecabbc
 
 | TC 範圍 | 描述 | 狀態 |
 |---|---|---|
-| TC-M01-CREATE-001~007 | F050 v2.0 — 成功新增 / 流水號遞增 / 999 上限 / PROD_KIND+CARD_TYPE 衝突 / case_status 必填 / 月跑鎖 / audit log | PASS (7/7) |
-| TC-M01-UPDATE-001~007 | F051 v2.0 — 覆寫成功 / 404 / inactive 422 / case_status 必填 / 衝突排除自身 / 衝突其他 list / 月跑鎖 | PASS (7/7) |
-| TC-M01-DISABLE-001~004 | F052 v2.0 — 軟刪除 / 404 / 重複停用 / 月跑鎖 | PASS (4/4) |
+| TC-M01-CREATE-001~007 | F050 v2.0 — 成功新增 / 流水號遞增 / 999 上限 / PROD_KIND+CARD_TYPE 衝突 / case_status 必填 / 月名單分派鎖 / audit log | PASS (7/7) |
+| TC-M01-UPDATE-001~007 | F051 v2.0 — 覆寫成功 / 404 / inactive 422 / case_status 必填 / 衝突排除自身 / 衝突其他 list / 月名單分派鎖 | PASS (7/7) |
+| TC-M01-DISABLE-001~004 | F052 v2.0 — 軟刪除 / 404 / 重複停用 / 月名單分派鎖 | PASS (4/4) |
 | TC-M01-LIST-001~005 | F048 v2.0 / F077 — 列表 / 預設不顯示 inactive / includeDisabled / lockState / stage 篩選 | PASS (5/5) |
 | TC-ROLE × 5 endpoint × 4 角色 | director / section_chief / plain / unauth × GET/POST/PUT/PUT-disable/DELETE | PASS (25/25) |
 | TC-FF-* | FeatureFlag ENABLE_E07_REFACTOR_PHASE3 寫入保護 + GET 不受影響 | PASS (4/4) |
@@ -150,6 +150,6 @@ P1 B2 共完成 **3 個 TDD cycle**：
 1. **F053~F056 / F069~F072 既有 controller** 已於 B2 替換為 RBAC 分流；service 邏輯仍維持
 2. **F082 / F079~F081 / F083~F089** 階段相關 spec（M03a / M03b / M03c / M03d）尚未實作；應依 F077 §6 BR-7 角色 × 階段矩陣套對應 Guard
 3. **歷史月份寫入攔截 service 層**：所有 E07 寫入 service 應補 `if (existing.project_workym < currentWorkYm) throw LIST_HISTORICAL_READONLY`
-4. **m17/m18 migration**：`ob_list_definition` 補 `case_status VARCHAR(14)` + `cr_enabled BOOLEAN NOT NULL DEFAULT false`；F050 / F051 service 補寫入；F050 spec §7 BR-7 OR 篩選邏輯由 F049 / F061 月跑 Stage 1 使用
+4. **m17/m18 migration**：`ob_list_definition` 補 `case_status VARCHAR(14)` + `cr_enabled BOOLEAN NOT NULL DEFAULT false`；F050 / F051 service 補寫入；F050 spec §7 BR-7 OR 篩選邏輯由 F049 / F061 月名單分派 Stage 1 使用
 5. **GET /api/v1/system/current-work-ym 端點**：抽 SystemModule（F077 §5.1）
 6. **`assignment_audit_log.action` union 擴 DISABLE**（若 architect 認為需要明確 action 而非 _operation workaround）

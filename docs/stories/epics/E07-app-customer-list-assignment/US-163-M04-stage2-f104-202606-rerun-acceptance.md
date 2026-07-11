@@ -38,25 +38,25 @@ change-summary: "新增 Story：F104 全欄修正後 202606 重跑驗收——ti
 ### AC-1：F104 全部引擎修正部署至 dev
 
 - **Given** US-159/160/162 引擎修正已 commit 到 dev，US-161 ETL 新欄（cus_sex/carea_no1/carea_no2/cellular/hpost_city/cpost_city/co_city）已 ETL 完成並載入 dev DB
-- **When** 觸發 dev 環境 202606 月跑
-- **Then** 月跑完成無錯誤；`ob_monthly_run_result` 含有效 card_level 與 tier_level 紀錄
+- **When** 觸發 dev 環境 202606 月名單分派
+- **Then** 月名單分派完成無錯誤；`ob_monthly_run_result` 含有效 card_level 與 tier_level 紀錄
 
 ### AC-2：card_level 分佈出現 ≥ 3 種值（H/S 名單）
 
 - **Given** H 卡理論計分上界 255 分；F103 後已出現多種 card_level，F104 修正更多欄
-- **When** 查詢 202606 月跑結果 `GROUP BY card_level`（只看 card_type = 'H'/'S'）
+- **When** 查詢 202606 月名單分派結果 `GROUP BY card_level`（只看 card_type = 'H'/'S'）
 - **Then** card_level 出現 ≥ 3 種不同值（例如 A、B、C、D 中至少 3 種，不全為 D）；若仍 ≤ 2 種值，啟動 AC-5 根因分析
 
 ### AC-3：tier spread 含 T1/T2（H/S 名單定性）
 
 - **Given** F104 修正後 H/S 名單計分
-- **When** 查詢 202606 月跑 `GROUP BY tier_level`（card_type = 'H'/'S'）
+- **When** 查詢 202606 月名單分派 `GROUP BY tier_level`（card_type = 'H'/'S'）
 - **Then** tier_level 包含 T1 與 T2（不僅 T3）；T3 佔比相較 F103 修正前有明顯改善（定性，不設精確百分比門檻）；方向與 legacy 202606 一致（legacy T1 佔比 > 0%）
 
 ### AC-4：CUS_SEX 分流欄位有效貢獻計分（抽樣驗證）
 
 - **Given** dev DB `customer_core` 已含 `cus_sex`/`carea_no1`/`carea_no2`/`cellular` 欄（ETL 完成）
-- **When** 抽取 10 筆個人客戶（cus_sex IN (1,2)）在 H 名單的月跑結果，手動核算其 CAREA_NO1/CAREA_NO2/CELLULAR 計分
+- **When** 抽取 10 筆個人客戶（cus_sex IN (1,2)）在 H 名單的月名單分派結果，手動核算其 CAREA_NO1/CAREA_NO2/CELLULAR 計分
 - **Then** 手動計算值與 `ob_monthly_run_result.score` 紀錄一致（允許 ±0 誤差）；確認分流邏輯不再使 cus_sex=1/2 的個人客戶在這三欄取到 0
 
 ### AC-5：若 tier spread 仍異常，本輪根因分析
@@ -113,7 +113,7 @@ change-summary: "新增 Story：F104 全欄修正後 202606 重跑驗收——ti
 
 ## Definition of Done
 
-- [ ] dev 環境 202606 月跑完成，無錯誤
+- [ ] dev 環境 202606 月名單分派完成，無錯誤
 - [ ] AC-2 card_level ≥ 3 種值（H/S 名單）
 - [ ] AC-3 tier_level 含 T1/T2（H/S 名單，定性）
 - [ ] AC-4 個人客戶分流欄位抽樣驗證通過

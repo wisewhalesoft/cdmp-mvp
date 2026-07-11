@@ -25,7 +25,7 @@ change-summary: "v2.1 修改：模組名稱「代碼維護」→「篩選欄位�
 
 ## 背景說明
 
-現行系統月跑 Stage 1 從 OBPOOLDATA 篩選案件時，篩選條件欄位（PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC 等）由 IT 人員在 Stored Procedure 中硬編碼。本次重構後，新建名單定義（US-106，草稿階段）的篩選條件欄位將從「白名單」動態產生。
+現行系統月名單分派 Stage 1 從 OBPOOLDATA 篩選案件時，篩選條件欄位（PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC 等）由 IT 人員在 Stored Procedure 中硬編碼。本次重構後，新建名單定義（US-106，草稿階段）的篩選條件欄位將從「白名單」動態產生。
 
 本 Story 管理這份白名單，包含：
 - **欄位識別**：OBPOOLDATA 的實際欄位名稱（`column_name`）
@@ -143,8 +143,8 @@ change-summary: "v2.1 修改：模組名稱「代碼維護」→「篩選欄位�
 ### AC-8：停用欄位不影響既有名單條件（舊名單相容）
 
 - **Given** 名單定義 LIST_NO `OB202604010` 的篩選條件包含欄位 `SETTLE_SRC = Y`；部長或 Admin 停用白名單中的 `SETTLE_SRC` 欄位
-- **When** 系統執行月跑讀取 `OB202604010` 的篩選條件
-- **Then** 月跑仍正確讀取 `SETTLE_SRC = Y` 並依此過濾 OBPOOLDATA；不因欄位停用而失敗
+- **When** 系統執行月名單分派讀取 `OB202604010` 的篩選條件
+- **Then** 月名單分派仍正確讀取 `SETTLE_SRC = Y` 並依此過濾 OBPOOLDATA；不因欄位停用而失敗
 
 ### AC-9：欄位類別影響名單定義表單元件選擇
 
@@ -169,7 +169,7 @@ change-summary: "v2.1 修改：模組名稱「代碼維護」→「篩選欄位�
 
 - 建議新建 `pooldata_field_whitelist` 表（AppDB），至少含 `column_name`（PK/唯一鍵）、`display_name`、`field_type ENUM`、`is_active`、`created_at`、`updated_at`；schema 設計由 system-architect 負責
 - 白名單表與 OBPOOLDATA 的欄位名稱是**字串映射關係**，不維護外鍵約束（OBPOOLDATA 為 ETL 同步資料，欄位可能動態變化）
-- 停用欄位的「不回溯」語意：後端在月跑讀取名單條件時，直接讀取 `ob_list_definition` 中儲存的條件 JSONB，不再 join 白名單做欄位有效性驗證（避免停用後月跑失敗）
+- 停用欄位的「不回溯」語意：後端在月名單分派讀取名單條件時，直接讀取 `ob_list_definition` 中儲存的條件 JSONB，不再 join 白名單做欄位有效性驗證（避免停用後月名單分派失敗）
 - **權限實作**：本頁所有寫入操作使用 `DirectorGuard`（部長 + Admin 可通過）；查看操作使用 `SalesManagerGuard`（部長 + 處長 + Admin 均可進入，前端依角色決定顯示哪些操作按鈕）
 
 ---
@@ -210,13 +210,13 @@ change-summary: "v2.1 修改：模組名稱「代碼維護」→「篩選欄位�
 
 - **Given**：白名單中 `SETTLE_SRC` 欄位為啟用狀態
 - **When**：部長停用 `SETTLE_SRC`；再次開啟新名單定義表單的條件篩選欄位選單
-- **Then**：選單中不出現 `SETTLE_SRC`；但現有含此條件的名單月跑不受影響
+- **Then**：選單中不出現 `SETTLE_SRC`；但現有含此條件的名單月名單分派不受影響
 
-### TC-102-07：停用欄位不中斷現有名單月跑
+### TC-102-07：停用欄位不中斷現有名單月名單分派
 
 - **Given**：名單 `OB202604010` 含篩選條件 `SETTLE_SRC = Y`；`SETTLE_SRC` 被停用
-- **When**：觸發月跑（US-081）
-- **Then**：月跑 Stage 1 仍正確以 `SETTLE_SRC = Y` 過濾 OBPOOLDATA，月跑完成不報錯
+- **When**：觸發月名單分派（US-081）
+- **Then**：月名單分派 Stage 1 仍正確以 `SETTLE_SRC = Y` 過濾 OBPOOLDATA，月名單分派完成不報錯
 
 ### TC-102-08：field_type 從 categorical 改為 numeric 顯示警告
 
@@ -237,7 +237,7 @@ change-summary: "v2.1 修改：模組名稱「代碼維護」→「篩選欄位�
 
 | ID | 問題 | 負責方 | 狀態 |
 |----|------|--------|------|
-| OQ-102-02 | 部長 / Admin 是否可以**刪除**（非停用）白名單欄位？若刪除後有既有名單條件使用此欄位，月跑行為如何？建議 MVP 僅支援停用，不支援硬刪除。 | 業務主管 + system-architect | 待確認 |
+| OQ-102-02 | 部長 / Admin 是否可以**刪除**（非停用）白名單欄位？若刪除後有既有名單條件使用此欄位，月名單分派行為如何？建議 MVP 僅支援停用，不支援硬刪除。 | 業務主管 + system-architect | 待確認 |
 
 ---
 
@@ -250,7 +250,7 @@ change-summary: "v2.1 修改：模組名稱「代碼維護」→「篩選欄位�
 - [ ] 處長唯讀（無操作按鈕）測試通過（TC-102-04）
 - [ ] 處長呼叫寫入 API 被拒測試通過（TC-102-05）
 - [ ] 停用欄位從新名單表單消失測試通過（TC-102-06）
-- [ ] 停用欄位不中斷月跑測試通過（TC-102-07）
+- [ ] 停用欄位不中斷月名單分派測試通過（TC-102-07）
 - [ ] field_type 變更警告測試通過（TC-102-08）
 - [ ] 稽核日誌寫入驗證（新增 / 編輯 / 停用）
 - [ ] 單元測試覆蓋率 ≥ 80%
@@ -262,7 +262,7 @@ change-summary: "v2.1 修改：模組名稱「代碼維護」→「篩選欄位�
 ## 相關文件
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
-- **相關 Stories**：~~US-092（M06 代碼維護現有頁面）~~（v2.1 DEPRECATED）、US-103（POOLDATA 類別型欄位可選值）、US-106（新名單定義草稿階段，條件篩選欄位來源）、US-081（月跑 Stage 1 讀取篩選條件）、US-100（部長角色定義）、US-101（處長唯讀規則）、US-124（篩選欄位合併頁入口，v2.1）、US-125（caseyear / case_status 選項遷移，v2.1）
+- **相關 Stories**：~~US-092（M06 代碼維護現有頁面）~~（v2.1 DEPRECATED）、US-103（POOLDATA 類別型欄位可選值）、US-106（新名單定義草稿階段，條件篩選欄位來源）、US-081（月名單分派 Stage 1 讀取篩選條件）、US-100（部長角色定義）、US-101（處長唯讀規則）、US-124（篩選欄位合併頁入口，v2.1）、US-125（caseyear / case_status 選項遷移，v2.1）
 - **GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`（E3、H1、J4）
 - **Reference SP**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`（Stage 1 篩選邏輯，初始 seed 欄位來源）
 - **Reference Table**：`reference/TableSchema/OB/OBPOOLDATA.sql`（OBPOOLDATA 欄位清單，作為白名單欄位 `column_name` 的合法參照）

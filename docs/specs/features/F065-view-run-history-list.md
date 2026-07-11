@@ -28,14 +28,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 1. 功能摘要
 
-提供業務部長 / 業務處長查看所有歷史月跑的執行紀錄清單，依 `triggered_at DESC` 排序（對應 `assignment_run.triggered_at DESC` 索引）。支援分頁、年月篩選、狀態篩選。清單顯示**所有狀態**的月跑（`completed` / `failed` / `running` / `pending`）；`running` / `pending` 列於操作欄提供「查看進度」入口導向 F062 進度頁。
+提供業務部長 / 業務處長查看所有歷史月名單分派的執行紀錄清單，依 `triggered_at DESC` 排序（對應 `assignment_run.triggered_at DESC` 索引）。支援分頁、年月篩選、狀態篩選。清單顯示**所有狀態**的月名單分派（`completed` / `failed` / `running` / `pending`）；`running` / `pending` 列於操作欄提供「查看進度」入口導向 F062 進度頁。
 
 > **2026-06-26 修正（業務拍板）**：原規格限定 `status IN ('completed', 'failed')`，與 prototype `34-run-history.html`（mock data 含 running 列 + 進度 icon）及實際前端實作不一致。經確認改為**清單納入全部狀態**，`running` 列顯示執行進度 icon。詳見 §6 BR-1。
 
 ## 2. 使用者故事
 
 **As a** 業務部長 / 業務處長
-**I want** 查看所有歷史月跑的執行紀錄清單
+**I want** 查看所有歷史月名單分派的執行紀錄清單
 **So that** 可追溯每月的分派執行情況，並快速找到特定月份的執行快照進行查詢或比對
 
 ## 3. 前置條件
@@ -45,11 +45,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 4. 驗收標準
 
-### AC-1：顯示歷史月跑清單
+### AC-1：顯示歷史月名單分派清單
 
 - **Given** 業務部長 / 業務處長進入 M05 快照歷史頁面
 - **When** 頁面載入完成
-- **Then** 顯示所有月跑清單（**不限狀態**），依 `triggered_at` 降序排列，每列包含：
+- **Then** 顯示所有月名單分派清單（**不限狀態**），依 `triggered_at` 降序排列，每列包含：
   - `run_id`（縮短顯示，前 8 碼）
   - `project_workym`（作業年月）
   - `triggered_by`（觸發者**名稱** — 後端以 `assignment_run.triggered_by` UUID join `users.name` 解析；回應另含 `triggeredByName` 欄位，無對應 user 時為 `null`）
@@ -72,13 +72,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 - **Given** 歷史清單已顯示
 - **When** 業務部長 / 業務處長使用篩選器（`projectWorkym` 下拉、`status` 下拉）
-- **Then** 清單即時過濾顯示符合條件的月跑紀錄
+- **Then** 清單即時過濾顯示符合條件的月名單分派紀錄
 
 ### AC-3：進入快照詳情
 
 - **Given** 歷史清單已顯示
-- **When** 業務部長 / 業務處長點擊某一月跑列
-- **Then** 跳轉至該月跑的快照詳情頁（F066），URL 為 `/assignment/history/:runId`
+- **When** 業務部長 / 業務處長點擊某一月名單分派列
+- **Then** 跳轉至該月名單分派的快照詳情頁（F066），URL 為 `/assignment/history/:runId`
 
 ### AC-4：比對差異入口
 
@@ -131,7 +131,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 | 規則編號 | 說明 |
 |---|---|
-| BR-1 | 清單顯示**所有狀態**的月跑（`completed` / `failed` / `running` / `pending`）。`running` / `pending` 列：操作欄僅顯示「查看進度」icon（導向 F062）、checkbox disabled。**（2026-06-26 修正：原為「僅顯示 completed/failed」，與 prototype 34 及實作不符，經業務拍板改為全狀態）** |
+| BR-1 | 清單顯示**所有狀態**的月名單分派（`completed` / `failed` / `running` / `pending`）。`running` / `pending` 列：操作欄僅顯示「查看進度」icon（導向 F062）、checkbox disabled。**（2026-06-26 修正：原為「僅顯示 completed/failed」，與 prototype 34 及實作不符，經業務拍板改為全狀態）** |
 | BR-2 | 預設排序：`triggered_at DESC`（對應 `assignment_run.triggered_at DESC` 索引） |
 | BR-3 | 分頁強制：預設 20 筆/頁，最大 100 筆/頁 |
 | BR-4 | 比對功能：勾選數量必須 = 2 才啟用「比對」按鈕；`running` / `pending` 列不可勾選 |
@@ -150,7 +150,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
 
 ## 8. 相依性
 
-- **Blocked By**：F061（至少一次月跑完成後才有歷史紀錄）
+- **Blocked By**：F061（至少一次月名單分派完成後才有歷史紀錄）
 - **Blocks**：F066（快照詳情頁入口）、F067（比對差異入口）
 
 ## 9. 交叉參考

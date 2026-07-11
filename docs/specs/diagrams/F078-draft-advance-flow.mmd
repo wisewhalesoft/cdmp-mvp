@@ -50,7 +50,7 @@ flowchart TD
 
     Pre5 -- 是 --> Pre6{6. assignment_run 非 pending / running？}
     Pre6 -- 否 --> R409[409 ASSIGNMENT_RUN_ALREADY_RUNNING]
-    R409 --> EndPre6([結束：月跑執行中])
+    R409 --> EndPre6([結束：月名單分派執行中])
 
     Pre6 -- 是 --> Tx[DB transaction:<br/>1. UPDATE ob_list_definition<br/>   SET stage = dept_ratio<br/>       updated_by = current user<br/>       updated_at = NOW<br/>   WHERE list_no = listNo<br/>2. INSERT assignment_audit_log<br/>   action = ADVANCE_STAGE<br/>   before.stage = draft<br/>   after.stage = dept_ratio]
 

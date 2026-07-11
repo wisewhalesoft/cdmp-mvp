@@ -30,7 +30,7 @@ last_updated: 2026-05-14
 | cardType 不可修改策略 | PUT 端點以 URL path param 為準；即使 request body 含 cardType 欄位，後端忽略之（AC-2 決策）；測試需驗證 body 中的 cardType 不影響實際更新結果 |
 | ob_levelcard_version 不同步驗證 | AC-3 BR-4 決策：編輯 ob_card_type.card_name 不回寫 ob_levelcard_version.card_name；測試需直接查詢 DB 確認 ob_levelcard_version 無變動 |
 | audit_log 驗證 | PUT 成功後查詢 assignment_audit_log，確認 before_value 含舊值、after_value 含新值 |
-| 月跑鎖 seed 格式 | 所有月跑鎖 TC 必須 seed AssignmentRun 全部 4 個 NOT NULL 欄位（run_id / project_workym / triggered_by / created_at） |
+| 月名單分派鎖 seed 格式 | 所有月名單分派鎖 TC 必須 seed AssignmentRun 全部 4 個 NOT NULL 欄位（run_id / project_workym / triggered_by / created_at） |
 
 ---
 
@@ -40,7 +40,7 @@ last_updated: 2026-05-14
 
 | 項目 | 內容 |
 |------|------|
-| Given | ob_card_type 有 H（card_name='期中'，prod_kind='01'）；ob_code_df 有 prodKind='01' 與 '02' 啟用紀錄；ob_levelcard_version 有 H v1（card_name='期中版本'）；無月跑鎖；SM Token |
+| Given | ob_card_type 有 H（card_name='期中'，prod_kind='01'）；ob_code_df 有 prodKind='01' 與 '02' 啟用紀錄；ob_levelcard_version 有 H v1（card_name='期中版本'）；無月名單分派鎖；SM Token |
 | When | PUT /api/v1/assignment/scoring/card-types/H，body = { cardName:'汽車高資產期中', prodKind:'01' } |
 | Then | HTTP 200；response 含 cardType='H'、cardName='汽車高資產期中'；DB ob_card_type.card_name='汽車高資產期中'；ob_levelcard_version.card_name 仍為'期中版本'（未同步） |
 
@@ -60,7 +60,7 @@ last_updated: 2026-05-14
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TC-F071-03 | PUT 成功：DB card_name / prod_kind 更新，ob_levelcard_version 不同步 | AC-3、BR-2、BR-4 | Integration | ob_card_type(H, card_name='期中', prod_kind='01')；ob_levelcard_version(H, v1, card_name='期中版本')；ob_code_df 有 01/02；無月跑鎖；SM Token | PUT /card-types/H，body { cardName:'汽車高資產期中', prodKind:'01' } | HTTP 200；DB ob_card_type.card_name='汽車高資產期中'；DB ob_levelcard_version.card_name 仍為'期中版本' |
+| TC-F071-03 | PUT 成功：DB card_name / prod_kind 更新，ob_levelcard_version 不同步 | AC-3、BR-2、BR-4 | Integration | ob_card_type(H, card_name='期中', prod_kind='01')；ob_levelcard_version(H, v1, card_name='期中版本')；ob_code_df 有 01/02；無月名單分派鎖；SM Token | PUT /card-types/H，body { cardName:'汽車高資產期中', prodKind:'01' } | HTTP 200；DB ob_card_type.card_name='汽車高資產期中'；DB ob_levelcard_version.card_name 仍為'期中版本' |
 | TC-F071-04 | PUT 成功後 audit_log 記錄 UPDATE 含 before/after | AC-3 | Integration | 同 TC-F071-03 成功後 | 查詢 assignment_audit_log 最新一筆 | action='UPDATE'；entity_type='ob_card_type'；entity_id='H'；before_value 含 card_name='期中'；after_value 含 card_name='汽車高資產期中' |
 | TC-F071-14 | PUT cardName 後 ob_levelcard_version.card_name 原值不變（版本獨立） | AC-3、BR-4 | Integration | 同 TC-F071-03；ob_levelcard_version(H, v1, card_name='期中版本') | PUT /card-types/H，body { cardName:'新名稱', prodKind:'01' } → 查詢 ob_levelcard_version | ob_levelcard_version WHERE card_type='H' AND card_version=1 的 card_name 仍為'期中版本'（未改動） |
 
@@ -68,23 +68,23 @@ last_updated: 2026-05-14
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TC-F071-02 | body 含 cardType 欄位時後端忽略（以 URL path 為準） | AC-2、BR-1 | Integration | ob_card_type(H active)；無月跑鎖；SM Token | PUT /card-types/H，body { cardName:'新名稱', prodKind:'01', cardType:'TAMPERED' } | HTTP 200；DB ob_card_type.card_type 仍為'H'（未被改寫）；cardName 更新成功 |
+| TC-F071-02 | body 含 cardType 欄位時後端忽略（以 URL path 為準） | AC-2、BR-1 | Integration | ob_card_type(H active)；無月名單分派鎖；SM Token | PUT /card-types/H，body { cardName:'新名稱', prodKind:'01', cardType:'TAMPERED' } | HTTP 200；DB ob_card_type.card_type 仍為'H'（未被改寫）；cardName 更新成功 |
 
 ### C. API Integration Tests — 驗證錯誤
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TC-F071-05 | cardName 為空回 422 | AC-4 | Integration | ob_card_type(H active)；無月跑鎖；SM Token | PUT /card-types/H，body { cardName:'', prodKind:'01' } | HTTP 422；errorCode='VALIDATION_ERROR' |
-| TC-F071-06 | prodKind 為空回 422 | AC-4 | Integration | ob_card_type(H active)；無月跑鎖；SM Token | PUT /card-types/H，body { cardName:'期中', prodKind:'' } | HTTP 422；errorCode='VALIDATION_ERROR' |
+| TC-F071-05 | cardName 為空回 422 | AC-4 | Integration | ob_card_type(H active)；無月名單分派鎖；SM Token | PUT /card-types/H，body { cardName:'', prodKind:'01' } | HTTP 422；errorCode='VALIDATION_ERROR' |
+| TC-F071-06 | prodKind 為空回 422 | AC-4 | Integration | ob_card_type(H active)；無月名單分派鎖；SM Token | PUT /card-types/H，body { cardName:'期中', prodKind:'' } | HTTP 422；errorCode='VALIDATION_ERROR' |
 | TC-F071-07 | 不存在的 cardType 回 404 | AC-5 | Integration | ob_card_type 無 NOTEXIST；SM Token | PUT /card-types/NOTEXIST，body { cardName:'測試', prodKind:'01' } | HTTP 404；errorCode='CARD_TYPE_NOT_FOUND' |
-| TC-F071-08 | prodKind 不在 ob_code_df 啟用期間內回 422 | AC-6 | Integration | ob_code_df 無 tbl_cd='99' 啟用紀錄；ob_card_type(H active)；無月跑鎖；SM Token | PUT /card-types/H，body { cardName:'期中', prodKind:'99' } | HTTP 422；errorCode='VALIDATION_ERROR' |
+| TC-F071-08 | prodKind 不在 ob_code_df 啟用期間內回 422 | AC-6 | Integration | ob_code_df 無 tbl_cd='99' 啟用紀錄；ob_card_type(H active)；無月名單分派鎖；SM Token | PUT /card-types/H，body { cardName:'期中', prodKind:'99' } | HTTP 422；errorCode='VALIDATION_ERROR' |
 
-### D. API Integration Tests — 月跑鎖
+### D. API Integration Tests — 月名單分派鎖
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TC-F071-09 | 月跑 pending 時 PUT 回 409 | AC-7、BR-5 | Integration | assignment_run(run_id='r1', project_workym='202604', triggered_by='u1', created_at=NOW(), status='pending')；SM Token | PUT /card-types/H，body { cardName:'測試', prodKind:'01' } | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
-| TC-F071-10 | 月跑 running 時 PUT 回 409 | AC-7、BR-5 | Integration | assignment_run(run_id='r2', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；SM Token | PUT /card-types/H，body { cardName:'測試', prodKind:'01' } | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
+| TC-F071-09 | 月名單分派 pending 時 PUT 回 409 | AC-7、BR-5 | Integration | assignment_run(run_id='r1', project_workym='202604', triggered_by='u1', created_at=NOW(), status='pending')；SM Token | PUT /card-types/H，body { cardName:'測試', prodKind:'01' } | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
+| TC-F071-10 | 月名單分派 running 時 PUT 回 409 | AC-7、BR-5 | Integration | assignment_run(run_id='r2', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；SM Token | PUT /card-types/H，body { cardName:'測試', prodKind:'01' } | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
 
 ### E. API Integration Tests — 認證
 
@@ -98,7 +98,7 @@ last_updated: 2026-05-14
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
 | TC-F071-01 | 開啟編輯 Modal 預填現有 cardName / prodKind 值 | AC-1 | Frontend Unit | stub GET /card-types 回傳 H（cardName='期中'，prodKind='01'） | 點擊 H 列的「編輯」按鈕 | Modal 開啟；cardName 輸入欄位預填'期中'；prodKind 下拉預選'01'；cardType 欄位顯示'H'且 disabled |
-| TC-F071-11 | 月跑鎖定時編輯按鈕 disabled | AC-7 | Frontend Unit | isLocked=true；stub GET /card-types 回傳 [H] | 渲染 Tab 1 | H 列的「編輯」按鈕 disabled=true；不可點擊（onClick 不被觸發） |
+| TC-F071-11 | 月名單分派鎖定時編輯按鈕 disabled | AC-7 | Frontend Unit | isLocked=true；stub GET /card-types 回傳 [H] | 渲染 Tab 1 | H 列的「編輯」按鈕 disabled=true；不可點擊（onClick 不被觸發） |
 
 ---
 
@@ -130,11 +130,11 @@ VALUES ('H', '期中', '01', 'active', NOW(), 'system', NOW(), 'system');
 INSERT INTO ob_levelcard_version (card_type, card_name, card_version, sdate, edate, status)
 VALUES ('H', '期中版本', 1, '20190823', '20991231', 'active');
 
--- 月跑鎖 seed（TC-F071-09，pending；4 欄全填）
+-- 月名單分派鎖 seed（TC-F071-09，pending；4 欄全填）
 INSERT INTO assignment_run (run_id, project_workym, triggered_by, created_at, status)
 VALUES ('run-pending-f071', '202604', 'test-user-id', NOW(), 'pending');
 
--- 月跑鎖 seed（TC-F071-10，running；4 欄全填）
+-- 月名單分派鎖 seed（TC-F071-10，running；4 欄全填）
 INSERT INTO assignment_run (run_id, project_workym, triggered_by, created_at, status)
 VALUES ('run-running-f071', '202604', 'test-user-id', NOW(), 'running');
 ```
@@ -154,7 +154,7 @@ VALUES ('run-running-f071', '202604', 'test-user-id', NOW(), 'running');
 | 場景 | 自動化適合度 | 說明 |
 |------|------------|------|
 | TC-F071-02~14（Integration） | 高 | Supertest + DB 查詢；ob_levelcard_version 查詢確認不同步 |
-| TC-F071-09、10（月跑鎖） | 高 | AssignmentRun seed 含 4 欄 NOT NULL |
+| TC-F071-09、10（月名單分派鎖） | 高 | AssignmentRun seed 含 4 欄 NOT NULL |
 | TC-F071-01（Modal 預填） | 高 | RTL；點擊按鈕後驗 input.value |
 | TC-F071-11（disabled 狀態） | 高 | isLocked prop 注入；getByRole('button').disabled |
 

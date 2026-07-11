@@ -1,7 +1,7 @@
 ---
 type: architecture-decision
 decision_id: AD-E07-30
-title: F102 月跑 CR 優先分派（失效清空 + CR 優先指派 + 扣量 + per-list cr_enabled 閘控 + 廢除全域旗標）
+title: F102 月名單分派 CR 優先分派（失效清空 + CR 優先指派 + 扣量 + per-list cr_enabled 閘控 + 廢除全域旗標）
 status: proposed
 last_updated: 2026-06-12
 bug_fixes:
@@ -16,7 +16,7 @@ related: [AD-E07-29, AD-E07-28, AD-E07-27, AD-E07-26, AD-E07-25]
 source_stories: [US-152, US-153, US-154]
 ---
 
-# AD-E07-30　F102 月跑 CR 優先分派
+# AD-E07-30　F102 月名單分派 CR 優先分派
 
 > 本決策記錄為架構設計產出，**不含 production / test 程式碼**。落地由 test-designer（測試策略）、
 > tdd-implementation（實作）後續承接。
@@ -629,7 +629,7 @@ legacy 202606 驗證：2,079/2,079 CR 案件均有指派日，散佈於全月 21
 | **I-CR-STAGE2-CLEAN-01** | Stage 2 不寫 `is_cr`；`is_cr` 僅由 Stage 1 帶入 + F102 CR前置步驟修改 | §8 |
 | **I-DET-01（繼承）** | Stage 3/4/ASSIGNDAY + CR 步驟全程無 `NEWID()` / `Math.random()` / `ORDER BY RANDOM()` / `crypto.randomUUID()` | AD-E07-29 |
 | **I-IDEM-01（繼承 + 延伸）** | run 級：重觸發前 DELETE run_id；Stage 3 前：清 dept_id/emplid/assignday + CR 步驟冪等（SET-based UPDATE 重跑結果一致）；is_cr 保留（F101 §3.5） | AD-E07-29 |
-| **I-CR-SNAPSHOT-01** | per-list `cr_enabled` 快照時機與 F101 `ob_dept_pct` / `ob_empl_set` 一致（月跑開始時讀取，月跑期間不受後續變更影響；US-153 AC-4 / BR-F102-01）| US-153 技術備註 |
+| **I-CR-SNAPSHOT-01** | per-list `cr_enabled` 快照時機與 F101 `ob_dept_pct` / `ob_empl_set` 一致（月名單分派開始時讀取，月名單分派期間不受後續變更影響；US-153 AC-4 / BR-F102-01）| US-153 技術備註 |
 
 ## 10. @SYS_DT 計算與日期比較規格
 

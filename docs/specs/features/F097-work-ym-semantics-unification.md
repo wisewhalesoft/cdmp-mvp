@@ -15,11 +15,11 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 
-> ⚠️ **PRODUCTION 行為變更警告（必讀）**：本 feature 修正月跑觸發所寫入之 `AssignmentRun.project_workym` 語意（由「執行月」改為使用者選定之「目標分派月」），並補入 ground-truth SP 之過去月 guard。**`POST /api/v1/assignment/runs` 為 breaking change**（`workYm` 由「後端自算、忽略 body」改為「必填、缺省回錯」）。deploy 後既有歷史 run 之 `project_workym` 採 **forward-only 不回填**（語意混雜，見 §6 BR-9）。
+> ⚠️ **PRODUCTION 行為變更警告（必讀）**：本 feature 修正月名單分派觸發所寫入之 `AssignmentRun.project_workym` 語意（由「執行月」改為使用者選定之「目標分派月」），並補入 ground-truth SP 之過去月 guard。**`POST /api/v1/assignment/runs` 為 breaking change**（`workYm` 由「後端自算、忽略 body」改為「必填、缺省回錯」）。deploy 後既有歷史 run 之 `project_workym` 採 **forward-only 不回填**（語意混雜，見 §6 BR-9）。
 >
 > **v1.0（2026-05-27 / F097 作業月語意統一，P1+P2+P3 合併一次到位）**：依 [proposals/work-ym-semantics-unification.md §0](../proposals/work-ym-semantics-unification.md)（已拍板）與 US-137~US-143 落地：
 > 1. **概念分離**：`current_work_ym`（系統錨點月，`new Date()`）與 `target_work_ym`（作業月 / 目標分派月，預設 `current_work_ym + 1`）分離（§4 BR-1）。
-> 2. **前端共享狀態**：四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月跑觸發）共享 `AssignmentWorkYmContext`，預設下月（§5.1 / US-137）。
+> 2. **前端共享狀態**：四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月名單分派觸發）共享 `AssignmentWorkYmContext`，預設下月（§5.1 / US-137）。
 > 3. **POST /runs 接受 workYm（必填）+ 過去月 guard**（§5.2 / US-138 / US-139）。
 > 4. **後端 `computeCurrentWorkYm()` 收斂至 `SystemService`** + 新增 `getDefaultTargetWorkYm()`（§5.3 / US-140）。
 > 5. **下游結果頁讀 `run.project_workym`，不加 MonthPicker**（§5.4 / US-141）。
@@ -48,15 +48,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 統一客戶名單分派模組中「作業月」之語意，消除「執行當下的日曆月」與「名單要派去作業的那個月」兩種意義混用所造成的 live 不一致（5 月選 6 月預覽卻跑 5 月）。核心做法為分離兩個概念並建立單一真實來源：
 
 - **`current_work_ym`（系統錨點月）**：真實日曆當月（`new Date()`），由後端 `SystemService.getCurrentWorkYm()` 計算，全系統唯一合法呼叫 `new Date()` 之處；用途為判定歷史/未來/唯讀（F077 BR-3）、月份範圍 ± 12（F077 BR-2）、衍生預設作業月。
-- **`target_work_ym`（作業月 / 目標分派月）**：使用者正在作業的目標月份（YYYYMM），預設 = `current_work_ym + 1`（下月）。涵蓋四頁，由前端 `AssignmentWorkYmContext` 共享；月跑觸發時寫入 `AssignmentRun.project_workym`。
+- **`target_work_ym`（作業月 / 目標分派月）**：使用者正在作業的目標月份（YYYYMM），預設 = `current_work_ym + 1`（下月）。涵蓋四頁，由前端 `AssignmentWorkYmContext` 共享；月名單分派觸發時寫入 `AssignmentRun.project_workym`。
 
 下游結果頁（進度 / 摘要 / 快照 / 比對）不加 MonthPicker，月份單一真實來源 = 該筆 `run.project_workym`。Stage 1 去重視窗靠傳入正確 `workdt`（= `project_workym + '01'`）自動對齊 ground-truth SP 語意。
 
 ## 2. 使用者故事
 
 **As a** 業務部長（Director）/ 處長（Section Chief）
-**I want** 在分派工作流四頁共享同一「分派作業月份」（預設下月），且月跑觸發確實以我選定的月份執行、拒絕對過去月觸發
-**So that** 5 月下旬為 6 月準備名單後按下「啟動月跑」跑的是 6 月名單，名單定義 / 估算 / 觸發 / 去重全程針對同一目標月，與原系統 SP `@WORKDT >= getdate()` 行為一致
+**I want** 在分派工作流四頁共享同一「分派作業月份」（預設下月），且月名單分派觸發確實以我選定的月份執行、拒絕對過去月觸發
+**So that** 5 月下旬為 6 月準備名單後按下「啟動月名單分派」跑的是 6 月名單，名單定義 / 估算 / 觸發 / 去重全程針對同一目標月，與原系統 SP `@WORKDT >= getdate()` 行為一致
 
 ## 3. 前置條件
 
@@ -87,7 +87,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 
 ### AC-3：`run-history` 頁不共享 Context（US-137 AC-4 / US-141 AC-5）
 
-- **Given** 使用者於月跑歷史頁（F065）操作 MonthPicker
+- **Given** 使用者於月名單分派歷史頁（F065）操作 MonthPicker
 - **When** 選擇任意月份
 - **Then** 歷史頁月份選取**不影響**共享 `target_work_ym`；反之共享狀態變更不影響歷史頁查詢月份
 
@@ -108,11 +108,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 
 ### AC-6：觸發 API 攜帶選定月（breaking change，US-138 AC-4 / AC-5）
 
-- **Given** 部長點擊「啟動月跑」並於 confirm modal 確認
+- **Given** 部長點擊「啟動月名單分派」並於 confirm modal 確認
 - **When** 前端呼叫 `POST /api/v1/assignment/runs`
 - **Then** request body 包含 `{ workYm: '202606' }`（選定月，YYYYMM）
 - **And** `triggerRun()` API client 函式簽名改為 `triggerRun(workYm: string): Promise<TriggerRunResponse>`
-- **And** confirm modal 標題顯示「確認觸發 2026-06 月跑？」（格式化自 `target_work_ym`，不顯示 `new Date()` 月份）
+- **And** confirm modal 標題顯示「確認觸發 2026-06 月名單分派？」（格式化自 `target_work_ym`，不顯示 `new Date()` 月份）
 
 ### AC-7：處長於觸發頁 MonthPicker 唯讀（US-138 AC-6）
 
@@ -146,7 +146,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 - **Given** body `{ workYm: '202504' }`（假設今天 2026-05-27，目標月 1 號 = 2025-04-01 < 今天）
 - **When** 通過格式驗證後進行業務邏輯檢查
 - **Then** 回 422，錯誤碼 `RUN_WORKYM_PAST`（§5.6 分支 (3)）
-- **And** response `message` 表達「不可對已開始或過去的作業月觸發月跑」（或等效說明）
+- **And** response `message` 表達「不可對已開始或過去的作業月觸發月名單分派」（或等效說明）
 
 ### AC-12：當月 1 號為邊界，當天可觸發（`>=` 語意，US-139 AC-5）
 
@@ -185,7 +185,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 
 ### AC-17：下游結果頁月份來自 `run.project_workym`，無 MonthPicker（US-141 AC-1 / AC-2 / AC-3）
 
-- **Given** 使用者進入月跑進度頁（F062）/ 結果摘要頁（F063）/ 快照詳情頁（F066）/ 比對差異頁（F067）
+- **Given** 使用者進入月名單分派進度頁（F062）/ 結果摘要頁（F063）/ 快照詳情頁（F066）/ 比對差異頁（F067）
 - **When** 頁面載入並呼叫 `GET /api/v1/assignment/runs/:runId`
 - **Then** 月份資訊取自 response 之 `project_workym`，**非**共享 `target_work_ym` Context
 - **And** 此四頁**不出現** MonthPicker；月份以靜態標籤顯示（前置文字「分派作業月份」，格式如「2026年06月」或「2026-06」，依各頁現有設計）
@@ -215,7 +215,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 ### AC-21：ETL 切點近似落差文件化（US-142 AC-4）
 
 - **Given** ETL 載入 `ob_pool_data_list` 上界仍為「真實日曆本月 1 號」（與目標月無關，以執行時月份為基準）
-- **When** 5 月下旬跑 6 月月跑
+- **When** 5 月下旬跑 6 月月名單分派
 - **Then** 系統接受此近似：`MAX(assignday)` 可能不含作業月上月之最後幾天，`MIN()` 以 `workdt − 1 日` 兜底
 - **And** 此已接受之近似於 `computeDedupWindow` 附近以程式碼注釋標記（對應 [F091 OQ-STAGE1-02](F091-stage1-complete-month-cnt-dedup-special-delete.md)，本輪不修正）
 
@@ -226,18 +226,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 | 項目 | 內容 |
 |---|---|
 | 實作 | React Context（`AssignmentWorkYmContext`），Provider（`AssignmentWorkYmProvider`）掛載於 assignment 區段 layout（**不使用 Zustand / Redux / URL query param**，[glossary §8](../glossary.md)）|
-| 涵蓋頁面 | 名單定義（F048/F077）/ 準備完成摘要（F088）/ Stage 0 試算（F049）/ 月跑觸發（F061）|
-| 不涵蓋頁面 | 月跑歷史（F065，獨立 local state）；下游結果頁（F062/F063/F066/F067，讀 `run.project_workym`，不加 MonthPicker）|
+| 涵蓋頁面 | 名單定義（F048/F077）/ 準備完成摘要（F088）/ Stage 0 試算（F049）/ 月名單分派觸發（F061）|
+| 不涵蓋頁面 | 月名單分派歷史（F065，獨立 local state）；下游結果頁（F062/F063/F066/F067，讀 `run.project_workym`，不加 MonthPicker）|
 | Context 提供值 | `currentWorkYm`（系統錨點月）、`targetWorkYm`（作業月，預設下月）、`setTargetWorkYm`（setter）|
 | 初始化流程 | Provider 掛載時呼叫一次 `GET /api/v1/system/current-work-ym` → 取得 `currentWorkYm` → 計算 `targetWorkYm = currentWorkYm + 1` → 存入 Context |
 | testid（E2E）| 觸發頁 MonthPicker 新增 `data-testid="trigger-run-month-picker"`；既有 `btn-start-run` / `confirm-trigger-modal` 保留 |
 
 ### 5.2 POST /api/v1/assignment/runs（DTO 變更 + guard）（US-138 / US-139）
 
-| 用途 | 觸發月跑（以選定之目標分派月為對象）|
+| 用途 | 觸發月名單分派（以選定之目標分派月為對象）|
 |---|---|
 | 認證 | JWT 必填 |
-| 權限 | 既有月跑觸發權限（部長；處長唯讀）— 本 feature 不變更 Guard |
+| 權限 | 既有月名單分派觸發權限（部長；處長唯讀）— 本 feature 不變更 Guard |
 
 **Request body — `TriggerRunDto`（變更）**
 
@@ -322,10 +322,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 |---|---|---|
 | `POST /runs` 缺 `workYm`（未帶 / null）| **400** 缺少必要欄位（通用驗證錯誤）；無 `new Date()` fallback（BR-4）| §5.6 分支 (1) / AC-10 |
 | `workYm` 帶值但格式非 YYYYMM 或 MM ∉ 01~12 | **422 `WORK_YM_INVALID_FORMAT`**（沿用既有碼）| §5.6 分支 (2) / AC-9 |
-| `workYm` 對應目標月 < 今天 | **422 `RUN_WORKYM_PAST`**（新增碼）；message 表達「不可對已開始或過去的作業月觸發月跑」| §5.6 分支 (3) / AC-11 |
+| `workYm` 對應目標月 < 今天 | **422 `RUN_WORKYM_PAST`**（新增碼）；message 表達「不可對已開始或過去的作業月觸發月名單分派」| §5.6 分支 (3) / AC-11 |
 | `workYm` 超出 `current_work_ym ± 12` | 沿用既有 `WORK_YM_OUT_OF_RANGE`（422）— 本 feature 不新增（[F077 BR-2](F077-month-switch-and-stage-overview.md)）；guard 順序與 range 檢查之先後待 tdd 依既有 pipeline 實作 | error-handling.md#assignment-list-errors |
 | 同月已有運行中 run | 沿用既有 `ASSIGNMENT_RUN_ALREADY_RUNNING`（409）| error-handling.md#assignment-run-errors |
-| 月跑前置條件未滿足 | 沿用既有 `ASSIGNMENT_RUN_PRECHECK_FAILED`（422）| error-handling.md#assignment-run-errors |
+| 月名單分派前置條件未滿足 | 沿用既有 `ASSIGNMENT_RUN_PRECHECK_FAILED`（422）| error-handling.md#assignment-run-errors |
 | 歷史 run 之 `project_workym` 為執行月語意 | forward-only：顯示既有值不回填，注釋標注（BR-9）| AC-18 |
 | ETL 尚未補入作業月上月最末派案 | 去重近似：`MIN()` 以 `workdt − 1 日` 兜底（已接受，[F091 OQ-STAGE1-02](F091-stage1-complete-month-cnt-dedup-special-delete.md)）| AC-21 |
 
@@ -349,14 +349,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 - **設計提案**：[proposals/work-ym-semantics-unification.md](../proposals/work-ym-semantics-unification.md) §0（拍板）/ §4（概念分離）/ §5（D1~D7）/ §7（R1~R5）
 - **來源 story**：[US-137](../../stories/epics/E07-app-customer-list-assignment/US-137-M04-shared-target-work-ym-state.md) ~ [US-143](../../stories/epics/E07-app-customer-list-assignment/US-143-M01-f077-default-month-rename.md)
 - **ground truth SP**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`（L24-34 guard，**UTF-16LE 解碼驗證**）
-- **既有 spec**：[F077](F077-month-switch-and-stage-overview.md)（`current_work_ym` / 月份範圍）、[F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md)（`computeDedupWindow`）、[F090 v2.0](F090-obpooldata-list-etl.md)（`ob_pool_data_list` 單源化）、[F061](F061-trigger-assignment-run.md)（月跑觸發）、[F049](F049-stage0-daily-estimate.md)、[F088](F088-ready-stage-summary.md)、[F065](F065-run-history.md)、F062 / F063 / F066 / F067（下游結果頁）
+- **既有 spec**：[F077](F077-month-switch-and-stage-overview.md)（`current_work_ym` / 月份範圍）、[F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md)（`computeDedupWindow`）、[F090 v2.0](F090-obpooldata-list-etl.md)（`ob_pool_data_list` 單源化）、[F061](F061-trigger-assignment-run.md)（月名單分派觸發）、[F049](F049-stage0-daily-estimate.md)、[F088](F088-ready-stage-summary.md)、[F065](F065-run-history.md)、F062 / F063 / F066 / F067（下游結果頁）
 - **錯誤處理**：[error-handling.md#assignment-run-errors](../error-handling.md#assignment-run-errors)（新增 `RUN_WORKYM_PAST` 422，已登記）
 
 ## 10. 跨 spec 影響註記
 
 > 本 feature 嚴格職責邊界：只寫 F097。以下為對其他文件之影響與已落地之同步狀態。
 
-- **F077（已升 v1.4）**：依 US-143 由 spec-writer 同步（限定範圍）：§7 + AC-1 / AC-3（預設月改 `target_work_ym` = `current_work_ym + 1`，涵蓋四頁 + `AssignmentWorkYmContext` 說明 + 月跑歷史頁獨立）、§1 摘要、AC-6、BR-7 C-4（殘留舊文字「`created_by = currentUserId` 過濾」改 `SectionChiefScopeService.getScopeDeptCode(userId)`，對齊 BR-4 v1.4）、§10 測試覆蓋目標、§13 變更紀錄、spec-index F077 版本/date。**刻意未動**：F077 §5.2 之 `INVALID_YM_FORMAT` / `INVALID_YM_RANGE`（400）既有技術債（OQ-F097-01 方案 A 不清此塊），僅於該處加 note 指向未來 cleanup。
+- **F077（已升 v1.4）**：依 US-143 由 spec-writer 同步（限定範圍）：§7 + AC-1 / AC-3（預設月改 `target_work_ym` = `current_work_ym + 1`，涵蓋四頁 + `AssignmentWorkYmContext` 說明 + 月名單分派歷史頁獨立）、§1 摘要、AC-6、BR-7 C-4（殘留舊文字「`created_by = currentUserId` 過濾」改 `SectionChiefScopeService.getScopeDeptCode(userId)`，對齊 BR-4 v1.4）、§10 測試覆蓋目標、§13 變更紀錄、spec-index F077 版本/date。**刻意未動**：F077 §5.2 之 `INVALID_YM_FORMAT` / `INVALID_YM_RANGE`（400）既有技術債（OQ-F097-01 方案 A 不清此塊），僅於該處加 note 指向未來 cleanup。
 - **error-handling.md（已更新）**：新增 `RUN_WORKYM_PAST`（422）至 `#assignment-run-errors`（OQ-F097-01 方案 A）；格式錯誤沿用既有 `WORK_YM_INVALID_FORMAT`（422，擴充適用至 `POST /runs` body `workYm`），缺省走通用 400；**未新增** `INVALID_YM_FORMAT`。
 - **spec-index.md（已更新）**：F097 登記於 Features 表；F077 版本/date 同步至 v1.4。
 - **F091 / F090 / data-model.md**：無變更（`computeDedupWindow` 不改、無新欄位、`project_workym` 不改名）。

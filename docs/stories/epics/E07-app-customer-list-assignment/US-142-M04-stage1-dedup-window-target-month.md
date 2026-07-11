@@ -14,7 +14,7 @@
 ## User Story
 
 **As a** 業務部長（Director）
-**I want** 月跑 Stage 1 的近 3 個月去重視窗以「分派作業月（目標月）」為基準計算，上界語意為「作業月上月底」
+**I want** 月名單分派 Stage 1 的近 3 個月去重視窗以「分派作業月（目標月）」為基準計算，上界語意為「作業月上月底」
 **So that** 去重視窗與 ground-truth SP 的 `workdt − 1 日` 對齊，不因月份語意偏差而少排除一個月的已派案，分派結果更精確
 
 ---
@@ -53,7 +53,7 @@ F097 前（US-139 前），`AssignmentRun.project_workym` 儲存的是執行月�
 ### AC-4：ETL 切點近似落差文件化（已接受的近似）
 
 - **Given** ETL 載入 `ob_pool_data_list` 的上界仍為「真實日曆本月 1 號」（與目標月 6 月無關，ETL 以執行時的 5 月為基準）
-- **When** 5 月下旬跑 6 月月跑
+- **When** 5 月下旬跑 6 月月名單分派
 - **Then** 系統接受此近似：`MAX(ob_pool_data_list.assignday)` 可能不含 5 月最後幾天（ETL 尚未補入最新派案），`MIN()` 取 `workdt − 1 日 = 2026-05-31` 作為兜底
 - **And** 此已接受的近似在 `computeDedupWindow` 附近以明確程式碼注釋標記（對應 F091 OQ-STAGE1-02，本輪不修正）
 

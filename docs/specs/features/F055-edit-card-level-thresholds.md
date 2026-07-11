@@ -28,7 +28,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ## 1. 功能摘要
 
-提供業務部長針對 Tab 1 選中之 CARD_TYPE，調整 CARD_LEVEL 各等級（A/B/C/D 等）的分數下限門檻（`ob_levelcard_level`）。修改時提供「預估各等級客戶分佈」預覽，並驗證門檻不得重疊。亦支援刪除特定等級（DELETE）以反映業務調整等級結構。所有寫入操作之範圍均限定於 Tab 1 選中之 CARD_TYPE。月跑執行中禁止修改。本功能屬 M02 計分設定 5 Tab 結構中的 Tab 4。
+提供業務部長針對 Tab 1 選中之 CARD_TYPE，調整 CARD_LEVEL 各等級（A/B/C/D 等）的分數下限門檻（`ob_levelcard_level`）。修改時提供「預估各等級客戶分佈」預覽，並驗證門檻不得重疊。亦支援刪除特定等級（DELETE）以反映業務調整等級結構。所有寫入操作之範圍均限定於 Tab 1 選中之 CARD_TYPE。月名單分派執行中禁止修改。本功能屬 M02 計分設定 5 Tab 結構中的 Tab 4。
 
 ## 2. 使用者故事
 
@@ -70,7 +70,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 - **Then** 頁面顯示預估影響：「預估各等級客戶分佈：A 級 N 人 / B 級 N 人 / C 級 N 人 / D 級 N 人」
 - **And** 預覽計算以目前 `ob_pool_data` 套用新門檻（允許最多 1 分鐘的應用層快取）
 
-### AC-4：月跑執行中禁止修改
+### AC-4：月名單分派執行中禁止修改
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
 - **When** 業務部長嘗試進入編輯模式
@@ -85,7 +85,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ### AC-6：刪除單一 CARD_LEVEL 列
 
-- **Given** 業務部長於 CARD_LEVEL 設定頁面看到某等級列；該等級於 `ob_levelcard_level` 中存在；無月跑鎖
+- **Given** 業務部長於 CARD_LEVEL 設定頁面看到某等級列；該等級於 `ob_levelcard_level` 中存在；無月名單分派鎖
 - **When** 業務部長點擊該列的刪除按鈕並於確認對話框點擊「確認刪除」
 - **Then** 呼叫 `DELETE /api/v1/assignment/scoring/card-levels`（query: `cardType` + `cardVersion` + `cardLevel`），HTTP 200，DB 中該複合 PK 紀錄被實體刪除（hard delete）
 - **And** 寫入 `assignment_audit_log`（`action = 'DELETE'`、`entity_type = 'ob_levelcard_level'`、`entity_id = '{cardType}|{cardVersion}|{cardLevel}'`、`before_value` 含舊 `scoreS` / `scoreE`、`after_value = null`）
@@ -95,7 +95,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 - **Given** 業務部長點擊刪除按鈕
 - **When** 確認對話框開啟
-- **Then** 對話框顯示警告文字：「刪除後此等級不再參與月跑 Stage 2 分級。若 TIER_LEVEL 對應（F056）中仍有此 `(cardType, cardLevel)` 紀錄，將無法刪除。」
+- **Then** 對話框顯示警告文字：「刪除後此等級不再參與月名單分派 Stage 2 分級。若 TIER_LEVEL 對應（F056）中仍有此 `(cardType, cardLevel)` 紀錄，將無法刪除。」
 - **And** 執行 DELETE 時，後端先檢查 `ob_tier WHERE card_type = :cardType AND card_level = :cardLevel`：
   - 若仍有紀錄存在 → 回 409 `CARD_LEVEL_REFERENCED`，要求業務先於 F056 移除對應後再回來刪除
   - 若無紀錄 → 執行 hard delete
@@ -196,7 +196,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | E07_REQUIRES_DIRECTOR | 寫入端點：`businessRole` 非 `'director'`（`DirectorGuard` 攔截）；GET 端點：`businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，回 `E07_ROLE_NOT_ASSIGNED`）。依 F002 §4.6.2 |
 | 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.4 新增；亦適用於 §5.1 PUT 端點 — request body 之 cardType） |
-| 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
+| 409 | SCORING_VERSION_LOCKED | 月名單分派執行中 |
 | 422 | SCORING_RANGE_OVERLAP | 門檻區間重疊 |
 
 ### 5.3 DELETE /api/v1/assignment/scoring/card-levels
@@ -232,7 +232,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | 403 | E07_REQUIRES_DIRECTOR | 寫入端點：`businessRole` 非 `'director'`（`DirectorGuard` 攔截）；GET 端點：`businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，回 `E07_ROLE_NOT_ASSIGNED`）。依 F002 §4.6.2 |
 | 404 | CARD_TYPE_NOT_FOUND | `cardType` query 不存在於 `ob_card_type.status = 'active'`（v1.4 新增） |
 | 404 | CARD_LEVEL_RECORD_NOT_FOUND | 指定的 `(cardType, cardVersion, cardLevel)` 紀錄不存在於 `ob_levelcard_level` |
-| 409 | SCORING_VERSION_LOCKED | 月跑執行中 |
+| 409 | SCORING_VERSION_LOCKED | 月名單分派執行中 |
 | 409 | CARD_LEVEL_REFERENCED | 仍被 `ob_tier` 引用，禁止刪除（cascade reference check 失敗，見 BR-6） |
 
 ## 5.4 RBAC 與權限（v1.6 部長 / 處長 Guard 行為導入）
@@ -267,9 +267,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 |---|---|
 | BR-1 | 門檻區間不得重疊；相鄰等級的 `score_e + 1 = 下一級 score_s` 允許 |
 | BR-2 | 預覽計算允許應用層快取 60 秒 |
-| BR-3 | 月跑鎖定：`assignment_run.status IN ('pending', 'running')` 時禁止修改 |
+| BR-3 | 月名單分派鎖定：`assignment_run.status IN ('pending', 'running')` 時禁止修改 |
 | BR-4 | `ob_levelcard_version.status` 欄位於遷移時補建（原 OBLEVELCARD_VERSION 無此欄位），初值由 `(SDATE <= 今日 < EDATE)` 計算；本功能仍以 `status = 'active'` 判斷 active 計分版本 |
-| BR-5 | **hard delete 決策**：DELETE 採 hard delete（`ob_levelcard_level` 表無 status 欄位；與 F054 軟刪除 `ob_levelcard_column` 的設計刻意不同，理由：等級結構為「業務分級設計」而非「啟用狀態」，被刪除的等級應從歷史結構中移除，歷史追溯依賴月跑 snapshot F066） |
+| BR-5 | **hard delete 決策**：DELETE 採 hard delete（`ob_levelcard_level` 表無 status 欄位；與 F054 軟刪除 `ob_levelcard_column` 的設計刻意不同，理由：等級結構為「業務分級設計」而非「啟用狀態」，被刪除的等級應從歷史結構中移除，歷史追溯依賴月名單分派 snapshot F066） |
 | BR-6 | **cascade reference check**：刪除前必須先檢查 `ob_tier WHERE card_type = :cardType AND card_level = :cardLevel`，若存在紀錄則回 409 `CARD_LEVEL_REFERENCED`，業務需先於 F056 移除對應後才能刪除 |
 | BR-7 | **CARD_TYPE 範圍鎖**（v1.4 新增）：所有寫入操作之 `cardType` 必須對應 `ob_card_type.status = 'active'`；違反回 404 `CARD_TYPE_NOT_FOUND`；前端 Tab 4 操作以 Tab 1 selectedCardType 為唯一資料範圍，跨 CARD_TYPE 寫入不開放 |
 
@@ -280,13 +280,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 - 錯誤提示：直接於有問題的等級列顯示紅色邊框 + 錯誤訊息
 - 等級列右側操作區新增「刪除」icon 按鈕（`trash-2` lucide icon，紅色 hover：`hover:text-danger hover:bg-red-50`），與 F056 TIER_LEVEL 對應表的刪除樣式一致
 - 點擊刪除按鈕觸發確認對話框（標題：「刪除 CARD_LEVEL 等級」、body：等級代碼 + AC-7 警告文字）
-- 月跑鎖定時刪除按鈕 disabled
+- 月名單分派鎖定時刪除按鈕 disabled
 - **prototype 28 註記**：原 prototype L1145-1151 僅繪 `check` icon（單列儲存）；trash 按鈕為 v1.3 本次新增，後續若 prototype 重繪須同步更新
 
 ## 8. 相依性
 
 - **Blocked By**：F053（需先了解計分版本結構）、F069（Tab 1 CARD_TYPE 選中狀態來源）
-- **Blocks**：F056（TIER_LEVEL 對應依賴 CARD_LEVEL 定義；刪除 cardLevel 前須確認 F056 `ob_tier` 對應已清空 — BR-6 cascade check）、F061（月跑 Stage 2 等級劃分）
+- **Blocks**：F056（TIER_LEVEL 對應依賴 CARD_LEVEL 定義；刪除 cardLevel 前須確認 F056 `ob_tier` 對應已清空 — BR-6 cascade check）、F061（月名單分派 Stage 2 等級劃分）
 
 ## 9. 交叉參考
 
@@ -310,5 +310,5 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 | # | 假設 | 標記 |
 |---|---|---|
-| A-1 | DELETE 採 hard delete 設計（`ob_levelcard_level` 無 status 欄位），歷史結構追溯依賴月跑 snapshot F066 | ✅ Decided（PO 2026-05-14） |
+| A-1 | DELETE 採 hard delete 設計（`ob_levelcard_level` 無 status 欄位），歷史結構追溯依賴月名單分派 snapshot F066 | ✅ Decided（PO 2026-05-14） |
 | A-2 | AC-6 / AC-7 cascade 行為採方案 A（reference check 阻擋刪除）為 PO 決策；歷史追溯依賴 F066 snapshot；未採方案 B（cascade 連動刪除 `ob_tier` 對應）以避免跨表副作用 | ✅ Decided（PO 2026-05-14） |

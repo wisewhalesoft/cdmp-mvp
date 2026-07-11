@@ -1,17 +1,17 @@
 ---
 type: test-design-infrastructure
 test-spec-id: AD-E07-43-P5c
-feature_name: MSSQL 全面遷移 P5c — MONTHRUN-DIFF 真實完整月跑跨引擎逐列比對（P5 全量 CI + 業務簽核第三片，F067 式簽核之技術底稿）
+feature_name: MSSQL 全面遷移 P5c — MONTHRUN-DIFF 真實完整月名單分派跨引擎逐列比對（P5 全量 CI + 業務簽核第三片，F067 式簽核之技術底稿）
 priority: P0-MVP
 related_spec:
-  - /docs/specs/implementation-log/AD-E07-43-mssql-p5-ci-signoff.md（§1 排序 P5a→P5b→P5c；§2.2 P5b 前置依賴；§3.1 MONTHRUN-DIFF 執行方式定調「manual/script，非新 CI 測試套件」；§5 P5c DoD 三條；§6 I-MSSQL-ENGINE-EQ-01「本文件為此不變式在完整月跑層級之最終驗收」、I-MSSQL-SIGNOFF-GATE-01「cutover 前提 (a) PG/MSSQL 結果一致」）
+  - /docs/specs/implementation-log/AD-E07-43-mssql-p5-ci-signoff.md（§1 排序 P5a→P5b→P5c；§2.2 P5b 前置依賴；§3.1 MONTHRUN-DIFF 執行方式定調「manual/script，非新 CI 測試套件」；§5 P5c DoD 三條；§6 I-MSSQL-ENGINE-EQ-01「本文件為此不變式在完整月名單分派層級之最終驗收」、I-MSSQL-SIGNOFF-GATE-01「cutover 前提 (a) PG/MSSQL 結果一致」）
   - /docs/test-specs/infrastructure/AD-E07-43-P5b-test.md（前置依賴：5 條生產 ETL pipeline 端對端驗證產出 `ob_pool_data`/`ob_pool_data_list`/`ob_emphire`/`ob_calendar`/`ob_arreturndf_min_cap` 真實資料；本文件沿用其 dbo 共用表 Harness 結論；§十二 REG-006「fullMode TRUNCATE 與共用表張力」先例，本文件比照其協調策略）
   - /docs/test-specs/infrastructure/AD-E07-42-P3a-test.md（Stage 1 篩選 EQ 已窮盡驗證；Harness 環境依賴段落「dbo 共用表＋前綴隔離＋精準 DELETE（禁 DROP/TRUNCATE）」原則沿用；`executeStage1Chain` 內部 customer_core 片段為 PG-only SQL 之已知限制，本文件 GATE-004 據此設計繞開策略）
   - /docs/test-specs/infrastructure/AD-E07-42-P3b-test.md（§二十一 MONTHRUN-DIFF-001/002：本文件之前身 stub，原僅涵蓋 score/card_level/tier_level 三欄、無執行方法論細節；本文件正式取代並擴大為 AD-E07-43 §5 P5c 完整範圍）
   - /docs/test-specs/infrastructure/AD-E07-42-P3c-test.md（Stage 3/4 比例分派 EQ 已窮盡驗證，含裸 `NUMERIC(18,0)` 精度缺陷已修復之前提）
   - /docs/test-specs/infrastructure/AD-E07-42-P3d-test.md（CR 優先分派 EQ 已窮盡驗證；§七 DATECAST-003「appl_date 非午夜時間分量未驗證假設」為本文件 §四 DATECAST-BOUNDARY 群組之直接前身，本文件於完整鏈路層級延伸此查證）
   - /docs/specs/implementation-log/F067-202606-cdmp-vs-legacy-diff.md（差異報告格式先例：§2/§3/§8 逐名單分佈表格式，本文件 §六 REPORT 群組沿用其表格結構，但比對性質不同，見零.1 方法論說明）
-  - apps/api/src/modules/assignment/services/assignment-run-pipeline.service.ts（test-designer 逐行查證：`executeStage2to3PushdownMssql` lines 1128-1218 現行已完整四步下推〔①`runStage2and3SqlMssql`②`clearStage3Fields`③`runCrPrioritySqlMssql`④`runStage3to4RationSqlMssql`〕，AD §0「MSSQL 月跑全鏈現已全部有值」之陳述經本文件直接讀碼確認屬實；`executeV2` lines 730-950+ 為既有 code comment 自陳之「golden oracle」JS 全鏈路徑〔Stage2 計分 `this.computeScore`+F102 `applyCrPriority`+F101 `distributeStage3to4`〕；`runStage1JsChain` lines 1735-1765 呼叫 `executeStage1Chain`；`resolveStage1Strategy`/`resolveStage2to4Strategy` lines 188-230 為 DB_TYPE 分流純函式）
+  - apps/api/src/modules/assignment/services/assignment-run-pipeline.service.ts（test-designer 逐行查證：`executeStage2to3PushdownMssql` lines 1128-1218 現行已完整四步下推〔①`runStage2and3SqlMssql`②`clearStage3Fields`③`runCrPrioritySqlMssql`④`runStage3to4RationSqlMssql`〕，AD §0「MSSQL 月名單分派全鏈現已全部有值」之陳述經本文件直接讀碼確認屬實；`executeV2` lines 730-950+ 為既有 code comment 自陳之「golden oracle」JS 全鏈路徑〔Stage2 計分 `this.computeScore`+F102 `applyCrPriority`+F101 `distributeStage3to4`〕；`runStage1JsChain` lines 1735-1765 呼叫 `executeStage1Chain`；`resolveStage1Strategy`/`resolveStage2to4Strategy` lines 188-230 為 DB_TYPE 分流純函式）
   - apps/api/src/modules/assignment/stage1/stage1-filter-chain.ts（`executeStage1Chain` JS oracle 主入口，line 362）
   - apps/api/src/modules/assignment/stage1/cr-priority.ts（`applyCrPriority` line 110，F102 JS oracle）
   - apps/api/src/modules/assignment/stage1/stage3to4-ration.ts（`distributeStage3to4`，F101 JS oracle）
@@ -22,17 +22,17 @@ date: 2026-07-08
 last_updated: 2026-07-08
 ---
 
-# AD-E07-43 P5c：MSSQL 全面遷移 — MONTHRUN-DIFF 真實完整月跑跨引擎逐列比對 — 測試設計
+# AD-E07-43 P5c：MSSQL 全面遷移 — MONTHRUN-DIFF 真實完整月名單分派跨引擎逐列比對 — 測試設計
 
-> 本文件覆蓋 AD-E07-43「MSSQL 全面遷移 P5（全量 CI + F067 式業務簽核）」之 **P5c 切片**（AD §3.1 + §5 P5c DoD）。AD §3.1 明文定調：「不是新的自動化 CI 測試套件，而是比照本專案既有的 F101/F102/F104 驗收前例（觸發真實月跑、SQL 直接查表比對、輸出人工可讀的差異記錄）」。本文件之產出即 **P5e F067 式業務簽核報告之技術附件**（非報告本體），亦是 **I-MSSQL-SIGNOFF-GATE-01** 條件 (a) 之直接證據來源。
+> 本文件覆蓋 AD-E07-43「MSSQL 全面遷移 P5（全量 CI + F067 式業務簽核）」之 **P5c 切片**（AD §3.1 + §5 P5c DoD）。AD §3.1 明文定調：「不是新的自動化 CI 測試套件，而是比照本專案既有的 F101/F102/F104 驗收前例（觸發真實月名單分派、SQL 直接查表比對、輸出人工可讀的差異記錄）」。本文件之產出即 **P5e F067 式業務簽核報告之技術附件**（非報告本體），亦是 **I-MSSQL-SIGNOFF-GATE-01** 條件 (a) 之直接證據來源。
 >
 > **明確排除**：Stage 1-4/CR 各站點方言轉換之正確性本身（P3a/b/c/d 已窮盡逐案 EQ 驗證，本文件視為已驗證黑盒依賴，不重新推導）；F067 式簽核報告之業務簽核行為本身（P5e，架構師起草、業務簽核，非 test-designer/tdd-implementation 職責）；datetime2 時區 production 查證之最終業務裁示（P5d，本文件僅設計「揭露」邊界案例，不代業務裁定可接受度）；P5b 之 5 條 ETL pipeline 端對端驗證本身（已完成，本文件僅消費其產出資料）。
 >
 > **★ test-designer 逐碼查證之關鍵事實（本文件測試設計之唯一真實依據）**：
 >
 > 1. **🔴🔴 環境約束已於本文件設計時再次確認為現行事實**：`postgres-test`（5433）本機不可達；`dev PG`（5432）依專案既有慣例（P4a impl log `EXTRACT-RESOLVE DUAL-DB` 偏差段落明載）**視為唯讀，不可注入測試列污染 dev**；`MSSQL CDMP_TEST`（1433）可用。此為本專案 MSSQL 遷移系列 P4a 起即已發生之真實環境限制（非本文件新假設），直接決定 §零.1 之比對方法論分層設計。
-> 2. **🔴🔴 MSSQL 完整四步下推鏈路已於程式碼層級確認就位**：`executeStage2to3PushdownMssql`（`assignment-run-pipeline.service.ts:1128-1218`）現行呼叫序為 ①`runStage2and3SqlMssql`（計分）②`clearStage3Fields`（清除，PG/MSSQL 共用 ANSI）③`runCrPrioritySqlMssql`（P3d CR 前置）④`runStage3to4RationSqlMssql`（P3c 比例分派），與 PG 版 `executeStage2to4Pushdown`（lines 1017-1106）四步順序完全對稱（I-CR-ORDER-01）。AD §0「MSSQL 月跑全鏈現已全部有值」之陳述經本文件直接讀碼確認屬實，**非僅信任 AD 文字**。
-> 3. **🔴🔴 既有「JS golden oracle」全鏈路徑可直接複用，非需重新撰寫**：`executeV2`（同檔 lines 730 起）之 code comment 自陳「此 JS 路徑為 golden oracle，與 PG SQL 下推逐列確定性等價（AC-15 DoD）」，其函式體確已完整組合 Stage 2 計分（`this.computeScore`）+ F102 CR 前置（`applyCrPriority`）+ F101 Stage 3/4 比例分派（`distributeStage3to4`），與 Stage 1 JS oracle（`executeStage1Chain`，由 `runStage1JsChain` 呼叫）合併即為完整月跑之 JS 端全鏈實作。**本文件 Tier 1 方法論之核心即複用此既有、已被專案自身標註為 golden 之程式碼路徑**，而非另行於測試檔內手算重新實作一份全鏈邏輯（後者才是真正的重工與額外風險來源）。
+> 2. **🔴🔴 MSSQL 完整四步下推鏈路已於程式碼層級確認就位**：`executeStage2to3PushdownMssql`（`assignment-run-pipeline.service.ts:1128-1218`）現行呼叫序為 ①`runStage2and3SqlMssql`（計分）②`clearStage3Fields`（清除，PG/MSSQL 共用 ANSI）③`runCrPrioritySqlMssql`（P3d CR 前置）④`runStage3to4RationSqlMssql`（P3c 比例分派），與 PG 版 `executeStage2to4Pushdown`（lines 1017-1106）四步順序完全對稱（I-CR-ORDER-01）。AD §0「MSSQL 月名單分派全鏈現已全部有值」之陳述經本文件直接讀碼確認屬實，**非僅信任 AD 文字**。
+> 3. **🔴🔴 既有「JS golden oracle」全鏈路徑可直接複用，非需重新撰寫**：`executeV2`（同檔 lines 730 起）之 code comment 自陳「此 JS 路徑為 golden oracle，與 PG SQL 下推逐列確定性等價（AC-15 DoD）」，其函式體確已完整組合 Stage 2 計分（`this.computeScore`）+ F102 CR 前置（`applyCrPriority`）+ F101 Stage 3/4 比例分派（`distributeStage3to4`），與 Stage 1 JS oracle（`executeStage1Chain`，由 `runStage1JsChain` 呼叫）合併即為完整月名單分派之 JS 端全鏈實作。**本文件 Tier 1 方法論之核心即複用此既有、已被專案自身標註為 golden 之程式碼路徑**，而非另行於測試檔內手算重新實作一份全鏈邏輯（後者才是真正的重工與額外風險來源）。
 > 4. **🔴🔴 已知限制（P3a 查證延續，非本文件新發現，但本文件是首次需要在「全鏈組合」層級處理其後果）**：`executeStage1Chain` 內部之 customer_core 篩選片段（`buildCustomerCoreClause`）為 PG-only SQL 字面（`AGE()`/`EXTRACT()`/`::date`），若以此函式對 MSSQL 連線之 repo 呼叫、且該名單之篩選條件包含 customer_core 維度，會拋 PG-only 語法錯誤。**本文件 Tier 1 之 JS oracle 全鏈驗證因此在設計上排除「Stage 1 篩選條件包含 customer_core 維度」之名單**（§一 GATE-004），customer_core 維度之 Stage 1 正確性已由 P3a CCEQ 群組（14 案例）窮盡驗證，不在本文件重複範圍；但**不排除**這類名單的案件流入 Stage 2-4/CR（即：這類名單改採「Stage 1 輸出直接預先寫入 `ob_monthly_run_result`」之方式參與比對，繞過重跑 Stage 1 兩次，見 §零.4）。
 > 5. **AD 文件內部欄位計數落差（低嚴重度，記錄性）**：AD §3.1（方法敘述）列出 10 個比對欄位（`score`／`tier_level`／`card_level`／`dept_id`／`emplid`／`emplid_deptid`／`assignday`／`cr_id`／`cr_nm`／`is_cr`），但 AD §5 P5c DoD 條文字面稱「9 個關鍵欄位」且逐一列舉時漏列 `cr_nm`。本文件採**兩者聯集（10 欄，含 `cr_nm`）** 為設計範圍——`cr_nm` 屬 `cr_id` 之衍生展示欄（`'CR'+emp_nm`），納入比對成本極低且無納入風已（詳 §一 GATE-003），建議 system-architect 下次修訂 AD 時同步此落差，非阻擋事項。
 > 6. **本文件之比對性質與 F067 根本不同，格式借用但方法論不可混淆（見 §零.1）**：F067（CDMP vs legacy）之兩側案件集完全不同（不同 ID 體系），故只能比「分佈形狀」；P5c（JS oracle vs MSSQL 下推）之兩側讀取**同一份來源資料**，案件集理論上應**完全相同**（同 `(orgno, appl_no)` 鍵集合），故本文件之核心比對是**逐列精確相等**（0 差異為預期基準值，任何差異即為真實缺陷，非「分佈噪音」），分佈層級比對（§五 DIST）僅作為輔助性、業務可讀摘要，非核心判定依據。
@@ -59,13 +59,13 @@ last_updated: 2026-07-08
 |---|---|---|---|
 | (a) PG 直接同資料跑一次 | 最強證據，逐列比對 PG 實際執行結果 | **現行不可行**：`postgres-test`（5433）本機不可達；`dev PG`（5432）視為唯讀不可注入測試（P4a 既有先例） | 列為 **§七 PG-ENHANCE**，`pgPortReachable()` 探測後 degradable，5433 恢復可達時自動啟用，不阻擋本文件 DoD |
 | (b) JS oracle 作黃金基準 | P3a-d 已證各站點 SQL builder↔JS oracle 逐列 EQ=0；本文件在**整合層**（全鏈組合）以同一份 JS oracle 為 golden，確認全鏈組合無誤 | **現行唯一始終可行路徑**，不依賴任何外部 PG 連線，僅需 MSSQL CDMP_TEST | **裁定為 Tier 1（主要、MUST-FIX、§三 CHAIN-EQ）** |
-| (c) 既有 PG 月跑 baseline 快照（如 F067 run `84486ddd`） | 唯讀查詢 dev PG 之既有已完成月跑結果，不涉及注入 | 技術上可行（唯讀 SELECT 不違反「不可注入」約束），但 MSSQL 端資料為 P5b fixture／合成資料，與 dev PG 之真實 202606 生產規模資料**非同一份輸入**，若要做逐列比對需額外一輪「匯出 PG 來源快照→匯入 MSSQL」之資料工程工作（比照既有 `scripts/import-legacy-ratios.cjs` 精神，但規模是全表非僅比例設定），**超出本文件 P5c 範圍之腳本工作量** | 列為 **§七 PGENH-003**，記錄為 **P5e 加強建議**（risks-and-gaps 追蹤），非 P5c DoD 阻擋項 |
+| (c) 既有 PG 月名單分派 baseline 快照（如 F067 run `84486ddd`） | 唯讀查詢 dev PG 之既有已完成月名單分派結果，不涉及注入 | 技術上可行（唯讀 SELECT 不違反「不可注入」約束），但 MSSQL 端資料為 P5b fixture／合成資料，與 dev PG 之真實 202606 生產規模資料**非同一份輸入**，若要做逐列比對需額外一輪「匯出 PG 來源快照→匯入 MSSQL」之資料工程工作（比照既有 `scripts/import-legacy-ratios.cjs` 精神，但規模是全表非僅比例設定），**超出本文件 P5c 範圍之腳本工作量** | 列為 **§七 PGENH-003**，記錄為 **P5e 加強建議**（risks-and-gaps 追蹤），非 P5c DoD 阻擋項 |
 
 **結論（呼應任務指示建議）**：以 (b) JS oracle 為主可行路徑（Tier 1，不依賴不可達 PG，MUST-FIX）+ (a)/(c) 為 PG 可達時或投入額外資料工程後之加強（Tier 2/3，degradable，不偽綠）。
 
 ### 0.2 🔴🔴 重要方法論澄清：Tier 1 是否足以滿足 I-MSSQL-SIGNOFF-GATE-01？（決策關卡，交 architect/業務裁定，非本文件自行裁定）
 
-I-MSSQL-SIGNOFF-GATE-01 條文字面為「(a) MONTHRUN-DIFF（P5c）對至少一個完整生產規模月跑顯示 **PG/MSSQL** 結果一致」——字面明確指「PG」，而非「JS」。Tier 1（JS oracle vs MSSQL）雖然是目前技術上唯一可行、且有 P3a-d 逐站點 EQ 佐證支撐其可信度的路徑，但**嚴格依 AD 條文字面，並不等於「PG/MSSQL 結果一致」**——JS oracle 是「PG 版本應該產出什麼」的程式碼層級代理（proxy），不是「PG 版本實際執行產出什麼」的直接觀測。
+I-MSSQL-SIGNOFF-GATE-01 條文字面為「(a) MONTHRUN-DIFF（P5c）對至少一個完整生產規模月名單分派顯示 **PG/MSSQL** 結果一致」——字面明確指「PG」，而非「JS」。Tier 1（JS oracle vs MSSQL）雖然是目前技術上唯一可行、且有 P3a-d 逐站點 EQ 佐證支撐其可信度的路徑，但**嚴格依 AD 條文字面，並不等於「PG/MSSQL 結果一致」**——JS oracle 是「PG 版本應該產出什麼」的程式碼層級代理（proxy），不是「PG 版本實際執行產出什麼」的直接觀測。
 
 本文件**不代 system-architect 或業務利害關係人裁定**此代理證據是否已足夠支撐簽核，僅將此列為 **§一 GATE-002 決策關卡**，要求：
 1. 本文件之報告（§六 REPORT）須在最顯著位置明確聲明「本次比對之基準＝JS oracle（golden，P3a-d 已證與 SQL builder 逐列 EQ），非 PG 實際執行結果」；
@@ -187,7 +187,7 @@ I-MSSQL-SIGNOFF-GATE-01 條文字面為「(a) MONTHRUN-DIFF（P5c）對至少一
 > 前提：§一 GATE 全數已決議；§二 HARNESS fixture 已就緒。**核心判定基準：0 差異**（非「分佈相近」，因兩側讀取同一份來源資料，理論上案件集與逐欄值應完全相同——此為本文件與 F067 方法論之根本差異，見★發現 6）。若 P3a-d 之個別站點 EQ 皆已驗證通過（決定性排序鍵、DECIMAL 精度修復、AGE 公式方向、tie-breaker 皆已確認正確），則本群組理論上應全數 0 差異；任何差異即代表**個別站點已驗證正確性、在「全鏈組合」層級失效**（例如某站點的輸出格式與下一站點的輸入假設不匹配），是本文件存在之核心價值。
 
 ### TS-MSSQL-P5C-CHAINEQ-001（🔴🔴 DoD 核心旗艦）：全量 fixture 案件集，兩側 10 欄逐列（依 `list_no`/`orgno`/`appl_no` 排序）精確相等
-- **Related Requirement**：I-MSSQL-ENGINE-EQ-01（本文件為此不變式在完整月跑層級之最終驗收）；AD §5 P5c DoD #2
+- **Related Requirement**：I-MSSQL-ENGINE-EQ-01（本文件為此不變式在完整月名單分派層級之最終驗收）；AD §5 P5c DoD #2
 - **Test Type**：EQ（DoD 核心旗艦）
 - **Expected Result**：`toEqual`/`toStrictEqual` 逐列比對 `score`/`card_level`/`tier_level`/`is_cr`/`cr_id`/`cr_nm`/`dept_id`/`emplid`/`emplid_deptid`/`assignday`，兩側案件集（`(orgno,appl_no)` 集合）本身亦須先確認完全相同（若案件集不同，任何欄位比對皆無意義，須優先反映為 GATE 層級問題而非欄位差異）
 
@@ -300,11 +300,11 @@ I-MSSQL-SIGNOFF-GATE-01 條文字面為「(a) MONTHRUN-DIFF（P5c）對至少一
 - **Related Requirement**：§零.1 Tier 2；degradable 政策落地確認
 - **Test Type**：Meta / Unit
 
-### TS-MSSQL-P5C-PGENH-002（best-effort，Tier 2）：5433 可達時，同一份 fixture 於 PG 端執行完整月跑（走 PG 既有 SQL 下推 `executeStage2to4Pushdown`，**非** JS oracle），10 欄與 MSSQL 端（`RUN_ID_MSSQL`）逐列比對
+### TS-MSSQL-P5C-PGENH-002（best-effort，Tier 2）：5433 可達時，同一份 fixture 於 PG 端執行完整月名單分派（走 PG 既有 SQL 下推 `executeStage2to4Pushdown`，**非** JS oracle），10 欄與 MSSQL 端（`RUN_ID_MSSQL`）逐列比對
 - **Related Requirement**：§零.1 選項 (a)；I-MSSQL-SIGNOFF-GATE-01 條件 (a) 之直接證據（若此案例執行且通過，可完整滿足字面「PG/MSSQL」要求，優於 Tier 1 之 proxy 性質）
 - **Test Type**：Positive / Integration — best-effort
 
-### TS-MSSQL-P5C-PGENH-003（記錄性，Tier 3，非本文件 DoD 案例）：既有 PG 生產月跑唯讀快照比對（如 F067 run `84486ddd`）之可行性評估與所需額外工作量說明
+### TS-MSSQL-P5C-PGENH-003（記錄性，Tier 3，非本文件 DoD 案例）：既有 PG 生產月名單分派唯讀快照比對（如 F067 run `84486ddd`）之可行性評估與所需額外工作量說明
 - **Related Requirement**：§零.1 選項 (c)
 - **Test Type**：Documentation
 - **Expected Result**：記錄於 risks-and-gaps，列為 P5e 加強建議（需額外資料工程：匯出 dev PG 202606 來源快照→匯入 MSSQL CDMP_TEST→重跑→與既有 PG run 結果比對），非 P5c 阻擋項
@@ -335,11 +335,11 @@ I-MSSQL-SIGNOFF-GATE-01 條文字面為「(a) MONTHRUN-DIFF（P5c）對至少一
 
 | AD §5 P5c DoD 原文 | 對應測試群組 |
 |---|---|
-| 「PG 與 MSSQL 於同一來源資料完整月跑各執行一次」 | §零.1（Tier 1/2/3 分層裁定）+ §七 PG-ENHANCE（Tier 2 執行 PG 實際月跑）+ §一 GATE-002（Tier 1 proxy 性質決策關卡） |
+| 「PG 與 MSSQL 於同一來源資料完整月名單分派各執行一次」 | §零.1（Tier 1/2/3 分層裁定）+ §七 PG-ENHANCE（Tier 2 執行 PG 實際月名單分派）+ §一 GATE-002（Tier 1 proxy 性質決策關卡） |
 | 「`ob_monthly_run_result` 全部案件之 9 個關鍵欄位逐列比對完成」（本文件裁定聯集 10 欄，見 GATE-003） | §三 CHAIN-EQ（全 10 案例，核心 CHAINEQ-001/002） |
 | 「產出比對結果文件（impl-log 風格），任何差異皆有具體案件級記錄與可解釋性判斷」 | §六 REPORT（全 5 案例，核心 REPORT-001/003/004） |
-| （AD §0 背景）「MSSQL 月跑全鏈現已全部有值」之前提查證 | ★發現 2（本文件逐碼確認屬實） |
+| （AD §0 背景）「MSSQL 月名單分派全鏈現已全部有值」之前提查證 | ★發現 2（本文件逐碼確認屬實） |
 | （AD §3.1）「degradable，不偽綠」之 PG 端來源方法論 | §零.1（三選項可行性評估）+ §七 PGENH-001（skip 機制） |
 | （AD §4 datetime2 邊界，銜接 P5d） | §四 DATECAST-BOUNDARY（3 案例，皆為 Probe，不預設答案） |
-| （AD §6 I-MSSQL-ENGINE-EQ-01「本文件為此不變式在完整月跑層級之最終驗收」） | §三 CHAIN-EQ 全群組，尤其 CHAINEQ-001 旗艦 + CHAINEQ-007（組合缺口專項） |
+| （AD §6 I-MSSQL-ENGINE-EQ-01「本文件為此不變式在完整月名單分派層級之最終驗收」） | §三 CHAIN-EQ 全群組，尤其 CHAINEQ-001 旗艦 + CHAINEQ-007（組合缺口專項） |
 | （AD §6 I-MSSQL-SIGNOFF-GATE-01 條件 (a)） | §一 GATE-002（決策關卡，本文件不自行裁定是否已滿足）+ §六 REPORT-004 |

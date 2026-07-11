@@ -30,12 +30,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ## 1. 功能摘要
 
-提供業務部長 / 業務處長選擇任意兩次月跑的結果進行差異比對，包含摘要層級差異、設定差異、客戶層級集合差異，以及**人員配對一致性 diff**（NFR-005 主驗收工具：比較同 APPL_NO 的 `ob_emplid` 是否一致，計算人員配對不一致率，超過 3% 觸發紅色警示）。比對完全由應用層計算，不額外寫入資料。使用者確認升級為 **P0-MVP**（原 epic-brief Should Have）。
+提供業務部長 / 業務處長選擇任意兩次月名單分派的結果進行差異比對，包含摘要層級差異、設定差異、客戶層級集合差異，以及**人員配對一致性 diff**（NFR-005 主驗收工具：比較同 APPL_NO 的 `ob_emplid` 是否一致，計算人員配對不一致率，超過 3% 觸發紅色警示）。比對完全由應用層計算，不額外寫入資料。使用者確認升級為 **P0-MVP**（原 epic-brief Should Have）。
 
 ## 2. 使用者故事
 
 **As a** 業務部長 / 業務處長
-**I want** 選擇任意兩次月跑的結果進行差異比對
+**I want** 選擇任意兩次月名單分派的結果進行差異比對
 **So that** 清楚了解調整計分設定或比例設定後對最終分派結果的具體影響（新增了哪些客戶、移除了哪些客戶、等級有何變化、人員配對是否一致）
 
 ## 3. 前置條件
@@ -46,16 +46,16 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ## 4. 驗收標準
 
-### AC-1：選擇兩次月跑進行比對
+### AC-1：選擇兩次月名單分派進行比對
 
 - **Given** 業務部長 / 業務處長在 F065 歷史清單或 F066 快照詳情頁
 - **When** 業務部長 / 業務處長選擇「比對差異」功能並選定 Base run_id 與 Compare run_id
-- **Then** 頁面顯示兩次月跑的基本資訊並排（`project_workym`、`triggered_at`、`total_cases`）
-- **And** 若兩次月跑的 `project_workym` 相同，顯示提示「同月比對通常用於重跑調參情境」（不阻擋比對）
+- **Then** 頁面顯示兩次月名單分派的基本資訊並排（`project_workym`、`triggered_at`、`total_cases`）
+- **And** 若兩次月名單分派的 `project_workym` 相同，顯示提示「同月比對通常用於重跑調參情境」（不阻擋比對）
 
 ### AC-2：摘要層級差異報告
 
-- **Given** 兩次月跑已選定
+- **Given** 兩次月名單分派已選定
 - **When** 比對計算完成
 - **Then** 顯示摘要差異：
   - 總分派筆數差異（Base N → Compare M，差異 ±X）
@@ -64,17 +64,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ### AC-3：人員配對一致性 diff（NFR-005 主驗收工具）
 
-- **Given** 兩次月跑已選定且均為 `completed` 狀態
+- **Given** 兩次月名單分派已選定且均為 `completed` 狀態
 - **When** 比對計算完成
 - **Then** 系統顯示「人員配對不一致」報告，包含：
-  - 兩次月跑中分派給不同業務員的案件清單（每列顯示 `appl_no`、Base `ob_emplid`、Compare `ob_emplid`）
+  - 兩次月名單分派中分派給不同業務員的案件清單（每列顯示 `appl_no`、Base `ob_emplid`、Compare `ob_emplid`）
   - **人員配對不一致率** = 不一致案件數 / 同批次總案件數 × 100%
   - 若不一致率 > 3%，顯示紅色警示並連結至 NFR-005
 - **And** 提供「下載不一致案件清單」按鈕，匯出 Excel 格式（欄位：`appl_no`、Base `ob_emplid`、Compare `ob_emplid`）
 
 ### AC-4：設定差異報告
 
-- **Given** 兩次月跑已選定
+- **Given** 兩次月名單分派已選定
 - **When** 業務部長 / 業務處長查看「設定差異」區塊
 - **Then** 列出兩份 `config` 快照的差異項目：
   - 計分版本是否變更（`card_version`）
@@ -105,7 +105,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 - **Given** 任一 `run_id` 的 `status` 不為 `completed`
 - **When** 業務部長 / 業務處長嘗試比對
-- **Then** 回傳 422 `ASSIGNMENT_RUN_NOT_COMPARABLE`，訊息：「僅 completed 狀態的月跑可比對」
+- **Then** 回傳 422 `ASSIGNMENT_RUN_NOT_COMPARABLE`，訊息：「僅 completed 狀態的月名單分派可比對」
 
 ## 5. API 規格
 
@@ -194,7 +194,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ## 9. UI/UX 需求
 
-- 頁首：兩次月跑基本資訊並排卡片
+- 頁首：兩次月名單分派基本資訊並排卡片
 - 摘要差異區：表格 + 差異值（正數綠 / 負數紅）
 - 人員配對一致性區：醒目顯示不一致率（> 3% 紅色）+ 「下載不一致案件清單」按鈕
 - 設定差異區：`config` 快照 diff 表格
@@ -202,7 +202,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ## 10. 相依性
 
-- **Blocked By**：F066（兩次月跑的快照詳情需可讀取）
+- **Blocked By**：F066（兩次月名單分派的快照詳情需可讀取）
 - **Blocks**：無（本 Feature 為終端消費功能）
 
 ## 11. 交叉參考

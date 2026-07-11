@@ -81,9 +81,9 @@ last_updated: 2026-05-21
 
 ---
 
-### TS-F089-003：月跑執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
+### TS-F089-003：月名單分派執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
 
-- **關聯需求**：F089 v1.3（月跑鎖）
+- **關聯需求**：F089 v1.3（月名單分派鎖）
 - **測試類型**：Negative / Integration（Supertest）
 - **前置條件**：
   - `assignment_run` seed 1 筆 `status='running'`；**必填 4 欄位**：`run_id`（UUID）、`project_workym='202605'`、`triggered_by`（operator UUID）、`created_at`（ISO timestamp）

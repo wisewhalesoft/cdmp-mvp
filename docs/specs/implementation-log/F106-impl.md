@@ -13,8 +13,8 @@ last_updated: 2026-06-25
 打通「停用計分維度」在 M02 Tab 2 的可見性與啟用管線，與既有 F054 disable 對稱補完：
 
 1. **後端讀取**：`getScoring()` 移除維度查詢 `status='active'` 過濾，一律回傳 active + inactive 全部維度，每維度補 `status` 欄位（AC-2 / BR-1 / OQ-164-2）。
-2. **後端寫入**：新增 `PUT /assignment/scoring/dimensions/:columnName/enable`，完全對稱 disable（同 guard / feature flag / 月跑鎖 / cardType 範圍鎖 / 404 語意 / audit），僅狀態方向相反（AC-3 / AC-4 / §5.3）。
-3. **前端**：Tab 2 顯示 inactive 列（列級灰底弱化 + 狀態 chip），inactive 列以「啟用」鈕取代「停用」鈕；移除 `?? 'active'` fallback；Tab badge 與「共 N 個維度」只計 active；月跑鎖時啟用 / 停用 一併 disabled。
+2. **後端寫入**：新增 `PUT /assignment/scoring/dimensions/:columnName/enable`，完全對稱 disable（同 guard / feature flag / 月名單分派鎖 / cardType 範圍鎖 / 404 語意 / audit），僅狀態方向相反（AC-3 / AC-4 / §5.3）。
+3. **前端**：Tab 2 顯示 inactive 列（列級灰底弱化 + 狀態 chip），inactive 列以「啟用」鈕取代「停用」鈕；移除 `?? 'active'` fallback；Tab badge 與「共 N 個維度」只計 active；月名單分派鎖時啟用 / 停用 一併 disabled。
 
 **無新錯誤碼、無新 DB 欄位、無 migration**（沿用既有計分設定錯誤體系與 `ob_levelcard_column.status`）。
 
@@ -25,7 +25,7 @@ last_updated: 2026-06-25
 | TS-F106-001（unit + e2e） | enable 成功 → status=active，回 enabledAt | PASS |
 | TS-F106-002（unit + e2e） | audit ENABLE，before inactive / after active，entity_id={cardType}\|{cardVersion}\|{columnName} | PASS |
 | TS-F106-003（unit + e2e，BR-3） | 對已 active 維度 enable → 404 SCORING_COLUMN_NOT_FOUND | PASS |
-| TS-F106-004（unit + e2e，AC-5） | 月跑鎖 → 409 SCORING_VERSION_LOCKED | PASS |
+| TS-F106-004（unit + e2e，AC-5） | 月名單分派鎖 → 409 SCORING_VERSION_LOCKED | PASS |
 | TS-F106-005（unit） | 不存在 column → 404 | PASS |
 | TS-F106-006（unit / e2e 權限） | findOne 限定 status='inactive'；非部長 enable → 403 | PASS |
 | TS-F106-007（unit，§5.3 EQ） | disable→enable→disable 往返狀態 + audit 軌跡逐項對稱 | PASS |
@@ -35,7 +35,7 @@ last_updated: 2026-06-25
 | TS-F106-FE-02 | inactive 列顯啟用鈕（無停用）、active 列顯停用鈕（無啟用） | PASS |
 | TS-F106-FE-03 / 04（OQ-164-4） | 「共 N 個維度」與 Tab badge 只計 active | PASS |
 | TS-F106-FE-05 / 06 | 啟用確認 Modal → enableDimension + toast；取消不發 API | PASS |
-| TS-F106-FE-07（AC-5） | 月跑鎖時啟用 / 停用 鈕一併 disabled | PASS |
+| TS-F106-FE-07（AC-5） | 月名單分派鎖時啟用 / 停用 鈕一併 disabled | PASS |
 
 **後端**：assignment-scoring 模組 272 unit tests 全綠（含新增 F106 enable spec 7 個 + F053 getScoring 改寫 2 個）。F106 E2E 6 個全綠。
 **前端**：scoring-config-page 46 tests 全綠（新增 F106 7 個）；assignment 目錄 597 tests 全綠。
@@ -58,7 +58,7 @@ last_updated: 2026-06-25
 ## 架構決議（spec 範圍內）
 
 - **getScoring status 映射**：`col.status === 'active' ? 'active' : 'inactive'`（任何非 'active' 一律歸 inactive），避免回傳未知狀態值給前端。排序維持依 column_name 升冪（active / inactive 混排，分群屬前端視覺）。
-- **enable 完全對稱 disable**：唯一差異 = `findOne(status='inactive')`（disable 為 'active'）、status 寫 'active'、audit action 'ENABLE'、回 `enabledAt`。月跑鎖 / cardType 範圍鎖 / 404 / entity_id 行為一致。
+- **enable 完全對稱 disable**：唯一差異 = `findOne(status='inactive')`（disable 為 'active'）、status 寫 'active'、audit action 'ENABLE'、回 `enabledAt`。月名單分派鎖 / cardType 範圍鎖 / 404 / entity_id 行為一致。
 - **前端 badge / 共 N 個維度只計 active（OQ-164-4）**：`dimensionsQuery` queryFn 端 filter active 供 Tab badge；DimensionsTab 內以 `activeCount` 供表格底部，inactive 仍完整顯示於列。
 - **enable 圖示 / 色調**：採 lucide `Power` + 綠色（`#10B981`），對稱 disable 的 `Ban` + 琥珀色，符合 UI-3「成功色調」。
 

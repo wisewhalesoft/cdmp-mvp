@@ -30,12 +30,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ## 1. 功能摘要
 
-提供業務部長 / 業務處長在月跑完成後快速查看分派結果摘要：整體統計、各部門分配量、各 CARD_LEVEL 等級分佈，以及部門實際比例與設定比例的偏差值。偏差超過 ±3% 以橘色標示（NFR-005 警示門檻）。資料來源為 `assignment_run` 基本資訊 + `assignment_run_snapshot` 的 `result` 快照聚合。
+提供業務部長 / 業務處長在月名單分派完成後快速查看分派結果摘要：整體統計、各部門分配量、各 CARD_LEVEL 等級分佈，以及部門實際比例與設定比例的偏差值。偏差超過 ±3% 以橘色標示（NFR-005 警示門檻）。資料來源為 `assignment_run` 基本資訊 + `assignment_run_snapshot` 的 `result` 快照聚合。
 
 ## 2. 使用者故事
 
 **As a** 業務部長 / 業務處長
-**I want** 在月跑完成後查看分派結果的摘要統計
+**I want** 在月名單分派完成後查看分派結果的摘要統計
 **So that** 快速確認本月名單總量、各部門分配量、各等級分佈是否符合預期，決定是否需要調整後重跑
 
 ## 3. 前置條件
@@ -48,9 +48,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ### AC-1：顯示整體摘要數據
 
-- **Given** 月跑已完成（`status = 'completed'`）
+- **Given** 月名單分派已完成（`status = 'completed'`）
 - **When** 業務部長 / 業務處長進入結果摘要頁
-- **Then** 顯示本次月跑的整體統計：
+- **Then** 顯示本次月名單分派的整體統計：
   - `run_id`、`project_workym`、`finished_at`、`duration_ms`
   - 總分派客戶數（`total_cases`）
   - 各 Stage 產出筆數（Stage 1 原始名單數 / Stage 4 最終分派數）
@@ -79,11 +79,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 - **And** 不洩漏轄區外部門 / 員工之存在性（轄區外 `deptId` 不出現在 `deptSummary[]`）
 - **And** `businessRole = 'director'`（業務部長）或 `role = 'admin'`：bypass filter，回全公司聚合（與 v1.0 原行為一致）
 
-### AC-4：月跑未完成時阻擋
+### AC-4：月名單分派未完成時阻擋
 
 - **Given** 目標 `run_id` 的 `status` 為 `pending` / `running` / `failed`
 - **When** 業務部長 / 業務處長嘗試查看結果摘要
-- **Then** 回傳 422 `ASSIGNMENT_RUN_NOT_COMPLETED`，訊息：「月跑尚未完成，結果摘要不可用」
+- **Then** 回傳 422 `ASSIGNMENT_RUN_NOT_COMPLETED`，訊息：「月名單分派尚未完成，結果摘要不可用」
 
 ## 5. API 規格
 
@@ -121,7 +121,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | E07_ROLE_NOT_ASSIGNED | `businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，依 F002 §4.6.2） |
 | 404 | ASSIGNMENT_RUN_NOT_FOUND | `run_id` 不存在 |
-| 422 | ASSIGNMENT_RUN_NOT_COMPLETED | 月跑尚未完成 |
+| 422 | ASSIGNMENT_RUN_NOT_COMPLETED | 月名單分派尚未完成 |
 
 ## 6. 商業規則
 
@@ -144,7 +144,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ## 8. 相依性
 
-- **Blocked By**：F061（月跑已完成）
+- **Blocked By**：F061（月名單分派已完成）
 - **Blocks**：無
 
 ## 9. 交叉參考

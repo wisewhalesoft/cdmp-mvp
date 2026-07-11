@@ -121,5 +121,5 @@ PROJECT_TP 改為 legacy COMPOSITE 真語意：每個 score row **同時 AND 兩
 
 ## 後續（交付後 orchestrator 負責）
 
-- **不重跑月跑 202606**（本次交付不含）；orchestrator 另跑驗收 001 tier 分佈
+- **不重跑月名單分派 202606**（本次交付不含）；orchestrator 另跑驗收 001 tier 分佈
   （預期 PROJECT_TP 復原後 73.9% 客戶不再 PROJECT_TP=0，分差缺口收斂）。

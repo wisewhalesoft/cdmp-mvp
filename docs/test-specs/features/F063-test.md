@@ -30,7 +30,7 @@ spec_version: "1.0"
 | 主要測試層 | Frontend Unit（React Testing Library） |
 | Component 路徑 | `apps/web/src/pages/assignment/_components/scoring-warning-banner.tsx`（待建立） |
 | Pattern | 同 rejection-banner.test.tsx（data-testid 驅動） |
-| warningSummary 來源 | F061 月跑回傳 reportPayload.warningSummary（JSONB 子鍵） |
+| warningSummary 來源 | F061 月名單分派回傳 reportPayload.warningSummary（JSONB 子鍵） |
 
 ---
 

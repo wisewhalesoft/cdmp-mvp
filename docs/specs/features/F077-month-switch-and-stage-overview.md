@@ -16,18 +16,18 @@ status: Draft
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 
 > **v1.4（2026-05-27 / F097 作業月語意統一 — US-143）**：依 [F097](F097-work-ym-semantics-unification.md) 與 [glossary.md](../glossary.md) 同步月份預設值語意（限定範圍）：
-> 1. **預設月份改為下月**：assignment 四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月跑觸發）之 MonthPicker 預設值由 `current_work_ym`（本月）改為 **`target_work_ym`（= `current_work_ym + 1`，下月）**；`current_work_ym` 仍由後端 `GET /api/v1/system/current-work-ym` 計算（不變），`target_work_ym` 由前端 `AssignmentWorkYmContext` 提供。影響 §1 摘要、AC-1、AC-3、AC-6、§7、§10。
-> 2. **月跑歷史頁維持獨立**：`run-history`（F065）MonthPicker 維持獨立 local state，不納入 `AssignmentWorkYmContext`。
+> 1. **預設月份改為下月**：assignment 四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月名單分派觸發）之 MonthPicker 預設值由 `current_work_ym`（本月）改為 **`target_work_ym`（= `current_work_ym + 1`，下月）**；`current_work_ym` 仍由後端 `GET /api/v1/system/current-work-ym` 計算（不變），`target_work_ym` 由前端 `AssignmentWorkYmContext` 提供。影響 §1 摘要、AC-1、AC-3、AC-6、§7、§10。
+> 2. **月名單分派歷史頁維持獨立**：`run-history`（F065）MonthPicker 維持獨立 local state，不納入 `AssignmentWorkYmContext`。
 > 3. **UI 標籤正名**：MonthPicker label 統一「分派作業月份」（[glossary §2](../glossary.md)）。
 > 4. **順修 BR-7 C-4 + AC-10 殘留舊文字**：處長轄區隔離條件由舊文字「`created_by = currentUserId` 過濾」改為 `SectionChiefScopeService.getScopeDeptCode(userId)`（對齊 BR-4 v1.4，修正 v1.3 矩陣 cell 與 AC-10 未同步之同類既有瑕疵）。§12 假設 A-4 之 `created_by` 字樣性質不同（未來月草稿隔離開放假設），維持不動留待 PO。
 > 5. **⚠️ 刻意未動**：§5.2 之 `INVALID_YM_FORMAT` / `INVALID_YM_RANGE`（400）為既有技術債（與 error-handling.md 之 `WORK_YM_INVALID_FORMAT` / `WORK_YM_OUT_OF_RANGE` 422 碼名 + status 雙重不一致）；F097 OQ-F097-01 採方案 A 不清此塊，本輪**不改碼**，僅於 §5.2 加 note 指向未來 cleanup。
 >
 > **v1.3（2026-05-21 / M01 v2.0~v2.3 Kanban 重構 + GAP-G6 收斂）**：依 US-105 v2.3 修正版 + US-130 Kanban + US-131 Detail Drawer + US-132 Ready CTA 補完角色 × 階段操作矩陣（GAP-G6 單一權威）：
 > 1. **AC-11 / BR-7 矩陣完整化**：擴增為 5 stage × 4 role 全矩陣（含 `admin` 列、`user` 整頁封鎖列）；按鈕文字以對齊 prototype `27-list-definition.html` 為準，並修正 v1.2 漏列項目。
-> 2. **AC-11 新增「查看」按鈕為跨 role / 跨 stage 通用操作**：所有 role 在所有 stage（含歷史月份、月跑鎖中）均可觸發 Detail Drawer（資料來源 `GET /assignment/list-definitions/:listNo/full-snapshot`，spec 見 [F050 v2.2 §6.2](F050-create-list-definition.md)）。
-> 3. **AC-11 修正「停」→「停用」全寫**（US-105 v2.3）；ready stage 移除 per-card 月跑觸發按鈕（US-132；月跑唯一入口為 Ready 欄頂 CTA Banner，spec 見 [F061 v1.4 §9](F061-trigger-assignment-run.md)）。
+> 2. **AC-11 新增「查看」按鈕為跨 role / 跨 stage 通用操作**：所有 role 在所有 stage（含歷史月份、月名單分派鎖中）均可觸發 Detail Drawer（資料來源 `GET /assignment/list-definitions/:listNo/full-snapshot`，spec 見 [F050 v2.2 §6.2](F050-create-list-definition.md)）。
+> 3. **AC-11 修正「停」→「停用」全寫**（US-105 v2.3）；ready stage 移除 per-card 月名單分派觸發按鈕（US-132；月名單分派唯一入口為 Ready 欄頂 CTA Banner，spec 見 [F061 v1.4 §9](F061-trigger-assignment-run.md)）。
 > 4. **AC-11 修正 `director` 可見範圍**：`admin` / `director` 均**全可見**（不過濾轄區）；v1.2 BR-4「處長 `created_by` 過濾」維持不變（修正 US-105 v1 既存 bug 之 spec 描述）。
-> 5. **BR-7 矩陣表格之 5 個橫切條件統一收斂**（歷史月份 / 月跑鎖 / 已停用 / 處長轄區 / 「查看」按鈕通用性）以避免每個 cell 重複描述。
+> 5. **BR-7 矩陣表格之 5 個橫切條件統一收斂**（歷史月份 / 月名單分派鎖 / 已停用 / 處長轄區 / 「查看」按鈕通用性）以避免每個 cell 重複描述。
 > 6. **新增 BR-10 `user` 整頁封鎖**：`role='user'`（business_role 不論值）一律封鎖整頁，顯示「名單定義為部長 / 處長 / Admin 專屬功能」說明卡。
 >
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-104 + US-105 + AD-E07 v3.0 一致性決議完整重建；Guard 為 `DirectorOrSectionChiefGuard`（清單瀏覽開放至處長）；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議。
@@ -63,7 +63,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 - 處長僅見本轄區名單（依 `created_by` 過濾），且不顯示 M02 計分設定導覽
 - 提供「角色 × 階段操作矩陣」單一權威，供 F050 v2.0 / F078 / F079 / F080 / F081 / F082 / F084 / F085 / F086 / F087 / F089 共用
 
-**`current_work_ym` 規則（OQ-C-01 確認）**：每月 1 號 0:00 切換為該月（YYYYMM）；前端讀取後端提供之 `current_work_ym` 值，不自行計算。**`target_work_ym`（分派作業月份）= `current_work_ym + 1`（預設，v1.4 / F097）**，由前端 `AssignmentWorkYmContext` 管理，涵蓋四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月跑觸發）；月跑歷史頁（F065）維持獨立 local state
+**`current_work_ym` 規則（OQ-C-01 確認）**：每月 1 號 0:00 切換為該月（YYYYMM）；前端讀取後端提供之 `current_work_ym` 值，不自行計算。**`target_work_ym`（分派作業月份）= `current_work_ym + 1`（預設，v1.4 / F097）**，由前端 `AssignmentWorkYmContext` 管理，涵蓋四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月名單分派觸發）；月名單分派歷史頁（F065）維持獨立 local state
 
 ## 2. 使用者故事
 
@@ -95,7 +95,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 
 - **Given** 使用者選擇歷史月份（`< current_work_ym`）
 - **When** 清單頁顯示該月份名單
-- **Then** 所有操作按鈕（新增、編輯、停用、推進、Rollback、觸發月跑）均**完全不渲染**
+- **Then** 所有操作按鈕（新增、編輯、停用、推進、Rollback、觸發月名單分派）均**完全不渲染**
 - **And** 頁面頂部顯示提示條：「歷史月份資料為唯讀，不可修改」
 - **And** 若透過 API 嘗試對歷史月份名單寫入，後端回 403 `LIST_HISTORICAL_READONLY`
 
@@ -106,7 +106,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 - **Then** `current_work_ym = YYYYMM of today`（例：2026-06-15 → `202606`）
 - **And** 前端透過 GET `/api/v1/system/current-work-ym` 取得，不自行計算
 - **And** 若後端存在覆蓋 config（`WORK_YM_SWITCH_DAY` / `OVERRIDE_CURRENT_WORK_YM`），以 config 為準；否則預設每月 1 號 0:00 切換
-- **And**（v1.4 / F097）`target_work_ym` = `current_work_ym + 1`（預設，跨年正確：12 月 → 次年 1 月）；由前端 `AssignmentWorkYmContext` 管理，涵蓋四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月跑觸發）；月跑歷史頁（F065）維持獨立 local state，不共享此 Context（詳 [F097 §5.1](F097-work-ym-semantics-unification.md)）
+- **And**（v1.4 / F097）`target_work_ym` = `current_work_ym + 1`（預設，跨年正確：12 月 → 次年 1 月）；由前端 `AssignmentWorkYmContext` 管理，涵蓋四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月名單分派觸發）；月名單分派歷史頁（F065）維持獨立 local state，不共享此 Context（詳 [F097 §5.1](F097-work-ym-semantics-unification.md)）
 
 ### AC-4：目前作業月份保有完整操作能力
 
@@ -129,7 +129,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 - **When** 月份切換器選擇變更
 - **Then** 頁面內容刷新為選定月份的名單清單
 - **And** URL 更新（如 query param `?ym=202506`），使用者可直接分享連結
-- **And**（v1.4 / F097）切換同步更新共享 `target_work_ym`（`AssignmentWorkYmContext`），其餘三頁（準備完成摘要 / Stage 0 試算 / 月跑觸發）下次渲染 / fetch 使用更新後之月份；月跑歷史頁不受影響
+- **And**（v1.4 / F097）切換同步更新共享 `target_work_ym`（`AssignmentWorkYmContext`），其餘三頁（準備完成摘要 / Stage 0 試算 / 月名單分派觸發）下次渲染 / fetch 使用更新後之月份；月名單分派歷史頁不受影響
 
 ### AC-7：清單頁顯示每份名單之當前階段
 
@@ -166,10 +166,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 - **Given** 使用者在 M01 名單定義主頁（Kanban 主頁，見 [F048 v2.0](F048-view-list-definition.md)）查看名單卡片
 - **When** 頁面渲染卡片操作按鈕
 - **Then** 各名單卡片顯示的操作按鈕依「stage × role」矩陣決定（5 stage × 4 role 完整矩陣，詳見 §6 BR-7 矩陣表）
-- **And** 「查看」按鈕為跨 role / 跨 stage / 跨歷史月份 / 跨月跑鎖中之**通用操作**：所有 role（含 `user`，但 `user` 整頁已封鎖故不適用）在所有 stage（draft / dept_ratio / personnel_ratio / approval / ready）皆可點擊「查看」觸發 Detail Drawer；資料來源 `GET /api/v1/assignment/list-definitions/:listNo/full-snapshot`，spec 見 [F050 v2.2 §6.2](F050-create-list-definition.md)
-- **And** `ready` stage 無 per-card 月跑觸發按鈕（v1.3 / US-132 GAP-G3）；月跑唯一入口為 Ready 欄頂 CTA Banner（spec 見 [F061 v1.4 §9](F061-trigger-assignment-run.md)）
+- **And** 「查看」按鈕為跨 role / 跨 stage / 跨歷史月份 / 跨月名單分派鎖中之**通用操作**：所有 role（含 `user`，但 `user` 整頁已封鎖故不適用）在所有 stage（draft / dept_ratio / personnel_ratio / approval / ready）皆可點擊「查看」觸發 Detail Drawer；資料來源 `GET /api/v1/assignment/list-definitions/:listNo/full-snapshot`，spec 見 [F050 v2.2 §6.2](F050-create-list-definition.md)
+- **And** `ready` stage 無 per-card 月名單分派觸發按鈕（v1.3 / US-132 GAP-G3）；月名單分派唯一入口為 Ready 欄頂 CTA Banner（spec 見 [F061 v1.4 §9](F061-trigger-assignment-run.md)）
 - **And** `draft` stage 之「停用」按鈕為**全寫**（不可縮寫為「停」；v1.3 / US-105 v2.3 修正）
-- **And** 矩陣表中之 5 個橫切條件（歷史月份 / 月跑鎖中 / 已停用名單 / 處長轄區 / 「查看」按鈕通用性）統一收斂於 §6 BR-7 表格下方，避免每 cell 重複描述
+- **And** 矩陣表中之 5 個橫切條件（歷史月份 / 月名單分派鎖中 / 已停用名單 / 處長轄區 / 「查看」按鈕通用性）統一收斂於 §6 BR-7 表格下方，避免每 cell 重複描述
 
 ### AC-12：階段狀態顯示支援歷史月份
 
@@ -271,17 +271,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 | `dept_ratio` | 設定（F079） / 退回（F081） / 查看 | 設定（F079） / 退回（F081） / 查看 | 查看 | **整頁封鎖**（BR-10） |
 | `personnel_ratio` | 檢視（F082 唯讀進入） / 退回（F085） / 查看 / 快速模板（F083） | 檢視（F082 唯讀進入） / 退回（F085） / 查看 / 快速模板（F083） | **設定本部門**（F082，限轄區） / 查看 | **整頁封鎖**（BR-10） |
 | `approval` | 核准（F086） / 拒絕（F087） / 查看 | 核准（F086） / 拒絕（F087） / 查看 | 查看 | **整頁封鎖**（BR-10） |
-| `ready` | 退回（F089） / 查看（**無** per-card 月跑觸發按鈕） | 退回（F089） / 查看（**無** per-card 月跑觸發按鈕） | 查看 | **整頁封鎖**（BR-10） |
+| `ready` | 退回（F089） / 查看（**無** per-card 月名單分派觸發按鈕） | 退回（F089） / 查看（**無** per-card 月名單分派觸發按鈕） | 查看 | **整頁封鎖**（BR-10） |
 
 **5 個橫切條件（套用於上述所有 cell）**：
 
 | # | 條件 | 行為 |
 |---|---|---|
 | C-1 | **歷史月份**（`ym < current_work_ym`） | 所有 role 之**寫入按鈕完全不渲染**（編輯 / 推進 / 停用 / 設定 / 退回 / 核准 / 拒絕 / 快速模板）；僅保留「查看」按鈕；頁面頂部紅色「歷史月份資料為唯讀」橫幅（AC-2） |
-| C-2 | **月跑鎖中**（`AssignmentRun.status IN ('pending','running')`） | 所有 role 之**寫入按鈕 disabled** + hover tooltip「分派執行中，無法 {操作}」；「查看」按鈕**不受影響**；Ready 欄頂 CTA Banner 改琥珀色 disabled 樣式（spec 見 [F061 v1.4 §9](F061-trigger-assignment-run.md)） |
+| C-2 | **月名單分派鎖中**（`AssignmentRun.status IN ('pending','running')`） | 所有 role 之**寫入按鈕 disabled** + hover tooltip「分派執行中，無法 {操作}」；「查看」按鈕**不受影響**；Ready 欄頂 CTA Banner 改琥珀色 disabled 樣式（spec 見 [F061 v1.4 §9](F061-trigger-assignment-run.md)） |
 | C-3 | **已停用名單**（`status = 'inactive'`） | Kanban 主視圖**不渲染**該卡片（隱藏）；若 [F048 v2.0](F048-view-list-definition.md) 提供「已停用」filter 顯示時，所有 role 僅顯示「查看」按鈕，無任何寫入操作 |
 | C-4 | **處長轄區隔離**（`role = 'section_chief'`） | 後端依 `SectionChiefScopeService.getScopeDeptCode(userId)`（反查 `users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職` 取 dept_code，再以 `ob_dept_pct` EXISTS 過濾）篩選 Kanban 卡片來源；非本轄區卡片**不渲染於 Kanban**；本轄區卡片之 cell 按鈕仍依矩陣決定（**v1.4 / F097 順修**：對齊 BR-4 v1.4，**廢除** v1.3 殘留之「`created_by = currentUserId` 過濾」舊文字——chicken-and-egg：處長不會建名單，永遠 0 match） |
-| C-5 | **「查看」按鈕通用性** | 「查看」按鈕在所有 role / 所有 stage / 歷史月份 / 月跑鎖中**皆可用**（不受 C-1 / C-2 影響）；觸發 Detail Drawer，資料來源 `GET /assignment/list-definitions/:listNo/full-snapshot`（spec 見 [F050 v2.2 §6.2](F050-create-list-definition.md)），不跳頁 |
+| C-5 | **「查看」按鈕通用性** | 「查看」按鈕在所有 role / 所有 stage / 歷史月份 / 月名單分派鎖中**皆可用**（不受 C-1 / C-2 影響）；觸發 Detail Drawer，資料來源 `GET /assignment/list-definitions/:listNo/full-snapshot`（spec 見 [F050 v2.2 §6.2](F050-create-list-definition.md)），不跳頁 |
 
 | BR-8 | **未來月份預先建立草稿**：限部長 / Admin；其他階段操作（推進 / 設定比例）於未來月份不受限（但依矩陣決定可否顯示）|
 | BR-9 | **M02 對處長隱藏（OQ-C-03）**：M02 計分設定之頂部 Tab + 側邊 Nav 入口連結對處長**完全隱藏**；F077 對應 SidebarNav 元件須依 `business_role` 條件渲染 |
@@ -293,7 +293,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
   - 位於頁面頂部（Sticky）
   - 元件：下拉選單或年月選擇器；格式「YYYY年MM月」
   - **label / placeholder 統一「分派作業月份」**（v1.4 / F097，[glossary §2](../glossary.md)）；不出現「作業年月」/「當月」/「本月」等舊標籤
-  - **預設顯示 `target_work_ym`（= `current_work_ym + 1`，下月；v1.4 / F097）**，由前端 `AssignmentWorkYmContext` 四頁共享；月跑歷史頁（F065）獨立 local state，預設值語意不同
+  - **預設顯示 `target_work_ym`（= `current_work_ym + 1`，下月；v1.4 / F097）**，由前端 `AssignmentWorkYmContext` 四頁共享；月名單分派歷史頁（F065）獨立 local state，預設值語意不同
   - 範圍 `current_work_ym ± 12`，超出灰色不可選
   - 歷史月份顯示「歷史月份唯讀」灰色 banner
   - 未來月份顯示「未來月份預先建立」藍色 banner（限部長 / Admin）
@@ -411,5 +411,5 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-27
 | v1.0 | 2026-05-15 | 初版（取代 US-104 + US-105，E07 補修批次 4）：合併兩 story 為「月份切換 + 階段總覽」單一 spec；新增 `current_work_ym` 計算服務；定義階段 ENUM + 中文標籤 + 配色；定義角色 × 階段操作矩陣（BR-7）作為其他 spec 之單一權威；處長 M02 隱藏（OQ-C-03） |
 | v1.1 | 2026-05-16 | 補完角色 × 階段操作矩陣（明列 F082 / F083 / F087 / F088 / F089）與 `current_work_ym` 計算規則之單一權威說明 |
 | v1.2 | 2026-05-16 | **救援重寫**：前一輪編碼事故損毀本檔內容，依 US-104 + US-105 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorOrSectionChiefGuard`（廢除 `SalesManagerGuard`）；保留 v1.0 / v1.1 所有設計決議 |
-| v1.3 | 2026-05-21 | **M01 v2.0~v2.3 Kanban 重構 + GAP-G6 收斂**：(1) AC-11 完整化為 5 stage × 4 role 全矩陣，含 `admin` 列、`user` 整頁封鎖列；(2) AC-11 新增「查看」按鈕為跨 role / 跨 stage 通用操作，觸發 Detail Drawer（資料來源 F050 v2.2 §6.2 `/full-snapshot`）；(3) AC-11 修正「停」→「停用」全寫（US-105 v2.3）；ready stage 移除 per-card 月跑觸發按鈕（US-132），月跑唯一入口為 Ready 欄頂 CTA Banner（F061 v1.4 §9）；(4) 修正 `director` 全可見（不過濾轄區，BR-4 處長轄區隔離不變）；(5) BR-7 矩陣 5 個橫切條件統一收斂（C-1 歷史月份 / C-2 月跑鎖 / C-3 已停用 / C-4 處長轄區 / C-5「查看」通用性）；(6) 新增 BR-10 `user` 整頁封鎖（對應 US-130 AC-7） |
-| v1.4 | 2026-05-27 | **F097 作業月語意統一（US-143，限定範圍）**：(1) 月份切換器預設值由 `current_work_ym`（本月）改為 `target_work_ym`（= `current_work_ym + 1`，下月），由前端 `AssignmentWorkYmContext` 四頁共享（影響 §1 / AC-1 / AC-3 / AC-6 / §7 / §10）；月跑歷史頁維持獨立 local state；(2) MonthPicker label 正名「分派作業月份」；(3) 順修 BR-7 C-4 + AC-10 殘留舊文字「`created_by = currentUserId` 過濾」→ `SectionChiefScopeService.getScopeDeptCode(userId)`（對齊 BR-4 v1.4，§12 A-4 維持不動）；(4) §5.2 之 `INVALID_YM_FORMAT` / `INVALID_YM_RANGE`（400）既有技術債**不於本輪改碼**，僅加 note 指向未來 cleanup（F097 OQ-F097-01 方案 A）。詳 [F097](F097-work-ym-semantics-unification.md) |
+| v1.3 | 2026-05-21 | **M01 v2.0~v2.3 Kanban 重構 + GAP-G6 收斂**：(1) AC-11 完整化為 5 stage × 4 role 全矩陣，含 `admin` 列、`user` 整頁封鎖列；(2) AC-11 新增「查看」按鈕為跨 role / 跨 stage 通用操作，觸發 Detail Drawer（資料來源 F050 v2.2 §6.2 `/full-snapshot`）；(3) AC-11 修正「停」→「停用」全寫（US-105 v2.3）；ready stage 移除 per-card 月名單分派觸發按鈕（US-132），月名單分派唯一入口為 Ready 欄頂 CTA Banner（F061 v1.4 §9）；(4) 修正 `director` 全可見（不過濾轄區，BR-4 處長轄區隔離不變）；(5) BR-7 矩陣 5 個橫切條件統一收斂（C-1 歷史月份 / C-2 月名單分派鎖 / C-3 已停用 / C-4 處長轄區 / C-5「查看」通用性）；(6) 新增 BR-10 `user` 整頁封鎖（對應 US-130 AC-7） |
+| v1.4 | 2026-05-27 | **F097 作業月語意統一（US-143，限定範圍）**：(1) 月份切換器預設值由 `current_work_ym`（本月）改為 `target_work_ym`（= `current_work_ym + 1`，下月），由前端 `AssignmentWorkYmContext` 四頁共享（影響 §1 / AC-1 / AC-3 / AC-6 / §7 / §10）；月名單分派歷史頁維持獨立 local state；(2) MonthPicker label 正名「分派作業月份」；(3) 順修 BR-7 C-4 + AC-10 殘留舊文字「`created_by = currentUserId` 過濾」→ `SectionChiefScopeService.getScopeDeptCode(userId)`（對齊 BR-4 v1.4，§12 A-4 維持不動）；(4) §5.2 之 `INVALID_YM_FORMAT` / `INVALID_YM_RANGE`（400）既有技術債**不於本輪改碼**，僅加 note 指向未來 cleanup（F097 OQ-F097-01 方案 A）。詳 [F097](F097-work-ym-semantics-unification.md) |

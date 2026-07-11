@@ -82,9 +82,9 @@
 - **Then** 篩選條件顯示（唯讀），無任何「新增欄位」「修改值」「刪除條件」等操作控件
 - **And** 若透過 API 嘗試修改篩選條件，後端回 422（「只有草稿階段才能修改篩選條件」）
 
-### AC-7：月跑執行中禁止推進
+### AC-7：月名單分派執行中禁止推進
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 部長或 Admin 嘗試點擊「推進」按鈕
 - **Then** 推進按鈕為停用狀態，hover 顯示提示「分派執行中，無法推進名單定義」
 
@@ -94,7 +94,7 @@
 
 - `stage` 欄位更新：`ob_list_definition.stage = 'dept_ratio'`（從 'draft'）
 - 「篩選條件鎖定」實作：後端依 stage 判斷，若 stage != 'draft' 則拒絕篩選條件寫入 API；前端依 stage 決定是否顯示編輯控件
-- 月跑中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
+- 月名單分派中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
 - 推進後的下一步操作（部門比例設定）由 E 組 Story（US-109~111）定義，本 Story 不含部門比例設定邏輯
 
 ---
@@ -125,7 +125,7 @@
 - **When**：部長嘗試呼叫修改篩選條件 API
 - **Then**：後端回 422「只有草稿階段才能修改篩選條件」
 
-### TC-108-05：月跑中禁止推進
+### TC-108-05：月名單分派中禁止推進
 
 - **Given**：AssignmentRun status = 'running'；LIST_NO = 'OB202506001'，stage = 'draft'
 - **When**：部長嘗試點擊「推進」
@@ -148,7 +148,7 @@
 - [ ] 篩選條件為空阻擋測試（TC-108-02）
 - [ ] 處長被拒測試（TC-108-03）
 - [ ] 推進後篩選條件鎖定測試（TC-108-04）
-- [ ] 月跑中禁止推進測試（TC-108-05）
+- [ ] 月名單分派中禁止推進測試（TC-108-05）
 - [ ] AssignmentAuditLog 寫入測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過

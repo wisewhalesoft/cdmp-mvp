@@ -30,7 +30,7 @@ last_updated: 2026-05-14
 | 同 transaction 驗證策略 | POST 成功後，同一測試案例查詢 ob_card_type 與 ob_levelcard_version 兩張表，確認均新增一筆（無需 mock transaction，直接 DB 查詢驗證） |
 | v1 初值驗證 | ob_levelcard_version.sdate = 今日 YYYYMMDD、edate = '20991231'、status = 'active'；使用 `new Date().toISOString().substring(0,10).replace(/-/g,'')` 計算期望值 |
 | Rollback 守護 | TC-F070-17 需模擬 ob_levelcard_version INSERT 失敗；建議用 test-only service mock 攔截 TypeORM save；SQLite 環境 savepoint 行為見 RISK-F070-01 |
-| 月跑鎖 seed 格式 | 所有月跑鎖 TC 必須 seed AssignmentRun 全部 4 個 NOT NULL 欄位（run_id / project_workym / triggered_by / created_at），缺一即 SQLite constraint failed |
+| 月名單分派鎖 seed 格式 | 所有月名單分派鎖 TC 必須 seed AssignmentRun 全部 4 個 NOT NULL 欄位（run_id / project_workym / triggered_by / created_at），缺一即 SQLite constraint failed |
 
 ---
 
@@ -40,7 +40,7 @@ last_updated: 2026-05-14
 
 | 項目 | 內容 |
 |------|------|
-| Given | ob_card_type 無 'X1' 紀錄；ob_code_df 有 tbl_id='PROD_KIND'、tbl_cd='01' 啟用期間內紀錄；無月跑鎖；SM Token |
+| Given | ob_card_type 無 'X1' 紀錄；ob_code_df 有 tbl_id='PROD_KIND'、tbl_cd='01' 啟用期間內紀錄；無月名單分派鎖；SM Token |
 | When | POST /api/v1/assignment/scoring/card-types，body = { cardType:'X1', cardName:'測試卡', prodKind:'01' } |
 | Then | HTTP 201；response 含 cardType='X1'、cardName='測試卡'、prodKind='01'、prodKindName='汽車'、status='active'、cardVersion=1；DB ob_card_type 新增 1 筆；DB ob_levelcard_version 新增 1 筆（card_type='X1'、card_version=1、status='active'） |
 | 驗證步驟 | 1. 確認 HTTP 201<br>2. 確認 response.cardType='X1'、cardVersion=1<br>3. 查詢 DB：ob_card_type WHERE card_type='X1' → 1 筆，status='active'<br>4. 查詢 DB：ob_levelcard_version WHERE card_type='X1' → 1 筆，card_version=1，status='active'<br>5. 確認 ob_levelcard_version.edate='20991231' |
@@ -49,11 +49,11 @@ last_updated: 2026-05-14
 
 | 項目 | 內容 |
 |------|------|
-| Given | ob_card_type 已有 cardType='H'（status='active'）；無月跑鎖；SM Token |
+| Given | ob_card_type 已有 cardType='H'（status='active'）；無月名單分派鎖；SM Token |
 | When | POST /api/v1/assignment/scoring/card-types，body = { cardType:'H', cardName:'重複測試', prodKind:'01' } |
 | Then | HTTP 422；errorCode='CARD_TYPE_DUPLICATE'；訊息含 'H'；DB 無新增任何紀錄 |
 
-### AC-6：月跑執行中禁止新增
+### AC-6：月名單分派執行中禁止新增
 
 | 項目 | 內容 |
 |------|------|
@@ -69,7 +69,7 @@ last_updated: 2026-05-14
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TC-F070-01 | POST 成功：ob_card_type + ob_levelcard_version 同 transaction 建立 | AC-1、BR-1 | Integration | ob_card_type 無 X1；ob_code_df 有 prodKind='01' 啟用紀錄；無月跑鎖；SM Token | POST { cardType:'X1', cardName:'測試卡', prodKind:'01' } | HTTP 201；DB ob_card_type 1 筆（X1）；DB ob_levelcard_version 1 筆（X1 v1 active） |
+| TC-F070-01 | POST 成功：ob_card_type + ob_levelcard_version 同 transaction 建立 | AC-1、BR-1 | Integration | ob_card_type 無 X1；ob_code_df 有 prodKind='01' 啟用紀錄；無月名單分派鎖；SM Token | POST { cardType:'X1', cardName:'測試卡', prodKind:'01' } | HTTP 201；DB ob_card_type 1 筆（X1）；DB ob_levelcard_version 1 筆（X1 v1 active） |
 | TC-F070-02 | v1 版本初值正確（sdate = 今日、edate = '20991231'、status = 'active'） | AC-1、BR-3 | Integration | 同 TC-F070-01 成功後 | 查詢 ob_levelcard_version WHERE card_type='X1' | sdate = 今日（YYYYMMDD 格式）；edate='20991231'；status='active'；card_version=1 |
 | TC-F070-03 | POST 成功後 audit_log 記錄 CREATE | AC-1、BR-6 | Integration | TC-F070-01 成功後 | 查詢 assignment_audit_log 最新一筆 | action='CREATE'；entity_type='ob_card_type'；entity_id='X1'；before_value=null；after_value 含 cardType='X1' |
 
@@ -77,18 +77,18 @@ last_updated: 2026-05-14
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TC-F070-04 | 重複 cardType（active 紀錄存在）回 422 | AC-2、BR-2 | Integration | ob_card_type 已有 H active；無月跑鎖；SM Token | POST { cardType:'H', cardName:'重複', prodKind:'01' } | HTTP 422；errorCode='CARD_TYPE_DUPLICATE'；DB ob_card_type 無新增 |
-| TC-F070-05 | cardType 格式違規（含小寫字母）回 422 | AC-4、data-model CHECK | Integration | 無月跑鎖；SM Token | POST { cardType:'x1', cardName:'小寫', prodKind:'01' } | HTTP 422；errorCode='VALIDATION_ERROR'；DB 無寫入 |
-| TC-F070-06 | cardType 超過 5 字元回 422 | AC-4 | Integration | 無月跑鎖；SM Token | POST { cardType:'TOOLONG', cardName:'超長', prodKind:'01' } | HTTP 422；errorCode='VALIDATION_ERROR'；DB 無寫入 |
-| TC-F070-08 | cardType 為空（必填驗證）回 422 | AC-4 | Integration | 無月跑鎖；SM Token | POST { cardType:'', cardName:'測試', prodKind:'01' } | HTTP 422；errorCode='VALIDATION_ERROR'；details 含 cardType 欄位說明 |
-| TC-F070-09 | prodKind 不在 ob_code_df 啟用期間內紀錄回 422 | AC-5 | Integration | ob_code_df 無 tbl_cd='99' 啟用紀錄；無月跑鎖；SM Token | POST { cardType:'Y1', cardName:'測試', prodKind:'99' } | HTTP 422；errorCode='VALIDATION_ERROR'；details 含 prodKind 欄位說明 |
+| TC-F070-04 | 重複 cardType（active 紀錄存在）回 422 | AC-2、BR-2 | Integration | ob_card_type 已有 H active；無月名單分派鎖；SM Token | POST { cardType:'H', cardName:'重複', prodKind:'01' } | HTTP 422；errorCode='CARD_TYPE_DUPLICATE'；DB ob_card_type 無新增 |
+| TC-F070-05 | cardType 格式違規（含小寫字母）回 422 | AC-4、data-model CHECK | Integration | 無月名單分派鎖；SM Token | POST { cardType:'x1', cardName:'小寫', prodKind:'01' } | HTTP 422；errorCode='VALIDATION_ERROR'；DB 無寫入 |
+| TC-F070-06 | cardType 超過 5 字元回 422 | AC-4 | Integration | 無月名單分派鎖；SM Token | POST { cardType:'TOOLONG', cardName:'超長', prodKind:'01' } | HTTP 422；errorCode='VALIDATION_ERROR'；DB 無寫入 |
+| TC-F070-08 | cardType 為空（必填驗證）回 422 | AC-4 | Integration | 無月名單分派鎖；SM Token | POST { cardType:'', cardName:'測試', prodKind:'01' } | HTTP 422；errorCode='VALIDATION_ERROR'；details 含 cardType 欄位說明 |
+| TC-F070-09 | prodKind 不在 ob_code_df 啟用期間內紀錄回 422 | AC-5 | Integration | ob_code_df 無 tbl_cd='99' 啟用紀錄；無月名單分派鎖；SM Token | POST { cardType:'Y1', cardName:'測試', prodKind:'99' } | HTTP 422；errorCode='VALIDATION_ERROR'；details 含 prodKind 欄位說明 |
 
-### C. API Integration Tests — 月跑鎖
+### C. API Integration Tests — 月名單分派鎖
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TC-F070-10 | 月跑 pending 時 POST 回 409 | AC-6、BR-5 | Integration | assignment_run(run_id='r1', project_workym='202604', triggered_by='u1', created_at=NOW(), status='pending')；SM Token | POST { cardType:'N1', cardName:'新增', prodKind:'01' } | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
-| TC-F070-11 | 月跑 running 時 POST 回 409 | AC-6、BR-5 | Integration | assignment_run(run_id='r2', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；SM Token | POST { cardType:'N2', cardName:'新增', prodKind:'01' } | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
+| TC-F070-10 | 月名單分派 pending 時 POST 回 409 | AC-6、BR-5 | Integration | assignment_run(run_id='r1', project_workym='202604', triggered_by='u1', created_at=NOW(), status='pending')；SM Token | POST { cardType:'N1', cardName:'新增', prodKind:'01' } | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
+| TC-F070-11 | 月名單分派 running 時 POST 回 409 | AC-6、BR-5 | Integration | assignment_run(run_id='r2', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；SM Token | POST { cardType:'N2', cardName:'新增', prodKind:'01' } | HTTP 409；errorCode='ASSIGNMENT_RUN_ALREADY_RUNNING' |
 
 ### D. API Integration Tests — 認證
 
@@ -115,7 +115,7 @@ last_updated: 2026-05-14
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TC-F070-12 | 月跑鎖定時「新增」按鈕 disabled 且 hover tooltip 存在 | AC-6 | Frontend Unit | isLocked=true（月跑 running 狀態注入） | 渲染 Tab 1 | 「新增計分卡類型」按鈕 disabled=true；按鈕有 title 或 aria-label 含「分派執行中」或等效說明文字 |
+| TC-F070-12 | 月名單分派鎖定時「新增」按鈕 disabled 且 hover tooltip 存在 | AC-6 | Frontend Unit | isLocked=true（月名單分派 running 狀態注入） | 渲染 Tab 1 | 「新增計分卡類型」按鈕 disabled=true；按鈕有 title 或 aria-label 含「分派執行中」或等效說明文字 |
 | TC-F070-13 | POST 成功後 Modal 關閉、清單刷新、新紀錄自動選中 | AC-1 | Frontend Unit | stub POST 回傳 HTTP 201（cardType='X1'）；stub GET /card-types 第二次呼叫回傳含 X1 的更新清單 | 填寫 Modal 表單並點擊「確認新增」 | Modal 不再渲染（closed）；Tab 1 清單顯示 X1；X1 列有高亮（自動選中） |
 | TC-F070-14 | 422 CARD_TYPE_DUPLICATE 時 Modal 不關閉，顯示行內錯誤 | AC-2 | Frontend Unit | stub POST 回傳 HTTP 422 CARD_TYPE_DUPLICATE | 送出 cardType='H' 的新增請求 | Modal 仍存在（未關閉）；cardType 輸入欄位下方顯示錯誤訊息（含 'H' 或「已存在」）；API 未被再次呼叫 |
 
@@ -144,12 +144,12 @@ VALUES ('OB', 'PROD_KIND', '01', '汽車', '20000101', '20991231');
 INSERT INTO ob_card_type (card_type, card_name, prod_kind, status, created_at, created_by, updated_at, updated_by)
 VALUES ('H', '期中', '01', 'active', NOW(), 'system', NOW(), 'system');
 
--- 月跑鎖 seed（TC-F070-10，pending）
+-- 月名單分派鎖 seed（TC-F070-10，pending）
 -- 注意：必須 4 個 NOT NULL 欄位全填
 INSERT INTO assignment_run (run_id, project_workym, triggered_by, created_at, status)
 VALUES ('run-pending-001', '202604', 'test-user-id', NOW(), 'pending');
 
--- 月跑鎖 seed（TC-F070-11，running）
+-- 月名單分派鎖 seed（TC-F070-11，running）
 INSERT INTO assignment_run (run_id, project_workym, triggered_by, created_at, status)
 VALUES ('run-running-001', '202604', 'test-user-id', NOW(), 'running');
 ```
@@ -170,7 +170,7 @@ VALUES ('run-running-001', '202604', 'test-user-id', NOW(), 'running');
 |------|------------|------|
 | TC-F070-01~03（同 tx + audit_log） | 高 | Supertest + DB 查詢；sdate 用今日日期動態計算 |
 | TC-F070-04~09（驗證錯誤） | 高 | 直接 API 呼叫驗證 HTTP status + errorCode |
-| TC-F070-10、11（月跑鎖） | 高 | seed AssignmentRun 含 4 欄 NOT NULL |
+| TC-F070-10、11（月名單分派鎖） | 高 | seed AssignmentRun 含 4 欄 NOT NULL |
 | TC-F070-17（rollback 守護） | 中 | SQLite savepoint 行為待確認（RISK-F070-01）；建議優先以 PostgreSQL Test Container 執行 |
 | TC-F070-12~14（Frontend Unit） | 高 | RTL；isLocked prop 注入；stub API |
 

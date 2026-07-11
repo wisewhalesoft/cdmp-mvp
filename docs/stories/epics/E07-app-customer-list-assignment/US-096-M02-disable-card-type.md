@@ -13,13 +13,13 @@
 
 **As a** 業務主管
 **I want** 停用已不再使用的計分卡類型，並自動清除其所有下游計分設定紀錄
-**So that** 系統不再將該 CARD_TYPE 納入月跑計算，且資料保持一致，不留孤兒紀錄
+**So that** 系統不再將該 CARD_TYPE 納入月名單分派計算，且資料保持一致，不留孤兒紀錄
 
 ---
 
 ## 背景說明
 
-停用 CARD_TYPE 屬於**不可復原的破壞性操作**，需二次確認並顯示影響範圍。級聯刪除範圍限定為計分設定的 5 張下游表（`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` / `ob_levelcard_level` / `ob_tier`），不影響歷史月跑快照（`assignment_run_snapshot`）及 `ob_pool_data_list` 歷史分派結果。`ob_card_type` 採 hard delete，操作完整紀錄寫入 `assignment_audit_log` 之 before_payload，供歷史追溯。
+停用 CARD_TYPE 屬於**不可復原的破壞性操作**，需二次確認並顯示影響範圍。級聯刪除範圍限定為計分設定的 5 張下游表（`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` / `ob_levelcard_level` / `ob_tier`），不影響歷史月名單分派快照（`assignment_run_snapshot`）及 `ob_pool_data_list` 歷史分派結果。`ob_card_type` 採 hard delete，操作完整紀錄寫入 `assignment_audit_log` 之 before_payload，供歷史追溯。
 
 ---
 
@@ -38,7 +38,7 @@
 
 - **Given** `ob_list_definition` 中有 status = 'active' 的名單定義引用了該 card_type
 - **When** 系統開啟確認對話框
-- **Then** 對話框額外顯示警示文字：「注意：該計分卡仍有 N 筆有效名單定義（ob_list_definition）。停用後這些名單定義的月跑將因無計分設定而無法執行，請確認已妥善處理相關名單定義後再停用」
+- **Then** 對話框額外顯示警示文字：「注意：該計分卡仍有 N 筆有效名單定義（ob_list_definition）。停用後這些名單定義的月名單分派將因無計分設定而無法執行，請確認已妥善處理相關名單定義後再停用」
 - **And** 「確認停用」按鈕仍可點擊（不強制攔截，但需業務主管自行評估風險）
 
 ### AC-3：確認後執行級聯刪除（Hard Delete）
@@ -60,7 +60,7 @@
 - **Given** 停用操作成功執行
 - **When** 系統完成 transaction
 - **Then** 以下資料**不被刪除，保持原狀**：
-  - `assignment_run_snapshot`：歷史月跑快照中包含該 CARD_TYPE 的 payload 保留，供歷史查詢（US-086）
+  - `assignment_run_snapshot`：歷史月名單分派快照中包含該 CARD_TYPE 的 payload 保留，供歷史查詢（US-086）
   - `ob_pool_data_list`：歷史分派結果中 card_type / tier_level 欄位值保留
   - `ob_list_definition`：名單定義紀錄保留（包含引用該 CARD_TYPE 的 active 名單定義，交由業務主管自行處理）
 
@@ -72,7 +72,7 @@
 - **And** 若該 CARD_TYPE 是目前 Tab 1 的選中狀態，則清除選中，Tab 2~5 顯示空狀態提示：「請選擇計分卡類型以查看設定」
 - **And** 若清單仍有其他 CARD_TYPE，頁面不自動選中任何一筆（由業務主管主動選擇）
 
-### AC-6：月跑執行中禁止停用
+### AC-6：月名單分派執行中禁止停用
 
 - **Given** 目前 `assignment_run` 有 status IN ('pending', 'running') 的紀錄
 - **When** 業務主管在 Tab 1 查看清單
@@ -89,12 +89,12 @@
   - `ob_levelcard_level WHERE card_type = :cardType AND card_version IN (SELECT card_version FROM ob_levelcard_version WHERE card_type = :cardType)`
   - `ob_levelcard_column WHERE card_type = :cardType`
   - `ob_levelcard_version WHERE card_type = :cardType`
-- **ob_card_type 本身**：hard delete，紀錄完全清除；歷史追溯透過 F066 月跑快照（`assignment_run_snapshot`）查詢
+- **ob_card_type 本身**：hard delete，紀錄完全清除；歷史追溯透過 F066 月名單分派快照（`assignment_run_snapshot`）查詢
 - **排除 scope**：`ob_pool_data_list`、`assignment_run_snapshot`、`ob_list_definition`（歷史資料保留原則）
 - **刪除順序**：依 FK 約束順序由子表至父表（ob_tier / ob_levelcard_score → ob_levelcard_level → ob_levelcard_column → ob_levelcard_version → ob_card_type hard delete）
 - **Transaction 保護**：6 個步驟同一 transaction，rollback 時所有步驟回復
 - **API**：`DELETE /api/v1/assignment/scoring/card-types/:cardType`（詳見 F072 §5）
-- **錯誤碼**：`CARD_TYPE_NOT_FOUND`（404）— 操作的 CARD_TYPE 不存在；`SCORING_VERSION_LOCKED`（409）— 月跑執行中
+- **錯誤碼**：`CARD_TYPE_NOT_FOUND`（404）— 操作的 CARD_TYPE 不存在；`SCORING_VERSION_LOCKED`（409）— 月名單分派執行中
 
 ---
 
@@ -130,7 +130,7 @@
 - **When**：停用 'H' 成功後
 - **Then**：`assignment_run_snapshot` 中的快照 payload 保持不變，US-086 仍可查詢歷史快照中 'H' 的計分設定
 
-### TC-096-06：月跑執行中停用按鈕 disabled
+### TC-096-06：月名單分派執行中停用按鈕 disabled
 
 - **Given**：`assignment_run` 有 status = 'running' 的紀錄
 - **When**：業務主管查看 Tab 1
@@ -157,7 +157,7 @@
 - [ ] 影響範圍統計顯示正確（TC-096-01）
 - [ ] Transaction rollback 測試通過（TC-096-04）
 - [ ] 歷史快照資料保留驗證通過（TC-096-05）
-- [ ] 月跑鎖定保護測試通過（TC-096-06）
+- [ ] 月名單分派鎖定保護測試通過（TC-096-06）
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新

@@ -2,7 +2,7 @@
 %% 名單 → per-list COUNT → 乘 ration → 乘 千分位 → 部門乘日矩陣 → 除 在職人數；含 scope filter 與 缺口分支
 flowchart TB
     subgraph L0L1["L0 + L1 既有引擎（不分叉，I-RUN-EST-01）"]
-        DPM["每日千分位 dpm<br/>computeWorkingDayRatios<br/>與月跑 Stage 4 ASSIGNDAY 共用"]
+        DPM["每日千分位 dpm<br/>computeWorkingDayRatios<br/>與月名單分派 Stage 4 ASSIGNDAY 共用"]
         LT["每份名單估算件數 list_total L<br/>per-list Stage1 dry-run COUNT<br/>建議取 F088 物化 estimateCases"]
     end
 

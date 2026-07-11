@@ -1,6 +1,6 @@
-%% F102 月跑 CR 優先分派流程：Stage 2 tier_level 就緒 → 讀 cr_enabled 閘控 → (true) 步驟 1 逾2年清空 → 步驟 2 離職清空 → 步驟 3 CR 優先指派 → 步驟 4 扣量交 F101；(false) is_cr 強制 N 全案件入 F101 池。CR 段為確定性 SET-based UPDATE（無 NEWID()，align I-DET-01）；legacy st3_emplid CR 段死碼不引用。
+%% F102 月名單分派 CR 優先分派流程：Stage 2 tier_level 就緒 → 讀 cr_enabled 閘控 → (true) 步驟 1 逾2年清空 → 步驟 2 離職清空 → 步驟 3 CR 優先指派 → 步驟 4 扣量交 F101；(false) is_cr 強制 N 全案件入 F101 池。CR 段為確定性 SET-based UPDATE（無 NEWID()，align I-DET-01）；legacy st3_emplid CR 段死碼不引用。
 flowchart TD
-    START(["月跑 worker：per-list 迴圈"]) --> S2DONE["Stage 2 完成<br/>score / card_level / tier_level<br/>已寫入 ob_monthly_run_result"]
+    START(["月名單分派 worker：per-list 迴圈"]) --> S2DONE["Stage 2 完成<br/>score / card_level / tier_level<br/>已寫入 ob_monthly_run_result"]
 
     S2DONE --> CLEAR["F101 BR-F101-06 重跑清除<br/>同月 T1-T5 之 dept_id / emplid / assignday 清空<br/>is_cr 保留<br/>§8 C-2：須在步驟 3 之前"]
 
@@ -31,7 +31,7 @@ flowchart TD
     F101POOL_ALL --> F101POOL
 
     F101POOL --> VERIFY["AC-13 deploy 後重跑 202606<br/>F064 匯出：is_cr=Y 約 1.9%<br/>cr_id / cr_nm 非空，emplid=cr_id"]
-    VERIFY --> NEXT(["下一 list / 月跑完成"])
+    VERIFY --> NEXT(["下一 list / 月名單分派完成"])
 
     %% ===== 旁註：廢除全域旗標 + 死碼 =====
     DEPRECATE["US-154 廢除全域旗標<br/>ob_assign_config.cr_reassignment_enabled<br/>per-list cr_enabled 唯一來源<br/>F059 doc body 已修正"]

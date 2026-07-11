@@ -18,7 +18,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 > **v2.1（2026-05-21 / M01 v2.0~v2.3 Kanban 重構 / US-105 v2.3 文字修正）**：核心變更：
 > 1. **§4 AC-1 / §7 UI/UX：按鈕文字「停」→「停用」全寫**（對應 US-105 v2.3 修正版；卡片設計允許換行不需縮寫）。
 > 2. **入口從表格列改為 Kanban 卡片按鈕**：F048 v2.0 Kanban 主頁之 `draft` 階段卡片操作欄之「停用」按鈕（依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) Role × Stage 矩陣）。
-> 3. **本 v2.1 不變更既有業務邏輯**（API endpoint / 軟刪除語意 / 月跑鎖 / 重複停用阻擋 / 5 個 AC 之核心行為）；僅按鈕文字與入口位置變更。
+> 3. **本 v2.1 不變更既有業務邏輯**（API endpoint / 軟刪除語意 / 月名單分派鎖 / 重複停用阻擋 / 5 個 AC 之核心行為）；僅按鈕文字與入口位置變更。
 >
 > **v2.0（2026-05-16）**：依 F002 v2.0 / AD-E07 v3.0 重構：Guard 改為 `DirectorGuard`（M01 名單 CRUD 寫入限部長）。
 
@@ -35,13 +35,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 
 ## 1. 功能摘要
 
-提供業務部長停用名單定義功能（軟刪除）。停用為不可逆操作（MVP 範圍內不提供重新啟用）；停用後 `status` 由 `'active'` 更新為 `'inactive'`，資料不刪除，歷史快照不受影響。月跑執行中禁止停用。
+提供業務部長停用名單定義功能（軟刪除）。停用為不可逆操作（MVP 範圍內不提供重新啟用）；停用後 `status` 由 `'active'` 更新為 `'inactive'`，資料不刪除，歷史快照不受影響。月名單分派執行中禁止停用。
 
 ## 2. 使用者故事
 
 **As a** 業務部長
 **I want** 停用不再需要的名單定義
-**So that** 避免已過時或錯誤設定的名單條件在下次月跑中被誤用，同時保留歷史紀錄以供查閱
+**So that** 避免已過時或錯誤設定的名單條件在下次月名單分派中被誤用，同時保留歷史紀錄以供查閱
 
 ## 3. 前置條件
 
@@ -85,16 +85,16 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 - **Then** 不顯示任何「啟用」、「重新啟用」或「恢復」按鈕
 - **And** 後端不提供對應 API 端點；若業務需恢復使用相同條件，業務部長可透過 F050「複製名單」建立新名單
 
-### AC-5：月跑執行中禁止停用
+### AC-5：月名單分派執行中禁止停用
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
 - **When** 業務部長嘗試點擊任何名單的「停用」按鈕
 - **Then** 停用按鈕為 disabled，hover 顯示提示「分派執行中，無法停用名單定義」
 - **And** 若直接呼叫 API，回傳 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
 
-### AC-6：已被 completed 月跑使用過的名單可停用
+### AC-6：已被 completed 月名單分派使用過的名單可停用
 
-- **Given** 某名單曾被歷史 `completed` 月跑使用（`assignment_run_snapshot.payload` 中有紀錄）
+- **Given** 某名單曾被歷史 `completed` 月名單分派使用（`assignment_run_snapshot.payload` 中有紀錄）
 - **When** 業務部長執行停用
 - **Then** 系統允許停用，`status` 更新為 `'inactive'`
 - **And** 歷史快照中對該名單的參照保持完整（`assignment_run_snapshot` 為 INSERT-only，不受名單 status 變更影響）
@@ -128,7 +128,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派執行中 |
 | 422 | ASSIGNMENT_LIST_ALREADY_INACTIVE | 名單已停用 |
 
 ## 6. 商業規則
@@ -137,8 +137,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 |---|---|
 | BR-1 | 停用為軟刪除：僅更新 `status`，不刪除資料列 |
 | BR-2 | 不提供重新啟用（MVP 範圍外）；業務部長需透過 F050「複製名單」建立新紀錄 |
-| BR-3 | 月跑鎖定範圍：`assignment_run.status IN ('pending', 'running')` |
-| BR-4 | 停用後的名單不會被未來月跑 Stage 1 讀取（Stage 1 `WHERE status = 'active'`） |
+| BR-3 | 月名單分派鎖定範圍：`assignment_run.status IN ('pending', 'running')` |
+| BR-4 | 停用後的名單不會被未來月名單分派 Stage 1 讀取（Stage 1 `WHERE status = 'active'`） |
 | BR-5 | 歷史 `assignment_run_snapshot` 為不可變紀錄，停用後仍完整保留當時的 input_list / result |
 
 ## 7. UI/UX 需求（v2.1 重寫）
@@ -149,7 +149,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 - **按鈕文字**：**全寫「停用」**（v2.1 修正：v1.0 / v2.0 prototype 之縮寫「停」已於 US-105 v2.3 統一改回全寫；卡片設計允許換行不需縮寫）
 - **按鈕樣式**：危險樣式（紅色邊框 / `text-danger border-danger hover:bg-red-50`），附 `archive` icon
 - **渲染條件**：依 [F077 v1.3 BR-7](F077-month-switch-and-stage-overview.md) Role × Stage 矩陣 — 僅 `draft` 階段 + `director` / `admin` role 渲染；其他 stage 不渲染停用按鈕（非草稿階段名單需先 Rollback 至草稿才可停用，由 F081 / F085 / F089 提供反向路徑）
-- **歷史月份 / 月跑鎖中**：依 F077 v1.3 BR-7 C-1 / C-2 — 歷史月份不渲染；月跑鎖中 disabled + hover tooltip「分派執行中，無法停用名單定義」
+- **歷史月份 / 月名單分派鎖中**：依 F077 v1.3 BR-7 C-1 / C-2 — 歷史月份不渲染；月名單分派鎖中 disabled + hover tooltip「分派執行中，無法停用名單定義」
 
 ### 7.2 確認對話框
 
@@ -162,10 +162,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 - 成功提示 toast：「`{list_no}` 已停用」+ 副訊息「可於名單列表『已停用』分區查詢」（warning 樣式）
 - Kanban 主頁即時刷新，該名單卡片從 `draft` 欄移除（依 [F077 v1.3 BR-7 C-3](F077-month-switch-and-stage-overview.md)，已停用名單不渲染於 Kanban 主視圖）
 
-### 7.4 月跑鎖定行為
+### 7.4 月名單分派鎖定行為
 
-- 月跑鎖定時：「停用」按鈕 disabled + hover 提示「分派執行中，無法停用名單定義」
-- 已開啟之停用確認對話框於月跑鎖觸發後：建議前端 polling lockState 即時關閉對話框並提示（屬未來 enhancement；本 v2.1 不規範 polling 機制）
+- 月名單分派鎖定時：「停用」按鈕 disabled + hover 提示「分派執行中，無法停用名單定義」
+- 已開啟之停用確認對話框於月名單分派鎖觸發後：建議前端 polling lockState 即時關閉對話框並提示（屬未來 enhancement；本 v2.1 不規範 polling 機制）
 
 ### 7.5 Prototype canonical reference
 
@@ -174,7 +174,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 ## 8. 相依性
 
 - **Blocked By**：F048（清單頁入口）、F050（需先有名單才能停用）
-- **Blocks**：無（停用後不影響歷史快照；F061 月跑前置條件僅讀取 active 名單）
+- **Blocks**：無（停用後不影響歷史快照；F061 月名單分派前置條件僅讀取 active 名單）
 
 ## 9. 交叉參考
 

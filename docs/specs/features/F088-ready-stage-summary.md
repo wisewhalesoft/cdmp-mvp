@@ -15,7 +15,7 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
-> **v1.3.1（2026-05-26 / estimateCases 物化 COUNT 來源升級補註，對齊 F092）**：[F092](F092-stage1-dry-run-estimate.md)（Stage 1 精確化工程 Phase 3）已落地，per-list estimate 升級為完整 Stage 1 鏈唯讀 dry-run。本版**僅補註** `estimateCases` 物化所用之 Stage 0 估算 COUNT 來源由「欄位篩選版」升級為「**完整 Stage 1 鏈 dry-run（≡ 月跑案件數）**」（`executeStage1Chain({ dryRun: true })`，含 MONTH_CNT + 近 3 個月去重 + 特殊 DELETE）。影響段落：**§6 BR-10**（補物化 COUNT 來源升級註）、**§5 清單回應欄位表 `estimateCases`**（補來源升級註）。**物化讀寫機制、UI、權限、其他 AC/BR 均不變**；僅 COUNT 內涵升級。交叉引用 [F092 AC-6](F092-stage1-dry-run-estimate.md) / [architecture-spec.md AD-E07-23](../architecture-spec.md)。
+> **v1.3.1（2026-05-26 / estimateCases 物化 COUNT 來源升級補註，對齊 F092）**：[F092](F092-stage1-dry-run-estimate.md)（Stage 1 精確化工程 Phase 3）已落地，per-list estimate 升級為完整 Stage 1 鏈唯讀 dry-run。本版**僅補註** `estimateCases` 物化所用之 Stage 0 估算 COUNT 來源由「欄位篩選版」升級為「**完整 Stage 1 鏈 dry-run（≡ 月名單分派案件數）**」（`executeStage1Chain({ dryRun: true })`，含 MONTH_CNT + 近 3 個月去重 + 特殊 DELETE）。影響段落：**§6 BR-10**（補物化 COUNT 來源升級註）、**§5 清單回應欄位表 `estimateCases`**（補來源升級註）。**物化讀寫機制、UI、權限、其他 AC/BR 均不變**；僅 COUNT 內涵升級。交叉引用 [F092 AC-6](F092-stage1-dry-run-estimate.md) / [architecture-spec.md AD-E07-23](../architecture-spec.md)。
 >
 > **v1.3（2026-05-26 / prototype 29d 對齊 + 重用端點落地）**：本版本對齊 prototype `prototypes/29d-ready-summary.html` 與 real code 之實作落差，重點：
 > 1. **§5 API 重用既有端點**：清單頁與詳情頁**不使用**原規劃之專屬端點 `GET /lists/{listNo}/ready-summary`，改為**重用既有端點**：清單頁 `GET /assignment/lists`；詳情頁 `GET /assignment/ratios/dept/{listNo}` + `GET /assignment/ratios/personnel/{listNo}` + `GET /assignment/lists/{listNo}/approval-history`；Stage 0 試算 `GET /assignment/list-definitions/{listNo}/estimate`。原 5.1 / 5.2 描述保留並標記為「規劃版」，實作以 §5.0 重用端點清單為準。
@@ -25,7 +25,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 > 5. **§12 假設 A-3 標記 resolved**（物化方案取代逐筆即時 COUNT）。
 > 6. 本 v1.3 **不變動** entity / migration / data-model.md / architecture-spec.md（欄位與 migration 細節由 system-architect 規範，本 spec 僅描述行為與資料來源）；`approvedAt` / `approverName` 之資料來源依賴 F086 v1.3 補寫 `assignment_approval(action='approve')`。
 >
-> **v1.2 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔，本版本依 US-118 + AD-E07 v3.0 一致性決議完整重建；Guard 統一為 `DirectorOrSectionChiefGuard`（admin / director / section_chief 三角色 + service 層 `scopeByCreator()` 過濾處長轄區）；廢除 `SalesManagerGuard`；business_role 欄位語意對齊；保留 v1.1 之月跑前置條件聚合提示。
+> **v1.2 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔，本版本依 US-118 + AD-E07 v3.0 一致性決議完整重建；Guard 統一為 `DirectorOrSectionChiefGuard`（admin / director / section_chief 三角色 + service 層 `scopeByCreator()` 過濾處長轄區）；廢除 `SalesManagerGuard`；business_role 欄位語意對齊；保留 v1.1 之月名單分派前置條件聚合提示。
 
 ## Agent Loading Guide
 
@@ -50,8 +50,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 提供部長 / 處長 / Admin 查詢 `stage = 'ready'` 名單之完整設定摘要：篩選條件、部門比例、個別業務比例、CR 開關狀態。本頁面為**完全唯讀**（無任何編輯按鈕），主要用途：
 
-1. 月跑前最終確認所有名單設定正確
-2. 部長透過本頁面確認「所有 active 名單均已就緒」後觸發月跑（F061 前置條件）
+1. 月名單分派前最終確認所有名單設定正確
+2. 部長透過本頁面確認「所有 active 名單均已就緒」後觸發月名單分派（F061 前置條件）
 
 **範圍**：
 - 處長僅可查看本轄區之 ready 名單與本轄區業務員比例（依 `created_by` 過濾，沿用 F074 BR-1）
@@ -62,7 +62,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 **As a** 部長（Director）/ 處長（Section Chief）/ Admin
 **I want** 在名單進入「準備完成」階段後，查看該名單完整設定摘要
-**So that** 月跑前可做最終確認，避免帶著錯誤設定進入月跑
+**So that** 月名單分派前可做最終確認，避免帶著錯誤設定進入月名單分派
 
 ## 3. 前置條件
 
@@ -100,13 +100,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - **Then** 個別業務比例區塊**僅顯示本處長轄區的部門業務員**（其他部門業務員不顯示）
 - **And** 篩選條件、部門比例、CR 開關可完整查看（全名單共用，非按轄區過濾）
 
-### AC-4：月跑前置條件聚合提示（部長 / Admin）
+### AC-4：月名單分派前置條件聚合提示（部長 / Admin）
 
 - **Given** 部長或 Admin 在 ready 名單清單頁
 - **When** 頁面載入
 - **Then** 系統由 `GET /assignment/lists`（ready / not-ready 名單分布）+ `GET /api/v1/assignment/runs/readiness` 組裝當月 active 名單就緒狀態（原規劃版 `GET /assignment/ready-summary` 未實作，見 §5.0 / §5.2）
-- **And** 若本月所有 active 名單（`status = 'active'` 且非 `'draft'`）均已進入 `'ready'` 狀態，頁面頂部顯示綠色提示「本月所有名單均已 ready · 可執行月跑」
-- **And** 若仍有名單未達 ready，頁面頂部顯示警告提示「本月仍有 {N} 筆名單未進入 ready 階段，無法執行月跑」，列出未就緒名單（`{listNo}（{stage}）`）
+- **And** 若本月所有 active 名單（`status = 'active'` 且非 `'draft'`）均已進入 `'ready'` 狀態，頁面頂部顯示綠色提示「本月所有名單均已 ready · 可執行月名單分派」
+- **And** 若仍有名單未達 ready，頁面頂部顯示警告提示「本月仍有 {N} 筆名單未進入 ready 階段，無法執行月名單分派」，列出未就緒名單（`{listNo}（{stage}）`）
 
 ### AC-5：唯讀保護（後端守衛）
 
@@ -150,7 +150,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | `GET /api/v1/assignment/lists/{listNo}/approval-history` | 簽核歷史（approve / reject 紀錄，依 `approved_at DESC`；approve 列來源見 §5.0.2 / F086 v1.3） | `DirectorOrSectionChiefGuard` |
 | `GET /api/v1/assignment/list-definitions/{listNo}/estimate` | Stage 0 即時試算（詳情頁可即時重算，與清單頁物化值並存；見 BR-10） | `DirectorGuard` |
 
-> **聚合 banner（模式 A · 部長 / Admin 月跑前置條件提示）**：原 §5.2 之 `GET /api/v1/assignment/ready-summary?ym={ym}` 聚合端點屬規劃版；real code 中月跑就緒狀態由清單回應（`GET /assignment/lists` 之 ready / not-ready 名單分布）+ `GET /api/v1/assignment/runs/readiness` 組裝，前端據以渲染綠色 / 警告 banner（UI 規格見 §7）。
+> **聚合 banner（模式 A · 部長 / Admin 月名單分派前置條件提示）**：原 §5.2 之 `GET /api/v1/assignment/ready-summary?ym={ym}` 聚合端點屬規劃版；real code 中月名單分派就緒狀態由清單回應（`GET /assignment/lists` 之 ready / not-ready 名單分布）+ `GET /api/v1/assignment/runs/readiness` 組裝，前端據以渲染綠色 / 警告 banner（UI 規格見 §7）。
 
 #### 5.0.1 GET /api/v1/assignment/lists 每筆 list item — v1.3 新增欄位
 
@@ -162,7 +162,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | `empCount` | number | `COUNT(ob_empl_set WHERE list_no = :listNo)` | 該名單之業務員（個別比例）數；29d 卡片標示為「業務員」 |
 | `approvedAt` | string \| null | `assignment_approval` 中最新 `action='approve'` 之 `approved_at` | 最新核准時間；ISO 8601；無核准紀錄時為 `null`（依賴 F086 v1.3 補寫，見 §5.0.2） |
 | `approverName` | string \| null | 最新 `action='approve'` 之 `approver_name` | 核准者姓名；無核准紀錄時為 `null` |
-| `estimateCases` | number \| null | `ob_list_definition` 物化估算欄位（由 F086 approve→ready 計算並存，見 BR-10）；**物化 COUNT 來源自 [F092](F092-stage1-dry-run-estimate.md) 起升級為完整 Stage 1 鏈 dry-run（≡ 月跑案件數），非欄位篩選版** | 預估案件數；尚未物化或計算失敗時為 `null`，前端顯示「—」 |
+| `estimateCases` | number \| null | `ob_list_definition` 物化估算欄位（由 F086 approve→ready 計算並存，見 BR-10）；**物化 COUNT 來源自 [F092](F092-stage1-dry-run-estimate.md) 起升級為完整 Stage 1 鏈 dry-run（≡ 月名單分派案件數），非欄位篩選版** | 預估案件數；尚未物化或計算失敗時為 `null`，前端顯示「—」 |
 
 > **效能原則（A-3 resolved）**：`estimateCases` 採**物化快取**讀取存值，**不**在 `listLists` 內逐筆即時對 `ob_pool_data`（百萬列）執行 COUNT；理由：per-list COUNT × N 張卡 = N 次重查詢，違反 ETL/scale 原則。`deptCount` / `empCount` 為對小表（`ob_dept_pct` / `ob_empl_set`，每名單數十列）之 COUNT，可即時聚合。
 
@@ -222,11 +222,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 ### 5.2 [規劃版 / 未實作] GET /api/v1/assignment/ready-summary
 
-> **規劃版資料概念對照**：本聚合端點為原始設計，real code **未實作**；月跑就緒狀態於實作中改由 `GET /assignment/lists`（ready / not-ready 名單分布）+ `GET /api/v1/assignment/runs/readiness` 組裝（見 §5.0）。保留以下 response 作為「聚合狀態應涵蓋之資料概念」之對照。
+> **規劃版資料概念對照**：本聚合端點為原始設計，real code **未實作**；月名單分派就緒狀態於實作中改由 `GET /assignment/lists`（ready / not-ready 名單分布）+ `GET /api/v1/assignment/runs/readiness` 組裝（見 §5.0）。保留以下 response 作為「聚合狀態應涵蓋之資料概念」之對照。
 
 | 屬性 | 值 |
 |---|---|
-| 用途 | 取得當月 ready 名單聚合狀態，供月跑前置條件提示 |
+| 用途 | 取得當月 ready 名單聚合狀態，供月名單分派前置條件提示 |
 | 認證 | JWT 必填 |
 | 授權 | `DirectorGuard`（admin OR business_role = 'director'） |
 
@@ -251,7 +251,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 }
 ```
 
-> `allReady = true` 表示所有 active 名單均為 ready，前端顯示綠色提示「所有名單已就緒，可觸發月跑」；`false` 時顯示警告與 `notReadyLists`。
+> `allReady = true` 表示所有 active 名單均為 ready，前端顯示綠色提示「所有名單已就緒，可觸發月名單分派」；`false` 時顯示警告與 `notReadyLists`。
 
 **錯誤回應（兩端點共用）**
 
@@ -273,11 +273,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | BR-3 | **角色矩陣**：admin / director / section_chief 三角色可查詢；其他回 403 `AUTH_FORBIDDEN` |
 | BR-4 | **聚合查詢僅部長 / Admin**：5.2 端點僅供部長 / Admin 使用（處長無此聚合需求），由 `DirectorGuard` 保護 |
 | BR-5 | **聚合查詢範圍**：`totalActiveLists` 計算 `status = 'active'` 且 `stage != 'draft'` 之名單；`readyCount` 計算其中 `stage = 'ready'` 者；`allReady = (readyCount === totalActiveLists)` |
-| BR-6 | **月跑狀態欄位**：`monthlyRunStatus` 反映當月 `assignment_run` 最新狀態，可能值：`'none'`（尚未觸發）/ `'pending'` / `'running'` / `'completed'` / `'failed'`；若 `status = 'running'` 則前端隱藏「觸發月跑」按鈕並顯示「分派執行中」 |
+| BR-6 | **月名單分派狀態欄位**：`monthlyRunStatus` 反映當月 `assignment_run` 最新狀態，可能值：`'none'`（尚未觸發）/ `'pending'` / `'running'` / `'completed'` / `'failed'`；若 `status = 'running'` 則前端隱藏「觸發月名單分派」按鈕並顯示「分派執行中」 |
 | BR-7 | **歷史月份允許查詢**：與 F082 / F079 寫入端點不同，本 spec 查詢端點允許歷史月份；UI 標示「歷史月份」即可 |
 | BR-8 | **CR 開關來源**：`cr_enabled` 欄位儲存位置依 F048 / US-120 規範；本 spec 僅讀取 |
 | BR-9 | **Feature Flag fallback**：本 spec 兩端點均掛 `FeatureFlagGuard`；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 503 + `FEATURE_NOT_ENABLED` |
-| BR-10 | **預估案件數採物化快取（v1.3 新增；v1.3.1 補註物化 COUNT 來源升級）**：`estimateCases` 於 F086 approve→ready 當下計算一次 Stage 0 估算並物化儲存至 `ob_list_definition`（欄位 / migration 細節由 system-architect 規範）；計算為 **best-effort**，失敗僅 log、**不**阻擋 approve（見 [F086 v1.3 §6.X](F086-approve-to-ready.md)）。清單頁 `GET /assignment/lists` **直接讀取存值**，**不**在 `listLists` 內逐筆對 `ob_pool_data` 即時 COUNT（per-list COUNT × N 卡 = N 次掃百萬列重查詢，違反 ETL/scale 原則）。物化值缺失（尚未計算 / 計算失敗）時回 `null`，前端顯示「—」。詳情頁另可呼叫 `GET /assignment/list-definitions/{listNo}/estimate` 取即時試算值。<br>**物化 COUNT 來源升級（自 [F092](F092-stage1-dry-run-estimate.md) Stage 1 精確化 Phase 3 起）**：物化計算所用之 Stage 0 估算 COUNT 由「欄位篩選版」升級為**完整 Stage 1 鏈唯讀 dry-run COUNT**（`executeStage1Chain({ dryRun: true })`，含 MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE，精確 ≡ 月跑案件數；見 [F092 AC-6](F092-stage1-dry-run-estimate.md) / [architecture-spec.md AD-E07-23](../architecture-spec.md)）。**物化讀寫機制（best-effort、清單頁讀存值、不即時逐筆 COUNT）不變**，僅 COUNT 內涵升級；因完整鏈含去重查詢，approve→ready 物化計算耗時可能略增，由物化（非即時）設計吸收。 |
+| BR-10 | **預估案件數採物化快取（v1.3 新增；v1.3.1 補註物化 COUNT 來源升級）**：`estimateCases` 於 F086 approve→ready 當下計算一次 Stage 0 估算並物化儲存至 `ob_list_definition`（欄位 / migration 細節由 system-architect 規範）；計算為 **best-effort**，失敗僅 log、**不**阻擋 approve（見 [F086 v1.3 §6.X](F086-approve-to-ready.md)）。清單頁 `GET /assignment/lists` **直接讀取存值**，**不**在 `listLists` 內逐筆對 `ob_pool_data` 即時 COUNT（per-list COUNT × N 卡 = N 次掃百萬列重查詢，違反 ETL/scale 原則）。物化值缺失（尚未計算 / 計算失敗）時回 `null`，前端顯示「—」。詳情頁另可呼叫 `GET /assignment/list-definitions/{listNo}/estimate` 取即時試算值。<br>**物化 COUNT 來源升級（自 [F092](F092-stage1-dry-run-estimate.md) Stage 1 精確化 Phase 3 起）**：物化計算所用之 Stage 0 估算 COUNT 由「欄位篩選版」升級為**完整 Stage 1 鏈唯讀 dry-run COUNT**（`executeStage1Chain({ dryRun: true })`，含 MONTH_CNT 期別過濾 + 近 3 個月去重 + 特殊 DELETE，精確 ≡ 月名單分派案件數；見 [F092 AC-6](F092-stage1-dry-run-estimate.md) / [architecture-spec.md AD-E07-23](../architecture-spec.md)）。**物化讀寫機制（best-effort、清單頁讀存值、不即時逐筆 COUNT）不變**，僅 COUNT 內涵升級；因完整鏈含去重查詢，approve→ready 物化計算耗時可能略增，由物化（非即時）設計吸收。 |
 | BR-11 | **設定者 / 代設定判定（v1.3 新增）**：詳情頁部門比例表之「設定者」欄由 `ob_dept_pct.created_by` 解析：以 `created_by` 查 user 取得姓名與 `business_role`；(1) 若該設定者 `businessRole = 'director'`，視為**「部長代設定」**（29d chip：「該部門由部長代設定」，warning 色）；(2) 否則視為**「由處長設定」**（29d chip：「由 {處長姓名} 設定」，green 色）。「處長」欄顯示該部門所屬處長姓名（部門 → 處長對應沿用 F074 轄區定義）。 |
 
 ## 7. UI/UX 需求
@@ -289,10 +289,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
     - 標題：`listNm`
     - 資訊列（icon + 值）：**部門數**（`deptCount`）/ **業務員數**（`empCount`）/ **預估案件數**（`~{estimateCases}`，物化值，`null` 顯示「—」）/ **建立者**（`createdBy`）/ **核准時間**（`approvedAt`）
     - 卡片右側按鈕「查看摘要」（eye icon）；點按鈕或整卡均進入詳情（`event.stopPropagation` 避免重複觸發）
-  - 部長 / Admin 視角：頁首顯示**月跑前置條件聚合提示 banner**（29d L171-201）：
-    - 所有 active 名單均已 ready → 綠色 banner「本月所有名單均已 ready · 可執行月跑」+「執行月跑」按鈕（連至 F061）
-    - 仍有名單未就緒 → 警告色 banner「本月仍有 {N} 筆名單未進入 ready 階段，無法執行月跑」+ 未就緒名單清單（`{listNo}（{stage}）`）；「執行月跑」按鈕 disabled
-  - 處長視角：僅顯示本轄區之 ready 名單（依 `scopeByCreator()` 過濾）；無「執行月跑」權限（按鈕不渲染）；轄區無 ready 名單時顯示空狀態卡（29d L604-611）
+  - 部長 / Admin 視角：頁首顯示**月名單分派前置條件聚合提示 banner**（29d L171-201）：
+    - 所有 active 名單均已 ready → 綠色 banner「本月所有名單均已 ready · 可執行月名單分派」+「執行月名單分派」按鈕（連至 F061）
+    - 仍有名單未就緒 → 警告色 banner「本月仍有 {N} 筆名單未進入 ready 階段，無法執行月名單分派」+ 未就緒名單清單（`{listNo}（{stage}）`）；「執行月名單分派」按鈕 disabled
+  - 處長視角：僅顯示本轄區之 ready 名單（依 `scopeByCreator()` 過濾）；無「執行月名單分派」權限（按鈕不渲染）；轄區無 ready 名單時顯示空狀態卡（29d L604-611）
 - **名單詳情頁布局**：
   - 標題：「準備完成階段摘要：{listNm}（{listNo}）」
   - 唯讀提示 banner：「此名單已進入準備完成階段，所有設定為唯讀。如需修改請先 Rollback 至簽核階段（部長 / Admin）」
@@ -307,8 +307,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - **核准資訊區塊**：頁面右上角顯示「核准者：{approverName} / 核准時間：{approvedAt 格式化}」
 - **跳轉動作（部長 / Admin）**：
   - 頁面底部「Rollback 至簽核」按鈕（連至 F089，僅部長 / Admin 可見）
-  - 「觸發月跑」按鈕（如 `allReady = true`，連至 F061）
-- **無觸發月跑權限提示**：處長視角不顯示「觸發月跑」按鈕
+  - 「觸發月名單分派」按鈕（如 `allReady = true`，連至 F061）
+- **無觸發月名單分派權限提示**：處長視角不顯示「觸發月名單分派」按鈕
 
 ## 8. 相依性
 
@@ -319,7 +319,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
   - F073（部長角色）/ F074（處長角色與轄區）
   - F077（五階段總覽，本 spec 入口）
 - **Blocks**：
-  - F061（月跑觸發，本 spec 提供月跑前置條件聚合確認入口）
+  - F061（月名單分派觸發，本 spec 提供月名單分派前置條件聚合確認入口）
   - F089（準備完成 Rollback，本 spec 之逆操作入口）
 
 ## 9. 交叉參考
@@ -339,10 +339,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
   - [F086](F086-approve-to-ready.md)（核准至 ready）
   - [F087](F087-reject-to-personnel-ratio.md)（簽核拒絕，本 spec 之逆方向之一）
   - [F089](F089-rollback-to-approval.md)（M03d Rollback，本 spec 之逆操作）
-  - [F061](F061-trigger-assignment-run.md)（月跑觸發，本 spec 為前置條件確認入口）
+  - [F061](F061-trigger-assignment-run.md)（月名單分派觸發，本 spec 為前置條件確認入口）
   - [F082](F082-set-personnel-ratio.md)（個別業務比例設定，本 spec 之資料來源 + UI 樣式參考）
   - [F079](F079-set-dept-ratio.md)（部門比例設定，本 spec 之資料來源）
-- **圖表**：[diagrams/F088-ready-summary-flow.mmd](../diagrams/F088-ready-summary-flow.mmd)（含聚合查詢 + 月跑前置條件判斷流程）
+- **圖表**：[diagrams/F088-ready-summary-flow.mmd](../diagrams/F088-ready-summary-flow.mmd)（含聚合查詢 + 月名單分派前置條件判斷流程）
 
 ## 10. 測試覆蓋率要求
 
@@ -364,14 +364,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
   - 處長 GET 5.1 帶 `deptCode` 屬於他人轄區 → 200 + `individualRatios.departments = []`
   - 處長 GET 5.1 → 篩選條件 / 部門比例 / CR 開關仍完整顯示（不過濾）
 - 前端關鍵測試案例：
-  - 部長 / Admin 視角顯示月跑前置條件聚合 banner
-  - `allReady = true` → 綠色 banner + 「觸發月跑」按鈕
+  - 部長 / Admin 視角顯示月名單分派前置條件聚合 banner
+  - `allReady = true` → 綠色 banner + 「觸發月名單分派」按鈕
   - `allReady = false` → 警告 banner + 未就緒名單跳轉連結
   - 處長視角不顯示聚合 banner
   - 詳情頁完全無編輯按鈕
   - 處長視角詳情頁業務員比例僅顯示本轄區
   - 部長 / Admin 視角顯示「Rollback 至簽核」按鈕，處長視角不顯示
-- E2E：F086 核准至 ready → 部長 GET 5.2 確認 allReady → F061 月跑觸發 → 月跑完成
+- E2E：F086 核准至 ready → 部長 GET 5.2 確認 allReady → F061 月名單分派觸發 → 月名單分派完成
 
 ## 11. 實作 Checklist
 
@@ -382,7 +382,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - [ ] 後端套 `StageTransitionService.assertStageEquals(listNo, 'ready')`（5.1 端點）
 - [ ] 後端套 `FeatureFlagGuard`
 - [ ] 前端「準備完成」頁籤渲染（F077 整合）
-- [ ] 前端月跑前置條件聚合 banner（部長 / Admin 視角）
+- [ ] 前端月名單分派前置條件聚合 banner（部長 / Admin 視角）
 - [ ] 前端名單詳情頁 4 區塊布局（篩選條件 / 部門比例 / 個別業務比例 / CR 開關）
 - [ ] 前端處長 vs 部長視角差異（業務員比例過濾、聚合 banner 隱藏、Rollback 按鈕渲染）
 - [ ] 前端完全無編輯按鈕之保護（DOM 層 + 路由 Guard）
@@ -396,13 +396,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | A-1 | **CR 開關儲存位置**：本 spec 假設 `cr_enabled` 欄位存於 `ob_list_definition`；具體位置由 US-120 / F048 spec 規範 | [ASSUMPTION] 待 F048 / US-120 確認 |
 | A-2 | **`monthlyRunStatus` 計算邏輯**：本 spec 預設取「當月最新一筆 `assignment_run` 之 status」；若同月有多筆 run（如重試），以最新一筆為準；具體邏輯由 F061 spec 規範 | [ASSUMPTION] 待 F061 spec 確認 |
 | A-3 | **聚合 / 估算效能**：~~當月 active 名單預估 10~50 份，單次查詢可接受；若未來規模擴大需考慮 cache 或物化視圖~~ → **RESOLVED（v1.3）**：採**物化快取**方案 —`estimateCases` 於 F086 approve→ready 當下計算一次並存至 `ob_list_definition`，清單頁直接讀存值；不在 `listLists` 內逐筆對 `ob_pool_data`（百萬列）即時 COUNT。`deptCount` / `empCount` 為對小表之即時 COUNT，效能無虞。詳見 BR-10 / [F086 v1.3 §6.X](F086-approve-to-ready.md) | **RESOLVED (v1.3)** |
-| A-4 | **歷史月份是否顯示月跑前置條件 banner**：本 spec 預設僅當月顯示；歷史月份頁面不顯示聚合 banner（避免誤觸發月跑） | [ASSUMPTION] 待 UI/UX 確認 |
+| A-4 | **歷史月份是否顯示月名單分派前置條件 banner**：本 spec 預設僅當月顯示；歷史月份頁面不顯示聚合 banner（避免誤觸發月名單分派） | [ASSUMPTION] 待 UI/UX 確認 |
 
 ## 13. 變更紀錄
 
 | 版本 | 日期 | 變更內容 |
 |---|---|---|
-| v1.0 | 2026-05-15 | 初版（對應 US-118，E07 補修批次 5）：依五階段流程提供 ready 名單摘要查詢；新增 5.2 聚合端點供月跑前置條件確認；完全唯讀（不提供寫入端點）；處長轄區過濾以 `scopeByCreator()` helper 統一實作 |
-| v1.1 | 2026-05-16 | **E07 補修批次 6 修訂**：補充月跑前置條件聚合 banner UI 規格（綠色 / 警告色雙態）；新增 `monthlyRunStatus` 欄位於 5.2 response；BR-6 描述月跑狀態欄位語意 |
-| **v1.2** | **2026-05-16** | **【救援重寫 / 編碼事故修復】**：依 US-118 + AD-E07 v3.0 一致性決議完整重建本檔；Guard 統一為 `DirectorOrSectionChiefGuard`（5.1 端點）+ `DirectorGuard`（5.2 聚合端點）；廢除 `SalesManagerGuard`；business_role 欄位語意對齊 F074 v2.0；保留 v1.1 之月跑前置條件聚合提示 |
+| v1.0 | 2026-05-15 | 初版（對應 US-118，E07 補修批次 5）：依五階段流程提供 ready 名單摘要查詢；新增 5.2 聚合端點供月名單分派前置條件確認；完全唯讀（不提供寫入端點）；處長轄區過濾以 `scopeByCreator()` helper 統一實作 |
+| v1.1 | 2026-05-16 | **E07 補修批次 6 修訂**：補充月名單分派前置條件聚合 banner UI 規格（綠色 / 警告色雙態）；新增 `monthlyRunStatus` 欄位於 5.2 response；BR-6 描述月名單分派狀態欄位語意 |
+| **v1.2** | **2026-05-16** | **【救援重寫 / 編碼事故修復】**：依 US-118 + AD-E07 v3.0 一致性決議完整重建本檔；Guard 統一為 `DirectorOrSectionChiefGuard`（5.1 端點）+ `DirectorGuard`（5.2 聚合端點）；廢除 `SalesManagerGuard`；business_role 欄位語意對齊 F074 v2.0；保留 v1.1 之月名單分派前置條件聚合提示 |
 | **v1.3** | **2026-05-26** | **【prototype 29d 對齊 + 重用端點落地】**：(1) 新增 §5.0 重用既有端點清單（`GET /assignment/lists` 清單 + `ratios/dept` / `ratios/personnel` / `approval-history` 詳情 + `list-definitions/{listNo}/estimate` 試算），原 §5.1 / §5.2 標記「規劃版 / 未實作」作資料概念對照；(2) §5.0.1 `GET /assignment/lists` 每筆 list item 新增 `deptCount` / `empCount` / `approvedAt` / `approverName` / `estimateCases` 5 欄位；§5.0.2 標註 approve 列依賴 F086 v1.3 補寫 `assignment_approval`；(3) §7 清單卡片改為 29d 卡片布局（部門數 / 業務員數 / 預估案件數 / 建立者 / 核准時間 + 整卡可點 + 「查看摘要」），詳情頁部門比例表新增「處長」「設定者（含『部長代設定』chip）」欄；(4) 新增 BR-10（物化估算 best-effort）+ BR-11（設定者 / 代設定判定）；(5) 假設 A-3 標記 RESOLVED（物化方案）。不變動 entity / migration / data-model.md / architecture-spec.md |

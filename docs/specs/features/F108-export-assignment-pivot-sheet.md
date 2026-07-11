@@ -67,7 +67,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-29
 
 #### AC-1：xlsx 匯出新增第 2 頁籤「樞紐分析」
 
-- **Given** 月跑已完成（`assignment_run.status = 'completed'`）
+- **Given** 月名單分派已完成（`assignment_run.status = 'completed'`）
 - **When** 業務部長 / 業務處長觸發 xlsx 匯出（`GET /api/v1/assignment/runs/:runId/export?format=xlsx`）
 - **Then** 回傳的 xlsx 檔案恰含 **2 個工作表**
 - **And** 第 1 個工作表名稱為 `assignment_result`，內容為 23 欄明細（與 F064 v2.1 一致，不受影響）
@@ -91,7 +91,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-29
 
 #### AC-2：「樞紐分析」頁籤版面與標頭列
 
-- **Given** 月跑 xlsx 匯出被觸發
+- **Given** 月名單分派 xlsx 匯出被觸發
 - **When** 「樞紐分析」工作表產生完成
 - **Then** R1 左欄顯示 `部門代號`、右欄顯示 `(全部)`
 - **And** R2 為空列
@@ -153,7 +153,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-29
 
 #### AC-6：CSV 格式不含樞紐頁籤
 
-- **Given** 月跑已完成
+- **Given** 月名單分派已完成
 - **When** 業務部長 / 業務處長觸發 CSV 匯出（`format=csv`）
 - **Then** 回傳 CSV 為**單一頁籤**格式（23 欄明細），不含任何樞紐分析內容
 - **And** CSV 的欄位、格式、streaming 行為與 F064 AC-6 完全一致，不受 F108 影響（BR-F108-01）
@@ -173,11 +173,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-29
 
 ### 空結果邊界
 
-**BR-F108-09（空結果邊界）**：月跑已完成但分派結果 0 筆（或處長 scoped 後無轄區資料）時，「樞紐分析」頁籤仍須存在（檔案含 2 個頁籤）。頁籤包含標頭列 R1~R4 與 `總計` 列；無名單代號欄（除 `總計` 欄外無資料欄）、無部門 / 員編資料列。`總計` 列之 `總計` 欄因全體案件數 = 0（0/0）依 BR-F108-11 輸出**空白**。整體匯出回 200 OK，不回 500。
+**BR-F108-09（空結果邊界）**：月名單分派已完成但分派結果 0 筆（或處長 scoped 後無轄區資料）時，「樞紐分析」頁籤仍須存在（檔案含 2 個頁籤）。頁籤包含標頭列 R1~R4 與 `總計` 列；無名單代號欄（除 `總計` 欄外無資料欄）、無部門 / 員編資料列。`總計` 列之 `總計` 欄因全體案件數 = 0（0/0）依 BR-F108-11 輸出**空白**。整體匯出回 200 OK，不回 500。
 
 #### AC-8：空結果邊界處理
 
-- **Given** 月跑已完成，但分派結果為 0 筆（或處長 scoped 後無轄區資料）
+- **Given** 月名單分派已完成，但分派結果為 0 筆（或處長 scoped 後無轄區資料）
 - **When** 觸發 xlsx 匯出
 - **Then** 「樞紐分析」頁籤仍存在（檔案含 2 個頁籤）
 - **And** 頁籤包含標頭列 R1~R4 與 `總計` 列，資料區為空（BR-F108-09）
@@ -316,7 +316,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-29
 | A-1 | 樞紐外層分組鍵 = `RawExportRow.emphire_dept_name`（明細欄 12 = `ob_emphire.dept_name`，員工所屬電銷單位）；對齊 legacy 工作表2 field 11。**非**明細欄 1「分處」（`ob_pool_data.dept_name`，案件營業分處）。 | Resolved（source-brief §3）|
 | A-2 | 樞紐欄軸 = `RawExportRow.list_no`（明細欄 4，名單代號）；對齊 legacy field 3。 | Resolved（source-brief §1）|
 | A-3 | exceljs 4.4.0 無原生樞紐 API；採靜態交叉表（後端預算 % of parent row 寫一般工作表）。 | Resolved（D-1，已驗證）|
-| A-4 | 舊 snapshot 之 `emplid` 可能為 NULL（新月跑由 F101/F102 已填值）；員編空 → 歸該部門「(空白)」員編列。 | Resolved（source-brief §8）|
+| A-4 | 舊 snapshot 之 `emplid` 可能為 NULL（新月名單分派由 F101/F102 已填值）；員編空 → 歸該部門「(空白)」員編列。 | Resolved（source-brief §8）|
 | A-5 | legacy 工作表2 數字格式為 `0.0%`、數值語意為 `percentOfParentRow`（已以實資料驗證）。 | Resolved（source-brief §1）|
 
 ## 11. 相關

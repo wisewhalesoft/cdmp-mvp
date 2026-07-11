@@ -14,7 +14,7 @@
 
 **As a** 處長（Section Chief）或代操作的部長（Director）/ Admin
 **I want** 在名單進入「個別業務比例設定」階段後，為本部門（處長轄區）的每位業務員設定分配比例（RATION），使部門內各業務員比例加總 = 100%
-**So that** 月跑時能按業務員設定的比例精準分配案件，反映每位業務員的當月承接量
+**So that** 月名單分派時能按業務員設定的比例精準分配案件，反映每位業務員的當月承接量
 
 ---
 
@@ -88,9 +88,9 @@
 - **And** 操作寫入 `assignment_audit_log`（action = 'SET_PERSONNEL_RATIO'，entity_type = 'list_definition'，LIST_NO 與 DEPT_CODE 記錄於 entity_id / metadata）
 - **And** 頁面顯示成功提示「{DEPT_NAME} 個別業務比例已儲存」，切換回唯讀模式
 
-### AC-8：月跑執行中禁止設定
+### AC-8：月名單分派執行中禁止設定
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 使用者嘗試進入個別業務比例設定的編輯模式
 - **Then** 編輯按鈕為停用狀態，hover 顯示提示「分派執行中，無法修改比例設定」
 
@@ -145,7 +145,7 @@
 - **When**：點擊儲存
 - **Then**：儲存成功；EMP003 仍顯示於清單，RATION = 0%
 
-### TC-112-06：月跑中禁止編輯
+### TC-112-06：月名單分派中禁止編輯
 
 - **Given**：AssignmentRun status = 'running'
 - **When**：處長嘗試進入編輯模式
@@ -168,7 +168,7 @@
 - [ ] 部長代操作測試（TC-112-03）
 - [ ] 加總 ≠ 100% 阻擋測試（TC-112-04）
 - [ ] RATION = 0 儲存測試（TC-112-05）
-- [ ] 月跑中鎖定測試（TC-112-06）
+- [ ] 月名單分派中鎖定測試（TC-112-06）
 - [ ] AssignmentAuditLog 寫入測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過

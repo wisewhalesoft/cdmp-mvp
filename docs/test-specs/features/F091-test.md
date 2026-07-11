@@ -373,7 +373,7 @@ last_updated: 2026-05-27
 
 ---
 
-> **v1.0 TS-F091-CH-002~005 維持**（EMPTY_CONDITIONS skip / 月跑模式 / dry-run 一致性 / MONTH_CNT skip 不阻擋），mock `list_nm` 字串若含 v1.0 誤判觸發字需更新為 v2.0 正確字串。
+> **v1.0 TS-F091-CH-002~005 維持**（EMPTY_CONDITIONS skip / 月名單分派模式 / dry-run 一致性 / MONTH_CNT skip 不阻擋），mock `list_nm` 字串若含 v1.0 誤判觸發字需更新為 v2.0 正確字串。
 
 ---
 

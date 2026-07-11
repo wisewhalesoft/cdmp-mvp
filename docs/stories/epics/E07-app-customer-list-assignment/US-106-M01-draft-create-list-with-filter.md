@@ -100,9 +100,9 @@ change-summary: "v2.1 修改：AC-5 類別型欄位選項來源改為 pooldata_f
 - **Then** 可修改名單名稱（LIST_NM）與所有篩選條件欄位（增加、刪除、修改值）
 - **And** 修改後儲存，stage 維持 'draft'，不推進至下一階段
 
-### AC-8：月跑執行中禁止建立
+### AC-8：月名單分派執行中禁止建立
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 部長或 Admin 嘗試點擊「建立名單」按鈕
 - **Then** 按鈕為停用狀態，hover 顯示提示「分派執行中，無法建立名單定義」
 
@@ -166,7 +166,7 @@ change-summary: "v2.1 修改：AC-5 類別型欄位選項來源改為 pooldata_f
     "logic": "AND"
   }
   ```
-- 月跑 Stage 1 讀取名單條件時，直接讀取 JSONB，不 join 白名單（停用欄位不影響既有名單月跑，與 US-102 AC-8 一致）
+- 月名單分派 Stage 1 讀取名單條件時，直接讀取 JSONB，不 join 白名單（停用欄位不影響既有名單月名單分派，與 US-102 AC-8 一致）
 - LIST_NO 產生機制：後端依當月 YYYYMM 查詢最大既有流水號後 +1；若無既有，從 001 開始（999 為上限，超過回 422）
 - 操作寫入 AssignmentAuditLog（action = 'CREATE'，entity_type = 'list_definition'）
 - **「從上月名單複製」實作（OQ-D-01）**：後端提供「取上月非停用名單清單」API（依 `project_workym = current_work_ym - 1 month`，`status != 'disabled'` 過濾）；前端選取後呼叫「讀取指定 LIST_NO 之篩選條件 JSONB」API，填入建立表單；**比例相關欄位不複製**；CR 回分開關預設為啟用（`cr_enabled = true`）
@@ -178,7 +178,7 @@ change-summary: "v2.1 修改：AC-5 類別型欄位選項來源改為 pooldata_f
 ### TC-106-01：正常建立草稿名單（多篩選條件）
 
 - **Given**：部長帳號；白名單有 PROD_KIND（categorical）、MONTH_CNT（numeric）兩個啟用欄位
-- **When**：部長建立名單，LIST_NM = 「機車月跑名單」，條件：PROD_KIND IN ['02']、MONTH_CNT min=1 max=6，點擊「儲存」
+- **When**：部長建立名單，LIST_NM = 「機車月名單分派名單」，條件：PROD_KIND IN ['02']、MONTH_CNT min=1 max=6，點擊「儲存」
 - **Then**：名單以 LIST_NO = 'OB202506001'、stage = 'draft' 寫入；篩選條件以 JSONB 儲存；成功提示顯示 LIST_NO
 
 ### TC-106-02：處長無法建立名單
@@ -211,7 +211,7 @@ change-summary: "v2.1 修改：AC-5 類別型欄位選項來源改為 pooldata_f
 - **When**：部長點擊「編輯」，修改 PROD_KIND 加入 '01'，儲存
 - **Then**：JSONB 更新為 PROD_KIND IN ['01', '02']；stage 仍為 'draft'
 
-### TC-106-07：月跑中禁止建立
+### TC-106-07：月名單分派中禁止建立
 
 - **Given**：AssignmentRun status = 'running'
 - **When**：部長嘗試點擊「建立名單」
@@ -247,7 +247,7 @@ change-summary: "v2.1 修改：AC-5 類別型欄位選項來源改為 pooldata_f
 - [ ] 類別型欄位至少選一驗證測試（TC-106-05）
 - [ ] 草稿可修改測試（TC-106-06）
 - [ ] 處長被拒測試（TC-106-02）
-- [ ] 月跑中鎖定測試（TC-106-07）
+- [ ] 月名單分派中鎖定測試（TC-106-07）
 - [ ] JSONB 儲存格式驗證
 - [ ] AssignmentAuditLog 寫入測試
 - [ ] 從上月名單複製篩選條件測試（TC-106-08）

@@ -110,7 +110,7 @@ v1.0 設計中，caseyear / case_status 的選項由 `ob_code_df` 提供，透�
 - `ob_code_df` 中 PROD_KIND / SPEC_TP / CASE_STATUS 的 DB 層清除（E4、E5、E6、E7）由 **Phase 3a system-architect** 執行 migration 腳本；本 Story 不涉及 DB 直接操作
 - PROD_KIND 3 筆與 SPEC_TP 32 筆的對應 `pooldata_field_option` Seed 值（E5、E6），依 OBMCODEDF 真實 dump 確認，由 Phase 3a 補充；本 Story 專注在 caseyear（J5 已拍板 8 筆）與 case_status（已知 4 筆）
 - `option_label` 的完整中文顯示名稱在 US-103 初始 Seed 中定義；本 Story 僅確認欄位存在且來源正確
-- caseyear 的特殊值 `99` 在月跑 Stage 1 的查詢邏輯（YEAR_CNT 無上限語意）由 **Phase 3a** 處理；US-103 seed 已有「99 = 不限年數」說明標籤
+- caseyear 的特殊值 `99` 在月名單分派 Stage 1 的查詢邏輯（YEAR_CNT 無上限語意）由 **Phase 3a** 處理；US-103 seed 已有「99 = 不限年數」說明標籤
 
 ---
 

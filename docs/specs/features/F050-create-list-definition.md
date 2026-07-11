@@ -71,7 +71,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 
 ## 1. 功能摘要
 
-提供業務部長新增名單定義功能，支援空白表單與「從既有名單複製」兩種建立模式。系統依格式 `OB{YYYYMM}{NNN}` 自動產生 `list_no`，同月流水號上限 999 筆；`prod_kind + card_type` 組合在當月 active 名單中必須唯一。**表單必填 `condition_payload`（至少 1 個 conditions），欄位來源為 F075 v1.5 白名單 active 集合；`list_period_start` / `list_period_end` / `list_interval` 維持為一級欄位（J8），不納入 conditions**。月跑執行中禁止新增。本 Feature 與 F051 共用表單欄位規範。
+提供業務部長新增名單定義功能，支援空白表單與「從既有名單複製」兩種建立模式。系統依格式 `OB{YYYYMM}{NNN}` 自動產生 `list_no`，同月流水號上限 999 筆；`prod_kind + card_type` 組合在當月 active 名單中必須唯一。**表單必填 `condition_payload`（至少 1 個 conditions），欄位來源為 F075 v1.5 白名單 active 集合；`list_period_start` / `list_period_end` / `list_interval` 維持為一級欄位（J8），不納入 conditions**。月名單分派執行中禁止新增。本 Feature 與 F051 共用表單欄位規範。
 
 ## 2. 使用者故事
 
@@ -132,7 +132,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - **And** 5 個 backward-compat 欄位不由前端複製；後端依新 `condition_payload` 衍生填入（BR-10）
 - **And** 若來源名單 `condition_payload IS NULL`（舊遷移名單），前端 dropdown 已過濾不列出；若繞過直接呼叫 API，後端回 422 `LEGACY_LIST_NOT_COPYABLE`（defense-in-depth，拍板 Q4）
 
-### AC-6：月跑執行中禁止新增
+### AC-6：月名單分派執行中禁止新增
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
 - **When** 業務部長嘗試點擊「新增名單定義」按鈕
@@ -192,14 +192,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - **When** 後端驗證並準備寫入
 - **Then** 後端以 201 Created 成功寫入，但 response body 附加 `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: ["<columnName>"] }]`
 - **And** 前端顯示非阻擋式提示：「部分篩選條件的選項值已停用，請確認是否仍符合業務需求」
-- **And** 與 F076 v1.5 BR-4「停用後不回溯」語意一致；月跑 Stage 1 仍可正常以已固化條件過濾
+- **And** 與 F076 v1.5 BR-4「停用後不回溯」語意一致；月名單分派 Stage 1 仍可正常以已固化條件過濾
 
 ### AC-14：stage 保護（v2.1 新增 / US-121 AC-3 / K1 / K3）
 
 - **Given** 名單 `stage` 不為 `'draft'`
 - **When** 任何使用者嘗試對該名單寫入 `condition_payload`（透過 F050 POST 為「新建」場景；本 AC 主要規範對應 F051 PUT 編輯場景，本 spec 沿用同語意）
 - **Then** 回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`（沿用既有錯誤碼）
-- **And** 月跑執行中（AssignmentRun status='running'）優先於 stage guard，即使 stage='draft' 仍回 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
+- **And** 月名單分派執行中（AssignmentRun status='running'）優先於 stage guard，即使 stage='draft' 仍回 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
 - **And** Rollback 操作完成後（M03a/b/c/d）stage 回 'draft'，condition_payload 重新可寫入（K3）
 
 ### AC-15：backward-compat 衍生欄位（v2.1 新增 / J6 / BR-10）
@@ -207,7 +207,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - **Given** 業務部長成功送出含 `condition_payload` 之新建請求
 - **When** 後端寫入 `ob_list_definition`
 - **Then** 5 個 backward-compat 欄位（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）由後端依 `condition_payload` 衍生填入並一併寫入 entity column（衍生規則由 Phase 3a system-architect 設計，本 spec 僅聲明意圖；對應 GAP-LIST §C3）
-- **And** 此 5 個欄位作為舊讀取端（含 F048 清單頁、F051 編輯頁載入 fallback、月跑 Stage 1 condition_payload IS NULL fallback）之 backward-compat 來源
+- **And** 此 5 個欄位作為舊讀取端（含 F048 清單頁、F051 編輯頁載入 fallback、月名單分派 Stage 1 condition_payload IS NULL fallback）之 backward-compat 來源
 - **And** GET API（含 F048 / F051 載入）回應 body 同時含 `conditionPayload` 與 5 個衍生欄位；條件來源以 `conditionPayload` 為準
 
 ### AC-16：cardType 下拉契約（v2.1.1 新增 / US-126 / US-127 / D1 / D4 / Q-A）
@@ -290,7 +290,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | 欄位 | Schema 欄位名 | UI 元件 | 說明 |
 |---|---|---|---|
 | 卡別 | `card_type` | **下拉選單（`<select>`）** | **v2.1.1（2026-05-20 / US-126 / US-127 / D1 / D4 / Q-A）**：UI 從文字輸入改為動態下拉；選項來源 `GET /api/v1/assignment/scoring/card-types`；建立模式僅列 `status='active'` 卡別；編輯模式（F051）額外保留「該名單已存的 inactive 值」（disabled，可保留不可重選）；首選項「— 未選擇 —」（空值，預設選中）；DTO 送出值為 `ob_card_type.card_type` 代碼字串。獨立輸入，不由 `list_nm` 解析（A43 決議）；後端欄位長度對齊 `ob_card_type.card_type VARCHAR(5)`（`^[A-Z0-9]{1,5}$`），v2.0 之前端 `maxLength={2}` 限制已移除。完整契約見 AC-16 |
-| 啟用 CR 回分 | `cr_enabled` | Toggle / Checkbox，預設 false | **v2.0 新增**：per-list flag，取代原 F059 全域開關（F059 已 DEPRECATED）。`BOOLEAN NOT NULL DEFAULT false`；月跑 Stage 3 依此 flag 決定是否將該名單套用 CR（Customer Recycling）回分規則。詳見 [data-model.md `ob_list_definition.cr_enabled`](../data-model.md#ob-list-definition-obmlistdf--名單定義) |
+| 啟用 CR 回分 | `cr_enabled` | Toggle / Checkbox，預設 false | **v2.0 新增**：per-list flag，取代原 F059 全域開關（F059 已 DEPRECATED）。`BOOLEAN NOT NULL DEFAULT false`；月名單分派 Stage 3 依此 flag 決定是否將該名單套用 CR（Customer Recycling）回分規則。詳見 [data-model.md `ob_list_definition.cr_enabled`](../data-model.md#ob-list-definition-obmlistdf--名單定義) |
 
 **v2.1.1 移除欄位**（不再為前端表單欄位；US-128 / D2 / Q-B B3）：
 
@@ -306,7 +306,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - `status = 'active'`（新增時固定）
 - `stage = 'draft'`（新增時固定，F077 五階段流程）
 - `created_by`, `created_at`, `updated_by`, `updated_at`（後端自動填入）
-- **backward-compat 衍生欄位**（v2.1 / J6 / BR-10）：`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src` — 表單不顯示，後端依 `condition_payload` 衍生填入並寫入 entity column；衍生規則由 Phase 3a system-architect 設計（GAP-LIST §C3）；作為舊讀取端（F048 清單頁、F051 編輯頁 fallback、月跑 Stage 1 fallback）之 backward-compat 來源
+- **backward-compat 衍生欄位**（v2.1 / J6 / BR-10）：`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src` — 表單不顯示，後端依 `condition_payload` 衍生填入並寫入 entity column；衍生規則由 Phase 3a system-architect 設計（GAP-LIST §C3）；作為舊讀取端（F048 清單頁、F051 編輯頁 fallback、月名單分派 Stage 1 fallback）之 backward-compat 來源
 - **`prod_best`（v2.1.1 deprecated / US-128 / Q-B B3）**：表單不顯示、前端不送出；entity column 保留為 deprecated（NOT NULL 放寬為 NULL），既有資料於本次一次性 migration 清空為 NULL；新名單寫入後端應忽略此欄位（具體 backend DTO 是否標 `@IsOptional()` 或刪除由 system-architect 決定）；**不**屬於 backward-compat 衍生欄位範圍（即不由 `condition_payload` 衍生填入），其業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接
 
 ### 5.4 condition_payload JSON Schema（v2.1 新增 / A2 解除）
@@ -367,7 +367,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 
 ```json
 {
-  "listNm": "車貸月跑名單",
+  "listNm": "車貸月名單分派名單",
   "listPeriodStart": 1,
   "listPeriodEnd": 6,
   "listInterval": 1,
@@ -409,7 +409,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 ```json
 {
   "listNo": "OB202605001",
-  "listNm": "車貸月跑名單",
+  "listNm": "車貸月名單分派名單",
   "status": "active",
   "projectWorkym": "202605",
   "stage": "draft",
@@ -426,7 +426,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | 400 | RESERVED_FIELD_IN_CONDITIONS | `conditions` 含一級保留欄位 `list_period_start` / `list_period_end` / `list_interval`（AC-12 / BR-8 / J8 / 拍板 3） |
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派執行中 |
 | 422 | CONDITION_COLUMN_NOT_IN_WHITELIST | `conditions[].columnName` 不在 F075 v1.5 白名單或對應欄位 `is_active=false`（AC-11 / BR-6 / 拍板 1） |
 | 422 | LEGACY_LIST_NOT_COPYABLE | `copyFromListNo` 指向之來源名單 `condition_payload IS NULL`（舊遷移名單）（AC-5 / 拍板 Q4） |
 | 422 | LIST_NO_LIMIT_EXCEEDED | 本月已達 999 筆 |
@@ -522,9 +522,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | `CREATE` | 名單建立 | F050 v2.1.1 AC-9（本 spec） |
 | `UPDATE` | 名單編輯（草稿階段） | F051 |
 | `DELETE` | 名單實體刪除（MVP 未使用，停用採軟刪除） | — |
-| `RUN` | 月跑觸發 | F061 v1.4 |
+| `RUN` | 月名單分派觸發 | F061 v1.4 |
 | `EXPORT` | 分派結果匯出 | F064 v1.1 AC-5 |
-| `CANCEL` | 月跑取消 | F062 Phase 2 |
+| `CANCEL` | 月名單分派取消 | F062 Phase 2 |
 | `STAGE_ADVANCE` | 階段推進（draft → dept_ratio / dept_ratio → personnel_ratio / personnel_ratio → approval / approval → ready） | F078 / F080 / F084 / F086 |
 | `STAGE_ROLLBACK` | 階段退回（dept_ratio → draft / personnel_ratio → dept_ratio / ready → approval） | F081 v1.3 / F085 v1.3 / F089 v1.3 |
 | `STAGE_REJECT` | 簽核拒絕（approval → personnel_ratio） | F087 |
@@ -568,10 +568,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在 |
 | 500 | SYSTEM_INTERNAL_ERROR | 伺服器內部錯誤 |
 
-**註**：本端點**不**攔截 `LIST_HISTORICAL_READONLY`（歷史月份）— 對應 US-131 AC-1 之明定行為：「歷史月份與目前月份均可開啟 Drawer」；歷史月份限制僅套用於寫入端點，本唯讀端點不適用。同理本端點**不**攔截 `ASSIGNMENT_RUN_ALREADY_RUNNING`（月跑鎖中）— Drawer 在月跑執行中仍可開啟唯讀檢視。
+**註**：本端點**不**攔截 `LIST_HISTORICAL_READONLY`（歷史月份）— 對應 US-131 AC-1 之明定行為：「歷史月份與目前月份均可開啟 Drawer」；歷史月份限制僅套用於寫入端點，本唯讀端點不適用。同理本端點**不**攔截 `ASSIGNMENT_RUN_ALREADY_RUNNING`（月名單分派鎖中）— Drawer 在月名單分派執行中仍可開啟唯讀檢視。
 
 **呼叫者**：
-- [F048 v2.0](F048-view-list-definition.md) Kanban 卡片「查看」按鈕（所有 role / 所有 stage / 歷史月份 / 月跑鎖中皆可觸發，對齊 [F077 v1.3 BR-7 C-5](F077-month-switch-and-stage-overview.md)）
+- [F048 v2.0](F048-view-list-definition.md) Kanban 卡片「查看」按鈕（所有 role / 所有 stage / 歷史月份 / 月名單分派鎖中皆可觸發，對齊 [F077 v1.3 BR-7 C-5](F077-month-switch-and-stage-overview.md)）
 
 ## 7. 商業規則
 
@@ -580,15 +580,15 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | BR-1 | `list_no` 產生邏輯：後端查詢當月最大既有流水號 + 1；若無既有則從 001 開始；達 999 回傳 `LIST_NO_LIMIT_EXCEEDED` |
 | BR-2 | 名單唯一性僅在 `status = 'active'` 範圍內檢查；停用紀錄不納入。**v2.2 定義（2026-06-02）**：以**正規化後 `condition_payload` 完全相同 + 同 `card_type`** 判定重複（正規化：條件與 values 皆無序、排除 system-fixed 欄位 best_case、含 logic）；新名單無有效條件 → 跳過；舊名單（`condition_payload IS NULL`）由 5 個 backward-compat 欄位還原比對。`card_type` 保留為比對 key（legacy 有條件全同僅 card_type 不同之合法名單）。**v2.1 prod_kind 交集語意已棄用**（非 legacy 沿用且誤擋他新/非他新中古配對，詳見 architecture-spec §18.8） |
 | BR-3 | 多值欄位（`caseyear` / `spec_tp` / `settle_src` / `case_status` / `prod_kind`）寫入 entity column 時以 `$$` 為分隔符儲存（如 `0$$1$$2$$3`、`01$$02$$03`）；v2.1 起此為**後端衍生填入之 backward-compat 格式**（BR-10），前端不直接送出此格式。**v2.1.1 補述（US-128）**：`prod_best` 已從一級欄位移除，**不**屬於 BR-3 衍生欄位之一；其業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接（見 BR-12） |
-| BR-4 | 月跑執行鎖由 `assignment_run.status IN ('pending', 'running')` 判斷 |
+| BR-4 | 月名單分派執行鎖由 `assignment_run.status IN ('pending', 'running')` 判斷 |
 | BR-5 | 所有寫入操作必須同步寫入 `assignment_audit_log`；稽核寫入失敗僅記錄 Logger.error，不 rollback 業務操作 |
 | BR-6 | **condition_payload 為 source of truth（v2.1 重寫，A1 / A2 / A3 解除；v2.3.1 最低條件數修正 / US-144）**：(1) 必填，`conditions` 至少 1 個**非系統固定（`is_system_fixed = false`）condition**——系統固定欄位（如 `best_case`）不計入最低門檻；計數於 `validateConditionPayload`、`injectSystemFixedConditions`（BR-14）**之前**執行，計數對象為使用者送入之 payload（無論是否含 `best_case`，一律排除 `is_system_fixed = true` 欄位）；非系統固定條件數為 0 時回 422 `VALIDATION_ERROR`，訊息「篩選條件不得為空，請至少設定一個非系統固定（使用者自訂）篩選欄位」（AC-10）；(2) 每個 `conditions[].columnName` 必須存在於 F075 v1.5 `pooldata_field_whitelist` 且 `is_active = true`；違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`（拍板 1）；(3) service 層校驗於寫入前執行（defense-in-depth，即使前端 dropdown 已過濾）；(4) `data-model.md` `ob_list_definition.condition_payload` JSONB 欄位之 schema 規範由本 §5.4 定義 |
 | BR-7 | **多值 / 區間 SQL 比對語意（v2.1 重寫，A6 / D3 解除）**：(1) categorical 條件以 SQL `columnName IN (v1, v2, ...)` 語意（同欄位多值 OR，符合任一即納入；對應 US-122 AC-2）；(2) numeric 條件以 `columnName BETWEEN min AND max`（含邊界，US-122 AC-3）；(3) date 條件以 `columnName BETWEEN dateStart AND dateEnd`；(4) 多欄位之間以 `AND` 組合；(5) **舊 SP 之 `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對已棄用**，僅保留於 `condition_payload IS NULL` 之舊名單 fallback 路徑（D4 / US-122 AC-4，由 Phase 3a 實作） |
 | BR-8 | **list_period_* 為一級保留欄位（v2.1 新增，J8 / 拍板 3）**：`list_period_start` / `list_period_end` / `list_interval` 為 `ob_list_definition` 一級欄位，禁止納入 `condition_payload.conditions`；違反回 400 `RESERVED_FIELD_IN_CONDITIONS`；前端 dropdown 不列出此三個欄位，後端 service 層 defense-in-depth 校驗 |
-| BR-9 | **INACTIVE 選項警示（v2.1 新增，非阻擋）**：寫入時若 `conditions[].values` 含 `pooldata_field_option.is_active=false` 之 option，回 201 Created + `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`；與 F076 v1.5 BR-4「停用後不回溯」語意一致；月跑 Stage 1 仍以已固化條件過濾 |
-| BR-10 | **backward-compat 衍生欄位（v2.1 新增，J6 / C3）**：5 個 entity column（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）由後端依 `condition_payload` 衍生填入並寫入 `ob_list_definition`；衍生規則之具體實作（單值 / 多值 `$$` 分隔組合方式、categorical/numeric/date 轉換語意）由 **Phase 3a system-architect** 設計；本 spec 僅聲明意圖。讀取端（F048 清單頁、F051 編輯頁 fallback、月跑 Stage 1 condition_payload IS NULL fallback）使用此 5 個欄位作為 backward-compat 資料來源。**v2.1.1 補述（US-128）**：`prod_best` **不**在本 BR-10 範圍內（即不由 `condition_payload` 衍生填入；亦不作為 backward-compat 讀取欄位）；其業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接（見 BR-12） |
+| BR-9 | **INACTIVE 選項警示（v2.1 新增，非阻擋）**：寫入時若 `conditions[].values` 含 `pooldata_field_option.is_active=false` 之 option，回 201 Created + `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`；與 F076 v1.5 BR-4「停用後不回溯」語意一致；月名單分派 Stage 1 仍以已固化條件過濾 |
+| BR-10 | **backward-compat 衍生欄位（v2.1 新增，J6 / C3）**：5 個 entity column（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）由後端依 `condition_payload` 衍生填入並寫入 `ob_list_definition`；衍生規則之具體實作（單值 / 多值 `$$` 分隔組合方式、categorical/numeric/date 轉換語意）由 **Phase 3a system-architect** 設計；本 spec 僅聲明意圖。讀取端（F048 清單頁、F051 編輯頁 fallback、月名單分派 Stage 1 condition_payload IS NULL fallback）使用此 5 個欄位作為 backward-compat 資料來源。**v2.1.1 補述（US-128）**：`prod_best` **不**在本 BR-10 範圍內（即不由 `condition_payload` 衍生填入；亦不作為 backward-compat 讀取欄位）；其業務語意改由 `condition_payload.conditions[columnName='best_case']` 承接（見 BR-12） |
 | BR-11 | **columnName 大小寫 normalize（v2.1 新增）**：API 接受 `conditions[].columnName` 時統一為 lowercase snake_case，對齊 `ob_pool_data` 與 F075 v1.4.3 BR-14；regex 為 `/^[a-z][a-z0-9_]{0,63}$/`；違反回 422 `VALIDATION_ERROR`。**不影響** F068（DEPRECATED v1.3）之 `ob_code_df.tbl_id` 大寫業務常數（屬獨立語境） |
-| BR-12 | **best_case 取代 prod_best 之語意映射（v2.1.1 新增，US-128 / US-129 / D2 / Q-B B3）**：(1) 業務語意「最佳產品 / 優質案件」改由 `condition_payload.conditions[columnName='best_case', fieldType='categorical', values: ['Y'\|'N']]` 表達；(2) `ob_list_definition.prod_best` schema 欄位保留為 deprecated（NOT NULL 放寬為 NULL），既有資料於本次一次性 migration 清空為 NULL（Q-B B3 決議）；新名單寫入不填值（後端 DTO 處置由 system-architect 決定）；(3) 月跑 Stage 1 不再讀 `prod_best` 欄位；依 `condition_payload.conditions` 之 `best_case` 條件對 `ob_pool_data.best_case` 以 `IN (...)` 過濾（對應 BR-7）；(4) `best_case` options 來源 = F076 v1.6 `pooldata_field_option WHERE column_name='best_case'`（`Y` = 優質案件、`N` = 非優質案件；US-129 AC-1）；(5) 完全 DROP COLUMN 屬 v2.2+ 後續決策，本 v2.1.1 不執行 |
+| BR-12 | **best_case 取代 prod_best 之語意映射（v2.1.1 新增，US-128 / US-129 / D2 / Q-B B3）**：(1) 業務語意「最佳產品 / 優質案件」改由 `condition_payload.conditions[columnName='best_case', fieldType='categorical', values: ['Y'\|'N']]` 表達；(2) `ob_list_definition.prod_best` schema 欄位保留為 deprecated（NOT NULL 放寬為 NULL），既有資料於本次一次性 migration 清空為 NULL（Q-B B3 決議）；新名單寫入不填值（後端 DTO 處置由 system-architect 決定）；(3) 月名單分派 Stage 1 不再讀 `prod_best` 欄位；依 `condition_payload.conditions` 之 `best_case` 條件對 `ob_pool_data.best_case` 以 `IN (...)` 過濾（對應 BR-7）；(4) `best_case` options 來源 = F076 v1.6 `pooldata_field_option WHERE column_name='best_case'`（`Y` = 優質案件、`N` = 非優質案件；US-129 AC-1）；(5) 完全 DROP COLUMN 屬 v2.2+ 後續決策，本 v2.1.1 不執行 |
 | BR-13 | **sessionStorage Signal Protocol — `cdmp.pendingToast`（v2.2 新增 / GAP-G2 / US-133 / single authority）**：跨頁 toast 訊號協定，限「子頁工作流完成後返回 M01 主頁」之情境使用。本 BR-13 為**唯一權威來源**，F079 / F082 / F086 / F087 之 §7 UI/UX 需求透過 cross-reference 引用本 BR-13，不重複定義。完整規範如下：<br><br>**(1) Key 命名**：`cdmp.pendingToast`（全小寫、點分隔；對齊 `cdmp.*` 全域 sessionStorage / localStorage key 命名規範）。<br><br>**(2) Payload JSON Schema**：<br>```json<br>{<br>  "type": "success" \| "info" \| "warning" \| "error",  // 必填<br>  "msg": string,                                       // 必填，主訊息（建議 ≤ 60 字）<br>  "sub": string                                        // 選填，副訊息（建議 ≤ 80 字）<br>}<br>```<br>對應 toast UI 4 種樣式（success = 綠 / info = 藍 / warning = 琥珀 / error = 紅）；前端 toast 元件依 `type` 渲染對應 icon 與顏色。<br><br>**(3) Producer 規範**（子頁寫入）：<br>- **寫入時機**：成功 / 取消決定後、`location.href` 跳轉**前**執行<br>- **寫入方式**：`sessionStorage.setItem('cdmp.pendingToast', JSON.stringify(payload))`<br>- **失敗處理**：以 `try/catch` 包覆，sessionStorage API 不可用（無痕模式 / 配額耗盡）時靜默吞 exception，不阻擋跳轉<br>- **適用子頁**：[F079](F079-set-dept-ratio.md) 部門比例設定（29a）、[F082](F082-set-per-sales-ratio.md) 個別比例設定（29b）、[F086](F086-approve-to-ready.md) 簽核核准 / [F087](F087-reject-to-personnel-ratio.md) 簽核拒絕（29c）；其他寫入操作 spec 如需採用須先 cross-reference 本 BR-13<br><br>**(4) Consumer 規範**（M01 主頁讀取）：<br>- **讀取時機**：M01 主頁（[F048 v2.0](F048-view-list-definition.md) Kanban 頁）`DOMContentLoaded`（或 React `useEffect([])`）執行、Kanban 渲染**之後**<br>- **行為**：`sessionStorage.getItem('cdmp.pendingToast')` → `JSON.parse`（包 try/catch）→ 依 `type` 顯示對應樣式 toast → 立即 `sessionStorage.removeItem('cdmp.pendingToast')`<br>- **無效 JSON / 無 key**：靜默不顯示、清除殘留 key（若有）；不拋出 uncaught exception<br><br>**(5) Consume-once 語意**：M01 主頁讀取後**立即** `removeItem`，確保：<br>- 同一 toast 不因頁面重整（F5）重複顯示<br>- 同一 toast 不因瀏覽器返回（browser back）重複顯示<br>- 同一 toast 不因多分頁同時開啟 M01 而重複顯示<br><br>**(6) 適用情境（限定範圍）**：<br>- **適用**：子頁完成（儲存 / 取消）後跳回 M01 主頁之 toast 提示（範例：「{LIST_NM} 部門比例已儲存 / 名單已推進至個別比例設定階段」、「已取消，返回名單定義」）<br>- **不適用**：同頁面內操作 toast（直接用 React state 即可）、Detail Drawer 操作回饋、橫向跨模組跳頁（如 M01 → M02）<br><br>**(7) 跨 spec reference**：F079 / F082 / F086 / F087 spec 之 §7 UI/UX 需求**僅描述**「子頁完成後依 [F050 v2.2 §7 BR-13](F050-create-list-definition.md) 寫入 `cdmp.pendingToast` 並跳回 M01 主頁」即可，不重複展開 payload / consume-once / key 命名等細節。 |
 | BR-14 | **系統固定篩選條件強制注入（`injectSystemFixedConditions` 契約）（v2.3 新增 / US-144 / Design A）**：(1) **觸發點**：`createList` 於 §5.4 condition_payload schema 驗證（含 AC-10 ~ AC-13 / BR-6 ~ BR-9 / BR-11）**通過後、寫入 `ob_list_definition` 前**，呼叫 `injectSystemFixedConditions(payload)`。(2) **契約**：input 為通過驗證之 condition_payload；service 層查 F075 v1.7 `pooldata_field_whitelist WHERE is_system_fixed = true` 之所有欄位，對每個 system-fixed 欄位於 output payload 之 `conditions` 中**確保存在對應條目且 `values` 強制為該欄位之固定值**——若 input 缺漏該條目則補入；若已存在則覆寫其 `values`（及 `fieldType`）為固定值。MVP 範圍唯一 system-fixed 欄位為 `best_case`，固定為 `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }`。(3) **tamper-normalization 靜默語意**：使用者就 system-fixed 欄位之任何竄改（傳 `['N']` / `[]` / 多值 / 完全省略）一律靜默正規化，**不**拒絕請求、**不**回錯誤碼，仍回 201 Created（對應 AC-17 / US-144 AC-1 / TC-144-01 / TC-144-02）。(4) **驅動旗標**：固定欄位集合與固定值之判定以 `pooldata_field_whitelist.is_system_fixed` 旗標為準（F075 v1.7 BR-15），**不** hardcode 字串 `'best_case'`，為未來擴充其他系統固定欄位預留。(5) **與 backward-compat 衍生欄位之關係**：`best_case` **不**在 BR-10 之 5 個衍生 entity column 範圍內（沿用 BR-12），僅存於 `condition_payload`。(6) **複製場景**：「從上月複製」（AC-5）之來源名單即使不含 `best_case`，注入仍於 `createList` 強制執行（US-144 AC-9）。(7) **Stage 1 無需修改**：注入後之 `best_case: ['Y']` 由既有 categorical `IN (...)` path（BR-7）產生 `"best_case" IN ('Y')`（US-144 AC-7）。(8) **回填**：既有 `stage = 'draft'` 名單之 `best_case` 回填由 migration 執行（draft only，凍結快照不回填，idempotent；US-144 AC-8）；migration 設計與 ordering 由 system-architect owns（AD-E07-18 或衍生決策），本 spec 僅引用 |
 | ~~BR-6 v2.0~~ | ~~`case_status` 為獨立業務欄位...必填，至少選 1 項；可選代碼由 F068 維護~~ | **v2.1 廢除**：case_status 改由 condition_payload 必填 + columnName 白名單驗證統一覆蓋（A1 / A5）；可選代碼來源改為 F076 v1.5 `pooldata_field_option`（US-125 AC-2） |
@@ -617,7 +617,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 
 - **Blocked By**：F048（清單頁入口）、**F075 v1.7（POOLDATA 篩選欄位白名單；含 case_status 條目 v1.5 + `best_case` 條目 v1.6 + `is_system_fixed` 旗標 v1.7：`best_case.is_system_fixed = true`，驅動 BR-14 注入與前端鎖定列 / dropdown 排除；US-144）**、F076 v1.6（類別型欄位可選值；caseyear / case_status 動態選項來源 v1.5 + **`best_case` Y/N options seed v1.6**；US-125 AC-1 / AC-2 / AC-5、US-129 AC-1）、F069（卡別計分卡主檔；`ob_card_type` 為卡別下拉資料來源；US-126 / US-127）、US-121（condition_payload 驗證規則）、US-125（caseyear / case_status 選項遷移）、**US-129（`best_case` Y/N options seed）**、**US-144（`best_case` 鎖定為系統固定篩選條件 Design A）**
 - ~~F068（PROD_KIND / SPEC_TP / CASE_STATUS 代碼維護）~~（**v2.1 廢除**：F068 DEPRECATED v1.3）
-- **Blocks**：F061（月跑需有 active 名單定義）、F060（per-LIST_NO 部門比例）
+- **Blocks**：F061（月名單分派需有 active 名單定義）、F060（per-LIST_NO 部門比例）
 - **§6.2 Detail Snapshot API（v2.2 / GAP-G1）Consumers**：[F048 v2.0](F048-view-list-definition.md)（Kanban 卡片「查看」按鈕觸發 Detail Drawer）
 - **§7 BR-13 sessionStorage Signal Protocol（v2.2 / GAP-G2）Consumers**：[F079](F079-set-dept-ratio.md)（29a 部門比例儲存 / 取消）、[F082](F082-set-per-sales-ratio.md)（29b 個別比例儲存 / 取消）、[F086](F086-approve-to-ready.md)（29c 簽核核准）、[F087](F087-reject-to-personnel-ratio.md)（29c 簽核拒絕）
 

@@ -72,14 +72,14 @@ status: Draft
 - **When** User 以正確憑證成功登入
 - **Then** 系統發行 JWT Token（payload 含 `role=user`、`businessRole='director'`），並重新導向至 `/c360/customers`
 - **And** sidebar 同時顯示 Customer 360 群組與「客戶名單分派」群組（含 M01~M07 全部子項，依 E07 相關 Feature 規格）
-- **And** 業務部長雖被導向 Customer 360 作為預設首頁，但可透過 sidebar 自由進入分派相關頁面（含名單 CRUD、計分卡寫入、月跑觸發、簽核等部長專屬入口），不會被路由守衛阻擋
+- **And** 業務部長雖被導向 Customer 360 作為預設首頁，但可透過 sidebar 自由進入分派相關頁面（含名單 CRUD、計分卡寫入、月名單分派觸發、簽核等部長專屬入口），不會被路由守衛阻擋
 
 ### AC-5b：業務處長登入後導向 Customer 360
 
 - **Given** User 帳號 `business_role='section_chief'` 且已啟用
 - **When** User 以正確憑證成功登入
 - **Then** 系統發行 JWT Token（payload 含 `role=user`、`businessRole='section_chief'`），並重新導向至 `/c360/customers`
-- **And** sidebar 同時顯示 Customer 360 群組與「客戶名單分派」群組（僅顯示處長可存取之子項：名單瀏覽、計分卡 GET、個別業務比例、快照歷史等；隱藏部長專屬入口如名單建立、月跑觸發、部門比例編輯、簽核）
+- **And** sidebar 同時顯示 Customer 360 群組與「客戶名單分派」群組（僅顯示處長可存取之子項：名單瀏覽、計分卡 GET、個別業務比例、快照歷史等；隱藏部長專屬入口如名單建立、月名單分派觸發、部門比例編輯、簽核）
 - **And** 處長存取「個別業務比例」（F082）時，後端 service 層以 `scopeByCreator()` 限縮為該處長轄區資料
 
 ### AC-6：sidebar 依實質身份動態顯示
@@ -119,7 +119,7 @@ status: Draft
 | 業務處長嘗試存取部長專屬前端路由（如 `/assignment/lists/create`、`/assignment/runs/trigger`） | 前端路由守衛攔截，重新導向至處長可達的預設頁（如 `/assignment/lists`） |
 | 任何 User 嘗試呼叫 admin 專屬 API 端點 | 後端回傳 HTTP 403 Forbidden，並記錄至日誌 |
 | 一般使用者呼叫 `/api/v1/assignment/**` 端點 | 後端 `DirectorGuard` 或 `DirectorOrSectionChiefGuard` 回傳 HTTP 403 + 錯誤碼 `E07_ROLE_NOT_ASSIGNED`（AD-E07 v3.0） |
-| 業務處長呼叫部長專屬端點（如名單 CRUD、月跑觸發） | 後端 `DirectorGuard` 回傳 HTTP 403 + 錯誤碼 `E07_REQUIRES_DIRECTOR` |
+| 業務處長呼叫部長專屬端點（如名單 CRUD、月名單分派觸發） | 後端 `DirectorGuard` 回傳 HTTP 403 + 錯誤碼 `E07_REQUIRES_DIRECTOR` |
 
 ### Admin 專屬 API 端點保護 — Response（HTTP 403）
 
@@ -178,7 +178,7 @@ status: Draft
 | **M03b 個別業務比例**（F082~F085） | C/R/U/D | C/R/U/D | C/R/U/D（轄區內） | - |
 | **M03c 簽核**（F086~F087） | C/R/U/D | C/R/U/D | R | - |
 | **M03d 準備完成 / Rollback**（F088~F089） | C/R/U/D | C/R/U/D | R | - |
-| **M04 月跑觸發**（F061） | C/R/U/D | C/R/U/D | R（跑歷史） | - |
+| **M04 月名單分派觸發**（F061） | C/R/U/D | C/R/U/D | R（跑歷史） | - |
 | **M05 快照 / 歷史查詢**（F062~F067） | R | R | R | - |
 | **M06 代碼維護 / 白名單**（F075~F076） | C/R/U/D | C/R/U/D（寫入端） | R | - |
 | **M07 角色管理**（F006a、F073、F074） | C/R/U/D | - | - | - |
@@ -201,8 +201,8 @@ status: Draft
 | **M03c 簽核** | F086~F087 | POST/PUT | `DirectorGuard` | 處長無簽核權 |
 | **M03d 準備完成** | F088 | POST | `DirectorOrSectionChiefGuard` | 依 user story 推進至下階段 |
 | **M03d Rollback** | F089 | POST/DELETE | `DirectorGuard` | 僅部長可回退 |
-| **M04 月跑觸發** | F061 | POST | `DirectorGuard` | 處長無觸發權 |
-| **M04 月跑歷史 GET** | F061（GET 子端點） | GET | `DirectorOrSectionChiefGuard` | |
+| **M04 月名單分派觸發** | F061 | POST | `DirectorGuard` | 處長無觸發權 |
+| **M04 月名單分派歷史 GET** | F061（GET 子端點） | GET | `DirectorOrSectionChiefGuard` | |
 | **M05 快照歷史 GET** | F062~F067（GET） | GET | `DirectorOrSectionChiefGuard` | 全 GET 端點 |
 | **M06 代碼維護 GET** | F075~F076（GET） | GET | `DirectorOrSectionChiefGuard` | |
 | **M06 白名單寫入** | F075~F076（POST/PUT/DELETE） | POST/PUT/DELETE | `DirectorGuard` | |

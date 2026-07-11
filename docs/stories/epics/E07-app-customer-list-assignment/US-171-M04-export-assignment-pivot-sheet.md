@@ -66,7 +66,7 @@ CDMP 目前的 xlsx 匯出（F064 v2.1，US-155）僅包含 23 欄明細頁籤�
 
 ### AC-1：xlsx 匯出新增第 2 頁籤「樞紐分析」
 
-- **Given** 月跑已完成（`assignment_run.status = 'completed'`）
+- **Given** 月名單分派已完成（`assignment_run.status = 'completed'`）
 - **When** 業務部長 / 業務處長觸發 xlsx 匯出（`GET /api/v1/assignment/runs/:runId/export?format=xlsx`）
 - **Then** 回傳的 xlsx 檔案包含 **2 個工作表**
 - **And** 第 1 個工作表名稱為 `assignment_result`，內容為 23 欄明細（與 US-155 一致，不受影響）
@@ -74,7 +74,7 @@ CDMP 目前的 xlsx 匯出（F064 v2.1，US-155）僅包含 23 欄明細頁籤�
 
 ### AC-2：「樞紐分析」頁籤版面與標頭列
 
-- **Given** 月跑 xlsx 匯出被觸發
+- **Given** 月名單分派 xlsx 匯出被觸發
 - **When** 「樞紐分析」工作表產生完成
 - **Then** R1（第 1 列）左欄顯示「部門代號」、右欄顯示「(全部)」（對齊 legacy 頁篩選標示）
 - **And** R2（第 2 列）為空列
@@ -110,7 +110,7 @@ CDMP 目前的 xlsx 匯出（F064 v2.1，US-155）僅包含 23 欄明細頁籤�
 
 ### AC-6：CSV 格式不含樞紐頁籤
 
-- **Given** 月跑已完成
+- **Given** 月名單分派已完成
 - **When** 業務部長 / 業務處長觸發 CSV 匯出（`format=csv`）
 - **Then** 回傳 CSV 為**單一頁籤**格式（23 欄明細），不包含任何樞紐分析內容
 - **And** CSV 的欄位、格式、streaming 行為與 US-155 AC-6 完全一致，不受 F108 影響
@@ -124,7 +124,7 @@ CDMP 目前的 xlsx 匯出（F064 v2.1，US-155）僅包含 23 欄明細頁籤�
 
 ### AC-8：空結果邊界處理
 
-- **Given** 月跑已完成，但分派結果為 0 筆（或處長 scoped 後無轄區資料）
+- **Given** 月名單分派已完成，但分派結果為 0 筆（或處長 scoped 後無轄區資料）
 - **When** 觸發 xlsx 匯出
 - **Then** 「樞紐分析」頁籤仍存在（檔案含 2 個頁籤）
 - **And** 頁籤內容包含標頭列（R1～R4）與總計列，資料區為空（或僅總計列顯示 100.0% 但無資料行）
@@ -136,13 +136,13 @@ CDMP 目前的 xlsx 匯出（F064 v2.1，US-155）僅包含 23 欄明細頁籤�
 
 ### TC-171-01：xlsx 含 2 個頁籤，名稱正確
 
-- **Given**：月跑 completed，結果 100 筆（含多個部門 / 員編 / 名單代號）
+- **Given**：月名單分派 completed，結果 100 筆（含多個部門 / 員編 / 名單代號）
 - **When**：業務部長觸發 xlsx 匯出
 - **Then**：xlsx 工作表數量 = 2；第 1 頁名稱 = `assignment_result`；第 2 頁名稱 = `樞紐分析`
 
 ### TC-171-02：CSV 不含樞紐頁籤
 
-- **Given**：月跑 completed，結果 100 筆
+- **Given**：月名單分派 completed，結果 100 筆
 - **When**：業務部長觸發 CSV 匯出
 - **Then**：回傳純文字 CSV（無工作表概念），內容為 23 欄明細，字串中不含「樞紐分析」字樣
 
@@ -200,14 +200,14 @@ CDMP 目前的 xlsx 匯出（F064 v2.1，US-155）僅包含 23 欄明細頁籤�
 
 ### TC-171-11：空結果邊界——頁籤存在且有標頭
 
-- **Given**：月跑 completed，分派結果 0 筆
+- **Given**：月名單分派 completed，分派結果 0 筆
 - **When**：業務部長觸發 xlsx 匯出
 - **Then**：xlsx 仍含 2 個頁籤；第 2 頁「樞紐分析」存在
 - **And**：頁籤包含 R1～R4 標頭列及總計列，回 200 OK
 
 ### TC-171-12：既有明細頁不受影響（回歸驗證）
 
-- **Given**：202606 月跑 completed 資料
+- **Given**：202606 月名單分派 completed 資料
 - **When**：業務部長觸發 xlsx 匯出
 - **Then**：第 1 頁 `assignment_result` 的 23 欄欄序、欄位名稱、資料列數與 F064 v2.1 規格完全一致
 - **And**：TC-155-01 所有斷言仍通過

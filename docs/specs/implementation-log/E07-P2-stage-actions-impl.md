@@ -47,7 +47,7 @@ last_updated: 2026-05-17
 
 1. **Stage 流轉**：全部走 P0 `StageTransitionService.advanceTo / rollbackTo / rejectTo`，含 audit log 同 transaction。`StageActionService` 為薄包裝。
 2. **比例驗證**：F079 dept 走 P0 `RatioValidationService`；F082 personnel 走 P0 `PersonnelRatioValidationService`（含全員離職短路 / `assertAllDeptsSumEquals100` for F084）。
-3. **月跑並發守衛**：所有寫入頂層 `AssignmentRunGuardService.assertNoRunningRun()`，符合決議 #6。
+3. **月名單分派並發守衛**：所有寫入頂層 `AssignmentRunGuardService.assertNoRunningRun()`，符合決議 #6。
 4. **Feature Flag fallback**：所有 controller 掛 `FeatureFlagGuard` + `@RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')`，符合決議 #2。
 5. **SectionChiefScopeGuard 決議 #4**：GET 不攔，service 內 `scopeByCreator(actorUser)` filter；PUT/POST 攔截邏輯放 service 層（PERSONNEL_RATIO_OUT_OF_SCOPE）。本批採輕量 service-level 實作（未獨立成 Guard class），與 spec v1.4 BR-14 一致。
 6. **F083 後端二次校驗**：放在 `PersonnelRatioService.validateAppliedTemplate()`，與 PUT 同流程，0 額外端點。
@@ -55,8 +55,8 @@ last_updated: 2026-05-17
 
 ## TDD Cycle 數量
 
-- DeptRatioService：6 cycles（GET / PUT 100% / 404 / 歷史 / 停用 / 月跑）
-- PersonnelRatioService：8 cycles（PUT 100% / 部門未配置 / 離職員工 / 處長越權 / F083 +10% 通過 / F083 不符 / 月跑 / 歷史）
+- DeptRatioService：6 cycles（GET / PUT 100% / 404 / 歷史 / 停用 / 月名單分派）
+- PersonnelRatioService：8 cycles（PUT 100% / 部門未配置 / 離職員工 / 處長越權 / F083 +10% 通過 / F083 不符 / 月名單分派 / 歷史）
 - StageActionService：15 cycles（每個 spec 至少 1 cycle + 共通 3 cycle）
 - legacy-grep regression：3 cycles（SalesManagerGuard / RequireSalesManager / e07_role）
 - **共 32 個 cycle**
@@ -91,7 +91,7 @@ last_updated: 2026-05-17
 | P0 共用基礎建設 | ✅ 完成 (commit 069bc3b) | 70+ |
 | P1 B1 schema + E02 role | ✅ 完成 (6899cba) | — |
 | P1 B2 SalesManager 全替換 + M01 CRUD | ✅ 完成 (bf636a4) | — |
-| P1 B3+B4 F055 v1.6 + M03 月跑 | ✅ 完成 (04fc403) | — |
+| P1 B3+B4 F055 v1.6 + M03 月名單分派 | ✅ 完成 (04fc403) | — |
 | P1 B5 POOLDATA 白名單 M04 | ✅ 完成 (d313ca3) | 62 |
 | P1 B6 M05 快照歷史 + F063~F067 spec | ✅ 完成 (ef164de) | 49 新 |
 | **P2 邊界與錯誤** | **✅ 完成（本批）** | **32 新** |
@@ -105,7 +105,7 @@ last_updated: 2026-05-17
 - FE-3：M03b 個別業務比例設定頁（F082）+ F083 快速模板
 - FE-4：M03c 簽核（F086 / F087）+ 拒絕 banner（F082 §7.x + F087 BR-11）
 - FE-5：M03d 簽核完成 Rollback（F089）+ F088 準備完成清單
-- FE-6：F063~F067 月跑結果摘要 / 比對 / 匯出
+- FE-6：F063~F067 月名單分派結果摘要 / 比對 / 匯出
 - FE-7：F075~F076 POOLDATA 白名單管理頁
 
 ## Blocking Issues

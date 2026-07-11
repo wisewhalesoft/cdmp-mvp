@@ -12,7 +12,7 @@ change-summary: "新增 story：Stage 3/4/ASSIGNDAY 全程使用確定性排序�
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：3
-> **Feature**：F101 月跑 Stage 3/4 真實比例分派
+> **Feature**：F101 月名單分派 Stage 3/4 真實比例分派
 
 ---
 
@@ -29,7 +29,7 @@ change-summary: "新增 story：Stage 3/4/ASSIGNDAY 全程使用確定性排序�
 Legacy SP 的差額補足（`NEWID()` 亂數補電銷課/員工）與案件分配順序（`ORDER BY NEWID()`）均為非確定性。此特性在 TypeScript/PostgreSQL 重新實作時**必須以確定性鍵替換**，原因有二：
 
 1. **可測試性**：確定性輸出才能撰寫 oracle 等效性測試（手算 FLOOR 公式 → 對應測試斷言）
-2. **JS↔SQL 等效驗證**：Stage 0 試算（JS）與月跑執行（SQL）需使用相同算法邏輯，確定性是等效驗證的前提
+2. **JS↔SQL 等效驗證**：Stage 0 試算（JS）與月名單分派執行（SQL）需使用相同算法邏輯，確定性是等效驗證的前提
 
 本 story 為 US-145/US-146/US-149 的橫切約束，不單獨 block 任何 story，但須在三個 story 實作中同步落地。具體確定性鍵名由架構師決定（align 現有 Stage 1 OQ-06 先例）。
 

@@ -44,7 +44,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 **As a** Admin
 **I want** 在 E07 系統中定義「業務部長（Director）」角色，確立其對 E07 全模組的完整操作權限
-**So that** 部長可透過 CDMP 平台跨處瀏覽與操作所有 E07 配置面板（白名單維護、計分設定、部門比例、簽核、月跑觸發、名單 CRUD…），無需逐一向各處長索取資料
+**So that** 部長可透過 CDMP 平台跨處瀏覽與操作所有 E07 配置面板（白名單維護、計分設定、部門比例、簽核、月名單分派觸發、名單 CRUD…），無需逐一向各處長索取資料
 
 ## 3. 前置條件
 
@@ -70,7 +70,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 - **Given** 帳號 `business_role = 'director'` 並登入 CDMP
 - **When** 進入 E07 任意模組（M01 / M02 / M03 / M04 / M05 / M06）
 - **Then** 顯示**所有**處長所設定之資料，不受處長轄區（`created_by`）篩選限制
-- **And** 所有寫入按鈕（新增 / 編輯 / 停用 / 白名單維護 / 計分設定 / 部門比例設定 / 簽核 / 觸發月跑）均可使用
+- **And** 所有寫入按鈕（新增 / 編輯 / 停用 / 白名單維護 / 計分設定 / 部門比例設定 / 簽核 / 觸發月名單分派）均可使用
 - **And** M06 白名單維護（F075）、M02 計分設定（F069~F072 / F053~F056）等部長專屬功能擁有完整寫入權限
 
 ### AC-3：Admin 自動繼承 E07 全範圍存取
@@ -100,7 +100,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 ### AC-6：處長無法操作部長專屬功能
 
 - **Given** 帳號 `business_role = 'section_chief'`（非 Director、非 Admin）
-- **When** 嘗試進入或操作以下任一部長專屬功能：M06 白名單維護（F075）/ M06 類別型欄位可選值管理（F076）/ M02 計分設定全部端點（F069~F072 / F053~F056，含 GET）/ M03a 部門比例設定（F079）/ 月跑觸發（F061）/ 名單新增（F050）/ 編輯（F051）/ 停用（F052）/ M03c 簽核（F086 / F087）
+- **When** 嘗試進入或操作以下任一部長專屬功能：M06 白名單維護（F075）/ M06 類別型欄位可選值管理（F076）/ M02 計分設定全部端點（F069~F072 / F053~F056，含 GET）/ M03a 部門比例設定（F079）/ 月名單分派觸發（F061）/ 名單新增（F050）/ 編輯（F051）/ 停用（F052）/ M03c 簽核（F086 / F087）
 - **Then** 後端 `DirectorGuard` 攔截，回 HTTP 403，錯誤碼 `AUTH_FORBIDDEN`
 - **And** 前端不渲染對應操作按鈕（F074 v2.0 進一步定義處長 UI 規則）
 
@@ -125,7 +125,7 @@ E07 所有 controller 使用以下 Guard 組合（具體實作規格由 F002 v2.
 | Guard 名稱 | 適用範圍 | 通過條件 |
 |---|---|---|
 | `DirectorOrSectionChiefGuard`（v2.0 新增，取代 `SalesManagerGuard`） | E07 全部 controller 入口檢查（M02 除外） | `role = 'admin'` OR `business_role IN ('director', 'section_chief')` |
-| `DirectorGuard`（v2.0 新增） | 部長專屬功能（M02 全部端點含 GET、M06 寫入、月跑觸發、名單 CRUD、M03a 寫入、M03b 推進至簽核、M03c 核准 / 拒絕、M03d Rollback） | `role = 'admin'` OR `business_role = 'director'` |
+| `DirectorGuard`（v2.0 新增） | 部長專屬功能（M02 全部端點含 GET、M06 寫入、月名單分派觸發、名單 CRUD、M03a 寫入、M03b 推進至簽核、M03c 核准 / 拒絕、M03d Rollback） | `role = 'admin'` OR `business_role = 'director'` |
 | `SectionChiefGuard`（v2.0 新增） | 處長專用端點（少數明確標記） | `business_role = 'section_chief'` |
 
 **檢查順序**（與 F002 v2.0 §4.6 對齊）：
@@ -152,7 +152,7 @@ E07 所有 controller 使用以下 Guard 組合（具體實作規格由 F002 v2.
 | BR-4 | 角色指派入口唯一：必須走 [F006a](F006a-update-business-role.md) PATCH `/business-role`；E07 內部頁面不提供任何指派 UI |
 | BR-5 | 部長對 E07 之可見範圍**不受 `created_by` 篩選**（與處長相反，見 F074 v2.0 BR-1） |
 | BR-6 | 角色指派 / 撤銷必須寫入 `assignment_audit_log`（`action = 'ASSIGN_ROLE'` / `'REVOKE_ROLE'`、`entity_type = 'business_role'`，由 F006a 統一寫入；本 spec 不獨立寫入） |
-| BR-7 | 部長專屬功能列表（適用 `DirectorGuard`）：M06 白名單維護（F075）、M06 可選值管理（F076）、M02 計分設定全部端點含 GET（F053 / F054 / F055 / F056 / F069 / F070 / F071 / F072）、M03a 部門比例設定寫入（F079 / F080 / F081）、M03c 簽核（F086 / F087）、M03d Rollback（F089）、月跑觸發（F061）、名單新增（F050）、編輯（F051）、停用（F052）|
+| BR-7 | 部長專屬功能列表（適用 `DirectorGuard`）：M06 白名單維護（F075）、M06 可選值管理（F076）、M02 計分設定全部端點含 GET（F053 / F054 / F055 / F056 / F069 / F070 / F071 / F072）、M03a 部門比例設定寫入（F079 / F080 / F081）、M03c 簽核（F086 / F087）、M03d Rollback（F089）、月名單分派觸發（F061）、名單新增（F050）、編輯（F051）、停用（F052）|
 | BR-8 | E07 角色矩陣之**唯一權威來源**為 [F002 v2.0 §4.6](F002-user-login.md#e07-角色矩陣)；本 Feature 僅定義 Director 語意，矩陣異動須回 F002 修訂 |
 | BR-9 | **業務角色變更入口唯一性（v2.0 / E07 合併重構）**：`users.business_role` 欄位之**唯一**寫入入口為 PATCH `/api/v1/accounts/:id/business-role`（[F006a](F006a-update-business-role.md) Admin only）；既有 PUT `/api/accounts/:id`（F006）**不**包含此欄位之變更能力 |
 | BR-10 | **Token revoke 同步觸發**：由 [F006a](F006a-update-business-role.md) BR-4 / §5.5 統一規範（本 spec 不重複描述機制細節） |
@@ -163,7 +163,7 @@ E07 所有 controller 使用以下 Guard 組合（具體實作規格由 F002 v2.
 - E07 內部頁面**完全不**顯示角色指派 UI；任何「指派 / 撤銷部長」操作須由 Admin 於 E02 帳號管理頁透過 [F006a](F006a-update-business-role.md) 執行
 - 部長登入後 sidebar 顯示完整 E07 群組（M01~M07 全部子項），對齊 [F002 v2.0 §4.5](F002-user-login.md#45-登入後導向與可用功能rbac--實質身份矩陣) 「業務部長」實質身份列
 - 部長進入任一 E07 模組之頁面時，所有寫入按鈕均處於可用狀態（不受 `created_by` 篩選或處長層級限制）
-- 月跑執行中（`assignment_run.status IN ('pending', 'running')`）部分按鈕仍可能 disabled（沿用各 Feature 既有月跑鎖規則，如 F055 BR-3、F068 等）
+- 月名單分派執行中（`assignment_run.status IN ('pending', 'running')`）部分按鈕仍可能 disabled（沿用各 Feature 既有月名單分派鎖規則，如 F055 BR-3、F068 等）
 - 全 UI 統一使用 label「業務部長」（不再使用「業務主管」/「Director」中英混雜寫法）
 - 視覺風格與互動細節由 UI/UX Designer 設計
 
@@ -191,7 +191,7 @@ E07 所有 controller 使用以下 Guard 組合（具體實作規格由 F002 v2.
 - E2E 測試必須覆蓋：
   - Admin 透過 F006a 指派 `business_role='director'` 後該帳號可進入 M06 白名單寫入端點（F075）
   - Admin 直接呼叫部長專屬端點通過（無需指派 `business_role`）
-  - 處長（`business_role='section_chief'`）呼叫月跑觸發 API 回 403 `AUTH_FORBIDDEN`
+  - 處長（`business_role='section_chief'`）呼叫月名單分派觸發 API 回 403 `AUTH_FORBIDDEN`
   - 一般使用者（`business_role=NULL`）呼叫 E07 任一端點回 403 `E07_ROLE_NOT_ASSIGNED`
   - 撤銷部長角色（`business_role=NULL`）後下次請求 401 `AUTH_TOKEN_REVOKED`
   - 部長 ↔ 處長切換（`business_role` 互斥覆寫）後 JWT 失效並依新角色執行
@@ -214,7 +214,7 @@ E07 所有 controller 使用以下 Guard 組合（具體實作規格由 F002 v2.
 |---|---|---|
 | A-1 | E07 應用層角色資料模型採**單一欄位** `users.business_role`（VARCHAR(20) NULL + CHECK constraint enum；m14 migration 同 transaction DROP 舊 `is_sales_manager` / `e07_role`）| ✅ Resolved（v2.0） |
 | A-2 | 撤銷 / 變更部長後既有 JWT 之失效機制：由 F006a 統一處理（沿用 F009 / F010 `password_changed_at` 機制） | ✅ Resolved（v2.0） |
-| A-3 | 月跑 `triggered_by` 之角色標示：暫定僅記錄帳號 ID，不額外標示業務角色；待業務確認後可補強 | [ASSUMPTION] 交 product-analyst |
+| A-3 | 月名單分派 `triggered_by` 之角色標示：暫定僅記錄帳號 ID，不額外標示業務角色；待業務確認後可補強 | [ASSUMPTION] 交 product-analyst |
 
 ## 13. 變更紀錄
 

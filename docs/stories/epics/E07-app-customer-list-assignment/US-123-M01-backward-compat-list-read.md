@@ -24,8 +24,8 @@ source-feature-spec: F050-create-list-definition, F051-edit-list-definition
 ## User Story
 
 **As a** 部長（Director）、Admin 或處長（Section Chief）
-**I want** 在 v2.1 系統上線後，仍能正常查看遷移自舊系統的名單定義，且這些舊名單不會因格式差異而造成月跑中斷
-**So that** 系統上線後業務操作不受舊資料遷移進度影響，月跑可正常執行
+**I want** 在 v2.1 系統上線後，仍能正常查看遷移自舊系統的名單定義，且這些舊名單不會因格式差異而造成月名單分派中斷
+**So that** 系統上線後業務操作不受舊資料遷移進度影響，月名單分派可正常執行
 
 ---
 
@@ -37,7 +37,7 @@ F050 v2.1 重構後，`condition_payload` 成為名單篩選條件的唯一來�
 - 6 個 entity column 保留為 **backward-compat 讀取欄位**，不立即刪除
 - 舊名單在清單頁、詳情頁以 entity column fallback **唯讀顯示**
 - 舊名單的篩選條件**不可在新介面中直接編輯**，需等 Phase 3a E2 backfill migration 一次性轉換後方可
-- 月跑 Stage 1 自動 fallback 讀取 entity column（詳見 US-122 AC-4）
+- 月名單分派 Stage 1 自動 fallback 讀取 entity column（詳見 US-122 AC-4）
 
 **涵蓋 GAP-LIST 項目**：D4、E2、G6、J6
 
@@ -70,15 +70,15 @@ F050 v2.1 重構後，`condition_payload` 成為名單篩選條件的唯一來�
 
 ---
 
-### AC-3：舊名單月跑 fallback 不報錯
+### AC-3：舊名單月名單分派 fallback 不報錯
 
 - **Given** `condition_payload` 為 NULL 的舊名單，且 `stage = 'ready'`
-- **When** 月跑 Stage 1 執行，讀取此名單
+- **When** 月名單分派 Stage 1 執行，讀取此名單
 - **Then** Stage 1 自動以 entity column fallback 組合 WHERE 條件（見 US-122 AC-4）
-- **And** 月跑執行完成，不因 condition_payload 為 NULL 而報錯或中斷
-- **And** 月跑執行後名單資料不被修改（condition_payload 仍為 NULL）
+- **And** 月名單分派執行完成，不因 condition_payload 為 NULL 而報錯或中斷
+- **And** 月名單分派執行後名單資料不被修改（condition_payload 仍為 NULL）
 
-> **業務意義（D4/J6）**：E2 backfill migration 完成前，舊名單的月跑不受影響，業務主管可正常執行月跑，不需等待資料轉換。
+> **業務意義（D4/J6）**：E2 backfill migration 完成前，舊名單的月名單分派不受影響，業務主管可正常執行月名單分派，不需等待資料轉換。
 
 ---
 
@@ -111,11 +111,11 @@ F050 v2.1 重構後，`condition_payload` 成為名單篩選條件的唯一來�
 - **When**：部長修改 LIST_NM 為「修改後名稱」並儲存
 - **Then**：LIST_NM 成功更新；condition_payload 仍為 NULL；篩選條件 entity column 不變
 
-### TC-123-04：舊名單月跑 Stage 1 正常執行
+### TC-123-04：舊名單月名單分派 Stage 1 正常執行
 
 - **Given**：名單 `OB202504001` condition_payload = NULL，stage = 'ready'；entity column prod_kind='01'
-- **When**：月跑觸發，Stage 1 讀取此名單
-- **Then**：Stage 1 以 entity column fallback 執行，月跑完成不報錯；condition_payload 仍為 NULL
+- **When**：月名單分派觸發，Stage 1 讀取此名單
+- **Then**：Stage 1 以 entity column fallback 執行，月名單分派完成不報錯；condition_payload 仍為 NULL
 
 ### TC-123-05：新名單（condition_payload 有值）不受影響
 
@@ -138,7 +138,7 @@ F050 v2.1 重構後，`condition_payload` 成為名單篩選條件的唯一來�
 - [ ] 清單頁 fallback 摘要顯示測試（TC-123-01）
 - [ ] 編輯頁篩選條件唯讀測試（TC-123-02）
 - [ ] 非篩選欄位仍可編輯測試（TC-123-03）
-- [ ] 月跑 Stage 1 fallback 不報錯測試（TC-123-04）
+- [ ] 月名單分派 Stage 1 fallback 不報錯測試（TC-123-04）
 - [ ] 新名單不受影響測試（TC-123-05）
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
@@ -150,5 +150,5 @@ F050 v2.1 重構後，`condition_payload` 成為名單篩選條件的唯一來�
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`（D4、E2、G6、J6）
-- **相關 Stories**：US-070（清單頁，補 fallback 摘要顯示）、US-121（condition_payload 驗證規則）、US-122（月跑 Stage 1 fallback 路徑）
+- **相關 Stories**：US-070（清單頁，補 fallback 摘要顯示）、US-121（condition_payload 驗證規則）、US-122（月名單分派 Stage 1 fallback 路徑）
 - **Feature Spec**：`docs/specs/features/F050-create-list-definition.md`、`docs/specs/features/F051-edit-list-definition.md`

@@ -12,7 +12,7 @@ last_updated: 2026-06-04
 
 ## Bug A 修復（2026-06-04，branch feat/monthly-run-execution-model-refactor）
 
-> app 實測迴歸：**PG + ASSIGNMENT_PIPELINE_V2 未設**（dev/prod 預設）時月跑只產生無計分 identity 列。
+> app 實測迴歸：**PG + ASSIGNMENT_PIPELINE_V2 未設**（dev/prod 預設）時月名單分派只產生無計分 identity 列。
 
 ### 根因
 

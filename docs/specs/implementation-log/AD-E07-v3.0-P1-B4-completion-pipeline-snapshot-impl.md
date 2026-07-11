@@ -85,7 +85,7 @@ agent_id: a8739a338c1a88813
     - Stage 2：score = `commission` 數值（未呼叫 `fn_calc_tier_level` PostgreSQL function — migration 141 已建但需真實 PG 環境）；card_level / tier_level 對應使用 ob_levelcard_level (score_s/score_e) + ob_tier 完整邏輯
     - Stage 3：is_cr Y/N 標記（未實作「曾被分派但未成交案件動態回分」）
     - Stage 4：dept_pct + empl_set 第一筆 round-robin（未實作 T1/T2/T3 新件 10% 轉資深 st4_exchange）
-4. **BR-12 邊緣 CARD_TYPE 跳過為非異常路徑** — pipeline 仍 `completed`，僅在 `warning_summary='BR-12_EDGE_CARD_TYPE_SKIPPED'` + `skipped_cases.cases[]` 記錄；對齊 system-architect 決議「跳過不拋錯，月跑仍 status='completed'」。
+4. **BR-12 邊緣 CARD_TYPE 跳過為非異常路徑** — pipeline 仍 `completed`，僅在 `warning_summary='BR-12_EDGE_CARD_TYPE_SKIPPED'` + `skipped_cases.cases[]` 記錄；對齊 system-architect 決議「跳過不拋錯，月名單分派仍 status='completed'」。
 5. **assignment_run.skipped_cases / warning_summary 兩欄位以 m19 補丁加入** — 不破壞既有 migration 120（仍可向下相容），對齊 architecture-spec L132 BR-1 結構。
 6. **assertNoRunningRun 在 service 層** — pipeline 啟動前由 AssignmentRunService.triggerRun 呼叫；pipeline 期間 `status='running'`，AssignmentRunGuardService 既有實作即可攔截其他 E07 寫入（無需在 pipeline 額外新增鎖機制）。
 7. **JSONB 欄位透過 `jsonColumnType` helper 寫入** — postgres=jsonb / sqlite=simple-json 自動切換，依 memory feedback_typeorm_timestamp 同類規則。
@@ -96,7 +96,7 @@ agent_id: a8739a338c1a88813
 - ✓ AC-3 五階段 pipeline 串接完整（含 BR-12 邊緣 case）
 - ✓ AC-4 三份快照同 transaction 原子寫入（rollback 驗證 PASS）
 - ✓ AC-5 失敗 → status='failed' + error_message 記錄
-- ✓ AC-7b BR-12 跳過邏輯與 system-architect 決議一致（不拋錯、月跑仍 completed）
+- ✓ AC-7b BR-12 跳過邏輯與 system-architect 決議一致（不拋錯、月名單分派仍 completed）
 - ✓ Run lifecycle pending → running → completed/failed 三段狀態流轉驗證
 - ✓ Pipeline 期間 status='running'，AssignmentRunGuardService 攔截併發
 - ✓ assignment_run_snapshot 三 type 紀錄完整（config / input_list / result）
@@ -111,13 +111,13 @@ agent_id: a8739a338c1a88813
 1. **Stage 1 condition_payload 篩選** — spec L83 提及「ob_list_definition 篩選」但 schema 無 condition_payload 欄位；v2.0 補完時應由 spec-writer 先補欄位定義
 2. **fn_calc_tier_level PG function 真實呼叫** — migration 141 已建但需真實 PostgreSQL；v1.0 採 commission 簡化計分
 3. **st4_exchange T1/T2/T3 10% 轉資深** — v2.0 補完真實名單交換邏輯
-4. **CR 回分動態邏輯** — 「曾被分派但未成交案件重新納入」依賴歷史月跑快照查詢；v2.0 補完
+4. **CR 回分動態邏輯** — 「曾被分派但未成交案件重新納入」依賴歷史月名單分派快照查詢；v2.0 補完
 5. **F062 / F063 / F064 / F067 前端整合** — 依賴本批次完成的快照表結構，可於 P1 B5 / P1 B6 串接
 6. **assignment_run_stage_log 進度寫入** — spec AC-3 提及「每個 Stage 成功後更新」；v1.0 採 status 三段切換已能反映；v2.0 進度頁 (F062) 需細化時補
 
 ## 提示下一步（P1 B5 — M04 白名單）
 
-依 spec-writer v2 計畫，B5 範圍為「M04 月跑白名單 / 重跑控制」。建議承接：
+依 spec-writer v2 計畫，B5 範圍為「M04 月名單分派白名單 / 重跑控制」。建議承接：
 
 1. **F063 結果摘要** — 讀取 result snapshot + 渲染分派結果列表（依賴本批次完成的 snapshot 結構）
 2. **F064 匯出** — Stage 4 結果 CSV / Excel 匯出

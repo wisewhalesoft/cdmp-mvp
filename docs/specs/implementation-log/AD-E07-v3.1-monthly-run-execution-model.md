@@ -1,7 +1,7 @@
 ---
 type: architecture-decision
 decision_id: AD-E07-28
-title: 月跑執行模型重構（Worker 抽離 + Stage 1~4 SQL 下推）
+title: 月名單分派執行模型重構（Worker 抽離 + Stage 1~4 SQL 下推）
 status: proposed
 last_updated: 2026-06-02
 oq_resolved: [OQ-AD28-01, OQ-AD28-02, OQ-AD28-03, OQ-AD28-04, OQ-AD28-05, OQ-AD28-06, OQ-F100-01, OQ-F099-02, OQ-F099-03]
@@ -11,7 +11,7 @@ supersedes_partial: [AD-E07-22, AD-E07-23, AD-E07-25]
 related: [AD-E07-24, AD-E07-26, AD-E07-27]
 ---
 
-# AD-E07-28　月跑執行模型重構（Worker 抽離 + Stage 1~4 SQL 下推）
+# AD-E07-28　月名單分派執行模型重構（Worker 抽離 + Stage 1~4 SQL 下推）
 
 > 本決策記錄為架構設計產出，**不含 production / test 程式碼**。落地由 spec-writer（feature spec）、
 > test-designer（測試策略）、tdd-implementation（實作）後續承接。所有 P1/P2/P3 階段之邊界、相依、
@@ -19,7 +19,7 @@ related: [AD-E07-24, AD-E07-26, AD-E07-27]
 
 ## 1. 問題陳述（Problem Statement）
 
-月跑 pipeline 目前**與 Web API 跑在同一個 Node.js 程序、同一條 event loop、同一個 V8 heap**。
+月名單分派 pipeline 目前**與 Web API 跑在同一個 Node.js 程序、同一條 event loop、同一個 V8 heap**。
 觸發點為 `AssignmentRunService.kickoffPipeline()`（`assignment-run.service.ts` L257），以
 `setImmediate(() => this.pipeline.runPipeline(...))` 於**同程序背景**啟動 Stage 1~4。
 
@@ -27,7 +27,7 @@ related: [AD-E07-24, AD-E07-26, AD-E07-27]
 
 | 失效面 | 機制 | 觀測證據 | 影響 |
 |--------|------|---------|------|
-| **F1：event loop 阻塞（CPU）** | `executeStage1Chain` / `executeV2` 為同步 JS 迴圈，無 `await` 讓出點；`pool.filter(...)`、`computeScore(...)` 全部在 event loop 上同步跑 | 202606（dev、僅 3 份名單）CPU 卡滿一核 **>25 分鐘、全程 0 DB query**；期間 `127.0.0.1:3000` 任意真實路由**逾時無回應** | 月跑期間整站 API 不可用（含登入、查詢、其他 E07 寫入） |
+| **F1：event loop 阻塞（CPU）** | `executeStage1Chain` / `executeV2` 為同步 JS 迴圈，無 `await` 讓出點；`pool.filter(...)`、`computeScore(...)` 全部在 event loop 上同步跑 | 202606（dev、僅 3 份名單）CPU 卡滿一核 **>25 分鐘、全程 0 DB query**；期間 `127.0.0.1:3000` 任意真實路由**逾時無回應** | 月名單分派期間整站 API 不可用（含登入、查詢、其他 E07 寫入） |
 | **F2：記憶體 / OOM** | `stage1-filter-chain.ts` L408 `qb.getMany()` 全載符合條件 `ob_pool_data` 進 heap；`queryRecentAssignedCustoNos` 全載近 3 月 DISTINCT custo_no Set；`executeV2` 又把整個 pool map 成 scoredPool | F055 同類前例：`poolDataListRepo.find()` 全載 ob_pool_data_list（7.8M 列 / 14GB）→ API OOM → 整頁 500 | prod 量級 heap OOM → 程序崩潰 → 整站 500 |
 
 兩者同源於「重運算與 API 共用執行資源」。本決策從**執行模型**層級根治，而非局部優化。
@@ -46,7 +46,7 @@ related: [AD-E07-24, AD-E07-26, AD-E07-27]
 2026-06-01 否決 Stage 1 SQL 下推時，效益門檻是「省 1 秒」（純效能微優化），不足以抵銷
 estimate≡run drift 與 guard 移轉成本。**現在情境已根本改變**：
 
-1. 效益不再是「省 N 秒」，而是**「月跑期間網頁可用」+「防 prod 整站 OOM」**——量級從「優化」升為「可用性 / 穩定性」。
+1. 效益不再是「省 N 秒」，而是**「月名單分派期間網頁可用」+「防 prod 整站 OOM」**——量級從「優化」升為「可用性 / 穩定性」。
 2. F1（event loop 阻塞）**單靠 worker 抽離即可解決**（軸①），SQL 下推（軸②）解決 F2（OOM）。
    兩軸正交，可分階段交付、各自獨立驗證。
 3. estimate≡run 不分叉、guard 移轉、portability 三個前例**仍須正面處理**（見 §6），但放在
@@ -56,9 +56,9 @@ estimate≡run drift 與 guard 移轉成本。**現在情境已根本改變**：
 
 ### 4.1 一句話
 
-月跑由「API 同程序 `setImmediate` 背景跑」改為「`triggerRun` 入列 pg-boss job → 獨立
+月名單分派由「API 同程序 `setImmediate` 背景跑」改為「`triggerRun` 入列 pg-boss job → 獨立
 `cdmp-worker` 容器消費 → Stage 1~4 以 set-based SQL `INSERT … SELECT` 在 Postgres 內完成」，
-使 API event loop 與 heap 完全脫離月跑負載。
+使 API event loop 與 heap 完全脫離月名單分派負載。
 
 ### 4.2 元件圖
 
@@ -112,7 +112,7 @@ graph TD
 | **狀態雙寫但不衝突** | pg-boss job 狀態（created/active/completed/failed/cancelled）為**佇列傳輸層**狀態；`assignment_run.status`（pending/running/completed/failed）為**業務領域**狀態。兩者各自權威：使用者 / 前端只看 `assignment_run.status`；佇列重試 / orphan 偵測看 job 狀態 |
 | **worker 共用既有 NestJS module** | `cdmp-worker` 以同一份 `apps/api` 程式碼啟動，但 bootstrap 為 worker entrypoint（非 `app.listen()`），只註冊 pipeline + queue consumer 所需 provider，不掛 HTTP server。避免程式碼重複與 entity drift |
 | **set-based SQL 為主，應用層為例外** | Stage 1~4 預設 `INSERT … SELECT`；無法可移植下推之規則（見 §6.3 portability）保留於應用層，但仍在 worker 程序執行，不回到 API |
-| **estimate≡run 仍共用單一 SQL** | Stage 0 試算（dryRun）與月跑（run）共用同一組 SQL builder，只差 `INSERT … SELECT`（run）vs `SELECT COUNT(*)`（estimate）的外層包裝（見 §6.1） |
+| **estimate≡run 仍共用單一 SQL** | Stage 0 試算（dryRun）與月名單分派（run）共用同一組 SQL builder，只差 `INSERT … SELECT`（run）vs `SELECT COUNT(*)`（estimate）的外層包裝（見 §6.1） |
 
 ## 5. 階段邊界與相依（P1 / P2 / P3）
 
@@ -134,8 +134,8 @@ graph TD
    崩潰遺留）之 run，標為 `failed`（error_message='worker 中斷，請重新觸發'）。pg-boss 內建
    job expiration / archive 可輔助偵測。
 
-**P1 完成後狀態**：F1 解除（API event loop 不再被月跑卡死）；F2（OOM）**尚未解**（pipeline 仍 JS 全載，
-但 OOM 現在炸的是 worker 程序，不再炸 API → 整站不再 500，僅該次月跑失敗）。此即「先止血」價值。
+**P1 完成後狀態**：F1 解除（API event loop 不再被月名單分派卡死）；F2（OOM）**尚未解**（pipeline 仍 JS 全載，
+但 OOM 現在炸的是 worker 程序，不再炸 API → 整站不再 500，僅該次月名單分派失敗）。此即「先止血」價值。
 
 **相依**：無前置；可獨立交付。
 
@@ -152,7 +152,7 @@ graph TD
 
 run 路徑：外層包 `INSERT INTO ob_monthly_run_result (run_id, list_no, orgno, appl_no, custo_no, settle_src, assignday, created_at, updated_at) SELECT :runId, :listNo, o.orgno, o.appl_no, o.custo_no, o.settle_src, NULL, NOW(), NOW() FROM ob_pool_data o WHERE <②③④⑤⑥ 合成>`。
 
-> **Schema 注意（測試設計揪出，2026-06-02）**：`ob_pool_data` **無** `assignday` 欄；現行 JS pipeline 從不寫 assignday（月跑結果該欄恆 NULL；entity 標 `forward-compat` 業務回填，見 `ob-monthly-run-result.entity.ts`）。下推 SELECT 須明確寫 `NULL`，不可嘗試從 `ob_pool_data` 取值。
+> **Schema 注意（測試設計揪出，2026-06-02）**：`ob_pool_data` **無** `assignday` 欄；現行 JS pipeline 從不寫 assignday（月名單分派結果該欄恆 NULL；entity 標 `forward-compat` 業務回填，見 `ob-monthly-run-result.entity.ts`）。下推 SELECT 須明確寫 `NULL`，不可嘗試從 `ob_pool_data` 取值。
 
 estimate 路徑：外層包 `SELECT COUNT(*) FROM ob_pool_data o WHERE <同一份 WHERE>`。
 
@@ -194,7 +194,7 @@ graph LR
 
 ### 6.1 estimate≡run 不可分叉
 
-**前例**：`executeStage1Chain` 是月跑（run, dryRun:false）與 Stage 0 試算（dry-run, dryRun:true）
+**前例**：`executeStage1Chain` 是月名單分派（run, dryRun:false）與 Stage 0 試算（dry-run, dryRun:true）
 **共用單一實作**，刻意不分叉——這正是 F049 原 bug 根因。
 
 **調和方案**：下推後**仍維持單一 SQL builder**。設計一個 `buildStage1Sql(list, workdt)` 純函式，回傳
@@ -393,7 +393,7 @@ ON DELETE CASCADE。故同一 `run_id` 重跑前，須先 `DELETE FROM ob_monthl
 | **OQ-AD28-05** | ✅ **RESOLVED 2026-06-02** | 裁定：單一 worker（`teamConcurrency=1`）序列化，MVP 階段足夠。 | worker scaling 固定；DB 連線池壓力最小 |
 | **OQ-AD28-06** | ✅ **RESOLVED 2026-06-02** | spec-writer 從 legacy SP（UTF-16LE 解碼 `SP_INFOT_ASSIGNEXPORTNAMELIST_st4_exchange.sql`）確認選案鍵 = `NEWID()`（隨機、無業務優先序）。下推改用 deterministic `ROW_NUMBER() OVER (PARTITION BY list_no ORDER BY orgno, appl_no)`，業務等價於隨機且可等價測試。 | Stage 4 排序鍵確定 |
 | **OQ-F100-01** | ✅ **RESOLVED 2026-06-02** | 裁定：對齊現行 JS 簡化版——`PARTITION BY list_no` + 單一 senior + deterministic 排序（`ORDER BY orgno, appl_no`）。legacy SP 的主管↔專員等量配對交換、寄信告警、整批回滾等副作用明確 **out-of-scope**。 | Stage 4 P3 實作範圍確定；不復刻 SP 配對語意 |
-| **OQ-F099-02** | ✅ **RESOLVED（測試設計階段，2026-06-02）** | assignday 下推寫 NULL（`ob_pool_data` 無此欄；月跑結果 assignday 恆 NULL，業務日後回填）。JS↔SQL 等價測試須斷言 `assignday IS NULL`。 | 下推 SELECT 欄位清單已更正（§5 P2）；無 schema 變更 |
+| **OQ-F099-02** | ✅ **RESOLVED（測試設計階段，2026-06-02）** | assignday 下推寫 NULL（`ob_pool_data` 無此欄；月名單分派結果 assignday 恆 NULL，業務日後回填）。JS↔SQL 等價測試須斷言 `assignday IS NULL`。 | 下推 SELECT 欄位清單已更正（§5 P2）；無 schema 變更 |
 | **OQ-F099-03** | ✅ **RESOLVED（測試設計階段，2026-06-02）** | year-above SQL 之 golden oracle = 現行 JS（`parseInt(year_produ ?? '1900') < cutoff`；NULL→1900、非數字→NaN→保留、前導數字正確解析）；初版示範 SQL 對 `''`/`'N/A'` 有誤排，精確實作由 tdd 以 PG 等價測試滿足。 | year-above SQL 實作方式已在 §5 P2 補充說明；tdd 負責邊界驗收 |
 
 ## 13. 與既有 AD 的關係
@@ -401,7 +401,7 @@ ON DELETE CASCADE。故同一 `run_id` 重跑前，須先 `DELETE FROM ob_monthl
 - **修訂 AD-E07-22 / AD-E07-23**：Stage 1 由「欄位篩選 SQL + 應用層 month_cnt/去重/特例」改為
   「全步驟 set-based SQL（含 year-above，OQ-AD28-03 RESOLVED = 選項 A）」。
   `executeStage1Chain` 的設計原則（estimate≡run 共用）**保留並強化**（§6.1）。
-- **修訂 AD-E07-25**：月跑寫入 `ob_monthly_run_result` 不變；但寫入方式由「JS 組 `Partial[]` 後
+- **修訂 AD-E07-25**：月名單分派寫入 `ob_monthly_run_result` 不變；但寫入方式由「JS 組 `Partial[]` 後
   `save()`」改為「`INSERT … SELECT` 下推」。
 - **不影響 AD-E07-26**：特例 trigger 判斷（`matchesSpecialRule`）仍為 JS 純函式，未 SQL 化；
   SQL 只接收「此 list 觸發哪些規則」的布林結果來決定是否加對應 `WHERE NOT (...)` 子句。

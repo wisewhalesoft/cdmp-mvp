@@ -62,7 +62,7 @@ P4a~P4c 交付通用 9 個 `*-handler-mssql.ts`；P4d 端對端驗證僅 custome
 
 ### 🔴🔴 升級 system-architect（潛在封鎖級）
 
-**現象**：任何一批含「壞值（非數字進 numeric / 非日期進 date / NOT NULL 欄空值）」之來源資料，會使 fullMode（TRUNCATE 後）或 partition_replace（DELETE 後）之 INSERT 整句失敗，導致該目標表（或該分區）之既存生產資料被清空且未重建。生產月度 ETL 若遇單筆髒資料，**整張 `ob_pool_data` / `ob_calendar` 等來源表可能被清空**，直接影響下游月跑（Stage 1-4 讀空表）。
+**現象**：任何一批含「壞值（非數字進 numeric / 非日期進 date / NOT NULL 欄空值）」之來源資料，會使 fullMode（TRUNCATE 後）或 partition_replace（DELETE 後）之 INSERT 整句失敗，導致該目標表（或該分區）之既存生產資料被清空且未重建。生產月度 ETL 若遇單筆髒資料，**整張 `ob_pool_data` / `ob_calendar` 等來源表可能被清空**，直接影響下游月名單分派（Stage 1-4 讀空表）。
 
 **本輪處置**：依測試設計 §六 report-not-fix 原則，**不修改凍結檔**（加交易保護屬架構層決策）。忠實記錄證據於本段，交 system-architect 裁定修法方向（建議候選，非本輪實作）：
 
@@ -157,6 +157,6 @@ PG 側 fullMode `TRUNCATE ob_pool_data` 會污染 CI `pg-specs` lane 共用之 `
 ## 需回報使用者之重點
 
 1. **🔴🔴 ATOMIC 資料完整性（潛在封鎖級，交 system-architect）**：fullMode（TRUNCATE 後）/ partition_replace（DELETE 後）之 INSERT 遇單筆髒資料整句失敗 → 目標表/分區既存生產資料遺失（實測分支 A，4 形狀一致）。引擎既有架構、PG/MSSQL 共通、非本輪回歸；需裁定是否加交易保護 / swap 全量 / TRY_CAST 前置驗證。
-2. **測試設計 ★發現 5 事實有誤**：pooldata_list field_mapping 實映射 6 個月跑欄位（僅 score/data_source 未映射）；交 test-designer 修訂（非封鎖）。
+2. **測試設計 ★發現 5 事實有誤**：pooldata_list field_mapping 實映射 6 個月名單分派欄位（僅 score/data_source 未映射）；交 test-designer 修訂（非封鎖）。
 3. **ob_emphire resign_date 哨兵→NULL 張力**：ETL（PG≡MSSQL）確將在職員工 resign_date 產出 NULL，與記憶 `feedback_emphire_active_resign_sentinel`（真實資料無 NULL）張力；交 architect/使用者裁定資料契約。
 4. **EQ-PG 逐欄比對 DEFERRED**：需專用 PG 庫（P5B_PG_DB）+ 5433 可達；本機不可達 → skip（非偽綠）。ATOMIC 兩引擎共通已由結構等價離線佐證。

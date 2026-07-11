@@ -19,7 +19,7 @@ last_updated: 2026-05-17
 
 採**漸進式 + feature flag**：
 - 新增 ENV `ASSIGNMENT_PIPELINE_V2=true` 啟用 v2.0
-- **預設 OFF（保留 v1.0 行為）**：避免破壞既有 13 PASS 與生產既有月跑邏輯
+- **預設 OFF（保留 v1.0 行為）**：避免破壞既有 13 PASS 與生產既有月名單分派邏輯
 - v2.0 邏輯獨立於 `executeV2()` private method
 - v1.0 邏輯封裝於 `executeV1()` private method（向後相容）
 

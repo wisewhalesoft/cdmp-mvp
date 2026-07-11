@@ -19,14 +19,14 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 > 新增 **§5.15「Stage 0 試算頁業務化重設計（F049 v2.0 / AD-E07-36）」** 與決策記錄 [`implementation-log/AD-E07-v3.6-f049-stage0-dept-matrix.md`](implementation-log/AD-E07-v3.6-f049-stage0-dept-matrix.md)。核心決策：(1) **OQ-F049-01**：新增獨立端點 `GET /api/v1/assignment/stage0/dept-estimate`（一次回整月部門矩陣，total-agnostic `daily-estimate` 不動，I-RUN-EST-01 分工保留）；(2) **OQ-F049-02**：`list_total[L]` 優先取 F088 物化 `stage0_estimate_count`（O(1)），NULL 時並行 fallback 即時 COUNT（30s 整體 timeout + per-list 失敗寫 `STAGE0_LIST_ESTIMATE_PARTIAL` warning 不阻擋整體回應），部門投影 / 缺口 / 人均 in-memory 合成（31×8 cells）；(3) **OQ-F049-03**：env var `STAGE0_MAX_CASES_PER_PERSON_PER_DAY`，預設 null → 不標紅（AC-FEAS-4 降級）；(4) **OQ-F049-04**：`dept-estimate` 新端點無 `@RequireDirector()`（DirectorOrSectionChief）；`list-definitions/:listNo/estimate` 移除 `@RequireDirector()`；`daily-estimate` 不動（director only）；actor 由 `req.user` 傳入 service；service 呼叫 `SectionChiefScopeService.getScopeDeptCode` 套 dept scope filter（鏡像 `listLists`）；scope=null → 200 空結果 + `SCOPE_UNRESOLVED` warning；(5) **OQ-F049-05**：production ETL 後 SQL 查核清單（pre-prod check，非 build blocker）；(6) **OQ-F049-06 RESOLVED（PO）**：人均分母 = 全部在職員工，不過濾 `jfun_nm`；(7) **OQ-F049-07**：`warnings[]` 結構性欄位（`DEPT_HEADCOUNT_ZERO` / `SCOPE_UNRESOLVED` / `STAGE0_LIST_ESTIMATE_PARTIAL`），不擴充 audit enum，無新 migration。延伸 **I-RUN-EST-01**（L3 投影層第三消費者）；新增 **I-DEPT-SCOPE-01**（service 層為安全邊界）與 **I-DEPT-ORDER-01**（deptCells deptCode ASC 確定性排序）。covers 補入 F102~F105。
 >
 
-> **v2.23 / 2026-06-05 變更摘要（AD-E07-29 F101 月跑 Stage 3/4 真實比例分派）**：
+> **v2.23 / 2026-06-05 變更摘要（AD-E07-29 F101 月名單分派 Stage 3/4 真實比例分派）**：
 >
-> 新增 **§5.14「月跑 Stage 3/4 真實比例分派（F101）」** 與 **AD-E07-29**（決策記錄 [`implementation-log/AD-E07-v3.2-f101-stage3-4-proportional-assignment.md`](implementation-log/AD-E07-v3.2-f101-stage3-4-proportional-assignment.md)）。背景：現行 `runStage4Sql` placeholder 全部案件指向 `dept[0]` + 單一 `defaultEmplid`，當 AI000 無員工設定時 `emplid=NULL`（Bug C）。取代方案：以 legacy SP（`st2_dept` / `st3_emplid`，UTF-16LE 解碼）算法為基底，Stage 3（dept）依三維分組（`ob_pool_data.dept_id`、`list_no`、`ob_monthly_run_result.tier_level`）FLOOR + 確定性差額補足，Stage 4（empl）依課內員工 FLOOR + 兩階段補足，ASSIGNDAY 複用 `calculateDailyEstimate(ym)`（I-RUN-EST-01 延伸）。**5 個 OQ 全部裁定**：OQ-F101-01 確定性鍵（obdeptid/emplid 升冪差額 + (orgno,appl_no) 升冪案件）；**OQ-F101-02 st4_exchange 廢除**（SP 硬編碼 `202408起停止交換` + simplified is_cr + F100 OQ-F100-01 三重佐證，`runStage4Sql` senior swap 由 F101 移除，不變式 I-NO-ST4-EXCHANGE）；OQ-F101-03 ob_assign_set vestigial 保留 entity 但排程獨立清理 sprint；OQ-F101-04 沿用 I-IDEM-01（per-list 清除 + per-run 冪等）；OQ-F101-05 警告寫 `assignment_run.skipped_cases.warnings[]` + `warning_summary`（不擴 audit_log enum，無 migration）。Schema Gap G-1 裁示：Stage 3 `tier_level` 讀 `ob_monthly_run_result`（Stage 2 輸出），pipeline 順序不變式 I-PIPELINE-STAGE-ORDER：Stage 2→Stage 3→Stage 4(empl)→ASSIGNDAY。修訂 AD-E07-28 P3 Stage 4 範圍（移除 senior swap）；不影響 P1/P2 / AD-E07-27 / AD-E07-26。
+> 新增 **§5.14「月名單分派 Stage 3/4 真實比例分派（F101）」** 與 **AD-E07-29**（決策記錄 [`implementation-log/AD-E07-v3.2-f101-stage3-4-proportional-assignment.md`](implementation-log/AD-E07-v3.2-f101-stage3-4-proportional-assignment.md)）。背景：現行 `runStage4Sql` placeholder 全部案件指向 `dept[0]` + 單一 `defaultEmplid`，當 AI000 無員工設定時 `emplid=NULL`（Bug C）。取代方案：以 legacy SP（`st2_dept` / `st3_emplid`，UTF-16LE 解碼）算法為基底，Stage 3（dept）依三維分組（`ob_pool_data.dept_id`、`list_no`、`ob_monthly_run_result.tier_level`）FLOOR + 確定性差額補足，Stage 4（empl）依課內員工 FLOOR + 兩階段補足，ASSIGNDAY 複用 `calculateDailyEstimate(ym)`（I-RUN-EST-01 延伸）。**5 個 OQ 全部裁定**：OQ-F101-01 確定性鍵（obdeptid/emplid 升冪差額 + (orgno,appl_no) 升冪案件）；**OQ-F101-02 st4_exchange 廢除**（SP 硬編碼 `202408起停止交換` + simplified is_cr + F100 OQ-F100-01 三重佐證，`runStage4Sql` senior swap 由 F101 移除，不變式 I-NO-ST4-EXCHANGE）；OQ-F101-03 ob_assign_set vestigial 保留 entity 但排程獨立清理 sprint；OQ-F101-04 沿用 I-IDEM-01（per-list 清除 + per-run 冪等）；OQ-F101-05 警告寫 `assignment_run.skipped_cases.warnings[]` + `warning_summary`（不擴 audit_log enum，無 migration）。Schema Gap G-1 裁示：Stage 3 `tier_level` 讀 `ob_monthly_run_result`（Stage 2 輸出），pipeline 順序不變式 I-PIPELINE-STAGE-ORDER：Stage 2→Stage 3→Stage 4(empl)→ASSIGNDAY。修訂 AD-E07-28 P3 Stage 4 範圍（移除 senior swap）；不影響 P1/P2 / AD-E07-27 / AD-E07-26。
 >
 
-> **v2.22 / 2026-06-02 變更摘要（AD-E07-28 月跑執行模型重構：Worker 抽離 + Stage 1~4 SQL 下推）**：
+> **v2.22 / 2026-06-02 變更摘要（AD-E07-28 月名單分派執行模型重構：Worker 抽離 + Stage 1~4 SQL 下推）**：
 >
-> 新增 **§5.13「月跑執行模型重構」** 與 **AD-E07-28**（決策記錄 [`implementation-log/AD-E07-v3.1-monthly-run-execution-model.md`](implementation-log/AD-E07-v3.1-monthly-run-execution-model.md)）。背景：月跑 pipeline 現與 Web API 同程序 / 同 event loop / 同 heap（`AssignmentRunService.kickoffPipeline()` 之 `setImmediate(() => pipeline.runPipeline(...))`），造成 (F1) event loop 阻塞——月跑期間 API 全逾時（實測 202606 dev 3 份名單卡滿一核 >25 分鐘 / 0 DB query）；(F2) `stage1-filter-chain.ts` 全載 `ob_pool_data` 進 heap → prod 量級 OOM → 整站 500。目標架構：`triggerRun` 改入列 **pg-boss**（靠現有 Postgres，免 Redis）→ 獨立 **`cdmp-worker`** 容器消費 → Stage 1~4 set-based SQL `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data WHERE …`。分階段：**P1** worker 抽離（pg-boss + 容器 + triggerRun 改入列 + cancellation poller + orphan reaper，解 F1）；**P2** Stage 1 SQL 下推（解 F2 Stage1）；**P3** Stage 2~4 SQL 下推 + v2 真實計分引擎（`ob_levelcard_*` 區間/類別權重 `SUM(CASE…)`、`customer_core` LEFT JOIN、CR `EXISTS`、st4_exchange `ROW_NUMBER()+CEIL(×0.1)`，解 F2 全）。四個踩雷前例調和：estimate≡run 共用 `buildStage1Sql` core（**I-RUN-EST-01**）；廢除 RGv2-005 grep-JS guard，改 PG 真庫 JS↔SQL 等價測試為驗收門檻；year-above CAST portability 採選項 C 保留應用層（**I-PORT-01**）；冪等清理（**I-IDEM-01**）。6 個 OQ-AD28-* 待使用者拍板（pg-boss schema 固定方式 / orphan 欄位 / portability 選項 / 重試策略 / worker scaling / st4 排序鍵）。修訂 AD-E07-22/23/25，不影響 AD-E07-26/27。covers 不變（F061/F062/F065/F066/F091/F092/F094 已在列）。
+> 新增 **§5.13「月名單分派執行模型重構」** 與 **AD-E07-28**（決策記錄 [`implementation-log/AD-E07-v3.1-monthly-run-execution-model.md`](implementation-log/AD-E07-v3.1-monthly-run-execution-model.md)）。背景：月名單分派 pipeline 現與 Web API 同程序 / 同 event loop / 同 heap（`AssignmentRunService.kickoffPipeline()` 之 `setImmediate(() => pipeline.runPipeline(...))`），造成 (F1) event loop 阻塞——月名單分派期間 API 全逾時（實測 202606 dev 3 份名單卡滿一核 >25 分鐘 / 0 DB query）；(F2) `stage1-filter-chain.ts` 全載 `ob_pool_data` 進 heap → prod 量級 OOM → 整站 500。目標架構：`triggerRun` 改入列 **pg-boss**（靠現有 Postgres，免 Redis）→ 獨立 **`cdmp-worker`** 容器消費 → Stage 1~4 set-based SQL `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data WHERE …`。分階段：**P1** worker 抽離（pg-boss + 容器 + triggerRun 改入列 + cancellation poller + orphan reaper，解 F1）；**P2** Stage 1 SQL 下推（解 F2 Stage1）；**P3** Stage 2~4 SQL 下推 + v2 真實計分引擎（`ob_levelcard_*` 區間/類別權重 `SUM(CASE…)`、`customer_core` LEFT JOIN、CR `EXISTS`、st4_exchange `ROW_NUMBER()+CEIL(×0.1)`，解 F2 全）。四個踩雷前例調和：estimate≡run 共用 `buildStage1Sql` core（**I-RUN-EST-01**）；廢除 RGv2-005 grep-JS guard，改 PG 真庫 JS↔SQL 等價測試為驗收門檻；year-above CAST portability 採選項 C 保留應用層（**I-PORT-01**）；冪等清理（**I-IDEM-01**）。6 個 OQ-AD28-* 待使用者拍板（pg-boss schema 固定方式 / orphan 欄位 / portability 選項 / 重試策略 / worker scaling / st4 排序鍵）。修訂 AD-E07-22/23/25，不影響 AD-E07-26/27。covers 不變（F061/F062/F065/F066/F091/F092/F094 已在列）。
 >
 > **v2.21 / 2026-05-28 變更摘要（AD-E07-18 §18.12 validateConditionPayload min-count 精化）**：
 >
@@ -38,7 +38,7 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 
 > **v2.19 / 2026-05-27 變更摘要（AD-E07-27 作業月語意統一架構決策）**：
 >
-> 新增 **AD-E07-27「F097 作業月語意統一（target_work_ym 分離 + SystemService 收斂 + 前端共享狀態 + 過去月 guard + 去重視窗對齊）」**：(1) 概念分離：`current_work_ym`（系統錨點月，唯一 `new Date()` 來源）vs `target_work_ym`（作業月，預設 `current_work_ym + 1`）；(2) `SystemService.getCurrentWorkYm()` 單一來源 + 新增 `getDefaultTargetWorkYm()`，收斂三個 controller static `computeCurrentWorkYm()`；(3) 過去月 guard `RUN_WORKYM_PAST`（422）落點於 `AssignmentRunController` / `AssignmentRunService`，比對基準 `SystemService.getCurrentWorkYm()` / SP `getdate()`，邊界 `>=`；(4) 前端 `AssignmentWorkYmContext`（React Context）Provider 掛載於 assignment 區段 layout，涵蓋四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月跑觸發），`run-history` 與下游結果頁排除；(5) 月跑觸發寫入 `AssignmentRun.project_workym = target_work_ym` 為下游單一真實來源；(6) `computeDedupWindow` 邏輯不改，靠 `workdt = parseWorkdt(project_workym)` 帶目標月自動對齊 `[workdt−3月, workdt−1日]`，關聯既有 OQ-STAGE1-02；(7) forward-only 不回填策略記錄為架構註記。covers 補入 F097。
+> 新增 **AD-E07-27「F097 作業月語意統一（target_work_ym 分離 + SystemService 收斂 + 前端共享狀態 + 過去月 guard + 去重視窗對齊）」**：(1) 概念分離：`current_work_ym`（系統錨點月，唯一 `new Date()` 來源）vs `target_work_ym`（作業月，預設 `current_work_ym + 1`）；(2) `SystemService.getCurrentWorkYm()` 單一來源 + 新增 `getDefaultTargetWorkYm()`，收斂三個 controller static `computeCurrentWorkYm()`；(3) 過去月 guard `RUN_WORKYM_PAST`（422）落點於 `AssignmentRunController` / `AssignmentRunService`，比對基準 `SystemService.getCurrentWorkYm()` / SP `getdate()`，邊界 `>=`；(4) 前端 `AssignmentWorkYmContext`（React Context）Provider 掛載於 assignment 區段 layout，涵蓋四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月名單分派觸發），`run-history` 與下游結果頁排除；(5) 月名單分派觸發寫入 `AssignmentRun.project_workym = target_work_ym` 為下游單一真實來源；(6) `computeDedupWindow` 邏輯不改，靠 `workdt = parseWorkdt(project_workym)` 帶目標月自動對齊 `[workdt−3月, workdt−1日]`，關聯既有 OQ-STAGE1-02；(7) forward-only 不回填策略記錄為架構註記。covers 補入 F097。
 >
 > **v2.18 / 2026-05-27 變更摘要（AD-E07-25 + AD-E07-26 全 DP Resolved，進入可實作狀態）**：
 >
@@ -50,7 +50,7 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 >
 > **v2.17 / 2026-05-27 變更摘要（ob_pool_data_list 單源化 + 特例規則結構化：AD-E07-25 + AD-E07-26 設計稿，待使用者確認 DP）**：
 >
-> **AD-E07-25「ob_pool_data_list 資料架構乾淨化」（修訂 AD-E07-21）**：(1) 移除月跑寫入 ob_pool_data_list 的設計，改為新建獨立結果表 `ob_monthly_run_result`；(2) ob_pool_data_list 回歸「ETL 單一來源」語意，`data_source` 欄降為 ETL 標記用，去重查詢僅讀此表；(3) 去重上界改由 `MAX(ob_pool_data_list.assignday)` 推導，廢除 WORKDT-1 近似，同時廢除 `OBASSSIGNSET` 方向；(4) 定義對 F090/F091/F092 現行實作的影響範圍；(5) 提出 6 個 DP 待使用者拍板。
+> **AD-E07-25「ob_pool_data_list 資料架構乾淨化」（修訂 AD-E07-21）**：(1) 移除月名單分派寫入 ob_pool_data_list 的設計，改為新建獨立結果表 `ob_monthly_run_result`；(2) ob_pool_data_list 回歸「ETL 單一來源」語意，`data_source` 欄降為 ETL 標記用，去重查詢僅讀此表；(3) 去重上界改由 `MAX(ob_pool_data_list.assignday)` 推導，廢除 WORKDT-1 近似，同時廢除 `OBASSSIGNSET` 方向；(4) 定義對 F090/F091/F092 現行實作的影響範圍；(5) 提出 6 個 DP 待使用者拍板。
 >
 > **AD-E07-26「特例規則 SP 落差修正 + 結構化模型」（修訂 AD-E07-22）**：(1) 透過 Node.js 解碼 SP UTF-16LE 確認：年資 trigger = `'%年以上%'`（非 `'%年資%'`）；規則 1 觸發 = `'%期中%機車%'`（非「中結強案」）；規則 2 觸發 = `'%期中%'` + 刪除條件含 `'%小資%'`（非「中結」+「滿」）；SP L113 寫入 OBPOOLDATA_LIST 為 per-list_no 全量 DELETE（無 data_source 分區語意）；(2) 設計結構化特例規則模型：`ob_special_delete_rule` 系統表 + `ob_list_definition.special_rule_flags JSONB` 觸發欄位；(3) 定義前端唯讀呈現 API 契約；(4) 提出 3 個 DP 待使用者拍板。
 
@@ -72,12 +72,12 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
-| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月跑執行流程、**5.13 月跑執行模型重構**、**§5.14 Stage 3/4 真實比例分派**、**§5.15 Stage 0 試算頁業務化重設計**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、**AD-E07-29（確定性排序鍵表 / st4_exchange 廢除 / 警告通道 / AC-12~18 測試策略）**、**AD-E07-36（端點拓樸 / Guard 接線 / DTO shape / I-DEPT-SCOPE-01 / I-DEPT-ORDER-01 / OQ 裁定）**、10. 技術棧決策 |
+| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月名單分派執行流程、**5.13 月名單分派執行模型重構**、**§5.14 Stage 3/4 真實比例分派**、**§5.15 Stage 0 試算頁業務化重設計**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、**AD-E07-29（確定性排序鍵表 / st4_exchange 廢除 / 警告通道 / AC-12~18 測試策略）**、**AD-E07-36（端點拓樸 / Guard 接線 / DTO shape / I-DEPT-SCOPE-01 / I-DEPT-ORDER-01 / OQ 裁定）**、10. 技術棧決策 |
 | TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**AD-E07-16（F072 應用層 Transaction）**、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、**E07-G M02 擴充 Migration 設計（D-CT-01/02/03 + D11 驗證 SQL）**、10. 技術棧決策 |
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**、**AD-E02-4-F Assignment Sidebar IA v2.3 重整決策**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、**5.13.7（cdmp-worker 容器 / pg-boss schema / docker-compose 變更 / dev synchronize vs prod migration）**、**AD-E07-28 §7~8（pg-boss schema migration 固定、worker entrypoint、不引入 Redis）**、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、**風險 13~16 為 E07 M02 擴充新增**）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月跑執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月跑架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）**；**§5.13 + AD-E07-28（月跑執行模型重構：pg-boss worker 抽離 + Stage 1~4 SQL 下推；P1/P2/P3 階段邊界；estimate≡run 共用 buildStage1Sql / I-RUN-EST-01；JS↔SQL 等價測試取代 RGv2-005；year-above portability 選項 C / I-PORT-01；冪等 I-IDEM-01；cancellation poller + orphan reaper；OQ-AD28-01~06）**；**§5.14 + AD-E07-29（F101 Stage 3/4 真實比例分派：三維分組 FLOOR + 確定性差額補足；st4_exchange 廢除 I-NO-ST4-EXCHANGE；ASSIGNDAY calculateDailyEstimate 共享；確定性排序鍵 obdeptid/emplid/orgno+appl_no；警告通道 skipped_cases.warnings；OQ-F101-01~05 全裁定；I-DET-01 / I-PIPELINE-STAGE-ORDER）** |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月名單分派執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月名單分派架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）**；**§5.13 + AD-E07-28（月名單分派執行模型重構：pg-boss worker 抽離 + Stage 1~4 SQL 下推；P1/P2/P3 階段邊界；estimate≡run 共用 buildStage1Sql / I-RUN-EST-01；JS↔SQL 等價測試取代 RGv2-005；year-above portability 選項 C / I-PORT-01；冪等 I-IDEM-01；cancellation poller + orphan reaper；OQ-AD28-01~06）**；**§5.14 + AD-E07-29（F101 Stage 3/4 真實比例分派：三維分組 FLOOR + 確定性差額補足；st4_exchange 廢除 I-NO-ST4-EXCHANGE；ASSIGNDAY calculateDailyEstimate 共享；確定性排序鍵 obdeptid/emplid/orgno+appl_no；警告通道 skipped_cases.warnings；OQ-F101-01~05 全裁定；I-DET-01 / I-PIPELINE-STAGE-ORDER）** |
 
 ## 目錄
 
@@ -85,7 +85,7 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 2. [系統上下文](#2-系統上下文)
 3. [邏輯架構](#3-邏輯架構)（含 3.10 E07 Assignment Module）
 4. [資料架構](#4-資料架構)（含 ob_* 表、assignment_* 表）
-5. [整合與通訊](#5-整合與通訊)（含 5.12 E07 月跑執行流程）
+5. [整合與通訊](#5-整合與通訊)（含 5.12 E07 月名單分派執行流程）
 6. [非功能需求架構對應](#6-非功能需求架構對應)
 7. [部署與執行時期視圖](#7-部署與執行時期視圖)
 8. [風險、取捨與替代方案](#8-風險取捨與替代方案)
@@ -297,7 +297,7 @@ graph TB
 
 > **E05 新增說明**：ETL Pipeline 的 Extract 節點讀取 AppDB 內的 raw data 表（不直接連外部資料庫），Load 節點寫入 AppDB 內的目標表（Phase 1 MVP 為 `customer_core`，約 45 欄位，整合 ZZIP_BAMCUST_M 與 MLMCUSTOMER 兩個來源），因此 ETL Pipeline 執行不新增外部依賴，資料流閉合於 AppDB 內部。Target Table Registry 為 in-process 靜態定義，無額外依賴。
 
-> **E07 新增說明**：E07 Assignment Module 不直連 OB 資料庫。OB 系統業務表（OBMLISTDF、OBPOOLDATA_LIST 等）已全數遷移至 AppDB（以 `ob_` 前綴 snake_case 命名），E07 所有讀寫操作均對 AppDB 執行。`ob_pool_data`（案件池）由 E04 擷取任務定期從 OB 原始系統匯入（建議月初執行一次）；E07 月跑 Stage 1 讀取的 `ob_pool_data` 資料新鮮度由 E04 任務頻率控制。E07 不引入新的外部系統依賴。
+> **E07 新增說明**：E07 Assignment Module 不直連 OB 資料庫。OB 系統業務表（OBMLISTDF、OBPOOLDATA_LIST 等）已全數遷移至 AppDB（以 `ob_` 前綴 snake_case 命名），E07 所有讀寫操作均對 AppDB 執行。`ob_pool_data`（案件池）由 E04 擷取任務定期從 OB 原始系統匯入（建議月初執行一次）；E07 月名單分派 Stage 1 讀取的 `ob_pool_data` 資料新鮮度由 E04 任務頻率控制。E07 不引入新的外部系統依賴。
 
 > **注意**：資料擷取（F021/F023）對目標資料庫的流量性質與連線測試（`SELECT 1`）顯著不同——擷取為批次資料讀取（`SELECT * FROM table` 或增量 `WHERE col > value`），可能涉及大量資料傳輸，對目標資料庫的負載影響需評估。
 
@@ -372,7 +372,7 @@ graph TB
             AssignmentScoringSvc["AssignmentScoring Service<br/>計分卡版本管理（ob_levelcard_*）<br/>CARD_LEVEL 門檻 / TIER_LEVEL 對應<br/>複雜計分邏輯呼叫 PostgreSQL function"]
             AssignmentRatioSvc["AssignmentRatio Service<br/>per-LIST_NO 部門比例（ob_dept_pct）<br/>人員比例（ob_empl_set）<br/>CR 回分規則開關"]
             AssignmentCodeSvc["AssignmentCode Service<br/>代碼維護（ob_code_df）<br/>PROD_KIND / SPEC_TP / CASE_STATUS"]
-            AssignmentRunSvc["AssignmentRun Service<br/>觸發月跑（202 非同步）<br/>Stage 0~4 執行引擎<br/>快照原子性寫入（Transaction）"]
+            AssignmentRunSvc["AssignmentRun Service<br/>觸發月名單分派（202 非同步）<br/>Stage 0~4 執行引擎<br/>快照原子性寫入（Transaction）"]
             AssignmentSnapshotSvc["AssignmentSnapshot Service<br/>歷史清單、快照詳情<br/>兩次執行差異比對"]
             AssignmentAuditSvc["AssignmentAudit Service<br/>E07 所有 CRUD 操作稽核<br/>寫入 assignment_audit_log"]
         end
@@ -523,7 +523,7 @@ graph TB
 | Guard 名稱 | 通過條件 | 失敗錯誤碼 | 適用範圍 |
 |---|---|---|---|
 | `DirectorOrSectionChiefGuard`（取代舊 `SalesManagerGuard`） | `req.user.role === 'admin'` OR `req.user.businessRole IN ('director', 'section_chief')` | 403 `E07_ROLE_NOT_ASSIGNED` | E07 全部 controller 入口（M02 除外） |
-| `DirectorGuard` | `req.user.role === 'admin'` OR `req.user.businessRole === 'director'` | 403 `AUTH_FORBIDDEN` | 部長專屬功能（M02 全部端點含 GET、M06 寫入、月跑觸發、名單 CRUD、M03a / M03c / M03d Rollback） |
+| `DirectorGuard` | `req.user.role === 'admin'` OR `req.user.businessRole === 'director'` | 403 `AUTH_FORBIDDEN` | 部長專屬功能（M02 全部端點含 GET、M06 寫入、月名單分派觸發、名單 CRUD、M03a / M03c / M03d Rollback） |
 | `SectionChiefGuard` | `req.user.businessRole === 'section_chief'` | 403 `AUTH_FORBIDDEN` | 處長專用端點（少數明確標記） |
 
 > **檢查順序**：JWT 驗證 → `DirectorOrSectionChiefGuard` → `DirectorGuard`（若功能為部長專屬）→ service 層 `scopeByCreator()`（處長轄區過濾）。詳見 [F002 v2.0 §4.6](features/F002-user-login.md#e07-角色矩陣)。
@@ -744,7 +744,7 @@ interface MenuSection {
 │       ├── 比例設定   /assignment/ratios         sales_manager
 │       ├── 名單定義   /assignment/list-definitions  sales_manager
 │       ├── Stage 0 試算  /assignment/estimate     sales_manager
-│       ├── 觸發月跑   /assignment/run            sales_manager
+│       ├── 觸發月名單分派   /assignment/run            sales_manager
 │       ├── 執行進度   /assignment/run-progress   sales_manager
 │       ├── 結果摘要   /assignment/run-summary    sales_manager
 │       ├── 執行歷史   /assignment/history        sales_manager
@@ -783,7 +783,7 @@ interface MenuSection {
 | 3 | 名單定義 | `27-list-definition.html` | `/assignment/list-definitions` |
 | 4 | 準備完成摘要 | `29d-ready-summary.html` | `/assignment/ready-summary` |
 | 5 | Stage 0 試算 | `30-stage0-estimate.html` | `/assignment/estimate` |
-| 6 | 觸發月跑 | `31-trigger-run.html` | `/assignment/run` |
+| 6 | 觸發月名單分派 | `31-trigger-run.html` | `/assignment/run` |
 | 7 | 執行進度 | `32-run-progress.html` | `/assignment/run-progress` |
 | 8 | 結果摘要 | `33-run-summary.html` | `/assignment/run-summary` |
 | 9 | 執行歷史 | `34-run-history.html` | `/assignment/history` |
@@ -1182,11 +1182,11 @@ apps/web/src/pages/
 
 **架構決策 AD-E07-1：OB 業務資料完全遷移至 AppDB，Assignment Module 直接操作 ob_* 表**
 
-OB 系統的業務表（OBMLISTDF 等 10 張表）已遷移至 AppDB，以 `ob_` 前綴 snake_case 命名。E07 不直連 OB 原始資料庫，所有讀寫操作均針對 AppDB，資料流閉合。`ob_pool_data`（案件池）由 E04 擷取任務定期從 OB 原始系統匯入（建議月初執行一次），E07 月跑 Stage 1 讀取此表。
+OB 系統的業務表（OBMLISTDF 等 10 張表）已遷移至 AppDB，以 `ob_` 前綴 snake_case 命名。E07 不直連 OB 原始資料庫，所有讀寫操作均針對 AppDB，資料流閉合。`ob_pool_data`（案件池）由 E04 擷取任務定期從 OB 原始系統匯入（建議月初執行一次），E07 月名單分派 Stage 1 讀取此表。
 
-**架構決策 AD-E07-2：月跑採非同步執行模型，三份快照原子性寫入**
+**架構決策 AD-E07-2：月名單分派採非同步執行模型，三份快照原子性寫入**
 
-`POST /api/v1/assignment/runs` 回傳 `202 Accepted`，月跑在背景 Promise chain 非同步執行 Stage 0~4。前端以 3 秒 Polling 讀取進度。同月僅允許一個 `pending` 或 `running` 狀態的月跑（重複觸發回傳 409）。月跑完成後，三份快照（config / input_list / result）在同一 DB Transaction 中原子性寫入 `assignment_run_snapshot`；任一失敗則整體 Rollback，`assignment_run.status` 改為 `failed`。
+`POST /api/v1/assignment/runs` 回傳 `202 Accepted`，月名單分派在背景 Promise chain 非同步執行 Stage 0~4。前端以 3 秒 Polling 讀取進度。同月僅允許一個 `pending` 或 `running` 狀態的月名單分派（重複觸發回傳 409）。月名單分派完成後，三份快照（config / input_list / result）在同一 DB Transaction 中原子性寫入 `assignment_run_snapshot`；任一失敗則整體 Rollback，`assignment_run.status` 改為 `failed`。
 
 **AD-E07-2 補充（v1.3 / 2026-05-18）：match_type 切換之 atomic delete + update + insert transaction scope**
 
@@ -1274,7 +1274,7 @@ END FOR
 
 | 來源表 | 受影響代表欄位 | 說明 |
 |--------|--------------|------|
-| OBPOOLDATA | 所有 CHAR/VARCHAR 欄位（如 CARD_TYPE, PROD_KIND 等）| 月跑 Stage 2 計分之 JOIN 鍵與比對值 |
+| OBPOOLDATA | 所有 CHAR/VARCHAR 欄位（如 CARD_TYPE, PROD_KIND 等）| 月名單分派 Stage 2 計分之 JOIN 鍵與比對值 |
 | OBLEVELCARD_COLUNM | CARD_TYPE, COLUNM, COLUNM_NAME | 計分維度定義；`column_name` 比對鍵 |
 | OBLEVELCARD_SCORE | CARD_TYPE, COLUNM, LEVEL1, LEVEL2_S, LEVEL2_E | `level1` 值與 CATEGORY 比對；數值欄位在 CAST 前 RTRIM |
 | OBTIER | CARD_TYPE, CARD_LEVEL, TIER_LEVEL | TIER_LEVEL 對應查詢鍵 |
@@ -1303,13 +1303,13 @@ const level1   = normalizeCharField(row['LEVEL1']) || null;  // 空字串還原�
 | AssignmentList Service | `ob_list_definition` CRUD；LIST_NO 自動產生；停用（status='inactive'） | LIST_NO 格式 `OB{YYYYMM}{NNN}`；同月 > 999 筆回傳 422（LIST_NO_LIMIT_EXCEEDED）；停用不刪除記錄 | US-070, US-071, US-088, US-089, US-090 |
 | AssignmentScoring Service | 計分維度（ob_levelcard_*）讀寫；版本管理（新版本遞增）；CARD_LEVEL 門檻；TIER_LEVEL 對應；**F056 v1.5 起：所有寫入端點加入 CARD_TYPE 範圍鎖（assertCardTypeActive）**；**F054 v1.3：match_type 欄位 atomic delete + update + insert（AD-E07-2 補充）** | 寫入時建立新 CARD_VERSION（不覆蓋舊版本）；複雜計分呼叫 PostgreSQL function（AD-E07-3）；**F056 TIER_LEVEL 列舉驗證（T1~T10）；Fallback/Standard 互斥檢查**（應用層 Mutex）；**ob_tier fallback 紀錄刪除必須用 `repo.remove(entity)`（TypeORM NULL PK silent bug 防範）**；**`scoresClear` 原子操作（F054 v1.3）**：match_type 切換時先 `DELETE ob_levelcard_score WHERE (card_type, card_version, column_name) = (:ct, :cv, :cn)` 再重新 INSERT，確保舊 score 紀錄不殘留；整段在同一 DB Transaction 中執行（DELETE + INSERT + UPDATE ob_levelcard_column.match_type）；Transaction 失敗時 Rollback，回傳 500 | US-072, US-073, US-074, US-075 |
 | CardType Service（**F069~F072 新增**） | `ob_card_type` CRUD；查詢清單（JOIN `ob_code_df` 取 prodKindName）；新增（同 transaction 自動建立 v1 `ob_levelcard_version`）；編輯（card_name / prod_kind 僅此兩欄）；刪除預覽（5 張下游表筆數統計 + ob_list_definition active 引用數）；級聯 hard delete（6 步驟 transaction）；審計日誌同 transaction 寫入 | **依賴 Repository**：`ObCardType`（新建 Entity）/ `ObLevelcardVersion` / `ObLevelcardColumn` / `ObLevelcardScore` / `ObLevelcardLevel` / `ObTier` / `ObCodeDf`（需新增 module import）/ `AssignmentRun` / `AssignmentAuditLog`；F070 同 transaction：INSERT ob_card_type + INSERT ob_levelcard_version（v1，sdate=今日 / edate=20991231 / status=active）；F072 採應用層 transaction（AD-E07-16，不使用 `ON DELETE CASCADE`） | US-093, US-094, US-095, US-096 |
-| AssignmentRatio Service（含 `PersonnelRatioService`） | per-LIST_NO 部門比例（ob_dept_pct）讀寫；人員比例（ob_empl_set）讀寫；CR 回分規則開關；**F084 v2.0 auto-advance 觸發宿主（AD-E07-19 補登）** | 比例總和驗證（各部門 RATION 總和需 = 100%）由應用層執行；`ob_dept_pct` 即為 per-LIST_NO 設定（無全域表）；**`PersonnelRatioService.setPersonnelRatios()` 擴大後 transaction scope（AD-E07-19）**：`dataSource.transaction(async (mgr) => {` (1) `mgr.query('SELECT pg_advisory_xact_lock($1)', [lockKey])`（tx 開頭取得 blocking advisory lock，`lockKey = hashtext(listNo)::bigint`）→ (2) DELETE `ob_empl_set` WHERE `(list_no, deptid_m)` → (3) INSERT 新員工比例紀錄 → (4) INSERT `assignment_audit_log`（`SET_PERSONNEL_RATIO`）→ (5)（若 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` = on）呼叫 `assertAllDeptsSumEquals100WithMgr(listNo, mgr)` 偵測完成度 → (6)（若全部完成且 `stage = 'personnel_ratio'`）月跑 guard check → (7) `stageTransition.advanceToInMgr(listNo, 'personnel_ratio', 'approval', actorId, mgr, { auto_advanced_by_completion: true, operator_role })` → `})`；tx commit 時 advisory lock 自動釋放；lock 等待超時（`lock_timeout = 5000ms`）→ auto-advance 跳過、PUT 仍回 200 + `autoAdvanced: false` | US-078, US-079, US-080, US-091 |
+| AssignmentRatio Service（含 `PersonnelRatioService`） | per-LIST_NO 部門比例（ob_dept_pct）讀寫；人員比例（ob_empl_set）讀寫；CR 回分規則開關；**F084 v2.0 auto-advance 觸發宿主（AD-E07-19 補登）** | 比例總和驗證（各部門 RATION 總和需 = 100%）由應用層執行；`ob_dept_pct` 即為 per-LIST_NO 設定（無全域表）；**`PersonnelRatioService.setPersonnelRatios()` 擴大後 transaction scope（AD-E07-19）**：`dataSource.transaction(async (mgr) => {` (1) `mgr.query('SELECT pg_advisory_xact_lock($1)', [lockKey])`（tx 開頭取得 blocking advisory lock，`lockKey = hashtext(listNo)::bigint`）→ (2) DELETE `ob_empl_set` WHERE `(list_no, deptid_m)` → (3) INSERT 新員工比例紀錄 → (4) INSERT `assignment_audit_log`（`SET_PERSONNEL_RATIO`）→ (5)（若 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` = on）呼叫 `assertAllDeptsSumEquals100WithMgr(listNo, mgr)` 偵測完成度 → (6)（若全部完成且 `stage = 'personnel_ratio'`）月名單分派 guard check → (7) `stageTransition.advanceToInMgr(listNo, 'personnel_ratio', 'approval', actorId, mgr, { auto_advanced_by_completion: true, operator_role })` → `})`；tx commit 時 advisory lock 自動釋放；lock 等待超時（`lock_timeout = 5000ms`）→ auto-advance 跳過、PUT 仍回 200 + `autoAdvanced: false` | US-078, US-079, US-080, US-091 |
 | AssignmentCode Service | `ob_code_df` CRUD（PROD_KIND / SPEC_TP / CASE_STATUS **三類**代碼維護；**CASEYEAR 不納入**，因 CASEYEAR 為前端 hard-coded 的 11 個固定 enum 選項 0~10，不從 `ob_code_df` 動態載入，證據：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`）；`tbl_id` 使用英文常數（非原系統數字代碼），映射規則：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`（AD-E07-14；初版含 `'04'→'CASEYEAR'`，於 2026-05-12 OQ-E07-24 Resolved 後移除） | Admin 與業務主管均可存取；代碼用於名單定義表單選項；F050/F051 `case_status` 欄位多選選項來源為 `tbl_id='CASE_STATUS'`；F050/F051 `caseyear` 欄位為前端固定 11 個選項（0~10），非 ob_code_df 動態載入 | US-092 |
-| AssignmentRun Service | 觸發月跑（202 非同步）；Stage 0~4 執行引擎；進度查詢；結果摘要；**匯出分派結果（23 欄，xlsx / CSV 雙格式 streaming；v2.0 改多表 join；BR-F064-01~15，AD-E07-31）** | 同月僅一個 running/pending 月跑（409 拒絕重複）；快照 Transaction 原子性（AD-E07-2）；Stage 1 讀取 ob_pool_data（依賴 E04）；Stage 3/4 回寫 ob_pool_data_list.ob_dept / ob_emplid；**F064 v2.0 匯出：資料來源改 `ob_monthly_run_result` 多表 join（INNER JOIN `ob_pool_data_list`，LEFT JOIN `ob_emphire`/`ob_list_definition`），不讀 snapshot JSONB；xlsx / CSV 共用 server-side cursor row-producer** | US-081, US-082, US-083, US-084, US-155 |
+| AssignmentRun Service | 觸發月名單分派（202 非同步）；Stage 0~4 執行引擎；進度查詢；結果摘要；**匯出分派結果（23 欄，xlsx / CSV 雙格式 streaming；v2.0 改多表 join；BR-F064-01~15，AD-E07-31）** | 同月僅一個 running/pending 月名單分派（409 拒絕重複）；快照 Transaction 原子性（AD-E07-2）；Stage 1 讀取 ob_pool_data（依賴 E04）；Stage 3/4 回寫 ob_pool_data_list.ob_dept / ob_emplid；**F064 v2.0 匯出：資料來源改 `ob_monthly_run_result` 多表 join（INNER JOIN `ob_pool_data_list`，LEFT JOIN `ob_emphire`/`ob_list_definition`），不讀 snapshot JSONB；xlsx / CSV 共用 server-side cursor row-producer** | US-081, US-082, US-083, US-084, US-155 |
 | AssignmentSnapshot Service | 執行歷史清單；快照詳情；兩次執行差異比對 | 差異比對在應用層計算（比對兩份 result 快照 JSONB）；快照為不可變記錄 | US-085, US-086, US-087 |
 | AssignmentAudit Service | E07 所有 CRUD 操作後寫入 `assignment_audit_log` | 不對外暴露 API；由各 Service 呼叫；保留 3 年，Cleanup Cron 每日清理 | 所有 E07 Stories |
-| **ScoringIntegrityCheckService**（**v1.3 / 2026-05-18 新增，F054 v1.3 / F061 v1.3**） | Stage 2 前置計分設定完整性稽核；提供 `checkAndWarn(runId, cardType, cardVersion)` method | 稽核內容：(1) `MATCH_TYPE_FIELD_MISMATCH`：`ob_levelcard_column.match_type` 與對應 `ob_levelcard_score` 紀錄之 level1 / level2_s 組合不一致；(2) `CATEGORY_DUPLICATE`：`match_type = 'CATEGORY'` 下同 `column_name + level1` 重複；稽核發現問題時**不拋錯、不中斷月跑**，而是：(a) 寫入 `assignment_audit_log`（`action = 'SCORING_INTEGRITY_WARN'`）；(b) 更新 `assignment_run.report_payload.warningSummary.SCORING_INTEGRITY_WARN`；稽核通過（無問題）時不寫任何紀錄；位置：`AssignmentModule` 底下，與 `AssignmentRunGuardService` 同層 | F054 v1.3, F061 v1.3 |
-| **AssignmentRunGuardService**（2026-05-16 新增 / 決議 #6） | 月跑並發守衛集中實作；提供 `assertNoRunningRun(workYm?)` method | 查詢 `assignment_run.status IN ('pending', 'running')`，若有則拋 `ConflictException` (409) + `ASSIGNMENT_RUN_ALREADY_RUNNING`；所有 E07 寫入 service method 最頂層呼叫；月跑結束（`status = 'completed'` / `'failed'`）後自動解除阻擋；位置：assignment 模組底下，與 `StageTransitionService` 同層 | F050 v2.0, F051, F052, F078, F079, F080, F081, F082 v1.3, F083（透過 F082 PUT）, F084, F085, F086, F087, F089 |
+| **ScoringIntegrityCheckService**（**v1.3 / 2026-05-18 新增，F054 v1.3 / F061 v1.3**） | Stage 2 前置計分設定完整性稽核；提供 `checkAndWarn(runId, cardType, cardVersion)` method | 稽核內容：(1) `MATCH_TYPE_FIELD_MISMATCH`：`ob_levelcard_column.match_type` 與對應 `ob_levelcard_score` 紀錄之 level1 / level2_s 組合不一致；(2) `CATEGORY_DUPLICATE`：`match_type = 'CATEGORY'` 下同 `column_name + level1` 重複；稽核發現問題時**不拋錯、不中斷月名單分派**，而是：(a) 寫入 `assignment_audit_log`（`action = 'SCORING_INTEGRITY_WARN'`）；(b) 更新 `assignment_run.report_payload.warningSummary.SCORING_INTEGRITY_WARN`；稽核通過（無問題）時不寫任何紀錄；位置：`AssignmentModule` 底下，與 `AssignmentRunGuardService` 同層 | F054 v1.3, F061 v1.3 |
+| **AssignmentRunGuardService**（2026-05-16 新增 / 決議 #6） | 月名單分派並發守衛集中實作；提供 `assertNoRunningRun(workYm?)` method | 查詢 `assignment_run.status IN ('pending', 'running')`，若有則拋 `ConflictException` (409) + `ASSIGNMENT_RUN_ALREADY_RUNNING`；所有 E07 寫入 service method 最頂層呼叫；月名單分派結束（`status = 'completed'` / `'failed'`）後自動解除阻擋；位置：assignment 模組底下，與 `StageTransitionService` 同層 | F050 v2.0, F051, F052, F078, F079, F080, F081, F082 v1.3, F083（透過 F082 PUT）, F084, F085, F086, F087, F089 |
 | **StageTransitionService**（2026-05-15 新增 / E07 重構批次 4 引入；2026-05-16 補登元件說明；**2026-05-25 補登 `advanceToInMgr` 過載 / AD-E07-19**） | 五階段流程引擎共用 helper；提供 `advanceTo` / `advanceToInMgr` / `rollbackTo` / `rejectTo` / `assertStageEquals` 5 個 method | `advanceTo(listNo, fromStage, toStage, actorId, preconditionFn, postActionFn?)` 自開 transaction，用於 F078 / F080 / F084 fallback 手動路徑 / F086；**`advanceToInMgr(listNo, fromStage, toStage, actorId, mgr, auditMetadata?)`（AD-E07-19 新增）**：接受外部 `EntityManager`、不自開 transaction，供 F084 v2.0 auto-advance 掛入 `setPersonnelRatios()` 的同一 tx；`auditMetadata` 為選擇性 JSONB 附加欄位（用於寫入 `metadata.auto_advanced_by_completion = true` / `metadata.operator_role`）；`rollbackTo(listNo, fromStage, toStage, actorId, cleanupFn)` 用於 F081 / F085 / F089；`rejectTo(listNo, fromStage, toStage, actorId, rejectReason, cleanupFn?, postActionFn?)` 用於 F087；`assertStageEquals(listNo, expectedStage, mgr?)` 接受可選 EntityManager，由各 service 共用；所有寫入操作於同一 DB transaction 內完成（含稽核 INSERT，稽核失敗例外）| F078, F079, F080, F081, F082, F084, F085, F086, F087, F089 |
 | **PersonnelRatioValidationService**（2026-05-15 新增 / E07 重構批次 5 引入；2026-05-16 補全員離職邊界；**2026-05-25 補登 `assertAllDeptsSumEquals100WithMgr` / AD-E07-19**） | per-DEPT 個別業務比例驗算 helper；提供 `assertDeptSumEquals100` / `assertAllDeptsSumEquals100` / `assertAllDeptsSumEquals100WithMgr` 3 個 method | `assertDeptSumEquals100(deptCode, ratios, activeEmployeeCount)` 用於 F082 PUT 寫入校驗（**v1.3 / 決議 #1**：若 `activeEmployeeCount === 0` **短路 return**，允許部門 sum = 0%、不阻擋儲存）；`assertAllDeptsSumEquals100(listNo)` 用於 F084 fallback 手動路徑推進前置條件驗證（使用 Repository 直查 `ob_empl_set`）；**`assertAllDeptsSumEquals100WithMgr(listNo, mgr)`（AD-E07-19 新增）**：接受外部 `EntityManager`，使用 `mgr.createQueryBuilder()` 查詢，確保能讀到 F082 PUT 同一 tx 內剛寫入但未 commit 的 `ob_empl_set` 資料（READ COMMITTED 隔離下 Repository 直查看不到未 commit 資料），供 F084 v2.0 auto-advance 偵測使用；全員離職部門（`activeEmployeeCount === 0`）短路邏輯兩個版本相同；錯誤碼 `PERSONNEL_RATIO_SUM_NOT_100`（per-DEPT 語意，與 `RatioValidationService` 之 per-LIST_NO 語意區隔） | F082, F084 |
 | **RatioValidationService**（2026-05-15 新增 / E07 重構批次 4 引入） | per-LIST_NO 部門比例驗算 helper；提供 `assertSumEquals100` / `assertEachInRange` 2 個 method | `assertSumEquals100(ratios)` 用於 F079 PUT + F080 推進前置條件驗證；`assertEachInRange(ratios, [0, 100])` 用於單欄位邊界校驗；錯誤碼 `RATIO_SUM_NOT_100` / `RATIO_OUT_OF_RANGE` | F079, F080 |
@@ -1342,8 +1342,8 @@ const level1   = normalizeCharField(row['LEVEL1']) || null;  // 空字串還原�
 | PUT | `/api/v1/assignment/ratios/cr-rule` | 開關 CR 回分規則 | user + is_sales_manager |
 | GET | `/api/v1/assignment/codes` | 查看代碼清單 | user + is_sales_manager |
 | PUT | `/api/v1/assignment/codes` | 維護代碼 | user + is_sales_manager |
-| POST | `/api/v1/assignment/runs` | 觸發分派月跑 | user + is_sales_manager |
-| GET | `/api/v1/assignment/runs/:runId` | 查看月跑執行進度 | user + is_sales_manager |
+| POST | `/api/v1/assignment/runs` | 觸發分派月名單分派 | user + is_sales_manager |
+| GET | `/api/v1/assignment/runs/:runId` | 查看月名單分派執行進度 | user + is_sales_manager |
 | GET | `/api/v1/assignment/runs/:runId/summary` | 查看分派結果摘要 | user + is_sales_manager |
 | GET | `/api/v1/assignment/runs/:runId/export` | 匯出分派結果 CSV | user + is_sales_manager |
 | GET | `/api/v1/assignment/history` | 查看歷史執行清單 | user + is_sales_manager |
@@ -1362,7 +1362,7 @@ graph LR
     OB_Sys["OB 原始系統\n（SQL Server）"]
     E04["E04 擷取任務\n（月初執行一次）"]
     ob_pool["ob_pool_data\n（AppDB）"]
-    E07["E07 月跑 Stage 1\n讀取案件池"]
+    E07["E07 月名單分派 Stage 1\n讀取案件池"]
 
     OB_Sys -->|"E04 擷取"| ob_pool
     ob_pool -->|"Stage 1 讀取"| E07
@@ -1606,7 +1606,7 @@ erDiagram
 | EtlPipelineLog | ETL Pipeline 模組 | 不對其他模組開放 |
 | 目標表（`customer_core` 等） | ETL Pipeline 模組（寫入）/ C360 模組（唯讀） | ETL Pipeline 以動態 SQL 執行 UPSERT；C360 模組以 Raw SQL / QueryBuilder 唯讀查詢；兩者均不透過 TypeORM Entity 管理此表；Phase 1 MVP 僅含 `customer_core`（85 欄位）；Phase 2/3 擴展時新增目標表至 Registry |
 | ob_* 表（ob_list_definition 等 10 張） | Assignment 模組（讀寫）/ E04 Extraction 模組（ob_pool_data 寫入） | Assignment Module 負責 CRUD；ob_pool_data 例外：由 E04 ExtractionExecution Service 從 OB 原始系統匯入寫入，E07 僅讀取 |
-| assignment_run / assignment_run_snapshot | Assignment 模組（讀寫） | 不對其他模組開放；月跑紀錄與快照完整由 AssignmentRun Service 管理 |
+| assignment_run / assignment_run_snapshot | Assignment 模組（讀寫） | 不對其他模組開放；月名單分派紀錄與快照完整由 AssignmentRun Service 管理 |
 | assignment_audit_log | Assignment 模組（只寫）/ DBA（唯讀） | 由 AssignmentAudit Service 寫入；不提供 API 查詢（稽核用途，由 DBA 直接查詢）；Cleanup Cron 負責 3 年清理 |
 
 ### 4.3 資料一致性模型
@@ -1629,9 +1629,9 @@ erDiagram
 | Pipeline 執行完成（更新 Log + Pipeline） | 強一致性 | 同一 DB 交易：UPDATE EtlPipelineLog（finished_at, duration_ms）+ UPDATE EtlPipeline（status, last_execution_at, processed_count, avg_duration_ms, execution_count）；測試執行同時更新 EtlPipelineVersion.status = 'testing' |
 | Pipeline 版本發布 | 強一致性 | 同一 DB 交易：UPDATE EtlPipelineVersion.status = 'published' + UPDATE EtlPipeline.version |
 | EtlPipelineLog 清理 | 最終一致性 | 背景 Cron Job，不影響前台操作 |
-| 觸發月跑（建立 AssignmentRun + 更新狀態） | 強一致性 | 同一 DB 交易：INSERT AssignmentRun（status=pending）+ 驗證同月無 pending/running 紀錄（並發控制） |
-| 月跑三份快照寫入 | 強一致性 | 同一 DB Transaction 原子性寫入三份 AssignmentRunSnapshot；任一失敗整體 Rollback，AssignmentRun.status 改為 failed（AD-E07-2） |
-| 月跑回寫 ob_pool_data_list（OB_DEPT / OB_EMPLID） | 強一致性 | Stage 3/4 完成後同步更新；失敗時 AssignmentRun.status 改為 failed |
+| 觸發月名單分派（建立 AssignmentRun + 更新狀態） | 強一致性 | 同一 DB 交易：INSERT AssignmentRun（status=pending）+ 驗證同月無 pending/running 紀錄（並發控制） |
+| 月名單分派三份快照寫入 | 強一致性 | 同一 DB Transaction 原子性寫入三份 AssignmentRunSnapshot；任一失敗整體 Rollback，AssignmentRun.status 改為 failed（AD-E07-2） |
+| 月名單分派回寫 ob_pool_data_list（OB_DEPT / OB_EMPLID） | 強一致性 | Stage 3/4 完成後同步更新；失敗時 AssignmentRun.status 改為 failed |
 | E07 CRUD 稽核日誌寫入 | 最終一致性 | AssignmentAudit Service 在業務操作成功後寫入；若稽核寫入失敗僅記錄 Logger.error，不 Rollback 業務操作 |
 | AssignmentAuditLog 清理 | 最終一致性 | Cleanup Cron Job 每日清理超過 3 年記錄 |
 
@@ -1675,15 +1675,15 @@ erDiagram
 | customer_core | name | INDEX | C360 預設排序（`ORDER BY name ASC`）效能 |
 | customer_core | idx_customer_core_fulltext（GIN） | GIN INDEX | C360 全文搜尋（`to_tsvector('simple', coalesce(name,'') \|\| ' ' \|\| coalesce(english_name,''))`）；F046 前置依賴 |
 | ob_list_definition | list_no | PRIMARY KEY | 名單定義查詢主鍵 |
-| ob_list_definition | status, project_workym | 複合 INDEX | 查詢本月 active 名單清單（US-070）；月跑 Stage 1 篩選條件 |
-| ob_pool_data_list | list_no, orgno, appl_no | PRIMARY KEY（複合） | 月跑 Stage 3/4 更新 ob_dept / ob_emplid |
+| ob_list_definition | status, project_workym | 複合 INDEX | 查詢本月 active 名單清單（US-070）；月名單分派 Stage 1 篩選條件 |
+| ob_pool_data_list | list_no, orgno, appl_no | PRIMARY KEY（複合） | 月名單分派 Stage 3/4 更新 ob_dept / ob_emplid |
 | ob_dept_pct | project_workym, list_no, obdeptid | PRIMARY KEY（複合） | 部門比例讀取（Stage 2）；per-LIST_NO 查詢 |
 | ob_empl_set | list_no, deptid_m, emplid | PRIMARY KEY（複合） | 人員比例讀取（Stage 4） |
 | ob_levelcard_version | card_type, card_version | 複合 INDEX | 最新計分版本查詢；版本管理 |
 | ob_levelcard_score | card_type, card_version | 複合 INDEX | 計分分數批次讀取 |
 | ob_levelcard_level | card_type, card_version | 複合 INDEX | CARD_LEVEL 門檻讀取 |
-| assignment_run | ym | INDEX | 同月唯一性檢查（防止重複月跑）；歷史清單年月篩選 |
-| assignment_run | status | INDEX | 排程或查詢 running/pending 月跑 |
+| assignment_run | ym | INDEX | 同月唯一性檢查（防止重複月名單分派）；歷史清單年月篩選 |
+| assignment_run | status | INDEX | 排程或查詢 running/pending 月名單分派 |
 | assignment_run | triggered_at DESC | INDEX | 歷史清單倒序排列（US-085） |
 | assignment_run_snapshot | run_id, snapshot_type | 複合 INDEX | 快速載入指定執行的特定快照類型 |
 | assignment_audit_log | entity_type, entity_id | 複合 INDEX | 查詢特定實體操作歷史 |
@@ -2124,7 +2124,7 @@ C360 模組在執行時期**不依賴** Extraction 模組或 ETL Pipeline 模組
 
 ---
 
-### 5.13 月跑執行模型重構（Worker 抽離 + Stage 1~4 SQL 下推）（AD-E07-28）
+### 5.13 月名單分派執行模型重構（Worker 抽離 + Stage 1~4 SQL 下推）（AD-E07-28）
 
 > 完整決策、四個踩雷前例調和方案、P1/P2/P3 階段邊界與相依、Open Questions：見
 > [`implementation-log/AD-E07-v3.1-monthly-run-execution-model.md`](implementation-log/AD-E07-v3.1-monthly-run-execution-model.md)。
@@ -2132,14 +2132,14 @@ C360 模組在執行時期**不依賴** Extraction 模組或 ETL Pipeline 模組
 
 #### 5.13.1 問題與目標（一句話）
 
-月跑 pipeline 現與 Web API **同程序、同 event loop、同 heap**（`AssignmentRunService.kickoffPipeline()`
+月名單分派 pipeline 現與 Web API **同程序、同 event loop、同 heap**（`AssignmentRunService.kickoffPipeline()`
 之 `setImmediate(() => pipeline.runPipeline(...))`），造成兩個失效面：**F1 event loop 阻塞**（同步 JS
-迴圈無讓出點 → 月跑期間 API 全逾時；實測 202606 dev 3 份名單即卡滿一核 >25 分鐘、0 DB query）、
+迴圈無讓出點 → 月名單分派期間 API 全逾時；實測 202606 dev 3 份名單即卡滿一核 >25 分鐘、0 DB query）、
 **F2 OOM**（`stage1-filter-chain.ts` 全載 `ob_pool_data` 進 heap → prod 量級程序崩 → 整站 500）。
 
 **目標架構**：`triggerRun` 改入列 **pg-boss**（靠現有 Postgres，免 Redis）job → 獨立 **`cdmp-worker`**
 容器消費 → Stage 1~4 以 set-based SQL `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data
-WHERE …` 在 DB 內完成，使 API event loop 與 heap 完全脫離月跑負載。
+WHERE …` 在 DB 內完成，使 API event loop 與 heap 完全脫離月名單分派負載。
 
 #### 5.13.2 目標元件與資料流
 
@@ -2253,7 +2253,7 @@ SQL，year-above 例外」，estimate≡run 共用原則保留並強化）、修
 
 ---
 
-### 5.14 月跑 Stage 3/4 真實比例分派（F101 / AD-E07-29）
+### 5.14 月名單分派 Stage 3/4 真實比例分派（F101 / AD-E07-29）
 
 > 完整決策、5 個 OQ 裁示、確定性排序鍵表格、st4_exchange 廢除依據、Schema Gap G-1 裁示：見
 > [`implementation-log/AD-E07-v3.2-f101-stage3-4-proportional-assignment.md`](implementation-log/AD-E07-v3.2-f101-stage3-4-proportional-assignment.md)。
@@ -2433,7 +2433,7 @@ F063 摘要頁（US-083）`AssignmentRunReportService.getSummary()` 的 `warning
 ```mermaid
 graph TD
     L0["L0 computeWorkingDayRatios\n（不動，Stage 4 / daily-estimate 共用）"]
-    L1["L1 estimateListCount / stage0_estimate_count\n（F092 dry-run ≡ 月跑 Stage 1）"]
+    L1["L1 estimateListCount / stage0_estimate_count\n（F092 dry-run ≡ 月名單分派 Stage 1）"]
     L2["L2 聚合層\n全部 active 名單 / 單一 listNo"]
     L3["L3 部門投影層\ndept_real = Σ list_total × ration / 100 × dpm / 1000\nin-memory 合成（31×8 cells）"]
     L4["L4 範圍隔離層\nSectionChiefScopeService.getScopeDeptCode\nservice 層強制 filter（I-DEPT-SCOPE-01）"]
@@ -2829,7 +2829,7 @@ Seed 流程：
 
 **描述**：`ob_tier` 複合唯一鍵 `UNIQUE INDEX ON ob_tier (card_type, COALESCE(card_level, ''))` 由 migration 以 raw SQL 建立（entity 檔案 line 9 說明：TypeORM `@Index` 不支援 `COALESCE` 表達式）。若此索引未在實際執行的 migration 中建立，則同一 `(card_type, card_level)` 組合可重複寫入，導致 F056 `TIER_LEVEL_DUPLICATE` 保護失效，且 Stage 2 `ob_tier` join 查詢可能取得多筆結果（非確定性）。
 
-**影響**：`ob_tier` 寫入重複紀錄；月跑 Stage 2 TIER_LEVEL 對應結果非確定性；資料一致性受損。
+**影響**：`ob_tier` 寫入重複紀錄；月名單分派 Stage 2 TIER_LEVEL 對應結果非確定性；資料一致性受損。
 
 **建議**：TDD Developer 在實作前必須確認現有 `ob_tier` migration 是否已包含 raw SQL `UNIQUE INDEX` 語句（非透過 `@Index` 裝飾器）；若未建立，需在 D-CT-01 附近的 migration 中補建。
 
@@ -3303,7 +3303,7 @@ cdmp-mvp/
 - [E07-A　資料來源分層架構](#e07-a-資料來源分層架構)
 - [E07-B　Migration 設計（L1 一次性遷移）](#e07-b-migration-設計l1-一次性遷移)
 - [E07-C　ETL 設計（L2 定期同步）](#e07-c-etl-設計l2-定期同步)
-- [E07-D　月跑執行架構（L3 系統產出）](#e07-d-月跑執行架構l3-系統產出)
+- [E07-D　月名單分派執行架構（L3 系統產出）](#e07-d-月名單分派執行架構l3-系統產出)
 - [E07-E　PostgreSQL Function 設計（fn_calc_tier_level）](#e07-e-postgresql-function-設計fn_calc_tier_level)
 - [E07-F　開發前準備檢核清單](#e07-f-開發前準備檢核清單)
 
@@ -3369,7 +3369,7 @@ END FOR
 
 - 層級：**L2（E04 定期 ETL 同步）**
 - 語意：案件池（共享，不分名單）；案件本身無 list_no
-- 與 `ob_pool_data_list` 的關係：**「池 / 結果」分離**——`ob_pool_data` 為原始案件資料，`ob_pool_data_list` 為月跑 Stage 1 篩選後的 per-list 分派結果（含 list_no、tier_level、dept_id、emplid 等計算欄位）
+- 與 `ob_pool_data_list` 的關係：**「池 / 結果」分離**——`ob_pool_data` 為原始案件資料，`ob_pool_data_list` 為月名單分派 Stage 1 篩選後的 per-list 分派結果（含 list_no、tier_level、dept_id、emplid 等計算欄位）
 
 **影響範圍**：
 
@@ -3493,12 +3493,12 @@ SELECT DISTINCT unnest(string_to_array(case_status, '$$')) AS code
 
 #### AD-E07-4　ob_levelcard_column 停用維度機制
 
-**決策**：新增 `status VARCHAR(10) NOT NULL DEFAULT 'active'` 欄位至 `ob_levelcard_column`，以支援計分維度的停用操作。停用後欄位值改為 `'disabled'`，月跑 Stage 2 執行時過濾 `status = 'active'` 的維度，不刪除資料列。
+**決策**：新增 `status VARCHAR(10) NOT NULL DEFAULT 'active'` 欄位至 `ob_levelcard_column`，以支援計分維度的停用操作。停用後欄位值改為 `'disabled'`，月名單分派 Stage 2 執行時過濾 `status = 'active'` 的維度，不刪除資料列。
 
 **理由**：
 - 與 `ob_list_definition.status`、`ob_levelcard_version.status` 的命名語意一致，降低認知負擔
 - `card_version` 遞增方案代價過高：每次停用一個維度就需要產生新版本號，導致版本號膨脹且無直覺語意
-- Soft disable 保留歷史資料，月跑 config 快照仍可回溯停用前的設定
+- Soft disable 保留歷史資料，月名單分派 config 快照仍可回溯停用前的設定
 
 **放棄替代方案**：`card_version` 遞增區分新舊維度 — 版本號膨脹且與現有版本管理語意（`ob_levelcard_version` 代表計分體系版本）混淆。
 
@@ -3529,7 +3529,7 @@ VALUES ('cr_reassignment_enabled', 'false', NOW(), 'CR 回分全域開關（F059
 **理由**：
 - `ob_assign_set` 表（映射自 OBASSIGNSET）屬於 Stage 0 **每日比例係數**的輸出表（L3 系統產出），寫入欄位為 `list_no`, `workdt`, `casedt`, `ratio_rate`，**並非**全域設定的適合儲存位置
 - 將 CR 開關混入 `ob_assign_set` 會造成設定語意污染：`ob_assign_set` 每月每 LIST_NO 均有多列，無法對應「全域唯一」的開關語意
-- 獨立 `ob_assign_config` Key-value 表擴展性佳，未來如需新增其他全域設定（如月跑觸發閾值等），無需 ALTER TABLE
+- 獨立 `ob_assign_config` Key-value 表擴展性佳，未來如需新增其他全域設定（如月名單分派觸發閾值等），無需 ALTER TABLE
 
 **放棄替代方案**：將 CR 開關存入 `ob_assign_set` — 語意不清，且該表為 Stage 0 寫出的每日比例記錄，行語意與全域開關不符。
 
@@ -3543,7 +3543,7 @@ VALUES ('cr_reassignment_enabled', 'false', NOW(), 'CR 回分全域開關（F059
 
 **決策**：以 `ob_emphire.resign_date IS NULL` 作為在職員工的判斷條件，**不在** `ob_empl_set` 新增 `status` 欄位。`ob_empl_set` 為比例設定表，其 `ration` 欄位代表分配比例，不承載員工在職狀態語意。
 
-月跑 Stage 4 在讀取 `ob_empl_set` 人員比例時，JOIN `ob_emphire` 並過濾 `resign_date IS NULL`，自動排除已離職員工。F057 查詢人員比例清單時，API 提供 `includeInactive=false`（預設）/`true` 參數，以 `ob_emphire.resign_date IS NULL` 為過濾條件。
+月名單分派 Stage 4 在讀取 `ob_empl_set` 人員比例時，JOIN `ob_emphire` 並過濾 `resign_date IS NULL`，自動排除已離職員工。F057 查詢人員比例清單時，API 提供 `includeInactive=false`（預設）/`true` 參數，以 `ob_emphire.resign_date IS NULL` 為過濾條件。
 
 **理由**：
 - `ob_emphire` 由 E04 每日 ETL 從 OBEMPHIRE 同步，`resign_date` 為 OBEMPHIRE 原生欄位，已能準確反映在職狀態（OQ-E07-15 已決議）
@@ -3556,14 +3556,14 @@ VALUES ('cr_reassignment_enabled', 'false', NOW(), 'CR 回分全域開關（F059
 
 ---
 
-#### AD-E07-7　月跑 Stage 進度儲存方式
+#### AD-E07-7　月名單分派 Stage 進度儲存方式
 
-**決策**：新建獨立表 `assignment_run_stage_log`，每個 Stage 啟動與完成時各寫入一列，支援結構化查詢，並能在月跑執行中提供 F062 進度輪詢所需的每 Stage 狀態。
+**決策**：新建獨立表 `assignment_run_stage_log`，每個 Stage 啟動與完成時各寫入一列，支援結構化查詢，並能在月名單分派執行中提供 F062 進度輪詢所需的每 Stage 狀態。
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | `id` | `BIGSERIAL PK` | 自增主鍵 |
-| `run_id` | `UUID NOT NULL FK → assignment_run.run_id` | 所屬月跑 |
+| `run_id` | `UUID NOT NULL FK → assignment_run.run_id` | 所屬月名單分派 |
 | `stage_no` | `SMALLINT NOT NULL` | Stage 編號（0~4） |
 | `status` | `VARCHAR(10) NOT NULL` | `running` / `completed` / `failed` |
 | `started_at` | `TIMESTAMP NOT NULL` | Stage 開始時間 |
@@ -3574,11 +3574,11 @@ VALUES ('cr_reassignment_enabled', 'false', NOW(), 'CR 回分全域開關（F059
 F062 Polling 查詢：`SELECT * FROM assignment_run_stage_log WHERE run_id = :runId ORDER BY stage_no ASC`。
 
 **理由**：
-- JSONB 欄位方案（在 `assignment_run` 新增 `stage_log JSONB`）無法在月跑執行中途原子性更新單一 Stage：PostgreSQL JSONB 更新需整欄覆寫，並發風險高
+- JSONB 欄位方案（在 `assignment_run` 新增 `stage_log JSONB`）無法在月名單分派執行中途原子性更新單一 Stage：PostgreSQL JSONB 更新需整欄覆寫，並發風險高
 - 獨立表支援精確的每 Stage `started_at` / `finished_at` 時間戳記，`processed_count` 等結構化欄位，可直接在 DB 層過濾/聚合，無需應用層解析 JSONB
 - F062 進度 API 需要「每 Stage 最新狀態」，獨立表 `ORDER BY stage_no` 直接滿足，不需解析嵌套 JSON
 
-**放棄替代方案**：JSONB 存入 `assignment_run.stage_log` — 月跑執行中即時更新 JSONB 需讀取→修改→回寫整個欄位，並發競爭條件下有寫入遺漏風險；結構化查詢（如「哪個 Stage 耗時最長」）需在應用層解析，無法利用 DB 索引。
+**放棄替代方案**：JSONB 存入 `assignment_run.stage_log` — 月名單分派執行中即時更新 JSONB 需讀取→修改→回寫整個欄位，並發競爭條件下有寫入遺漏風險；結構化查詢（如「哪個 Stage 耗時最長」）需在應用層解析，無法利用 DB 索引。
 
 **對應假設**：OQ-E07-13（F062） → 已解決，採獨立 `assignment_run_stage_log` 表。
 
@@ -3604,7 +3604,7 @@ per_date    = base_ratio
 
 此演算法移植自 `reference/SP/Stage0_估算每日分派案件數量.sql`（T-SQL ROW_NUMBER OVER ORDER BY CALENDAR_DATE DESC）。
 
-**注意**：Stage 0 在 F049「每日估算」功能中僅為**試算預覽**（不寫入 `ob_assign_set`），正式月跑（F061）前置條件 Stage 0 才執行正式寫入。
+**注意**：Stage 0 在 F049「每日估算」功能中僅為**試算預覽**（不寫入 `ob_assign_set`），正式月名單分派（F061）前置條件 Stage 0 才執行正式寫入。
 
 **對應假設**：F049 A-2 → 已解決，確認演算法為 FLOOR + 餘數補最近日期。
 
@@ -3618,9 +3618,9 @@ per_date    = base_ratio
 |------|---------|------|
 | L1（一次性遷移） | OB 舊系統歷史資料 | ob_list_definition / ob_dept_pct / ob_empl_set / ob_levelcard_* / ob_tier / ob_code_df |
 | L2（E04 定期 ETL） | OBPOOLDATA / OBEMPHIRE / OBCALENDAR / OB_ARRETURNDF_MIN_CAP 每日/每月 ETL | ob_pool_data / ob_emphire / ob_calendar / ob_arreturndf_min_cap |
-| L3（月跑系統產出） | E07 月跑計算結果 | ob_assign_set / ob_pool_data_list（欄位回寫）/ assignment_run / assignment_run_snapshot / assignment_run_stage_log / assignment_audit_log |
+| L3（月名單分派系統產出） | E07 月名單分派計算結果 | ob_assign_set / ob_pool_data_list（欄位回寫）/ assignment_run / assignment_run_snapshot / assignment_run_stage_log / assignment_audit_log |
 
-**理由**：`ob_assign_set` 存放的是月跑 Stage 0 計算得出的「當月各工作日分派量係數」，每月月跑前重新計算，不是歷史遷移資料。舊系統的 OBASSIGNSET 歷史資料無需遷移，直接由新系統月跑重新產出。
+**理由**：`ob_assign_set` 存放的是月名單分派 Stage 0 計算得出的「當月各工作日分派量係數」，每月月名單分派前重新計算，不是歷史遷移資料。舊系統的 OBASSIGNSET 歷史資料無需遷移，直接由新系統月名單分派重新產出。
 
 ---
 
@@ -3648,7 +3648,7 @@ graph TD
     end
 
     subgraph L2["L2：E04 ETL 定期同步"]
-        ETL_POOL["E04 擷取任務\nOBPOOLDATA → ob_pool_data\n月跑前手動/排程執行"]
+        ETL_POOL["E04 擷取任務\nOBPOOLDATA → ob_pool_data\n月名單分派前手動/排程執行"]
         ETL_EMP["E04 擷取任務\nOBEMPHIRE → ob_emphire\n每日 ETL"]
         ETL_CAL["E04 擷取任務\nOBCALENDAR → ob_calendar\n每年 ETL（年初一次）"]
     end
@@ -3667,7 +3667,7 @@ graph TD
             ob_emphire_pg["ob_emphire"]
             ob_cal_pg["ob_calendar"]
         end
-        subgraph ob_l3["L3 月跑產出"]
+        subgraph ob_l3["L3 月名單分派產出"]
             ob_assign_set["ob_assign_set\n日比例係數"]
             ob_pool_list["ob_pool_data_list\n分派結果"]
             assign_run["assignment_run\nassignment_run_snapshot\nassignment_run_stage_log\nassignment_audit_log"]
@@ -3675,7 +3675,7 @@ graph TD
         end
     end
 
-    subgraph E07月跑["E07 月跑引擎（F061）"]
+    subgraph E07月名單分派["E07 月名單分派引擎（F061）"]
         Stage0["Stage 0\n前置條件 + 日比例計算"]
         Stage1["Stage 1\n名單建立（ob_pool_data 篩選）"]
         Stage2["Stage 2\n計分（fn_calc_tier_level）"]
@@ -3696,7 +3696,7 @@ graph TD
 
     MIG_SCRIPT -->|"psql COPY\n+ 轉換 + 補建 PK"| ob_migrated
 
-    OBPOOLDATA -->|"E04 ETL（月跑前）"| ETL_POOL
+    OBPOOLDATA -->|"E04 ETL（月名單分派前）"| ETL_POOL
     OBEMPHIRE -->|"E04 ETL（每日）"| ETL_EMP
     OBCALENDAR -->|"E04 ETL（每年）"| ETL_CAL
 
@@ -3732,20 +3732,20 @@ graph TD
     class ETL_POOL,ETL_EMP,ETL_CAL l2
     class ob_l3,ob_assign_set,ob_pool_list,assign_run,ob_assign_cfg l3
     class 舊OB系統,OBMLISTDF,OBMDEPTPCT,OBEMPLSETMF,OBLEVELCARD_V,OBLEVELCARD_COL,OBLEVELCARD_SCO,OBLEVELCARD_LEV,OBTIER,OBMCODEDF,OBPOOLDATA,OBEMPHIRE,OBCALENDAR src
-    class E07月跑,Stage0,Stage1,Stage2,Stage3,Stage4,Snapshot engine
+    class E07月名單分派,Stage0,Stage1,Stage2,Stage3,Stage4,Snapshot engine
 ```
 
 #### 資料來源分層表（含 ob_pool_data 定位說明）
 
 | 層級 | 資料表 | 來源 | 語意說明 |
 |------|--------|------|---------|
-| L1（一次性遷移） | ob_list_definition, ob_dept_pct, ob_empl_set, ob_levelcard_*, ob_tier, ob_code_df | OB 歷史設定表 | 靜態設定，月跑前置條件 |
-| L2（E04 定期 ETL） | **ob_pool_data**（PK: orgno+appl_no，**不含 list_no**）, ob_emphire, ob_calendar, **ob_arreturndf_min_cap** | OBPOOLDATA / OBEMPHIRE / OBCALENDAR / OB_ARRETURNDF_MIN_CAP | **ob_pool_data 為共享案件池，案件本身無 list_no 概念**；list_no 由 Stage 1 JOIN ob_list_definition 篩選後首次出現於 ob_pool_data_list（AD-E07-13）；**ob_arreturndf_min_cap**：ARRETURNDF 累積未償本金彙總（per APPL_NO），月跑 Stage 2 計分使用 |
-| L3（月跑系統產出） | ob_assign_set, **ob_pool_data_list**（含 list_no）, assignment_run, assignment_run_snapshot, assignment_run_stage_log, assignment_audit_log | E07 月跑計算結果 | ob_pool_data_list 為 Stage 1 篩選後的 per-list 分派結果表；ob_pool_data（L2）與 ob_pool_data_list（L3）構成「池 / 結果」分離關係 |
+| L1（一次性遷移） | ob_list_definition, ob_dept_pct, ob_empl_set, ob_levelcard_*, ob_tier, ob_code_df | OB 歷史設定表 | 靜態設定，月名單分派前置條件 |
+| L2（E04 定期 ETL） | **ob_pool_data**（PK: orgno+appl_no，**不含 list_no**）, ob_emphire, ob_calendar, **ob_arreturndf_min_cap** | OBPOOLDATA / OBEMPHIRE / OBCALENDAR / OB_ARRETURNDF_MIN_CAP | **ob_pool_data 為共享案件池，案件本身無 list_no 概念**；list_no 由 Stage 1 JOIN ob_list_definition 篩選後首次出現於 ob_pool_data_list（AD-E07-13）；**ob_arreturndf_min_cap**：ARRETURNDF 累積未償本金彙總（per APPL_NO），月名單分派 Stage 2 計分使用 |
+| L3（月名單分派系統產出） | ob_assign_set, **ob_pool_data_list**（含 list_no）, assignment_run, assignment_run_snapshot, assignment_run_stage_log, assignment_audit_log | E07 月名單分派計算結果 | ob_pool_data_list 為 Stage 1 篩選後的 per-list 分派結果表；ob_pool_data（L2）與 ob_pool_data_list（L3）構成「池 / 結果」分離關係 |
 
 > **ob_pool_data vs ob_pool_data_list 區別（AD-E07-13 決議）**：
 > - `ob_pool_data`（L2）：案件池，全量 ETL 同步，不含 list_no，PK = `(orgno, appl_no)`
-> - `ob_pool_data_list`（L3）：月跑 Stage 1 產出，per-list 分派結果，含 list_no，PK = `(list_no, orgno, appl_no)`
+> - `ob_pool_data_list`（L3）：月名單分派 Stage 1 產出，per-list 分派結果，含 list_no，PK = `(list_no, orgno, appl_no)`
 
 ---
 
@@ -3833,10 +3833,10 @@ SELECT COUNT(*) FROM ob_list_definition WHERE prod_kind LIKE '%$$%';
 
 | 流程 | 來源（SQL Server） | E04 任務名稱 | E04 中介表 | E05 Pipeline 名稱 | AppDB 目標表 | 同步策略 | 頻率 |
 |------|-----------------|------------|----------|-----------------|------------|---------|------|
-| OBPOOLDATA 同步 | `dbo.OBPOOLDATA` | E07-OBPOOLDATA-Extract | `raw_{obpooldata_id}`（短）| E07-OBPOOLDATA-Load | `ob_pool_data` | E04 full + E05 replace | 月跑前手動 |
+| OBPOOLDATA 同步 | `dbo.OBPOOLDATA` | E07-OBPOOLDATA-Extract | `raw_{obpooldata_id}`（短）| E07-OBPOOLDATA-Load | `ob_pool_data` | E04 full + E05 replace | 月名單分派前手動 |
 | OBEMPHIRE 同步 | `dbo.OBEMPHIRE` | E07-OBEMPHIRE-Extract | `raw_{obemphire_id}`（短）| E07-OBEMPHIRE-Load | `ob_emphire` | E04 full + E05 replace | 每日 03:00 |
 | OBCALENDAR 同步 | `dbo.OBCALENDAR` | E07-OBCALENDAR-Extract | `raw_{obcalendar_id}`（短）| E07-OBCALENDAR-Load | `ob_calendar` | E04 full + E05 replace | 每年初一次 |
-| OB_ARRETURNDF_MIN_CAP 同步 | `dbo.OB_ARRETURNDF_MIN_CAP` | E07-OBARRETURNDF_MIN_CAP-Extract | `raw_{obarreturndf_min_cap_id}`（短）| E07-OBARRETURNDF_MIN_CAP-Load | `ob_arreturndf_min_cap` | E04 full + E05 replace | 月跑前手動 |
+| OB_ARRETURNDF_MIN_CAP 同步 | `dbo.OB_ARRETURNDF_MIN_CAP` | E07-OBARRETURNDF_MIN_CAP-Extract | `raw_{obarreturndf_min_cap_id}`（短）| E07-OBARRETURNDF_MIN_CAP-Load | `ob_arreturndf_min_cap` | E04 full + E05 replace | 月名單分派前手動 |
 
 > **說明**：E04 中介表名稱由引擎自動產生（F021 §5.6c：`raw_{task_id_short}`），不可由使用者自訂。每次 ETL 全量重抓即覆寫，中介表為**短期持有**，不需長期保留。
 
@@ -3848,9 +3848,9 @@ E05 既有規格（F030 AC-6）中，Pipeline 觸發機制僅支援**定時 cron
 |--------|---------|------|
 | E04 OBEMPHIRE-Extract | 每日 **03:00** | 從 OB DB 擷取全量至 `raw_{id}` |
 | E05 OBEMPHIRE-Load | 每日 **03:30** | Pipeline 讀取 `raw_{id}` → TargetLoad `ob_emphire` |
-| E04 E05 OBPOOLDATA | 月跑前**手動**依序觸發 | E04 Execute → 等待完成 → E05 Execute |
+| E04 E05 OBPOOLDATA | 月名單分派前**手動**依序觸發 | E04 Execute → 等待完成 → E05 Execute |
 | E04 E05 OBCALENDAR | 每年初**手動**依序觸發 | E04 Execute → 等待完成 → E05 Execute |
-| E04 E05 OB_ARRETURNDF_MIN_CAP | 月跑前**手動**依序觸發（同 OBPOOLDATA）| E04 Execute → 等待完成 → E05 Execute；Stage 2 計分依賴此表 |
+| E04 E05 OB_ARRETURNDF_MIN_CAP | 月名單分派前**手動**依序觸發（同 OBPOOLDATA）| E04 Execute → 等待完成 → E05 Execute；Stage 2 計分依賴此表 |
 
 > **風險 E07-C-1（已接受）**：若 E04 在 03:00~03:30 之間未完成（資料量超預期），E05 Pipeline 於 03:30 執行時讀取的 `raw_{id}` 為上一批資料（或空表）。員工數 < 1 萬筆，實際 E04 執行時間預估 < 10 分鐘，30 分鐘緩衝足夠。若未來資料量增加，需重新評估時間間隔或引入 E04 完成回呼機制。
 
@@ -3860,7 +3860,7 @@ E05 既有規格（F030 AC-6）中，Pipeline 觸發機制僅支援**定時 cron
 - 案件池每月由舊系統 Stored Procedure 重建，增量欄位不可靠，採全量重抓
 - E04 任務 `mode: full`（F021）：`TRUNCATE raw_{id}` 後批次 INSERT 1000 筆/批
 - E05 Pipeline TargetLoad `fullMode: true`（F044）：`TRUNCATE ob_pool_data` + 批次 INSERT，確保目標表完全反映本次 ETL 結果
-- 月跑前由業務主管手動依序執行 E04→E05，確保 `ob_pool_data` 就緒（F061 前置條件 AC-1 第 6 點）
+- 月名單分派前由業務主管手動依序執行 E04→E05，確保 `ob_pool_data` 就緒（F061 前置條件 AC-1 第 6 點）
 
 **OBEMPHIRE（E04 full + E05 replace，每日全量重抓）**
 - 員工數 < 1 萬筆，全量重抓無效能壓力；避免增量同步所需的 UPSERT 複雜性
@@ -3873,9 +3873,9 @@ E05 既有規格（F030 AC-6）中，Pipeline 觸發機制僅支援**定時 cron
 - 資料量小（~365 列/年），全量 E04 + E05 replace 無效能問題
 - 由 DBA 每年初手動依序觸發 E04→E05
 
-**OB_ARRETURNDF_MIN_CAP（E04 full + E05 replace，月跑前手動）**
-- OB 端 `OB_ARRETURNDF_MIN_CAP` 為 `ARRETURNDF` 還款明細的預先彙總表（`MIN(ADD_UN_CAPITAL) GROUP BY APPL_NO`），OB 端每月月跑前由其 SP 重建
-- 資料量與案件池規模相當（預計與 OBPOOLDATA 筆數接近），全量 E04 + E05 replace，每月月跑前手動依序觸發
+**OB_ARRETURNDF_MIN_CAP（E04 full + E05 replace，月名單分派前手動）**
+- OB 端 `OB_ARRETURNDF_MIN_CAP` 為 `ARRETURNDF` 還款明細的預先彙總表（`MIN(ADD_UN_CAPITAL) GROUP BY APPL_NO`），OB 端每月月名單分派前由其 SP 重建
+- 資料量與案件池規模相當（預計與 OBPOOLDATA 筆數接近），全量 E04 + E05 replace，每月月名單分派前手動依序觸發
 - E04 任務 `mode: full`：全量 SELECT → TRUNCATE raw_{id} → 批次 INSERT；E05 TargetLoad `fullMode: true`：TRUNCATE ob_arreturndf_min_cap → 批次 INSERT
 - [ASSUMPTION] 原表 `APPL_NO` 無 PK constraint；ETL 同步後需驗證 `appl_no` 唯一性（見 E07-F F-2 D 列）
 
@@ -3965,7 +3965,7 @@ sequenceDiagram
     participant RAW as AppDB raw_{id}（中介表）
     participant E05 as E05 Pipeline（Scheduler）
     participant TARGET as AppDB ob_* 目標表
-    participant E07 as E07 月跑引擎
+    participant E07 as E07 月名單分派引擎
 
     Note over OB_DB,TARGET: 每日 ETL（OBEMPHIRE → ob_emphire）排程時間錯開
     Note over E04: 每日 03:00 觸發
@@ -3980,7 +3980,7 @@ sequenceDiagram
     E05->>TARGET: TRUNCATE ob_emphire
     E05->>TARGET: 批次 INSERT ob_emphire（5000 筆/批，fullMode）
 
-    Note over OB_DB,TARGET: 月跑前 ETL（OBPOOLDATA → ob_pool_data）手動觸發
+    Note over OB_DB,TARGET: 月名單分派前 ETL（OBPOOLDATA → ob_pool_data）手動觸發
     E04->>OB_DB: SELECT * FROM OBPOOLDATA（全量，mode: full）
     OB_DB-->>E04: 當月案件池資料
     E04->>RAW: TRUNCATE raw_{obpooldata_id}
@@ -4002,7 +4002,7 @@ sequenceDiagram
     E05->>TARGET: TRUNCATE ob_calendar
     E05->>TARGET: 批次 INSERT ob_calendar（5000 筆/批，fullMode）
 
-    Note over TARGET,E07: 月跑觸發（ob_* 資料已就緒）
+    Note over TARGET,E07: 月名單分派觸發（ob_* 資料已就緒）
     E07->>TARGET: 讀 ob_calendar（工作日計算）
     E07->>TARGET: 讀 ob_pool_data（當月案件）
     E07->>TARGET: 讀 ob_emphire（在職員工，resign_date IS NULL）
@@ -4010,13 +4010,13 @@ sequenceDiagram
 
 ---
 
-### E07-D　月跑執行架構（L3 系統產出）
+### E07-D　月名單分派執行架構（L3 系統產出）
 
-#### 月跑整體流程
+#### 月名單分派整體流程
 
 ```mermaid
 graph TD
-    A["業務主管\n點擊「執行月跑」"] --> B["POST /api/v1/assignment/runs"]
+    A["業務主管\n點擊「執行月名單分派」"] --> B["POST /api/v1/assignment/runs"]
     B --> C{前置條件檢查\n AC-1}
     C -->|失敗| D["422 ASSIGNMENT_RUN_PRECHECK_FAILED\n回傳失敗清單"]
     C -->|通過| E["確認對話框\n顯示 YM / 名單數 / 計分版本"]
@@ -4122,10 +4122,10 @@ Stage 1 `case_status` 篩選 SQL：
 | 情境 | 控制方式 |
 |------|---------|
 | 同月重複觸發（pending/running 存在） | 前置條件 AC-1 第 5 點：查詢 `assignment_run WHERE ym = :currentYm AND status IN ('pending','running')`，存在則回傳 409 `ASSIGNMENT_RUN_ALREADY_RUNNING` |
-| 月跑執行中 CRUD 操作 | F048/F050~F052/F054~F060/F068 API 在寫入前檢查 `assignment_run.status IN ('pending','running')`，存在則回傳 409 `*_LOCKED`（月跑鎖） |
+| 月名單分派執行中 CRUD 操作 | F048/F050~F052/F054~F060/F068 API 在寫入前檢查 `assignment_run.status IN ('pending','running')`，存在則回傳 409 `*_LOCKED`（月名單分派鎖） |
 | 重跑（completed 狀態） | 允許；前次快照保留（BR-4，F061） |
 
-#### 月跑環境變數清單
+#### 月名單分派環境變數清單
 
 | 變數名稱 | 預設值 | 說明 |
 |---------|-------|------|
@@ -4133,7 +4133,7 @@ Stage 1 `case_status` 篩選 SQL：
 | `STAGE0_ESTIMATE_TIMEOUT_MS` | `10000` | F049 估算 API 逾時（毫秒） |
 | `STAGE0_POOL_WARN_THRESHOLD` | `1000` | F049 案件池數量警告門檻 |
 | `EXPORT_FILE_EXPIRE_MS` | `300000` | F064 匯出逾時（毫秒，預設 5 分鐘） |
-| `ASSIGNMENT_RUN_TIMEOUT_MS` | `1800000` | 月跑最大執行時間（毫秒，預設 30 分鐘，對應 NFR-003） |
+| `ASSIGNMENT_RUN_TIMEOUT_MS` | `1800000` | 月名單分派最大執行時間（毫秒，預設 30 分鐘，對應 NFR-003） |
 
 ---
 
@@ -4179,7 +4179,7 @@ UPDATE ob_pool_data_list pdl
        tier_level = calc.tier_level
   FROM ob_pool_data pd
   CROSS JOIN LATERAL fn_calc_tier_level(
-      :p_card_type,       -- 由月跑 Stage 1 依 list_no → ob_list_definition.card_type 決定
+      :p_card_type,       -- 由月名單分派 Stage 1 依 list_no → ob_list_definition.card_type 決定
       :p_card_version,    -- 取 ob_levelcard_version WHERE card_type = :p_card_type AND status = 'active'
       pd.*
   ) AS calc
@@ -4222,7 +4222,7 @@ SELECT tier_level FROM ob_tier
 
 **F104 新增架構約束**：
 - **兩條引擎路徑（PG 下推 `resolveColumnSource` / JS oracle `resolveColumnValue`）簽章須加 `cardType` 參數**（AD-E07-32）：per-card default 與縣市 default 均依 card_type 決定，現行 `resolveColumnSource(columnName)` 不收 cardType — F104 改為 `resolveColumnSource(columnName, cardType)`。
-- **`cus_sex` NULL-safe cast 為硬性要求**（AD-E07-34）：dev 資料含非數值髒值（`'C'`/`'D'`/`'8'`/`'9'`/空字串），PG 裸 `::int` 對非數值拋例外導致整支月跑 SQL 掛掉；JS `Number()` 對非數值字串返回 NaN。
+- **`cus_sex` NULL-safe cast 為硬性要求**（AD-E07-34）：dev 資料含非數值髒值（`'C'`/`'D'`/`'8'`/`'9'`/空字串），PG 裸 `::int` 對非數值拋例外導致整支月名單分派 SQL 掛掉；JS `Number()` 對非數值字串返回 NaN。
 - **cus_sex 兩處 default 刻意分離**（AD-E07-34 / BR-F104-13a）：(i) CUS_SEX **計分欄** default = `3`；(ii) 五欄**分流 gating** default = `'1'`（個人）；兩者不可混用同一 COALESCE。
 
 **column_name 對應規則表 v5.0**（legacy 真語意，F105 權威；引擎 alias `o`=ob_pool_data / `cc`=customer_core LEFT JOIN / `ar`=ob_arreturndf_min_cap LEFT JOIN；`<safe_int>` 定義見 AD-E07-34；`composite` match kind 定義見 AD-E07-35）：
@@ -4291,7 +4291,7 @@ flowchart TD
     MATCH --> SUM["SUM → score → card_level → tier_level"]
 ```
 
-> **ADD_UN_CAPITAL ETL 前置注意**：`ADD_UN_CAPITAL` 僅在 `ob_arreturndf_min_cap` ETL 同步就緒時有意義，表為空時所有案件 fallback 為 0。月跑前置條件應將此 ETL 同步納入必要檢核。
+> **ADD_UN_CAPITAL ETL 前置注意**：`ADD_UN_CAPITAL` 僅在 `ob_arreturndf_min_cap` ETL 同步就緒時有意義，表為空時所有案件 fallback 為 0。月名單分派前置條件應將此 ETL 同步納入必要檢核。
 
 > **F103 實作授權補述（AD-E07-v3.5，2026-06-24）【部分已被 F104 覆蓋，詳見上表 F103→F104 變更欄】**：
 >
@@ -4375,13 +4375,13 @@ private resolveColumnValue(pool, columnName, cc, arCap, cardType: string): strin
 1. 數值 per-card default 欄（LIST_MONTH、LOAN_RATE）：套 H 基準（LIST_MONTH→25、LOAN_RATE→0）
 2. 縣市欄（HPOST_NUM_NM/CPOST_NUM_NM/CO_NUM_NM）：未知 card_type 一律**不計分縣市欄**（無 default，回傳 null/skip），因縣市欄僅在特定 card 啟用，未知 card 貿然套 default 會引入錯誤計分
 3. EDUCAT_BACK：套 `'02'`（E 基準）
-4. **所有 fallback 均須 `logger.warn(card_type)` + 不阻擋月跑**
+4. **所有 fallback 均須 `logger.warn(card_type)` + 不阻擋月名單分派**
 
 ---
 
 #### AD-E07-34　`cus_sex` NULL-safe cast 模式 + 兩處 default 分離（F104，2026-06-24）
 
-**問題**：`customer_core.cus_sex`（`varchar(2)`）dev 實測含非數值髒值（`'C'`/`'D'`/`'8'`/`'9'`/空字串 及少量 NULL），共約 3.7 萬筆髒值（總 350 萬筆中）。PG 裸 `cc.cus_sex::int` 對 `'C'` 等非數值字串拋 `invalid input syntax for type integer`，導致整支月跑 SQL 失敗。
+**問題**：`customer_core.cus_sex`（`varchar(2)`）dev 實測含非數值髒值（`'C'`/`'D'`/`'8'`/`'9'`/空字串 及少量 NULL），共約 3.7 萬筆髒值（總 350 萬筆中）。PG 裸 `cc.cus_sex::int` 對 `'C'` 等非數值字串拋 `invalid input syntax for type integer`，導致整支月名單分派 SQL 失敗。
 
 **決策：強制所有引用 `cus_sex` 的路徑套 `<safe_int>` wrapper，並嚴格區分兩處 default。**
 
@@ -4598,8 +4598,8 @@ HM 名單共 63 筆，仍在業務使用。
 
 **過渡安排與風險**：
 - `ob_tier` 中 HM 的 A/B/C/D 四筆對應（dump 遷移後保留）可正常服務 TIER_LEVEL lookup
-- **遷移阻斷點**：`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` 目前**缺 HM 計分設定**。在業務主管透過 F053/F054 建立 HM 計分設定或由遷移腳本補入前，月跑 HM 名單的計分結果將為 `score=0`、`card_level=NULL`，tier_level 走 fallback（`card_level IS NULL`）——但 `ob_tier` 中 HM 並無 `card_level IS NULL` 的 fallback 紀錄，最終 `tier_level` 為 NULL
-- **建議處置**：遷移腳本執行後，業務方需透過 F054（計分維度編輯）補建 HM 計分設定；在設定完成前，月跑驗收應排除 HM 名單，或由月跑引擎對「score=0 且 tier_level=NULL」案件輸出警告標記
+- **遷移阻斷點**：`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` 目前**缺 HM 計分設定**。在業務主管透過 F053/F054 建立 HM 計分設定或由遷移腳本補入前，月名單分派 HM 名單的計分結果將為 `score=0`、`card_level=NULL`，tier_level 走 fallback（`card_level IS NULL`）——但 `ob_tier` 中 HM 並無 `card_level IS NULL` 的 fallback 紀錄，最終 `tier_level` 為 NULL
+- **建議處置**：遷移腳本執行後，業務方需透過 F054（計分維度編輯）補建 HM 計分設定；在設定完成前，月名單分派驗收應排除 HM 名單，或由月名單分派引擎對「score=0 且 tier_level=NULL」案件輸出警告標記
 
 **影響範圍**：
 - `fn_calc_tier_level`（migration 141）：**不修改**
@@ -4609,7 +4609,7 @@ HM 名單共 63 筆，仍在業務使用。
 - E07-F 開發前檢核清單：新增 P5 項（HM 計分設定補建確認）
 
 **替代方案考量**：
-- **方案 A（Stage 2 呼叫端加 HM→M 映射）**：Stage 2 若 `card_type='HM'` 改傳 `p_card_type='M'`，但 `ob_tier` lookup 保留 `'HM'`。可立即消除月跑 HM 名單為空的風險，但在 Service 層引入 CARD_TYPE 映射表，造成計分邏輯不透明；業務若調整 M 設定，HM 計分隨之改變，缺乏控制——**不採**
+- **方案 A（Stage 2 呼叫端加 HM→M 映射）**：Stage 2 若 `card_type='HM'` 改傳 `p_card_type='M'`，但 `ob_tier` lookup 保留 `'HM'`。可立即消除月名單分派 HM 名單為空的風險，但在 Service 層引入 CARD_TYPE 映射表，造成計分邏輯不透明；業務若調整 M 設定，HM 計分隨之改變，缺乏控制——**不採**
 - **方案 B（在 ob_levelcard_* 複製 M 的資料為 HM 版本）**：等同本決策（補建獨立設定），但以資料複製而非業務輸入實作初值——資料來源不透明且雙向維護問題存在——可作為**臨時救急手段**，由 DBA 執行，但長期應以業務主管透過 F054 維護為準
 
 ---
@@ -4727,7 +4727,7 @@ step 7: INSERT assignment_audit_log   (action='DELETE', before_value=刪除筆�
 | K1：`condition_payload` 寫入限 `stage='draft'` | 不破壞；`updateList` 補強確認 conditionPayload 存在時觸發既有 stage guard |
 | K2：F052 軟刪除限 `stage='draft'` | 不影響；`disableList` 邏輯無改動 |
 | K3：Rollback 後 condition_payload 重新可寫 | 不破壞；rollback 路徑（M03a/b/c/d）退回 draft 後 service 層正常接受 conditionPayload |
-| K4：Stage 1 月跑只讀 `stage='ready'` 名單 | 不影響；Stage 0 篩選邏輯未改 |
+| K4：Stage 1 月名單分派只讀 `stage='ready'` 名單 | 不影響；Stage 0 篩選邏輯未改 |
 | K5：推進 API（F078/F080/F084/F086）不受影響 | 不影響；推進 API 邏輯未改動 |
 
 ---
@@ -4792,7 +4792,7 @@ graph LR
 
 | 項目 | 說明 |
 |---|---|
-| **up() 邏輯重點** | ① `SELECT list_no, prod_kind, caseyear, spec_tp, case_status, settle_src FROM ob_list_definition WHERE condition_payload IS NULL`；② 對每筆以 TypeScript loop 組裝 JSON（非純 SQL，原因：SQLite 無 JSONB 函數）；③ 組裝規則詳見 §18.6 衍生規則；④ 若所有 5 欄均為空 / NULL，寫入 `{ "conditions": [], "logic": "AND", "_backfill_empty": true }` 並記錄 `Logger.warn`；**月跑 Stage 1 行為：路徑 A 解析到 `conditions: []` 時 skip 該名單（見 §18.5.2）**；⑤ `UPDATE ob_list_definition SET condition_payload = :json WHERE list_no = :listNo` 逐筆更新；⑥ 每 100 筆記錄 `Logger.log` 進度 |
+| **up() 邏輯重點** | ① `SELECT list_no, prod_kind, caseyear, spec_tp, case_status, settle_src FROM ob_list_definition WHERE condition_payload IS NULL`；② 對每筆以 TypeScript loop 組裝 JSON（非純 SQL，原因：SQLite 無 JSONB 函數）；③ 組裝規則詳見 §18.6 衍生規則；④ 若所有 5 欄均為空 / NULL，寫入 `{ "conditions": [], "logic": "AND", "_backfill_empty": true }` 並記錄 `Logger.warn`；**月名單分派 Stage 1 行為：路徑 A 解析到 `conditions: []` 時 skip 該名單（見 §18.5.2）**；⑤ `UPDATE ob_list_definition SET condition_payload = :json WHERE list_no = :listNo` 逐筆更新；⑥ 每 100 筆記錄 `Logger.log` 進度 |
 | **down() 邏輯重點** | `UPDATE ob_list_definition SET condition_payload = NULL`（全數清空；down M1 會 DROP 欄位） |
 | **Idempotency** | `WHERE condition_payload IS NULL`；重複執行不影響已 backfill 紀錄 |
 | **依賴** | 必須在 M1 之後執行（condition_payload column 須存在） |
@@ -4953,10 +4953,10 @@ graph TD
 
 1. **跳過此名單**：不對 `ob_pool_data` 發出任何查詢，不寫入 `ob_pool_data_list`
 2. **記錄警告**：`Logger.warn('[Stage1] Skipping list ${listNo}: empty conditions (backfilled empty or invalid state)')`
-3. **不中斷月跑**：`assignment_run` 繼續執行其他名單；整體月跑不因此 fail
-4. **result summary 標記**：該名單在月跑結果摘要中列為 skipped，`reason: "EMPTY_CONDITIONS"`
+3. **不中斷月名單分派**：`assignment_run` 繼續執行其他名單；整體月名單分派不因此 fail
+4. **result summary 標記**：該名單在月名單分派結果摘要中列為 skipped，`reason: "EMPTY_CONDITIONS"`
 
-> **設計理由**（對應 §18.2.9）：空 conditions 若不 skip 而改撈全表，會造成無預期大量案件湧入 Stage 2，業務風險極高。異常名單（`_backfill_empty: true`）應在 M2 上線前由人工確認並補值，不應讓月跑自動處理。
+> **設計理由**（對應 §18.2.9）：空 conditions 若不 skip 而改撈全表，會造成無預期大量案件湧入 Stage 2，業務風險極高。異常名單（`_backfill_empty: true`）應在 M2 上線前由人工確認並補值，不應讓月名單分派自動處理。
 
 **list_period_* 比對（路徑 A / B 共用）**：
 
@@ -5011,7 +5011,7 @@ month_cnt BETWEEN :periodStart AND :periodEnd
 | `prod_kind` | NOT NULL VARCHAR(255) | `''`（空字串）| NOT NULL 不可設 null；空字串代表「未設定此條件」；Stage 1 路徑 B fallback skip 空字串 |
 | `caseyear` | NULL VARCHAR(255) | `null` | nullable，直接設 null |
 | `spec_tp` | NULL VARCHAR(255) | `null` | 同上 |
-| `case_status` | NOT NULL VARCHAR(14) | `''`（空字串）| **重要**：NOT NULL 不可設 null；月跑路徑 B 遇空字串 skip 此欄位比對 |
+| `case_status` | NOT NULL VARCHAR(14) | `''`（空字串）| **重要**：NOT NULL 不可設 null；月名單分派路徑 B 遇空字串 skip 此欄位比對 |
 | `settle_src` | NULL VARCHAR(6) | `null` | nullable，直接設 null |
 
 **多條件同一 columnName 防禦規則**：
@@ -5153,7 +5153,7 @@ legacy 的客戶去重在下游 pool-data 層（`ob_pool_data_list (assignday, c
 | **Performance** | GIN index（§18.3 M1）+ Stage 1 動態 WHERE（§18.5）| Stage 1 從全表 `O(n)` 降為 JSONB index 過濾；條件越多 WHERE 越精確，案件池縮小效果更佳 |
 | **Performance（backfill）** | M2 分批 Logger.log 每 100 筆 | backfill 為一次性 migration，不影響線上效能；進度可觀察 |
 | **Security** | columnName allowlist `/^[a-z][a-z0-9_]{0,63}$/` guard（§18.5）| 防止儲存在 JSONB 內的 columnName 被篡改後造成 SQL Injection；不符規則的欄位 skip 並記錄 warn，不 crash Stage 1 |
-| **Backward-compat** | 舊名單 fallback 路徑 B（§18.5）+ 5 個 entity column 保留（J6）| `condition_payload IS NULL` 名單月跑不中斷；舊讀取端（F048 / F051 fallback）繼續可用 entity column |
+| **Backward-compat** | 舊名單 fallback 路徑 B（§18.5）+ 5 個 entity column 保留（J6）| `condition_payload IS NULL` 名單月名單分派不中斷；舊讀取端（F048 / F051 fallback）繼續可用 entity column |
 | **Availability** | M5 deployment gate（§18.2.7）| 防止 `ob_code_df.PROD_KIND` 刪除後 F069 `prodKindName` 全部返回 null 造成可見 bug |
 | **Observability** | M2 backfill 進度 log；Stage 1 路徑 B columnName skip warn log | 可在 log 中觀察 backfill 進度與 Stage 1 的 skip 行為 |
 | **Maintainability** | 單一 source of truth（condition_payload）+ 白名單驅動（F075 / F076）| 業務部長可自助新增篩選欄位而無需重新部署；spec 對齊 data-model.md + F050 §5.4 |
@@ -5185,7 +5185,7 @@ legacy 的客戶去重在下游 pool-data 層（`ob_pool_data_list (assignday, c
 | **風險** | 若既有名單 5 個欄位均為空 / NULL（異常資料），backfill 後產生 `{ "conditions": [], ..., "_backfill_empty": true }`；此類名單無法透過 F051 v2.1 編輯（conditions 為空違反 BR-6） |
 | **緩解** | Phase 5 上線前執行 `SELECT count(*), prod_kind, caseyear, spec_tp, case_status, settle_src FROM ob_list_definition WHERE condition_payload IS NULL GROUP BY ...` 統計異常名單數量；若有業務意義名單，人工補值後再執行 M2 |
 | **追蹤** | M2 PR 合入前需附異常名單數量查詢結果（預期為 0 筆） |
-| **OQ-TEST-002 拍板後處置** | Stage 1 對 `conditions: []` 名單採 skip + `Logger.warn`（§18.5.2 / §18.2.9），避免異常名單撈全表造成業務影響；建議 Phase 5 後續 follow-up 補一個 admin alert 機制，讓管理員在月跑後可察覺 skipped 名單 |
+| **OQ-TEST-002 拍板後處置** | Stage 1 對 `conditions: []` 名單採 skip + `Logger.warn`（§18.5.2 / §18.2.9），避免異常名單撈全表造成業務影響；建議 Phase 5 後續 follow-up 補一個 admin alert 機制，讓管理員在月名單分派後可察覺 skipped 名單 |
 
 ###### R4：F069 spec 尚未於 Phase 2 更新（`prod_kind_name` 依賴 `ob_code_df`）
 
@@ -5203,7 +5203,7 @@ legacy 的客戶去重在下游 pool-data 層（`ob_pool_data_list (assignday, c
 | **緩解** | Phase 5 在 `ObListDefinition` entity 新增 `condition_payload` 欄位時加入 `transformer: { from: (v) => (typeof v === 'string' ? JSON.parse(v) : v), to: JSON.stringify }`；或在 `buildStage1Query` 加防禦型 `typeof === 'string' ? JSON.parse(...)` |
 | **追蹤** | E2E test suite 執行時驗證 Stage 1 路徑 A 可正確解析 condition_payload |
 
-###### R6：caseyear=99 wildcard 語意未對齊月跑 Stage 2 計分（拍板 OQ-TEST-001 衍生）
+###### R6：caseyear=99 wildcard 語意未對齊月名單分派 Stage 2 計分（拍板 OQ-TEST-001 衍生）
 
 | 項目 | 說明 |
 |---|---|
@@ -5226,17 +5226,17 @@ legacy 的客戶去重在下游 pool-data 層（`ob_pool_data_list (assignday, c
 | 優先級 | 邊界 Case | 測試重點 |
 |---|---|---|
 | 極高 | M2 backfill idempotency | 執行兩次 up() 結果相同；backfill 後 condition_payload 可被路徑 A 正確解析 |
-| 極高 | Stage 1 路徑 A / B 並存 | 同月跑內，路徑 A 名單（condition_payload IS NOT NULL）與路徑 B 名單（IS NULL）各走正確路徑，結果不互相干擾 |
+| 極高 | Stage 1 路徑 A / B 並存 | 同月名單分派內，路徑 A 名單（condition_payload IS NOT NULL）與路徑 B 名單（IS NULL）各走正確路徑，結果不互相干擾 |
 | 高 | case_status 空字串 fallback | 路徑 B：`case_status = ''` 不加 `list_type` 比對條件；與舊名單語意一致 |
 | 高 | 完整條件集相等唯一性（v2.2）| 同 card_type 條件全等 → 422；同 prod_kind 同 card_type 僅 spec_tp 不同（他新/非他新中古-H）→ 通過；條件/values 順序不同但集合相同 → 422（無序）；不同 card_type 條件全等 → 通過 |
 | 高 | columnName SQL Injection 防禦 | 植入含非法字元的 columnName → Stage 1 skip 該欄位 + Logger.warn，不 crash |
 | 高 | SQLite JSON 解析（R5）| E2E condition_payload TEXT → object 正確反序列化 |
-| 中 | conditions 含 INACTIVE option | 201 Created + warnings body 正確；Stage 1 月跑仍執行 |
+| 中 | conditions 含 INACTIVE option | 201 Created + warnings body 正確；Stage 1 月名單分派仍執行 |
 | 中 | M5 pre-condition 失敗 | `pooldata_field_option` 資料不足時 M5 up() throw，migration 終止 |
 | 中 | F068 route 刪除後 404 確認 | E2E 驗 `/api/v1/assignment/codes/*` 全部回 404 |
 | 中 | K3 rollback 後 condition_payload 重新可寫 | rollback 退回 draft 後 updateList 可正常接受新 conditionPayload |
 | 高 | caseyear=99 wildcard（OQ-TEST-001）| `caseyear=['99']` → Stage 1 無 year_cnt fragment，全年數案件均入選；`caseyear=['1','99']` → 同樣 skip；`caseyear=['1','3']` → `year_cnt IN ('1','3')`（正常路徑） |
-| 高 | 空 conditions 名單 skip（OQ-TEST-002）| `conditions: []` 名單 → Stage 1 skip，不撈案件；Logger.warn 記錄 listNo；月跑不 fail；result summary 含 skipped + reason="EMPTY_CONDITIONS" |
+| 高 | 空 conditions 名單 skip（OQ-TEST-002）| `conditions: []` 名單 → Stage 1 skip，不撈案件；Logger.warn 記錄 listNo；月名單分派不 fail；result summary 含 skipped + reason="EMPTY_CONDITIONS" |
 
 ---
 
@@ -5409,7 +5409,7 @@ prod_best: string | null;
 
 對 `ob_pool_data.best_case` 直接過濾，無需 entity column mapping（路徑 A 動態欄位，不走 `PATH_B_MAPPING`）。
 
-**設計架構原則**：此確認強化了 F075 / F076 whitelist-driven 設計的核心優勢 — 任何 categorical 欄位加入 whitelist 後，Stage 1 路徑 A 即可自動支援，**無需修改 query composer**。未來新增篩選欄位只需維護 F075 / F076，月跑邏輯零改動。
+**設計架構原則**：此確認強化了 F075 / F076 whitelist-driven 設計的核心優勢 — 任何 categorical 欄位加入 whitelist 後，Stage 1 路徑 A 即可自動支援，**無需修改 query composer**。未來新增篩選欄位只需維護 F075 / F076，月名單分派邏輯零改動。
 
 ---
 
@@ -5482,7 +5482,7 @@ prod_best: string | null;
 | 18.12.1 | `is_system_fixed BOOLEAN NOT NULL DEFAULT false` 加入 `pooldata_field_whitelist` | 獨立 `system_fixed_fields` 設定表 | whitelist 已是 system-of-record；獨立表增加 JOIN 複雜度且違反單一責任於單一欄位可表達的場景 |
 | 18.12.2 | `injectSystemFixedConditions` 為 service private helper，接受 `(payload, systemFixedFields[])` 兩個參數；固定值由 caller 傳入 whitelist query 結果（`systemFixedFields` 含 `columnName` + `fieldType` + 固定值對映） | service method hardcode `'best_case'` → `['Y']` | 不 hardcode 單一欄位名，為未來新增系統固定欄位預留擴充點；call site 只需一次 whitelist query 即可處理所有 system-fixed 欄位 |
 | 18.12.3 | 固定值來源：`best_case` → `['Y']`，於 **M-B1 whitelist UPSERT 之後**以 DB query 動態取得；helper 設計接受 `{ columnName, fixedValues: string[] }[]` 陣列（目前 1 筆，未來可擴充）。固定值 mapping 儲存策略：短期以 hardcoded constant 於 service layer（`private static readonly SYSTEM_FIXED_VALUES`），不另開新表 | 新增 `fixed_value` column 於 `pooldata_field_whitelist` | MVP 僅 best_case 一個 system-fixed 欄位，新增 DB column 有 schema 膨脹風險且回填語意不清；service constant 易測試、易改動；日後如需 per-field 固定值設定可再 migration 新增 `fixed_values JSONB NULL` 欄位 |
-| 18.12.4 | `updateList` 僅當 `conditionPayload` 有傳值（DTO `conditionPayload` 非 undefined / null）時才執行 `injectSystemFixedConditions`；legacy null-payload 名單不觸碰 | 無條件注入（含 null-payload 名單） | null-payload 名單屬舊系統遷移路徑 B；其 `condition_payload IS NULL` 語意為「使用 entity column fallback」；強制注入會使 payload 從 NULL 變為僅含 best_case 的 JSON，改變名單月跑路徑（B → A），語意破壞風險高；應由 M-B2 data migration 負責回填 draft 名單，updateList 不主動觸發路徑切換 |
+| 18.12.4 | `updateList` 僅當 `conditionPayload` 有傳值（DTO `conditionPayload` 非 undefined / null）時才執行 `injectSystemFixedConditions`；legacy null-payload 名單不觸碰 | 無條件注入（含 null-payload 名單） | null-payload 名單屬舊系統遷移路徑 B；其 `condition_payload IS NULL` 語意為「使用 entity column fallback」；強制注入會使 payload 從 NULL 變為僅含 best_case 的 JSON，改變名單月名單分派路徑（B → A），語意破壞風險高；應由 M-B2 data migration 負責回填 draft 名單，updateList 不主動觸發路徑切換 |
 | 18.12.5 | deactivation guard 置於 `PooldataFieldWhitelistService.deactivate()` / `update()` 方法 service 層，回 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`；前端停用按鈕 disabled 為 UX 層防護，service 層為 defense-in-depth | 僅前端 disabled，後端不驗 | 前端 disabled 可被繞過（直接 curl）；service 層驗證確保 API 合約安全 |
 | 18.12.6 | M-B1 與 M-B2 拆為兩個獨立 migration（295 / 296） | 合併 | 語意分離：M-B1 schema + seed（可獨立驗收，與 M-B2 資料操作無依賴關係）；M-B2 draft 名單回填（需 M-B1 已提供 `is_system_fixed` 欄位 + best_case=true 才能正確查詢） |
 | 18.12.7 | condition_payload IS NULL 的 draft 名單**不**在 M-B2 回填範圍內 | 回填全部 draft 包含 null-payload | null-payload draft 屬遷移中間態；強行注入 best_case 會使 payload 從 NULL 變為部分 JSON，month跑路徑從 B 跳 A，而其他欄位條件尚未對齊 condition_payload（E2 backfill 已完成，但 null-payload 遺留表示舊名單未完整遷移）；正確處理是人工確認後透過 F051 edit 完整設定 condition_payload，而非僅注入 best_case |
@@ -5593,7 +5593,7 @@ private static readonly SYSTEM_FIXED_VALUE_MAP: Record<string, string[]> = {
 - **§18.12.8（新增）`validateConditionPayload` min-count 排除系統固定欄位**：驗證時先取得 `isSystemFixed=true` 欄位集合（同一次 DB query），從 `conditions` 中排除這些 columnName 後計算數量；要求非系統固定 conditions ≥ 1，否則 422 `VALIDATION_ERROR`。此驗證作用於使用者原始送入的 payload，`injectSystemFixedConditions` 尚未執行——即使使用者送 `conditions: []`，驗證仍拒絕（注入後雖有 best_case 但那是系統行為，不代表使用者設定了任何條件）
 - `validateConditionPayload` 先於 `injectSystemFixedConditions`：確保格式與最低數量在注入前驗證；注入後不需再次驗證（helper 輸出符合 payload schema）
 - `injectSystemFixedConditions` 先於 `deriveBackwardCompatColumns`：語意明確，backward-compat 衍生讀取完整 conditions；best_case 不在 5 個 backward-compat 欄位範圍內（BR-12），順序不影響衍生結果
-- legacy null-payload 名單（`condition_payload IS NULL`）走路徑 B，`updateList` 當 `dto.conditionPayload` 為 undefined / null 時跳過整個 step 1，名單月跑路徑不改變
+- legacy null-payload 名單（`condition_payload IS NULL`）走路徑 B，`updateList` 當 `dto.conditionPayload` 為 undefined / null 時跳過整個 step 1，名單月名單分派路徑不改變
 
 ---
 
@@ -5641,7 +5641,7 @@ if (field.isSystemFixed) {
 - Stage 1 路徑 A 對 `best_case` categorical condition 已生成正確 SQL：`"best_case" IN ('Y')`（§18.11.7 已確認）
 - `best_case` 無 wildcard 語意，不需特殊 case（與 `caseyear='99'` 不同）
 
-**架構原則再確認**：F075 / F076 whitelist-driven 設計確保任何 categorical 欄位進入白名單後 Stage 1 路徑 A 自動支援，**月跑邏輯零改動**。
+**架構原則再確認**：F075 / F076 whitelist-driven 設計確保任何 categorical 欄位進入白名單後 Stage 1 路徑 A 自動支援，**月名單分派邏輯零改動**。
 
 ---
 
@@ -5687,7 +5687,7 @@ graph LR
 
 | 項目 | 說明 |
 |---|---|
-| **目的** | 對 `stage = 'draft'` 且 `condition_payload IS NOT NULL` 之名單：若 `conditions` 中不含 `best_case` 條目則補入；若已含但 values ≠ `['Y']` 則正規化為 `['Y']`。確保 draft 名單推進至 ready 後月跑 Stage 1 路徑 A 一定可生成 `best_case IN ('Y')` 條件 |
+| **目的** | 對 `stage = 'draft'` 且 `condition_payload IS NOT NULL` 之名單：若 `conditions` 中不含 `best_case` 條目則補入；若已含但 values ≠ `['Y']` 則正規化為 `['Y']`。確保 draft 名單推進至 ready 後月名單分派 Stage 1 路徑 A 一定可生成 `best_case IN ('Y')` 條件 |
 | **回填範圍決策** | ✅ 回填：`stage = 'draft' AND condition_payload IS NOT NULL`；✅ 跳過：`condition_payload IS NULL`（legacy null-payload，§18.12.2 決策 18.12.7）；✅ 跳過：`stage IN ('dept_ratio', 'personnel_ratio', 'approval', 'ready')`（凍結快照，Business Rule：已推進的名單為不可變快照） |
 | **up() 邏輯重點** | ① `SELECT list_no, condition_payload FROM ob_list_definition WHERE stage = 'draft' AND condition_payload IS NOT NULL`；② 對每筆：TypeScript 解析 JSON（SQLite 存為 TEXT，需 `JSON.parse`；PG 為 JSONB，TypeORM 自動反序列化）；③ 檢查 `payload.conditions` 是否含 `columnName = 'best_case'` 條目；④ 若無 → push `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }`；若有但 `JSON.stringify(values.sort()) !== JSON.stringify(['Y'])` → 設 `values = ['Y']`；⑤ 若無需修改（已含正確值）→ skip（idempotent）；⑥ `UPDATE ob_list_definition SET condition_payload = :json, updated_at = CURRENT_TIMESTAMP WHERE list_no = :listNo`；⑦ 每 50 筆 `Logger.log` 進度（draft 名單數量有限，無需分批複雜設計） |
 | **down() 邏輯重點** | 從 `condition_payload.conditions` 中移除 `columnName = 'best_case'` 條目（逆操作）；對所有 `stage = 'draft' AND condition_payload IS NOT NULL` 執行；標記 `// down(): removes best_case injection — for emergency rollback only` |
@@ -5704,9 +5704,9 @@ graph LR
 | **Correctness（業務語意一致性）** | `injectSystemFixedConditions` 在 createList / updateList 強制注入，tamper-proof | 對齊舊系統 `OBPOOLDATA.BEST_CASE` 恆 `'Y'` 業務語意；前端竄改靜默正規化，不暴露 422 給合法使用者 |
 | **Security（defense-in-depth）** | service 層 deactivation guard 422 + 前端 disabled（兩層） | 即使前端被繞過，後端 API 合約仍安全 |
 | **Idempotency** | M-B1 `IF NOT EXISTS` + `UPDATE WHERE` 冪等；M-B2 skip already-correct rows | CI 環境反覆執行 migration 安全 |
-| **Backward-compat** | updateList null-payload 名單不觸碰；M-B2 不回填 null-payload | legacy 路徑 B 名單月跑不受干擾 |
+| **Backward-compat** | updateList null-payload 名單不觸碰；M-B2 不回填 null-payload | legacy 路徑 B 名單月名單分派不受干擾 |
 | **Extensibility** | `SYSTEM_FIXED_VALUE_MAP` constant + `injectSystemFixedConditions` 接受陣列 | 未來新增系統固定欄位只需：(a) M 新增欄位 `is_system_fixed=true`；(b) `SYSTEM_FIXED_VALUE_MAP` 補一筆 constant；(c) 無需改動 injectSystemFixedConditions 邏輯或 Stage 1 |
-| **Stage 1 不改動** | best_case condition 由路徑 A categorical fragment 自動處理 | 維持「whitelist-driven，月跑邏輯零改動」架構原則（§18.11.7 確認）|
+| **Stage 1 不改動** | best_case condition 由路徑 A categorical fragment 自動處理 | 維持「whitelist-driven，月名單分派邏輯零改動」架構原則（§18.11.7 確認）|
 | **Observability** | M-B2 每 50 筆 Logger.log 進度；skip 時無日誌（idempotent run 靜默） | 可於 migration 執行日誌確認回填筆數 |
 
 ---
@@ -5725,8 +5725,8 @@ graph LR
 
 | 項目 | 說明 |
 |---|---|
-| **風險** | 凍結快照（approved / ready）不被 M-B2 回填；Stage 1 月跑這些名單時若缺 best_case 條目，仍走路徑 A 但不過濾 best_case（不符業務語意：應只撈優質案件）|
-| **緩解** | 在 m286 M-A1 / m287 M-A2 之前（US-128 / US-129 完成時）這些名單已在舊系統以 `prod_best='Y'` 語意執行，遷移後若已推進至 approved / ready 即屬歷史快照，業務上視為已確認；本系統月跑若使用這些舊快照，應在業務層確認是否重建名單。架構層不回填凍結快照（K4 原則：月跑只讀 ready 名單，不回溯修改） |
+| **風險** | 凍結快照（approved / ready）不被 M-B2 回填；Stage 1 月名單分派這些名單時若缺 best_case 條目，仍走路徑 A 但不過濾 best_case（不符業務語意：應只撈優質案件）|
+| **緩解** | 在 m286 M-A1 / m287 M-A2 之前（US-128 / US-129 完成時）這些名單已在舊系統以 `prod_best='Y'` 語意執行，遷移後若已推進至 approved / ready 即屬歷史快照，業務上視為已確認；本系統月名單分派若使用這些舊快照，應在業務層確認是否重建名單。架構層不回填凍結快照（K4 原則：月名單分派只讀 ready 名單，不回溯修改） |
 | **追蹤** | 上線前由業務確認是否有 `stage='ready'` 且 `condition_payload IS NOT NULL` 且缺 `best_case` 的名單；若有，建議重建名單（F052 rollback → draft → 重新 approve → ready） |
 
 ---
@@ -5877,7 +5877,7 @@ setPersonnelRatios(listNo, dto, actor, currentWorkYm) {
   //            }
   //            throw e  // 其他錯誤仍向上拋
   //          }
-  //     [4b] 月跑 guard（tx 內，對應 BR-15）
+  //     [4b] 月名單分派 guard（tx 內，對應 BR-15）
   //          if (await runGuard.isRunning()) →
   //            autoAdvanced = false, autoAdvanceFailReason = 'ASSIGNMENT_RUN_ALREADY_RUNNING'
   //            return  // 跳過 [4c]~[4d]，tx 仍 commit
@@ -6173,8 +6173,8 @@ constructor(
 ##### 21.1 背景
 
 **現況**：
-- `ob_pool_data_list`（migration m111）已由本系統月跑 Stage 1 寫入，為「本系統產出層」。
-- Legacy SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list` 執行時對 `OBPOOLDATA_LIST` 做 `DELETE WHERE LIST_NO = @LIST_NO` 後重新寫入，每次月跑為**全量取代（per list_no）**。
+- `ob_pool_data_list`（migration m111）已由本系統月名單分派 Stage 1 寫入，為「本系統產出層」。
+- Legacy SP `SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list` 執行時對 `OBPOOLDATA_LIST` 做 `DELETE WHERE LIST_NO = @LIST_NO` 後重新寫入，每次月名單分派為**全量取代（per list_no）**。
 - 近 3 個月去重規則（SP L74~L87）需查詢 `OBPOOLDATA_LIST.ASSIGNDAY` 判定近期已派案客戶，確認哪些 `CUSTO_NO` 不得重複派案。
 - 目前 `ob_pool_data_list` 為 0 筆，無 ETL，近 3 個月去重查詢將永遠回空集合，造成大量案件漏過去重過濾。
 
@@ -6187,22 +6187,22 @@ constructor(
 | 資料來源 | 類型 | 代表欄位 |
 |---------|------|---------|
 | Legacy 歷史（ETL 載入，per LIST_NO 全量替換） | **歷史派案紀錄**，用於去重查詢 | `assignday`（VARCHAR 日期）, `custo_no`, `list_no` |
-| 本系統月跑輸出（Stage 1 寫入） | **本月分派結果**，用於 Stage 3/4 更新 `ob_dept` / `ob_emplid` | `ob_dept`, `ob_emplid`, `list_no` |
+| 本系統月名單分派輸出（Stage 1 寫入） | **本月分派結果**，用於 Stage 3/4 更新 `ob_dept` / `ob_emplid` | `ob_dept`, `ob_emplid`, `list_no` |
 
 **共存機制（per list_no 分區語意）**：
 
-SP 行為已提供天然邊界：每次執行前 `DELETE WHERE LIST_NO = @LIST_NO`，因此 `list_no` 是天然的「分區鍵」。本系統月跑與 ETL 歷史資料不重疊的條件如下：
+SP 行為已提供天然邊界：每次執行前 `DELETE WHERE LIST_NO = @LIST_NO`，因此 `list_no` 是天然的「分區鍵」。本系統月名單分派與 ETL 歷史資料不重疊的條件如下：
 
-- ETL 載入對象：**上個月（或更早）已執行過的 LIST_NO 的歷史記錄**，這些 `list_no` 本月月跑前即已存在於 `OBPOOLDATA_LIST`（legacy 累積）。
-- 本系統月跑寫入：**本月新跑的 LIST_NO 記錄**，Stage 1 先 `DELETE WHERE list_no = :listNo` 再 INSERT，語意與 SP 完全對齊。
+- ETL 載入對象：**上個月（或更早）已執行過的 LIST_NO 的歷史記錄**，這些 `list_no` 本月月名單分派前即已存在於 `OBPOOLDATA_LIST`（legacy 累積）。
+- 本系統月名單分派寫入：**本月新跑的 LIST_NO 記錄**，Stage 1 先 `DELETE WHERE list_no = :listNo` 再 INSERT，語意與 SP 完全對齊。
 
-**衝突風險評估**：若 ETL 載入目標月份（本月）與月跑同時執行同一 `list_no`，兩者均會 DELETE + INSERT，形成 race condition。
+**衝突風險評估**：若 ETL 載入目標月份（本月）與月名單分派同時執行同一 `list_no`，兩者均會 DELETE + INSERT，形成 race condition。
 
 > **[DP-AD21-1 ✅ Resolved 2026-05-26；schema 修正 2026-05-26]**：採**歷史限定策略**。
 >
 > **源表 schema 修正**：`OBPOOLDATA_LIST`（128 欄）**不含 `PROJECT_WORKYM` 欄**——該欄屬於 `OBMLISTDF`（名單定義表），非派案結果表。SP 本身亦不以 `PROJECT_WORKYM` 過濾 `OBPOOLDATA_LIST`。唯一可用的時間欄為 `ASSIGNDAY (VARCHAR yyyyMMdd)`。
 >
-> **修正後結論**：ETL Load Pipeline 僅載入 `ASSIGNDAY < 本月第一天 (yyyyMMdd)` 的歷史記錄，完全排除本月及未來派案，消除與月跑的並發衝突。E05 Pipeline Load 節點於 SELECT 時加上 `WHERE ASSIGNDAY < :currentMonthFirstDay`（格式：`'yyyyMM01'`）過濾條件。
+> **修正後結論**：ETL Load Pipeline 僅載入 `ASSIGNDAY < 本月第一天 (yyyyMMdd)` 的歷史記錄，完全排除本月及未來派案，消除與月名單分派的並發衝突。E05 Pipeline Load 節點於 SELECT 時加上 `WHERE ASSIGNDAY < :currentMonthFirstDay`（格式：`'yyyyMM01'`）過濾條件。
 
 ##### 21.3 ETL 設計（仿照 E07-OBPOOLDATA 雙層架構）
 
@@ -6213,7 +6213,7 @@ SP 行為已提供天然邊界：每次執行前 `DELETE WHERE LIST_NO = @LIST_N
 
 **關鍵設計決策：Load Mode 採 per-list_no 截斷而非全表 TRUNCATE**
 
-`ob_pool_data_list` 同時承載本系統月跑輸出，若採用 `fullMode: true`（TRUNCATE 全表）則每次 ETL 會清除本月月跑結果，造成 Stage 3/4 資料遺失。
+`ob_pool_data_list` 同時承載本系統月名單分派輸出，若採用 `fullMode: true`（TRUNCATE 全表）則每次 ETL 會清除本月月名單分派結果，造成 Stage 3/4 資料遺失。
 
 因此 E07-OBPOOLDATA_LIST-Load **不可用**既有的 `fullMode: true`，需採用客製化 Load 策略。
 
@@ -6224,9 +6224,9 @@ SP 行為已提供天然邊界：每次執行前 `DELETE WHERE LIST_NO = @LIST_N
 | 面向 | 決策 |
 |------|------|
 | 新增欄位 | `ob_pool_data_list.data_source VARCHAR(20) NULL` |
-| 值域 | `'etl_legacy'`（ETL 歷史載入）/ `'monthly_run'`（本系統月跑 Stage 1 寫入）|
+| 值域 | `'etl_legacy'`（ETL 歷史載入）/ `'monthly_run'`（本系統月名單分派 Stage 1 寫入）|
 | ETL Load 行為 | 先 `DELETE FROM ob_pool_data_list WHERE data_source = 'etl_legacy'`，再批次 INSERT（所有插入列填 `data_source = 'etl_legacy'`） |
-| Stage 1 月跑行為 | 每個 list_no 執行時先 `DELETE WHERE list_no = :listNo AND data_source = 'monthly_run'`，再 INSERT（所有插入列填 `data_source = 'monthly_run'`） |
+| Stage 1 月名單分派行為 | 每個 list_no 執行時先 `DELETE WHERE list_no = :listNo AND data_source = 'monthly_run'`，再 INSERT（所有插入列填 `data_source = 'monthly_run'`） |
 | 去重查詢 | 讀兩者聯集：`WHERE assignday BETWEEN ... AND ...`（不加 data_source 過濾，涵蓋所有來源）|
 
 **需新增 migration**（由 spec-writer / TDD Developer 實作）：
@@ -6306,7 +6306,7 @@ DELETE A FROM #TargetCase A JOIN TMP B ON A.CUSTO_NO = B.CUSTO_NO
 
 **本系統應用層等效設計**：
 
-近 3 個月去重查詢資料來源為 `ob_pool_data_list`（含 ETL 歷史 + 本系統過去月跑輸出）。查詢條件：
+近 3 個月去重查詢資料來源為 `ob_pool_data_list`（含 ETL 歷史 + 本系統過去月名單分派輸出）。查詢條件：
 
 ```sql
 SELECT DISTINCT custo_no
@@ -6321,20 +6321,20 @@ SP 使用 `MAX(OBASSSIGNSET.CASEDT)` 動態調整上界。`OBASSSIGNSET` 為 leg
 
 > **[DP-AD21-3 ✅ Resolved 2026-05-26]**：採**近似上界（WORKDT − 1 日）**。Phase 1 不建立 `OBASSSIGNSET` ETL，以 `workdt - 1 day`（本月第一天前一日，即上月末日）作為 `@Q_ASSIGNDAY_E` 的近似值。此為 SP 原始 ISNULL fallback 值，業務可接受。如未來精確度需求提升，再評估補建 `E07-OBASSSIGNSET-Extract` + Load（作為 OQ follow-up 項目，見 §24.5）。
 
-##### 21.6 近 3 個月去重與本系統月跑輸出的聯集策略（DP-AD21-1 已決議）
+##### 21.6 近 3 個月去重與本系統月名單分派輸出的聯集策略（DP-AD21-1 已決議）
 
-ETL 只載入非本月歷史；本系統月跑輸出（`data_source='monthly_run'`）記錄過去幾個月的已派案 `custo_no`。近 3 個月去重查詢應涵蓋兩者，因為兩者都代表已派案的 custo_no。
+ETL 只載入非本月歷史；本系統月名單分派輸出（`data_source='monthly_run'`）記錄過去幾個月的已派案 `custo_no`。近 3 個月去重查詢應涵蓋兩者，因為兩者都代表已派案的 custo_no。
 
-此需求由「兩類資料共存於同一表」的設計自然滿足：去重查詢 `ob_pool_data_list WHERE assignday BETWEEN :start AND :end`（不加 `data_source` 過濾）即自動涵蓋 ETL 歷史與本系統月跑輸出，無需 UNION 或特殊處理。
+此需求由「兩類資料共存於同一表」的設計自然滿足：去重查詢 `ob_pool_data_list WHERE assignday BETWEEN :start AND :end`（不加 `data_source` 過濾）即自動涵蓋 ETL 歷史與本系統月名單分派輸出，無需 UNION 或特殊處理。
 
-##### 21.7 ETL 執行頻率與月跑前置條件
+##### 21.7 ETL 執行頻率與月名單分派前置條件
 
 | 時機 | 操作 |
 |------|------|
-| 月跑前（月初手動）| 執行 `E07-OBPOOLDATA_LIST-Extract` + `E07-OBPOOLDATA_LIST-Load`，確保去重歷史最新 |
-| 月跑執行（Stage 1）| 每個 list_no 先 DELETE ob_pool_data_list WHERE list_no = :listNo，再 INSERT 本次案件池 |
+| 月名單分派前（月初手動）| 執行 `E07-OBPOOLDATA_LIST-Extract` + `E07-OBPOOLDATA_LIST-Load`，確保去重歷史最新 |
+| 月名單分派執行（Stage 1）| 每個 list_no 先 DELETE ob_pool_data_list WHERE list_no = :listNo，再 INSERT 本次案件池 |
 
-> 注意：ETL 不應於月跑 Stage 1 進行中執行（避免 per-list DELETE 互相干擾）。月跑前手動完成 ETL 後才啟動月跑。
+> 注意：ETL 不應於月名單分派 Stage 1 進行中執行（避免 per-list DELETE 互相干擾）。月名單分派前手動完成 ETL 後才啟動月名單分派。
 
 ---
 
@@ -6531,13 +6531,13 @@ if (list.list_nm?.includes('年資')) {
 
 #### AD-E07-23　Stage 1 完整鏈 Dry-run 架構：唯讀複用設計（2026-05-26）
 
-> **範圍**：本節定義「正式月跑 Stage 1」與「dry-run 估算」共用同一完整篩選鏈的架構設計，消除 estimate / run 雙軌 drift 風險。
+> **範圍**：本節定義「正式月名單分派 Stage 1」與「dry-run 估算」共用同一完整篩選鏈的架構設計，消除 estimate / run 雙軌 drift 風險。
 
 ##### 23.1 核心設計原則：Single Source of Truth
 
-**問題根源**：現行 `Stage0EstimateService.estimateListCount()` 使用 `buildStage1WhereConditions()` COUNT，但這只涵蓋欄位篩選（路徑 A/B），**不包含** MONTH_CNT 期別過濾、近 3 個月去重、特殊 DELETE 三步驟。正式月跑完成三步驟後，兩者估算結果必然偏差。
+**問題根源**：現行 `Stage0EstimateService.estimateListCount()` 使用 `buildStage1WhereConditions()` COUNT，但這只涵蓋欄位篩選（路徑 A/B），**不包含** MONTH_CNT 期別過濾、近 3 個月去重、特殊 DELETE 三步驟。正式月名單分派完成三步驟後，兩者估算結果必然偏差。
 
-**設計目標**：完整 Stage 1 篩選鏈應**只有一套實作**，供月跑（寫入模式）和 dry-run（唯讀模式）共用。
+**設計目標**：完整 Stage 1 篩選鏈應**只有一套實作**，供月名單分派（寫入模式）和 dry-run（唯讀模式）共用。
 
 ##### 23.2 抽象層設計
 
@@ -6579,7 +6579,7 @@ interface Stage1ChainResult {
    - **選項 B（近似）**：同樣執行去重查詢取得 custo_no 集合，在應用層 filter COUNT 結果 — 效能佳（去重集合通常較小）
    - **建議 Phase 1 採選項 B**：先取 pool 的 COUNT 結果，再減去「與去重集合相交的案件數」
 
-4. **特殊 DELETE 估算**：**[DP-AD23-1 ✅ Resolved]** 採完整鏈精確模式。dry-run 模式下特殊 DELETE 規則同樣執行：若規則適用（`list_nm` includes 比對成立），執行 `SELECT appl_no, payt_term, deal_num, spec_name, year_produ FROM ob_pool_data WHERE <欄位篩選 + MONTH_CNT 過濾>` 載入必要欄位（非全欄位 `SELECT *`），在應用層套用 filter 後計算 count，確保 dry-run 結果與正式月跑一致。
+4. **特殊 DELETE 估算**：**[DP-AD23-1 ✅ Resolved]** 採完整鏈精確模式。dry-run 模式下特殊 DELETE 規則同樣執行：若規則適用（`list_nm` includes 比對成立），執行 `SELECT appl_no, payt_term, deal_num, spec_name, year_produ FROM ob_pool_data WHERE <欄位篩選 + MONTH_CNT 過濾>` 載入必要欄位（非全欄位 `SELECT *`），在應用層套用 filter 後計算 count，確保 dry-run 結果與正式月名單分派一致。
 
 ##### 23.4 對既有 per-list estimate 的影響
 
@@ -6590,10 +6590,10 @@ interface Stage1ChainResult {
 | 使用端 | 現行 | 升級後 | 影響評估 |
 |--------|------|--------|---------|
 | F088 準備完成摘要卡片快取（AD-E07-20 hook）| 欄位篩選版 | **完整鏈 dry-run COUNT** | 估算數字更精確；計算耗時可能增加（去重需查 ob_pool_data_list） |
-| Stage 0 試算頁總計（F049）| 欄位篩選版 | **完整鏈 dry-run COUNT** | 同上；Stage 0 試算頁數字將更接近實際月跑 |
-| 月跑 Stage 1 正式執行 | 欄位篩選版（僅）| **完整鏈執行（寫入模式）**| 加入 MONTH_CNT / 去重 / 特殊 DELETE 後**實際月跑案件數將改變（production behavior change）**；**[DP-AD23-2 ✅ Resolved] 無 feature flag 保護，deploy 後立即生效** |
+| Stage 0 試算頁總計（F049）| 欄位篩選版 | **完整鏈 dry-run COUNT** | 同上；Stage 0 試算頁數字將更接近實際月名單分派 |
+| 月名單分派 Stage 1 正式執行 | 欄位篩選版（僅）| **完整鏈執行（寫入模式）**| 加入 MONTH_CNT / 去重 / 特殊 DELETE 後**實際月名單分派案件數將改變（production behavior change）**；**[DP-AD23-2 ✅ Resolved] 無 feature flag 保護，deploy 後立即生效** |
 
-> **[DP-AD23-2 ✅ Resolved 2026-05-26]**：**不加 feature flag，deploy 後直接生效**。Phase 2 deploy 即改變所有環境（含 production）的月跑分派案件數。此為使用者明確接受之風險；分階段交付的風險管控改為「deploy 前業務知會」（見 §24.3 更新）。
+> **[DP-AD23-2 ✅ Resolved 2026-05-26]**：**不加 feature flag，deploy 後直接生效**。Phase 2 deploy 即改變所有環境（含 production）的月名單分派案件數。此為使用者明確接受之風險；分階段交付的風險管控改為「deploy 前業務知會」（見 §24.3 更新）。
 
 ##### 23.5 `Stage0EstimateService.estimateListCount()` 升級路徑
 
@@ -6618,7 +6618,7 @@ async estimateListCount(listNo: string): Promise<number>
 
 #### AD-E07-24　Stage 1 精確化工程分階段交付計劃（2026-05-26）
 
-> **範圍**：定義 ETL、Stage 1 補完整、Dry-run 三個工作項目的相依序列、可獨立交付邊界、以及對 production 月跑行為的影響。
+> **範圍**：定義 ETL、Stage 1 補完整、Dry-run 三個工作項目的相依序列、可獨立交付邊界、以及對 production 月名單分派行為的影響。
 
 ##### 24.1 分階段交付序列
 
@@ -6638,19 +6638,19 @@ graph TD
 
 ##### 24.2 各階段邊界與影響
 
-| 階段 | 前置條件 | 交付後狀態 | 對 production 月跑的影響 |
+| 階段 | 前置條件 | 交付後狀態 | 對 production 月名單分派的影響 |
 |------|---------|----------|------------------------|
-| **Phase 1（ETL）** | migration m111 已存在；E04/E05 引擎可用 | ob_pool_data_list 有 legacy 歷史資料 | **不影響月跑**（Stage 1 尚未讀取 ob_pool_data_list 去重） |
-| **Phase 2（Stage 1 補完整）** | Phase 1 完成（ob_pool_data_list 有資料） | Stage 1 包含 MONTH_CNT 過濾 + 去重 + 特殊 DELETE | **⚠️ 直接生效、無 flag 保護**：deploy 後立即改變所有環境（含 production）月跑分派案件數；**需 deploy 前完成業務知會**（DP-AD23-2 已拍板，此為明確接受風險） |
-| **Phase 3（Dry-run 升級）** | Phase 2 完成 | estimate / dry-run 結果精確對齊月跑 | **不影響月跑**（只改變估算計算路徑） |
+| **Phase 1（ETL）** | migration m111 已存在；E04/E05 引擎可用 | ob_pool_data_list 有 legacy 歷史資料 | **不影響月名單分派**（Stage 1 尚未讀取 ob_pool_data_list 去重） |
+| **Phase 2（Stage 1 補完整）** | Phase 1 完成（ob_pool_data_list 有資料） | Stage 1 包含 MONTH_CNT 過濾 + 去重 + 特殊 DELETE | **⚠️ 直接生效、無 flag 保護**：deploy 後立即改變所有環境（含 production）月名單分派案件數；**需 deploy 前完成業務知會**（DP-AD23-2 已拍板，此為明確接受風險） |
+| **Phase 3（Dry-run 升級）** | Phase 2 完成 | estimate / dry-run 結果精確對齊月名單分派 | **不影響月名單分派**（只改變估算計算路徑） |
 
 ##### 24.3 Phase 2 上線風險管控（DP-AD23-2 已決議：無 feature flag）
 
-Phase 2 是唯一改變 production 月跑案件數的階段。**業務已明確接受「deploy 後直接生效」的風險，不加 feature flag 保護**。因此風險管控聚焦於 deploy 前的人為確認：
+Phase 2 是唯一改變 production 月名單分派案件數的階段。**業務已明確接受「deploy 後直接生效」的風險，不加 feature flag 保護**。因此風險管控聚焦於 deploy 前的人為確認：
 
-1. **Deploy 前業務知會（必要）**：Phase 2 PR merge 前，業務主管須已知悉本次 deploy 將改變月跑分派案件數（MONTH_CNT 過濾 + 去重 + 特殊 DELETE 生效），並確認 deploy 時間點不在月跑執行中。
-2. **部署前 dry-run 驗證（建議）**：在 staging/dev 環境執行完整月跑 dry-run（Phase 3 完成後才可完整驗證），比對 deploy 前後案件數差異，確認過濾量與業務預期相符。
-3. **無 feature flag 回滾**：一旦 deploy，無法透過 flag 回滾；若月跑結果不符預期，需提交 hotfix PR 回退三個步驟（移除 MONTH_CNT fragment、去重、特殊 DELETE filter）。此為明確接受的 trade-off。
+1. **Deploy 前業務知會（必要）**：Phase 2 PR merge 前，業務主管須已知悉本次 deploy 將改變月名單分派案件數（MONTH_CNT 過濾 + 去重 + 特殊 DELETE 生效），並確認 deploy 時間點不在月名單分派執行中。
+2. **部署前 dry-run 驗證（建議）**：在 staging/dev 環境執行完整月名單分派 dry-run（Phase 3 完成後才可完整驗證），比對 deploy 前後案件數差異，確認過濾量與業務預期相符。
+3. **無 feature flag 回滾**：一旦 deploy，無法透過 flag 回滾；若月名單分派結果不符預期，需提交 hotfix PR 回退三個步驟（移除 MONTH_CNT fragment、去重、特殊 DELETE filter）。此為明確接受的 trade-off。
 
 ##### 24.4 決策彙總（全部 Resolved 2026-05-26）
 
@@ -6660,8 +6660,8 @@ Phase 2 是唯一改變 production 月跑案件數的階段。**業務已明確�
 | DP-AD21-2 ✅ | ETL Load Mode | **方案 A：`data_source VARCHAR(20) NULL` 欄**（`'etl_legacy'` / `'monthly_run'`）| 需新增 migration `1711360000291-AddObPoolDataListDataSource`；entity 補 @Column |
 | DP-AD21-3 ✅ | 去重上界 | **近似 WORKDT − 1 日**（不建 OBASSSIGNSET ETL）| Phase 1 無額外 ETL 工作；上界 = 上月末日 yyyyMMdd |
 | DP-AD22-1 ✅ | 特殊 DELETE 落地 | **忠實複刻**（LIST_NM `includes` 比對 + JS filter）| 繼承字串脆弱性；結構化旗標保留為 follow-up OQ-STAGE1-01 |
-| DP-AD23-1 ✅ | Dry-run 精確度 | **完整鏈**（三步驟全部執行，COUNT 模式）| dry-run 結果與月跑嚴格一致 |
-| DP-AD23-2 ✅ | Feature flag 保護 | **不加 flag，deploy 後直接生效**| Phase 2 deploy 即改變所有環境月跑行為；需 deploy 前業務知會 |
+| DP-AD23-1 ✅ | Dry-run 精確度 | **完整鏈**（三步驟全部執行，COUNT 模式）| dry-run 結果與月名單分派嚴格一致 |
+| DP-AD23-2 ✅ | Feature flag 保護 | **不加 flag，deploy 後直接生效**| Phase 2 deploy 即改變所有環境月名單分派行為；需 deploy 前業務知會 |
 
 ##### 24.5 各階段不影響的範圍
 
@@ -6686,7 +6686,7 @@ Phase 2 是唯一改變 production 月跑案件數的階段。**業務已明確�
 
 #### AD-E07-25　ob_pool_data_list 資料架構乾淨化（2026-05-27）
 
-> **範圍**：本節修訂 AD-E07-21 之雙重角色設計，將 `ob_pool_data_list` 回歸「ETL 單一來源」語意，分離月跑分派結果至獨立落點，並修正去重上界策略。
+> **範圍**：本節修訂 AD-E07-21 之雙重角色設計，將 `ob_pool_data_list` 回歸「ETL 單一來源」語意，分離月名單分派結果至獨立落點，並修正去重上界策略。
 >
 > **狀態**：**全 DP Resolved（2026-05-27）。可進入實作。**
 
@@ -6696,10 +6696,10 @@ AD-E07-21 v1.x 的設計（`data_source` 欄區隔 `etl_legacy` / `monthly_run` 
 
 | 問題面向 | 現況描述 | 風險 |
 |---------|---------|------|
-| **語意污染** | `ob_pool_data_list` 同時代表「業務系統歷史真相（ETL）」與「我方系統提案（月跑）」兩種不同性質的資料 | 去重查詢若未來誤加 `data_source` 過濾，將漏掉本方過去月跑的已派案件，導致重複派案 |
-| **SP 寫入語意衝突** | SP L113 = `DELETE FROM OBPOOLDATA_LIST WHERE LIST_NO=@LIST_NO`（全量刪除，無 data_source 分區）；業務系統每次月跑前清除該名單全部歷史 | SP 的「提案即真相」全量覆寫語意與本系統分離設計衝突 |
-| **月跑為「提案」** | 本系統月跑產出理應是「推回業務系統前的候選清單」，被業務系統調整後才是真相；當前設計將提案混入歷史真相表 | 未來業務回調後，兩者混存更難追蹤 |
-| **ETL 刪除邊界隱性依賴** | ETL Load 採 `DELETE WHERE data_source='etl_legacy'` 保護月跑資料；下游 Stage 3/4 讀取 ob_pool_data_list 的月跑資料，此保護機制成為隱性依賴 | 任何未來 ETL 邏輯調整都必須知道「月跑分區不能刪」 |
+| **語意污染** | `ob_pool_data_list` 同時代表「業務系統歷史真相（ETL）」與「我方系統提案（月名單分派）」兩種不同性質的資料 | 去重查詢若未來誤加 `data_source` 過濾，將漏掉本方過去月名單分派的已派案件，導致重複派案 |
+| **SP 寫入語意衝突** | SP L113 = `DELETE FROM OBPOOLDATA_LIST WHERE LIST_NO=@LIST_NO`（全量刪除，無 data_source 分區）；業務系統每次月名單分派前清除該名單全部歷史 | SP 的「提案即真相」全量覆寫語意與本系統分離設計衝突 |
+| **月名單分派為「提案」** | 本系統月名單分派產出理應是「推回業務系統前的候選清單」，被業務系統調整後才是真相；當前設計將提案混入歷史真相表 | 未來業務回調後，兩者混存更難追蹤 |
+| **ETL 刪除邊界隱性依賴** | ETL Load 採 `DELETE WHERE data_source='etl_legacy'` 保護月名單分派資料；下游 Stage 3/4 讀取 ob_pool_data_list 的月名單分派資料，此保護機制成為隱性依賴 | 任何未來 ETL 邏輯調整都必須知道「月名單分派分區不能刪」 |
 
 **結論**：應清楚分離兩種資料的落點，而非用標記欄位混存。
 
@@ -6713,7 +6713,7 @@ graph TD
 
     subgraph 本系統["本系統應用資料庫"]
         ob_pool_data_list["ob_pool_data_list\n單一來源：ETL 歷史\n去重查詢唯一依據\ndata_source 欄改為 ETL 標記"]
-        ob_monthly_run_result["ob_monthly_run_result（新建）\n月跑分派提案\nStage 1 寫入 → Stage 3/4 更新\nassignment_run FK 關聯"]
+        ob_monthly_run_result["ob_monthly_run_result（新建）\n月名單分派提案\nStage 1 寫入 → Stage 3/4 更新\nassignment_run FK 關聯"]
         assignment_run_snapshot["assignment_run_snapshot（現有）\ntype=result JSONB 稽核快照\n短期保留雙軌"]
     end
 
@@ -6731,18 +6731,18 @@ graph TD
 
 | 面向 | 現況（AD-E07-21）| 目標（AD-E07-25）|
 |------|----------------|-----------------|
-| 資料來源 | ETL 歷史 + 月跑提案混存 | ETL 歷史唯一 |
+| 資料來源 | ETL 歷史 + 月名單分派提案混存 | ETL 歷史唯一 |
 | `data_source` 欄用途 | 區分兩種資料（`etl_legacy` / `monthly_run`）| 僅標記 ETL 批次（改值域為 `'etl_load'`，見 DP-AD25-1）|
-| ETL Load 刪除邊界 | `DELETE WHERE data_source='etl_legacy'` | 可改全量 DELETE（因無月跑資料需保護）或 `DELETE WHERE data_source='etl_load'` |
+| ETL Load 刪除邊界 | `DELETE WHERE data_source='etl_legacy'` | 可改全量 DELETE（因無月名單分派資料需保護）或 `DELETE WHERE data_source='etl_load'` |
 | 去重查詢目標 | ob_pool_data_list（不過濾 data_source）| ob_pool_data_list（單源；邏輯不變，語意更清晰）|
-| 月跑 Stage 1 寫入目標 | ob_pool_data_list（`data_source='monthly_run'`）| **ob_monthly_run_result**（新建） |
+| 月名單分派 Stage 1 寫入目標 | ob_pool_data_list（`data_source='monthly_run'`）| **ob_monthly_run_result**（新建） |
 | Stage 3/4 讀取目標 | ob_pool_data_list（`data_source='monthly_run'`）| ob_monthly_run_result |
 
 > **[DP-AD25-1] RESOLVED**：`data_source` 欄保留，改值域為 `'etl_load'`（**方案 A**）。作為 ETL batch run 追蹤用；migration `1711360000291` 已存在，只需更新應用層值域說明，無需新 migration。
 
 ##### 25.4 新結果表：ob_monthly_run_result
 
-月跑 Stage 1 的寫入目標改為此表，承載「本次月跑對各名單的分派提案」。
+月名單分派 Stage 1 的寫入目標改為此表，承載「本次月名單分派對各名單的分派提案」。
 
 **Schema（DP-AD25-2 / DP-AD25-6 已 Resolved）**：
 
@@ -6750,7 +6750,7 @@ graph TD
 -- migration 命名：1711360000292-CreateObMonthlyRunResult
 
 CREATE TABLE ob_monthly_run_result (
-  -- PK：月跑 ID + 名單 + 案件識別碼
+  -- PK：月名單分派 ID + 名單 + 案件識別碼
   run_id        UUID          NOT NULL,   -- FK → assignment_run.run_id (ON DELETE CASCADE)
   list_no       VARCHAR(100)  NOT NULL,
   orgno         VARCHAR(2)    NOT NULL,
@@ -6775,7 +6775,7 @@ CREATE TABLE ob_monthly_run_result (
   emplid        VARCHAR(10)   NULL,
   emplid_deptid VARCHAR(6)    NULL,
 
-  -- 業務系統回填（月跑後業務調整；初始 'PENDING'；業務回填後改 'SUCCESS'/'FAILED'）
+  -- 業務系統回填（月名單分派後業務調整；初始 'PENDING'；業務回填後改 'SUCCESS'/'FAILED'）
   result_status VARCHAR(20)   NULL DEFAULT 'PENDING',
 
   -- Forward-compat：業務派案日期（DP-AD25-6 Resolved，新增供業務查詢派案紀錄）
@@ -6801,7 +6801,7 @@ CREATE INDEX idx_omrr_assignday     ON ob_monthly_run_result (assignday)
 **欄位設計原則**：
 - 僅保留 Stage 2~4 計算結果欄位，不複製 ob_pool_data_list 的全部業務欄位
 - 業務欄位（spec_name、year_produ、payt_term 等）在 Stage 2 計算時由 ob_pool_data JOIN 取得
-- `run_id` FK + CASCADE DELETE：月跑刪除時自動清除對應結果
+- `run_id` FK + CASCADE DELETE：月名單分派刪除時自動清除對應結果
 - `result_status` 承接現有 resultPayload.assignments[i].status 語意，從 JSONB 解放至結構化欄位
 
 > **[DP-AD25-2] RESOLVED**：ob_monthly_run_result 欄位範疇 → **方案 A（精簡）**。Stage 2 所需業務欄位透過 JOIN ob_pool_data 取得；Stage 2 計算本就持有 ObPoolData[]，直接傳入即可，無需額外 JOIN。
@@ -6846,11 +6846,11 @@ graph TD
     style PC fill:#e8f4f8
 ```
 
-| 階段 | 對 production 月跑的影響 | 前置條件 |
+| 階段 | 對 production 月名單分派的影響 | 前置條件 |
 |------|------------------------|---------|
-| **Phase A** | ⚠️ 月跑寫入目標改變；需同一 PR 完整切換（Stage 1 寫入 + Stage 3/4 讀取）| DP-AD25-1~3 全部拍板 |
+| **Phase A** | ⚠️ 月名單分派寫入目標改變；需同一 PR 完整切換（Stage 1 寫入 + Stage 3/4 讀取）| DP-AD25-1~3 全部拍板 |
 | **Phase B** | 去重上界調整，可能輕微改變去重案件數 | Phase A 完成 + DP-AD25-4 拍板 |
-| **Phase C** | 不影響月跑案件數 | Phase B 完成 + 業務回填流程確認 |
+| **Phase C** | 不影響月名單分派案件數 | Phase B 完成 + 業務回填流程確認 |
 
 ##### 25.8 DP 決策彙總（全部 Resolved）
 
@@ -6943,7 +6943,7 @@ interface ListDefinitionResponse {
   // ... 現有欄位 ...
 
   /**
-   * 本名單本次月跑實際套用的特例排除規則清單（唯讀，read-time 推導）。
+   * 本名單本次月名單分派實際套用的特例排除規則清單（唯讀，read-time 推導）。
    * 由 Service 層依 list_nm 即時計算，無新 DB 欄位。
    * 前端在名單詳情頁以唯讀標籤列表顯示。
    */
@@ -7044,7 +7044,7 @@ WHERE  column_name = 'list_type';
 | 語意 | 代表 | 現況問題 |
 |------|------|---------|
 | **執行當下日曆月** | `new Date()` 的 YYYYMM | `AssignmentRunController` / `Stage0EstimateController` / `AssignmentListController` 各自持有 static `computeCurrentWorkYm()`，三份重複 |
-| **名單要派去的目標月** | 通常是下個月（5 月跑 6 月名單）| 前端 `trigger-run-page` 寫死 `new Date()`；`POST /assignment/runs` 忽略 body 自行計算 → 5 月選 6 月預覽卻觸發 5 月月跑 |
+| **名單要派去的目標月** | 通常是下個月（5 月名單分派 6 月名單）| 前端 `trigger-run-page` 寫死 `new Date()`；`POST /assignment/runs` 忽略 body 自行計算 → 5 月選 6 月預覽卻觸發 5 月月名單分派 |
 
 ground-truth SP（`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`，UTF-16LE）L25 / L31：
 
@@ -7062,9 +7062,9 @@ IF ISNULL(@IS_ASSIGNED,'N')='Y' OR @WORKDT < getdate()  BEGIN RETURN END
 | 概念 | 識別碼 | 語意 | 唯一計算點 | 用途 |
 |------|--------|------|-----------|------|
 | 系統錨點月 | `current_work_ym` | 真實日曆當月（YYYYMM）；每月 1 號 0:00 切換 | **後端 `SystemService.getCurrentWorkYm()`**（全系統唯一合法 `new Date()` 之處） | 判定歷史/未來/唯讀（F077 BR-3）；月份範圍 ± 12；衍生 `target_work_ym` 預設值 |
-| 分派作業月份 | `target_work_ym` | 使用者正在作業的目標月份（YYYYMM）；預設 = `current_work_ym + 1` | 前端 `AssignmentWorkYmContext`（使用者透過 top-bar MonthPicker 選定） | 名單篩選、Stage 0 估算、月跑觸發 → 寫入 `AssignmentRun.project_workym` |
+| 分派作業月份 | `target_work_ym` | 使用者正在作業的目標月份（YYYYMM）；預設 = `current_work_ym + 1` | 前端 `AssignmentWorkYmContext`（使用者透過 top-bar MonthPicker 選定） | 名單篩選、Stage 0 估算、月名單分派觸發 → 寫入 `AssignmentRun.project_workym` |
 
-**不做什麼**：`current_work_ym` 不直接用於月跑觸發的 `project_workym`（那是 `target_work_ym` 的職責）；前端不得自行呼叫 `new Date()` 計算月份。
+**不做什麼**：`current_work_ym` 不直接用於月名單分派觸發的 `project_workym`（那是 `target_work_ym` 的職責）；前端不得自行呼叫 `new Date()` 計算月份。
 
 ```mermaid
 graph LR
@@ -7077,7 +7077,7 @@ graph LR
         CTX["AssignmentWorkYmProvider<br/>currentWorkYm<br/>targetWorkYm（預設 +1）<br/>setTargetWorkYm"]
     end
 
-    subgraph RunTrigger["月跑觸發"]
+    subgraph RunTrigger["月名單分派觸發"]
         DTO["TriggerRunDto.workYm（必填）"]
         RUN["AssignmentRun<br/>project_workym = workYm"]
     end
@@ -7186,13 +7186,13 @@ sequenceDiagram
 | 名單定義（F048/F077） | `list-definition` | consume `AssignmentWorkYmContext` | `targetWorkYm` |
 | 準備完成摘要（F088） | `ready-summary` | consume `AssignmentWorkYmContext` | `targetWorkYm` |
 | Stage 0 試算（F049） | `stage0-estimate` | consume `AssignmentWorkYmContext` | `targetWorkYm` |
-| 月跑觸發（F061） | `trigger-run` | consume `AssignmentWorkYmContext` | `targetWorkYm`（處長觸發頁 MonthPicker 唯讀） |
-| **月跑歷史（F065）** | `run-history` | **不 consume**，獨立 local state | 使用者選定（查詢任意月歷史 run，語意不同） |
+| 月名單分派觸發（F061） | `trigger-run` | consume `AssignmentWorkYmContext` | `targetWorkYm`（處長觸發頁 MonthPicker 唯讀） |
+| **月名單分派歷史（F065）** | `run-history` | **不 consume**，獨立 local state | 使用者選定（查詢任意月歷史 run，語意不同） |
 | **下游結果頁（F062/F063/F066/F067）** | `run-progress` / `run-summary` / `run-snapshot` / `run-compare` | **不 consume**，不加 MonthPicker | `run.project_workym`（靜態標籤，讀 `GET /assignment/runs/:runId` 回傳 `projectWorkym`） |
 
 **UI 標籤**：所有四頁 MonthPicker 之 label / placeholder 一律顯示「分派作業月份」（[glossary §2](../docs/specs/glossary.md)）。舊標籤字串「作業年月」、「當月」、「本月」（指作業月）廢棄移除。
 
-##### 27.6 資料流：月跑觸發寫入 `project_workym` 為下游單一真實來源
+##### 27.6 資料流：月名單分派觸發寫入 `project_workym` 為下游單一真實來源
 
 > **決策：已拍板**（F097 BR-8 / AC-14 / AC-17）
 
@@ -7244,7 +7244,7 @@ workdt = parseWorkdt('202606') = new Date('2026-06-01')
 去重視窗 = [2026-03-01, MIN(MAX(ob_pool_data_list.assignday), 2026-05-31)]
 ```
 
-**ETL 切點近似落差（已接受，關聯 OQ-STAGE1-02）**：ETL 載入 `ob_pool_data_list` 上界為真實日曆本月 1 號（執行時），非目標月相對。5 月下旬跑 6 月月跑時，`MAX(assignday)` 可能不含 5 月最後幾天；`MIN()` 以 `workdt − 1 日`（2026-05-31）兜底。此為已接受之近似，以程式碼注釋標記於 `computeDedupWindow` 附近，本輪不修正（OQ-STAGE1-02 非本輪範疇）。
+**ETL 切點近似落差（已接受，關聯 OQ-STAGE1-02）**：ETL 載入 `ob_pool_data_list` 上界為真實日曆本月 1 號（執行時），非目標月相對。5 月下旬跑 6 月月名單分派時，`MAX(assignday)` 可能不含 5 月最後幾天；`MIN()` 以 `workdt − 1 日`（2026-05-31）兜底。此為已接受之近似，以程式碼注釋標記於 `computeDedupWindow` 附近，本輪不修正（OQ-STAGE1-02 非本輪範疇）。
 
 ##### 27.8 forward-only 資料策略：歷史 run 不回填
 
@@ -7286,7 +7286,7 @@ workdt = parseWorkdt('202606') = new Date('2026-06-01')
 | `computeDedupWindow` 函式簽名與邏輯 | 靠傳入正確 `workdt` 自動對齊，函式本身無需改動（AC-20）|
 | F077 §5.2 既有 ym error code 技術債 | OQ-F097-01 方案 A 不清此塊；僅加 note 指向未來 cleanup |
 | ETL `currentMonthFirstDay` 計算點 | 維持日曆相對（已接受近似），非本輪修正範疇（OQ-STAGE1-02）|
-| F061 月跑觸發 Guard（權限控管）| 部長觸發；處長唯讀 MonthPicker；Guard 本身不變更 |
+| F061 月名單分派觸發 Guard（權限控管）| 部長觸發；處長唯讀 MonthPicker；Guard 本身不變更 |
 | `assertion` service 層（`assertYmInRange` / `assertNotHistorical` 等）| 邏輯不改，僅改 controller 取值來源 |
 
 ---
@@ -7470,7 +7470,7 @@ ALTER TABLE ob_tier
 | E5 | 建立 E05 Pipeline：E07-OBEMPHIRE-Load（`raw_{obemphire_id}` → Field Mapping + RTRIM(deptid_m) → TargetLoad `ob_emphire`，`fullMode: true`） | ⬜ 待建立 | **[BLOCKER]** |
 | E6 | 建立 E05 Pipeline：E07-OBCALENDAR-Load（`raw_{obcalendar_id}` → Field Mapping → TargetLoad `ob_calendar`，`fullMode: true`） | ⬜ 待建立 | |
 | E7 | 確認排程錯開設定：E04 OBEMPHIRE-Extract 03:00、E05 OBEMPHIRE-Load 03:30；E04 E05 其餘管道手動依序觸發 | ⬜ 待確認 | **[BLOCKER]** |
-| E8 | 首次執行 OBEMPHIRE 全鏈路 ETL（E04 → 等待 → E05），確認 `ob_emphire` 有資料（月跑 Stage 4 依賴） | ⬜ 待執行 | **[BLOCKER]** |
+| E8 | 首次執行 OBEMPHIRE 全鏈路 ETL（E04 → 等待 → E05），確認 `ob_emphire` 有資料（月名單分派 Stage 4 依賴） | ⬜ 待執行 | **[BLOCKER]** |
 | E9 | 首次執行 OBCALENDAR 全鏈路 ETL（E04 → 等待 → E05），確認 `ob_calendar` 當年度工作日資料完整 | ⬜ 待執行 | **[BLOCKER]** |
 | E10 | 建立 E04 擷取任務：E07-OBARRETURNDF_MIN_CAP-Extract（來源 `dbo.OB_ARRETURNDF_MIN_CAP`，`mode: full`） | ⬜ 待設定 | **[BLOCKER]**（Stage 2 ADD_UN_CAPITAL 維度依賴） |
 | E11 | 建立 E05 Pipeline：E07-OBARRETURNDF_MIN_CAP-Load（`raw_{obarreturndf_min_cap_id}` → Field Mapping：`APPL_NO → appl_no`、`ADD_UN_CAPITAL → add_un_capital` → TargetLoad `ob_arreturndf_min_cap`，`fullMode: true`）；首次執行後驗證資料（見 F-2 D12） | ⬜ 待建立 | **[BLOCKER]**（Stage 2 ADD_UN_CAPITAL 維度依賴） |
@@ -7479,11 +7479,11 @@ ALTER TABLE ob_tier
 
 | # | 項目 | 狀態 | 備注 |
 |---|------|------|------|
-| P1 | 撰寫 `fn_calc_tier_level` PostgreSQL function（plpgsql）；實作含 LEFT JOIN `customer_core`（取客戶屬性）與 LEFT JOIN `ob_arreturndf_min_cap`（取 ADD_UN_CAPITAL），依 AD-E07-10-L 規則表對應各 column_name 取值；缺值以 COALESCE 補預設值 | ⬜ 待撰寫 | **[BLOCKER]**（月跑 Stage 2 依賴） |
+| P1 | 撰寫 `fn_calc_tier_level` PostgreSQL function（plpgsql）；實作含 LEFT JOIN `customer_core`（取客戶屬性）與 LEFT JOIN `ob_arreturndf_min_cap`（取 ADD_UN_CAPITAL），依 AD-E07-10-L 規則表對應各 column_name 取值；缺值以 COALESCE 補預設值 | ⬜ 待撰寫 | **[BLOCKER]**（月名單分派 Stage 2 依賴） |
 | P2 | Function 單元測試：以 `reference/DumpData/` 已知資料驗證計分結果 | ⬜ 待撰寫 | **[BLOCKER]** |
 | P3 | ob_tier fallback 邏輯測試（M5 → T5M，card_level IS NULL 案例） | ⬜ 待撰寫 | |
 | P4 | 效能測試：10 萬筆 LATERAL JOIN 耗時 < 10 分鐘（NFR-003 Stage 2 門檻）| ⬜ 待執行 | 建議在 Staging 環境以真實資料量測試 |
-| P5 | **HM 計分設定補建確認**（AD-E07-15）：遷移腳本執行後確認 `ob_levelcard_version` 中是否已有 HM 版本；若無，由業務主管透過 F054 補建 HM 計分維度與分數設定後方可進行 HM 名單的月跑驗收 | ⬜ 待確認 | **[BLOCKER for HM 名單月跑]**（未補建前月跑 HM 名單 score=0 / tier_level=NULL） |
+| P5 | **HM 計分設定補建確認**（AD-E07-15）：遷移腳本執行後確認 `ob_levelcard_version` 中是否已有 HM 版本；若無，由業務主管透過 F054 補建 HM 計分維度與分數設定後方可進行 HM 名單的月名單分派驗收 | ⬜ 待確認 | **[BLOCKER for HM 名單月名單分派]**（未補建前月名單分派 HM 名單 score=0 / tier_level=NULL） |
 
 #### F-5　開放問題最終確認
 
@@ -7492,15 +7492,15 @@ ALTER TABLE ob_tier
 | Q1 | ob_tier UNIQUE INDEX 語法驗證（`COALESCE(card_level, '')` in index key） | ⬜ 待驗證 | 詳見 A54 |
 | Q2 | ob_levelcard_column.status 欄位：確認是否需要 `index(status)` 加速 Stage 2 篩選 | ⬜ 待確認 | 建議加 `INDEX (card_type, card_version, status)` |
 | Q3 | F062 `assignment_run_stage_log` 表：確認 `stage_no` 是否需要 `UNIQUE (run_id, stage_no, status)` 約束，防止重複插入同一 Stage 狀態 | ⬜ 待確認 | 建議 `UNIQUE (run_id, stage_no)` + 以 UPDATE 取代 INSERT（若同一 Stage 重跑） |
-| Q4 | OBPOOLDATA 全量替換期間（TRUNCATE 中）月跑若被觸發，需確認鎖定順序（建議 E04 ETL 執行中加 advisory lock 或直接在前置條件禁止月跑觸發） | ⬜ 待確認 | 架構風險：ETL 與月跑並發 |
+| Q4 | OBPOOLDATA 全量替換期間（TRUNCATE 中）月名單分派若被觸發，需確認鎖定順序（建議 E04 ETL 執行中加 advisory lock 或直接在前置條件禁止月名單分派觸發） | ⬜ 待確認 | 架構風險：ETL 與月名單分派並發 |
 
 #### F-6　規格最終對齊
 
 | # | 項目 | 狀態 | 備注 |
 |---|------|------|------|
-| S1 | F049 試算 API 與正式月跑 Stage 0 確認共用同一日比例演算法（AD-E07-8） | ✅ 確認 | F049 試算不寫入 ob_assign_set；月跑 Stage 0 正式寫入 |
+| S1 | F049 試算 API 與正式月名單分派 Stage 0 確認共用同一日比例演算法（AD-E07-8） | ✅ 確認 | F049 試算不寫入 ob_assign_set；月名單分派 Stage 0 正式寫入 |
 | S2 | `[DEPRECATED-F102]` 全域 CR 旗標 `ob_assign_config.cr_reassignment_enabled` 已由 F102 US-154（AD-E07-30）正式廢棄；CR 開關唯一有效來源 = `ob_list_definition.cr_enabled`（per-list，BOOLEAN NOT NULL DEFAULT false）。F059 doc body §1/§6 已加 `[DEPRECATED]` 標記（F102 spec 已執行）；任何 service / controller 讀取全域旗標均為錯誤（AC-12 靜態掃描為 DoD 門檻）。 | ✅ 廢棄並更新（F102 US-154 / AD-E07-30 OQ-5） | 原 AD-E07-5 裁示已由 F102 OQ-4/OQ-5 取代 |
-| S3 | F054/F057 月跑鎖：確認所有 E07 CRUD API 在寫入前查詢 `assignment_run WHERE status IN ('pending','running')` | ⬜ 待 TDD 實作驗證 | |
+| S3 | F054/F057 月名單分派鎖：確認所有 E07 CRUD API 在寫入前查詢 `assignment_run WHERE status IN ('pending','running')` | ⬜ 待 TDD 實作驗證 | |
 | S4 | F064 v2.0 匯出：(1) 資料來源改 `ob_monthly_run_result` 多表 join（23 欄，AD-E07-31 OQ-F064-1 裁定）；(2) CSV streaming 改 `PassThrough` 逐列寫（取代 in-memory 全量拼接字串）；(3) xlsx streaming 沿用 exceljs `WorkbookWriter`；雙格式共用 server-side cursor row-producer（I-EXP-STREAM-01）；不含 `custo_no`/`cust_name`/`card_level`/`score`（GAP-1）；進件日取 pool 端 `appl_date`（GAP-3）。F102 已補齊前置依賴（`1ac93da` on main）。 | ✅ 架構設計完成（AD-E07-31 / 2026-06-17）；待 TDD 實作驗證 | AD-E07-31 / AD-E07-11 |
 | S5 | 確認 `ob_emphire.resign_date IS NULL` 為在職判斷唯一條件（AD-E07-6），無其他停用欄位 | ✅ 確認 | |
 | S6 | F064 v2.0 200k+ 筆 prod 實測：5 min timeout 是否足夠；若不足另開 pg-boss worker story（AD-E07-31 OQ-F064-3 裁定）| ⬜ post-deploy 觀察項 | |
@@ -7536,7 +7536,7 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
   → raw_{task_id_short}（AppDB 中介表，短期持有，每次 full 覆寫）
   → E05 Pipeline TargetLoad（fullMode: true，F044 既有機制）
   → ob_pool_data / ob_emphire / ob_calendar（AppDB 最終目標表）
-  → E07 月跑引擎讀取
+  → E07 月名單分派引擎讀取
 ```
 
 **理由**：
@@ -7559,7 +7559,7 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 
 - *新增架構決策 AD-E07-13（ob_pool_data 結構修正：PK 設為 (orgno, appl_no)、移除 list_no）*
 - *E07-A 補充資料來源分層表，明確標註 ob_pool_data 不含 list_no、與 ob_pool_data_list 的池/結果分離關係*
-- *E07-D 月跑執行架構補充「Stage 1 演算法說明」節——強調 ob_pool_data 為共享池，per-list 透過 JOIN ob_list_definition 篩選條件取得候選，list_no 首次出現於 ob_pool_data_list*
+- *E07-D 月名單分派執行架構補充「Stage 1 演算法說明」節——強調 ob_pool_data 為共享池，per-list 透過 JOIN ob_list_definition 篩選條件取得候選，list_no 首次出現於 ob_pool_data_list*
 - *E07-F 開發前檢核清單 D11 補充：驗證 ob_pool_data (orgno, appl_no) 唯一性*
 - *AD-E07-12 補充下游 ETL 配置修正提示（scripts/e07-etl-config.json LIST_NO fieldMapping 須移除）*
 - *新增 OQ-E07-18（open-questions.md）：schema 落差盤點，4 項處置*
@@ -7589,7 +7589,7 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 - *新增 E07-A 資料來源分層架構（含 L1/L2/L3 分層圖）*
 - *新增 E07-B Migration 設計（匯入順序、轉換規則、驗證 SQL）*
 - *新增 E07-C ETL 設計（OBPOOLDATA/OBEMPHIRE/OBCALENDAR 三任務配置）*
-- *新增 E07-D 月跑執行架構（流程圖、狀態機、並發控制、環境變數）*
+- *新增 E07-D 月名單分派執行架構（流程圖、狀態機、並發控制、環境變數）*
 - *新增 E07-E PostgreSQL Function 設計（fn_calc_tier_level 簽章、LATERAL JOIN 呼叫、ob_tier fallback）*
 - *新增 E07-F 開發前準備檢核清單（M/D/E/P/Q/S 六類共 28 項，其中 9 項為 BLOCKER）*
 - *解決 OQ-E07-6/8/9/13 開放問題；更新 covers 清單至 F048~F068 全覆蓋*
@@ -7645,9 +7645,9 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 
 *本文件版本 2.8，由 System Architect Agent 依據 test-designer 比對 dump / SP 後識別之架構問題（2026-05-13）更新。主要變更：*
 
-- *新增架構決策 AD-E07-15（HM 計分卡獨立化：不延續舊 SP_OBLEVELCARD_HM 借用 M 計分設定的設計；HM 應補建為獨立計分卡；fn_calc_tier_level / Stage 2 呼叫端均不修改；過渡期月跑 HM 名單 score=0 / tier_level=NULL 屬已知風險）*
+- *新增架構決策 AD-E07-15（HM 計分卡獨立化：不延續舊 SP_OBLEVELCARD_HM 借用 M 計分設定的設計；HM 應補建為獨立計分卡；fn_calc_tier_level / Stage 2 呼叫端均不修改；過渡期月名單分派 HM 名單 score=0 / tier_level=NULL 屬已知風險）*
 - *AD-E07-10 ob_tier Fallback 邏輯段落新增備註：說明新系統 IS NULL 顯式分支修正舊 SP NULL=NULL 不 match 的行為（M5 fallback 在舊系統從未實際生效）*
-- *E07-F F-4 PostgreSQL Function 清單新增 P5 項（HM 計分設定補建確認，[BLOCKER for HM 名單月跑]）*
+- *E07-F F-4 PostgreSQL Function 清單新增 P5 項（HM 計分設定補建確認，[BLOCKER for HM 名單月名單分派]）*
 - *OQ-E07-27（HM 借用行為）標為 ✅ Resolved（AD-E07-15）；OQ-E07-28（M3/HC/C3）標為 ✅ Resolved（OBMLISTDF dump 實證，data-model.md 補 seed 規範）；新增 OQ-E07-29（HB/SEB/SEC 邊緣 CARD_TYPE，Open，待業務確認）*
 - *covers 清單維持 F068 不變（本次無新增 Feature 涵蓋）*
 
@@ -7662,7 +7662,7 @@ OB SQL Server（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）
 
 *本文件版本 2.19（2026-05-27），由 System Architect Agent 依據 F097 spec-writer 定稿 + glossary.md + proposals/work-ym-semantics-unification.md §0 拍板決策新增。主要變更：*
 
-- *新增架構決策 AD-E07-27（F097 作業月語意統一）：概念分離（current_work_ym vs target_work_ym）；SystemService 單一來源（收斂 3 個 controller static method + 新增 getDefaultTargetWorkYm()）；過去月 guard RUN_WORKYM_PAST（422）落點與邊界語意（`>=`，對應 SP L31 `@WORKDT < getdate()`）；AssignmentWorkYmContext React Context 架構（Provider 掛載 assignment 區段 layout、四頁涵蓋、run-history/下游結果頁排除）；月跑觸發寫入 project_workym = target_work_ym 為下游單一真實來源；computeDedupWindow 靠正確 workdt 自動對齊（函式不改）；forward-only 不回填架構策略*
+- *新增架構決策 AD-E07-27（F097 作業月語意統一）：概念分離（current_work_ym vs target_work_ym）；SystemService 單一來源（收斂 3 個 controller static method + 新增 getDefaultTargetWorkYm()）；過去月 guard RUN_WORKYM_PAST（422）落點與邊界語意（`>=`，對應 SP L31 `@WORKDT < getdate()`）；AssignmentWorkYmContext React Context 架構（Provider 掛載 assignment 區段 layout、四頁涵蓋、run-history/下游結果頁排除）；月名單分派觸發寫入 project_workym = target_work_ym 為下游單一真實來源；computeDedupWindow 靠正確 workdt 自動對齊（函式不改）；forward-only 不回填架構策略*
 - *covers 補入 F097*
 - *Agent Loading Guide E07 TDD Developer 行補入 AD-E07-27 引用*
 

@@ -59,7 +59,7 @@ L0（千分位 ratio）與 L1（per-list dry-run COUNT）完全不動（I-RUN-ES
 ### 2.2 F088 物化快取（`ob_list_definition.stage0_estimate_count`）
 
 - 於 `approveToReady()` best-effort hook 寫入（AD-E07-20）
-- 語意：完整 Stage 1 dry-run COUNT（F092 升級後 = 月跑 Stage 1 案件數）
+- 語意：完整 Stage 1 dry-run COUNT（F092 升級後 = 月名單分派 Stage 1 案件數）
 - Nullable：未 approve / 計算失敗時為 NULL → 觸發 fallback 即時計算
 
 ### 2.3 `SectionChiefScopeService.getScopeDeptCode(userId)`
@@ -394,7 +394,7 @@ class Stage0EstimateService {
 > 三個消費者不得各自重寫 ratio 邏輯，一律呼叫此函式輸出。
 
 **Part B 新增約束**：
-- `list_total[L]` 來源必須與月跑 Stage 1 同源（F088 物化 = F092 dry-run COUNT，AD-E07-23）
+- `list_total[L]` 來源必須與月名單分派 Stage 1 同源（F088 物化 = F092 dry-run COUNT，AD-E07-23）
 - `ration[L][D]` 來源必須是 `ob_dept_pct`（per-list 百分比），與 F101 Stage 3 部門分派一致（BR-F049-8）
 
 ### I-DEPT-SCOPE-01（新增）

@@ -127,7 +127,7 @@ last_updated: 2026-05-20
 
 ## 三、停用選項不回溯語意
 
-### TS-F076-007：停用選項不回溯：既有名單 condition_payload 含已停用值仍可月跑
+### TS-F076-007：停用選項不回溯：既有名單 condition_payload 含已停用值仍可月名單分派
 
 - **關聯需求**：F076 BR-4 / US-122 AC-6
 - **測試類型**：Positive / Integration（Supertest）
@@ -136,12 +136,12 @@ last_updated: 2026-05-20
   - `pooldata_field_option`：`prod_kind` 選項 `02` 已停用（`is_active = false`）
   - 名單 stage=ready
 - **步驟**：
-  1. 觸發月跑（或呼叫 Stage 1 buildStage1Query 相關整合測試）
+  1. 觸發月名單分派（或呼叫 Stage 1 buildStage1Query 相關整合測試）
   2. 驗證 Stage 1 執行行為
 - **預期結果**：
   - Stage 1 以 `prod_kind IN ('01','02')` 正常過濾 ob_pool_data（**不因停用而移除 `02`**）
-  - 月跑完成，不報錯
-  - 月跑完成後名單的 condition_payload 未被修改（停用不回溯）
+  - 月名單分派完成，不報錯
+  - 月名單分派完成後名單的 condition_payload 未被修改（停用不回溯）
 
 ---
 

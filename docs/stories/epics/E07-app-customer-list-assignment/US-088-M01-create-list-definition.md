@@ -58,9 +58,9 @@
 - **Then** 業務主管選擇某一來源名單後，表單各欄位自動填入來源名單的對應值
 - **And** LIST_NO 仍為空（儲存後重新產生），LIST_NM 可自由修改
 
-### AC-5：月跑執行中禁止新增
+### AC-5：月名單分派執行中禁止新增
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 業務主管嘗試點擊「新增名單定義」按鈕
 - **Then** 按鈕為停用狀態，hover 顯示提示「分派執行中，無法新增名單定義」
 
@@ -153,7 +153,7 @@
 
 > **[ASSUMPTION]** OBMLISTDF 多值欄位（PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC / case_status）均以 `$$` 分隔字串儲存，與舊系統格式一致（2026-05-05 dump 驗證）。表單元件對應為多選 CHKBOX，非單選下拉。
 - 操作寫入 AssignmentAuditLog（待 system-architect 設計表結構）
-- 月跑中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
+- 月名單分派中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
 
 ---
 
@@ -172,7 +172,7 @@
 
 ### TC-088-01：正常新增（空白表單，含 case_status）
 
-- **Given**：業務主管填入 LIST_NM = 「新車月跑名單」、PROD_KIND = 'A'、CASEYEAR = '1$$2'、SPEC_TP = 'S1'、case_status = '01$$02'（期中 + 中結）、LIST_PERIOD_START = 1、LIST_PERIOD_END = 6、LIST_INTERVAL = 1、SETTLE_SRC = 'Y'
+- **Given**：業務主管填入 LIST_NM = 「新車月名單分派名單」、PROD_KIND = 'A'、CASEYEAR = '1$$2'、SPEC_TP = 'S1'、case_status = '01$$02'（期中 + 中結）、LIST_PERIOD_START = 1、LIST_PERIOD_END = 6、LIST_INTERVAL = 1、SETTLE_SRC = 'Y'
 - **When**：點擊「儲存」
 - **Then**：OBMLISTDF 新增一列，LIST_NO = 'OB202605001'（假設本月首筆），STATUS = 'active'，LIST_TYPE = '01'（後端寫入），case_status = '01$$02'
 - **And**：成功提示顯示 LIST_NO，返回清單頁
@@ -195,7 +195,7 @@
 - **When**：業務主管選擇複製，修改 LIST_NM 為「新月複製名單」後儲存
 - **Then**：新名單以 'OB202605002' 寫入，欄位值對應來源名單（LIST_NM 除外），STATUS = 'active'
 
-### TC-088-04：月跑中禁止新增
+### TC-088-04：月名單分派中禁止新增
 
 - **Given**：AssignmentRun status = 'running'
 - **When**：業務主管嘗試點擊「新增名單定義」
@@ -206,7 +206,7 @@
 ## 依賴關係
 
 - **Blocked By**：US-070（新增按鈕在清單頁）、US-092（PROD_KIND / CASEYEAR / SPEC_TP / case_status 代碼維護）
-- **Blocks**：US-081（月跑需有 active 名單定義）
+- **Blocks**：US-081（月名單分派需有 active 名單定義）
 
 ---
 
@@ -219,7 +219,7 @@
 - [ ] 必填欄位驗證測試（含 case_status 未選阻擋）
 - [ ] case_status 多選值以 `$$` 分隔正確儲存測試
 - [ ] LIST_PERIOD_END >= START 驗證測試
-- [ ] 月跑中資料鎖測試
+- [ ] 月名單分派中資料鎖測試
 - [ ] AssignmentAuditLog 寫入測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過

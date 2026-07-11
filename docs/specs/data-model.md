@@ -819,7 +819,7 @@ Phase 2/3 的 `customer_interaction`、`customer_financial`、`customer_service`
 本段落定義 E07「客戶名單分派」所需的 AppDB（PostgreSQL）資料表。分為兩類：
 
 1. **OB 系統遷移表**（10 張）：從 SQL Server OB 資料庫遷移至 AppDB，採 `ob_` 前綴命名。
-2. **E07 新建表**（3 張）：月跑執行紀錄、快照、稽核，不用 `ob_` 前綴。
+2. **E07 新建表**（3 張）：月名單分派執行紀錄、快照、稽核，不用 `ob_` 前綴。
 
 ### 命名規範
 
@@ -864,13 +864,13 @@ PK：`list_no`
 | name | VARCHAR(50) | NULL | NAME | 名稱 |
 | caseyear | VARCHAR(255) | NULL | CASEYEAR | 進件/滿期/中結年數（多值欄位，`$$` 分隔；**v2.1（2026-05-20）**：F050 v2.1 / F051 v2.1 動態載入自 `pooldata_field_option` `column_name='caseyear'`，初始 seed **8 筆 `0`~`6` + `99`**（由 F076 v1.5 維護；US-125 AC-1 / J5 拍板）；~~F050/F051 前端固定 11 個選項 value `0`~`10`~~（**v2.1 廢除**：A4 / J5 拍板對應 m22 現行 seed 8 筆）；舊系統 hardcoded 證據 `reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`（OQ-E07-24 ✅ Resolved 2026-05-12）僅供歷史對照；本欄位為 v2.1 condition_payload 之 **backward-compat 衍生欄位**（J6 / F050 v2.1 BR-10），由後端依 `condition_payload.conditions[columnName='caseyear'].values` 衍生填入；Stage 1 與 `ob_pool_data.year_cnt` 整數比對） |
 | caseyearnm | VARCHAR(10) | NULL | CASEYEARNM | 案件年份名稱 |
-| case_status | VARCHAR(14) | NOT NULL | （新增，原 OBMLISTDF.LIST_TYPE 業務語意拆出） | 案件結清期別（多值欄位，`$$` 分隔；**v2.1（2026-05-20）**：可選代碼來源改為 `pooldata_field_option` `column_name='case_status'`（4 筆，由 F076 v1.5 維護；US-125 AC-2 / A5 / E4 解除），原 `ob_code_df.tbl_id='CASE_STATUS'`（對應 OBMCODEDF TBL_ID='22'）已由 US-124 廢除（F068 DEPRECATED v1.3）；本欄位為 v2.1 condition_payload 之 **backward-compat 衍生欄位**（J6 / F050 v2.1 BR-10），由後端依 `condition_payload.conditions[columnName='case_status'].values` 衍生填入。最大長度依 4 個代碼全選計算 `01$$02$$03$$04` = 14 字元。**4 個值業務語意對照詳見 [F050 v2.1 §5.1.1](features/F050-create-list-definition.md#511-case_status-4-個值業務語意對照表)**（OQ-E07-23 ✅ Resolved 2026-05-12，依 `reference/SP/USP_OB_OBPOOLDATA.sql:189-216` + DB 實證 1,487,695 筆）。月跑 Stage 1 以本欄位（業務主管選擇）與 `ob_pool_data.list_type`（SP 計算寫入）作 OR / IN 比對（F050 v2.1 BR-7） |
+| case_status | VARCHAR(14) | NOT NULL | （新增，原 OBMLISTDF.LIST_TYPE 業務語意拆出） | 案件結清期別（多值欄位，`$$` 分隔；**v2.1（2026-05-20）**：可選代碼來源改為 `pooldata_field_option` `column_name='case_status'`（4 筆，由 F076 v1.5 維護；US-125 AC-2 / A5 / E4 解除），原 `ob_code_df.tbl_id='CASE_STATUS'`（對應 OBMCODEDF TBL_ID='22'）已由 US-124 廢除（F068 DEPRECATED v1.3）；本欄位為 v2.1 condition_payload 之 **backward-compat 衍生欄位**（J6 / F050 v2.1 BR-10），由後端依 `condition_payload.conditions[columnName='case_status'].values` 衍生填入。最大長度依 4 個代碼全選計算 `01$$02$$03$$04` = 14 字元。**4 個值業務語意對照詳見 [F050 v2.1 §5.1.1](features/F050-create-list-definition.md#511-case_status-4-個值業務語意對照表)**（OQ-E07-23 ✅ Resolved 2026-05-12，依 `reference/SP/USP_OB_OBPOOLDATA.sql:189-216` + DB 實證 1,487,695 筆）。月名單分派 Stage 1 以本欄位（業務主管選擇）與 `ob_pool_data.list_type`（SP 計算寫入）作 OR / IN 比對（F050 v2.1 BR-7） |
 | settle_src | VARCHAR(6) | NULL | SETTLE_SRC | 結案來源（多值欄位，`$$` 分隔） |
 | card_type | VARCHAR(5) | NULL | CARD_TYPE | 計分卡類型（沿用舊值，A43 決議；dump 含 3 字元值如 SEC/SEB，與 ob_levelcard_* 系列一致改為 VARCHAR(5)）。**v2.1.1（2026-05-20 / US-126 / US-127 / D1 / D4 / Q-A）**：前端表單元件從文字輸入改為 `ob_card_type` 動態下拉（資料來源 `GET /api/v1/assignment/scoring/card-types`）；建立模式只列 `status='active'` 卡別，編輯模式（F051）含「該名單已存的 inactive 值」disabled 保留；首選項「— 未選擇 —」（空值，預設選中）；本欄位儲存值範圍對齊 [`ob_card_type.card_type`](#ob-card-type-entity)（PK，VARCHAR(5)，`^[A-Z0-9]{1,5}$`）；前端 v2.0 之 `maxLength={2}` 硬限制已移除，由下拉選項與後端 `@MaxLength(5)` 雙重把關。完整 UI/API 契約見 [F050 v2.1.1 AC-16](features/F050-create-list-definition.md#ac-16cardtype-下拉契約v211-新增--us-126--us-127--d1--d4--q-a)。 |
 | status | VARCHAR(10) | NOT NULL DEFAULT 'active' | （AppDB 新建欄位） | 啟用狀態：`'active'` / `'inactive'`（草稿階段停用後設 `'inactive'`，沿用 epic-brief「已解決問題」第 2 點與 F052） |
-| stage | VARCHAR(20) | NOT NULL DEFAULT 'draft' | （AppDB 新建欄位，2026-05-15 F077 v1.0 / E07 重構批次 2 引入；**migration 歸屬：`1711360000100-CreateE07ObSettingsTables`（m100）中 `ob_list_definition` CREATE TABLE 時同步加入此欄位；m12 data backfill UPDATE 僅寫資料不建欄，見 AD-E07-17 議題 3**） | 五階段流程列舉值：`'draft'` / `'dept_ratio'` / `'personnel_ratio'` / `'approval'` / `'ready'`；CHECK constraint 限制此 5 值；F050 新建寫入 `'draft'`；舊 OBMLISTDF 遷移腳本全數初始 `'ready'`（見下方「遷移規則」）；月跑 Stage 0/1 只讀取 `stage = 'ready'` 之名單（F061 BR） |
-| cr_enabled | BOOLEAN | NOT NULL DEFAULT TRUE | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入，**取代 F059 OBASSIGNSET 全域路徑**） | per-LIST_NO CR 回分開關；草稿階段（`stage = 'draft'`）由 F050 v2.0 / F051 v2.0 透過 `crEnabled` 欄位設定；推進至非草稿階段後鎖定（透過 F051 v2.0 BR-3 統一拒絕，無需獨立鎖定欄位）；月跑 Stage 3 讀取本欄位決定是否執行 CR 回分（false = 跳過）；既有 OBMLISTDF 遷移之名單初始 `true`（保持現行行為）；US-120 spec 落差修正之唯一儲存位置；F059 v2.0 標記 DEPRECATED 不再讀寫 |
-| condition_payload | JSONB | NULL | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入；**v2.1（2026-05-20）取代 v2.0 固定欄位 prod_kind / caseyear / spec_tp / case_status / settle_src 等之必填語意，成為 source of truth**） | 動態篩選條件 JSONB；schema：`{ "conditions": [{ "columnName": "...", "fieldType": "numeric/categorical/date", ...type-specific }], "logic": "AND" }`；完整 schema 規範詳見 [F050 v2.1 §5.4](features/F050-create-list-definition.md#54-condition_payload-json-schemav21-新增--a2-解除)；F050 v2.1 新建必填（至少 1 個 conditions）；F051 v2.1 草稿階段可整段覆寫（限 `stage='draft'`，K1 / F051 v2.1 BR-9）；**F050 v2.1 BR-6** 強制 `conditions[].columnName` 必須存在於 F075 v1.5 白名單且 `is_active = true`，違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`（拍板 1 / A3 解除）；**F050 v2.1 BR-8** 強制 `columnName` 不得為 `list_period_start` / `list_period_end` / `list_interval`（一級保留欄位，J8 / 拍板 3），違反回 400 `RESERVED_FIELD_IN_CONDITIONS`；**F050 v2.1 BR-9**：若 conditions 含 `pooldata_field_option.is_active=false` 之 categorical option，寫入仍成功但 response 附加 `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`（非阻擋；對應 [error-handling.md#assignment-run-warnings](error-handling.md#assignment-run-warnings)）；月跑 Stage 1 讀取本欄位動態組 SQL WHERE 對 `ob_pool_data` 過濾（**F050 v2.1 BR-7**：categorical `IN (...)`、numeric `BETWEEN`、date `BETWEEN`；US-122 AC-1~AC-3 / A6 / D3 解除）；**5 個 entity column（prod_kind / caseyear / spec_tp / case_status / settle_src）由後端依本欄位衍生填入並寫入 entity column，為 backward-compat 讀取欄位**（J6 / F050 v2.1 BR-10；衍生規則由 Phase 3a system-architect 設計）；既有 OBMLISTDF 遷移之名單初始 `NULL`，月跑 Stage 1 fallback 至 5 個 entity column 讀取（D4 / US-122 AC-4 / US-123 AC-3）；E2 backfill（entity column → condition_payload 一次性轉換）由 Phase 3a system-architect 執行（拍板 2 / 無 confirm 流程）。**v2.1.1（2026-05-20 / US-128 / US-129）**：`best_case` 為合法 `conditions[].columnName` 之一（F075 v1.6 seed），值為 categorical `Y` / `N`（F076 v1.6 seed）；承接已移除之 `prod_best` 一級欄位業務語意（見上方 `prod_best` 欄位 DEPRECATED 說明 + [F050 v2.1.1 BR-12](features/F050-create-list-definition.md#7-商業規則)）；月跑 Stage 1 對 `ob_pool_data.best_case` 以 `IN (...)` 過濾。**v1.18（2026-07-02 / F109 / AD-E07-37）**：`conditions[]` 每筆新增 **optional** `dataSource?: 'ob_pool_data' \| 'customer_core'`；`AssignmentListService.createList`/`updateList` 於 `injectSystemFixedConditions` 之後、`deriveBackwardCompatColumns` 之前，以新增步驟 `stampConditionDataSource` 依當下白名單逐 `columnName` 固化寫入（決定性，事後欄位停用不影響既有名單，F075 BR-4 相容）；F109 上線前既有 `condition_payload`（無此 key）由 Stage 1 讀取端以靜態常數 `CUSTOMER_CORE_COLUMN_NAMES` fallback 判定，**不需要 backfill migration**（F109 前白名單驗證已保證舊 payload 不可能含 customer_core 欄名）。`dataSource` 值決定 Stage 1 是否將該 condition 之 fragment 路由至 `buildCustomerCoreClause`（`cc.` 前綴 + LEFT JOIN customer_core）或既有 composer（`ob_pool_data` 裸欄名）。詳見 [AD-E07-37](implementation-log/AD-E07-37-f109-customer-source-filter.md) §3 OQ-F109-01 / §6。|
+| stage | VARCHAR(20) | NOT NULL DEFAULT 'draft' | （AppDB 新建欄位，2026-05-15 F077 v1.0 / E07 重構批次 2 引入；**migration 歸屬：`1711360000100-CreateE07ObSettingsTables`（m100）中 `ob_list_definition` CREATE TABLE 時同步加入此欄位；m12 data backfill UPDATE 僅寫資料不建欄，見 AD-E07-17 議題 3**） | 五階段流程列舉值：`'draft'` / `'dept_ratio'` / `'personnel_ratio'` / `'approval'` / `'ready'`；CHECK constraint 限制此 5 值；F050 新建寫入 `'draft'`；舊 OBMLISTDF 遷移腳本全數初始 `'ready'`（見下方「遷移規則」）；月名單分派 Stage 0/1 只讀取 `stage = 'ready'` 之名單（F061 BR） |
+| cr_enabled | BOOLEAN | NOT NULL DEFAULT TRUE | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入，**取代 F059 OBASSIGNSET 全域路徑**） | per-LIST_NO CR 回分開關；草稿階段（`stage = 'draft'`）由 F050 v2.0 / F051 v2.0 透過 `crEnabled` 欄位設定；推進至非草稿階段後鎖定（透過 F051 v2.0 BR-3 統一拒絕，無需獨立鎖定欄位）；月名單分派 Stage 3 讀取本欄位決定是否執行 CR 回分（false = 跳過）；既有 OBMLISTDF 遷移之名單初始 `true`（保持現行行為）；US-120 spec 落差修正之唯一儲存位置；F059 v2.0 標記 DEPRECATED 不再讀寫 |
+| condition_payload | JSONB | NULL | （AppDB 新建欄位，2026-05-15 F050 v2.0 / E07 重構批次 3 引入；**v2.1（2026-05-20）取代 v2.0 固定欄位 prod_kind / caseyear / spec_tp / case_status / settle_src 等之必填語意，成為 source of truth**） | 動態篩選條件 JSONB；schema：`{ "conditions": [{ "columnName": "...", "fieldType": "numeric/categorical/date", ...type-specific }], "logic": "AND" }`；完整 schema 規範詳見 [F050 v2.1 §5.4](features/F050-create-list-definition.md#54-condition_payload-json-schemav21-新增--a2-解除)；F050 v2.1 新建必填（至少 1 個 conditions）；F051 v2.1 草稿階段可整段覆寫（限 `stage='draft'`，K1 / F051 v2.1 BR-9）；**F050 v2.1 BR-6** 強制 `conditions[].columnName` 必須存在於 F075 v1.5 白名單且 `is_active = true`，違反回 422 `CONDITION_COLUMN_NOT_IN_WHITELIST`（拍板 1 / A3 解除）；**F050 v2.1 BR-8** 強制 `columnName` 不得為 `list_period_start` / `list_period_end` / `list_interval`（一級保留欄位，J8 / 拍板 3），違反回 400 `RESERVED_FIELD_IN_CONDITIONS`；**F050 v2.1 BR-9**：若 conditions 含 `pooldata_field_option.is_active=false` 之 categorical option，寫入仍成功但 response 附加 `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`（非阻擋；對應 [error-handling.md#assignment-run-warnings](error-handling.md#assignment-run-warnings)）；月名單分派 Stage 1 讀取本欄位動態組 SQL WHERE 對 `ob_pool_data` 過濾（**F050 v2.1 BR-7**：categorical `IN (...)`、numeric `BETWEEN`、date `BETWEEN`；US-122 AC-1~AC-3 / A6 / D3 解除）；**5 個 entity column（prod_kind / caseyear / spec_tp / case_status / settle_src）由後端依本欄位衍生填入並寫入 entity column，為 backward-compat 讀取欄位**（J6 / F050 v2.1 BR-10；衍生規則由 Phase 3a system-architect 設計）；既有 OBMLISTDF 遷移之名單初始 `NULL`，月名單分派 Stage 1 fallback 至 5 個 entity column 讀取（D4 / US-122 AC-4 / US-123 AC-3）；E2 backfill（entity column → condition_payload 一次性轉換）由 Phase 3a system-architect 執行（拍板 2 / 無 confirm 流程）。**v2.1.1（2026-05-20 / US-128 / US-129）**：`best_case` 為合法 `conditions[].columnName` 之一（F075 v1.6 seed），值為 categorical `Y` / `N`（F076 v1.6 seed）；承接已移除之 `prod_best` 一級欄位業務語意（見上方 `prod_best` 欄位 DEPRECATED 說明 + [F050 v2.1.1 BR-12](features/F050-create-list-definition.md#7-商業規則)）；月名單分派 Stage 1 對 `ob_pool_data.best_case` 以 `IN (...)` 過濾。**v1.18（2026-07-02 / F109 / AD-E07-37）**：`conditions[]` 每筆新增 **optional** `dataSource?: 'ob_pool_data' \| 'customer_core'`；`AssignmentListService.createList`/`updateList` 於 `injectSystemFixedConditions` 之後、`deriveBackwardCompatColumns` 之前，以新增步驟 `stampConditionDataSource` 依當下白名單逐 `columnName` 固化寫入（決定性，事後欄位停用不影響既有名單，F075 BR-4 相容）；F109 上線前既有 `condition_payload`（無此 key）由 Stage 1 讀取端以靜態常數 `CUSTOMER_CORE_COLUMN_NAMES` fallback 判定，**不需要 backfill migration**（F109 前白名單驗證已保證舊 payload 不可能含 customer_core 欄名）。`dataSource` 值決定 Stage 1 是否將該 condition 之 fragment 路由至 `buildCustomerCoreClause`（`cc.` 前綴 + LEFT JOIN customer_core）或既有 composer（`ob_pool_data` 裸欄名）。詳見 [AD-E07-37](implementation-log/AD-E07-37-f109-customer-source-filter.md) §3 OQ-F109-01 / §6。|
 | stage0_estimate_count | INTEGER | NULL | （AppDB 新建欄位，2026-05-26 / F088 準備完成摘要 / AD-E07-20 引入） | **物化 Stage 0 預估案件數快取**。於名單 `approve→ready`（F086）成功後，`StageActionService.approveToReady()` 在 transaction 之外呼叫 `Stage0EstimateService.estimateListCount(listNo)` 計算並以 best-effort UPDATE 寫入本欄。計算失敗（timeout / 找不到名單）僅 logger.warn，不影響 approve 結果（graceful degradation，見 AD-E07-20）。值語意：ob_pool_data 套用該名單 condition_payload 篩選後之 COUNT（INTEGER）。**nullable 理由**：（1）既有歷史名單（遷移時 stage='ready'）從未經過 approve→ready hook，保留 NULL 表示「未計算」；（2）計算失敗或 timeout 亦保留 NULL。前端 F088 卡片顯示 NULL 時呈現「—」。**不提供 backfill**：既有 ready 名單下次 re-approve 才填（F089 rollback 至 approval 再 re-approve 觸發）。 |
 | stage0_estimated_at | TIMESTAMP | NULL | （AppDB 新建欄位，2026-05-26 / F088 準備完成摘要 / AD-E07-20 引入；**實作必須使用 `dateColumnType` helper，禁用 `type: 'timestamp'` 字串**，見 AD-E07-17 / memory feedback_typeorm_timestamp） | **物化估算時間戳**。與 `stage0_estimate_count` 同步寫入，記錄計算執行當下之 UTC 時間。nullable 理由同上欄（未計算 / 計算失敗為 NULL）。前端 F088 可選擇性顯示此欄位（如 tooltip「預估時間：YYYY-MM-DD HH:mm」），由 F088 spec 決定。 |
 
@@ -881,8 +881,8 @@ PK：`list_no`
 **v2.1 寫入規範（J6 / F050 v2.1 BR-10）**：v2.0 之「UI 提交時序列化為 `$$` 分隔字串」**已廢除**；v2.1 起 5 個欄位均為 **backward-compat 衍生欄位**，由後端依 `condition_payload` 衍生填入並寫入 entity column（衍生規則由 Phase 3a system-architect 設計）；前端不直接送出此 `$$` 分隔格式。
 
 **v2.1 查詢規範（A6 / D3 解除）**：
-- **新名單（`condition_payload IS NOT NULL`）**：月跑 Stage 1 從 JSONB 解析 conditions 後組合 SQL `columnName IN (v1, v2, ...)`（categorical）/ `BETWEEN min AND max`（numeric）/ `BETWEEN dateStart AND dateEnd`（date）；多欄位之間 `AND`（F050 v2.1 BR-7 / US-122 AC-1~AC-3）
-- **舊名單（`condition_payload IS NULL`）**：月跑 Stage 1 fallback 讀 5 個 entity column 並以 `IN (...)` 對應比對（D4 / US-122 AC-4 / US-123 AC-3）
+- **新名單（`condition_payload IS NOT NULL`）**：月名單分派 Stage 1 從 JSONB 解析 conditions 後組合 SQL `columnName IN (v1, v2, ...)`（categorical）/ `BETWEEN min AND max`（numeric）/ `BETWEEN dateStart AND dateEnd`（date）；多欄位之間 `AND`（F050 v2.1 BR-7 / US-122 AC-1~AC-3）
+- **舊名單（`condition_payload IS NULL`）**：月名單分派 Stage 1 fallback 讀 5 個 entity column 並以 `IN (...)` 對應比對（D4 / US-122 AC-4 / US-123 AC-3）
 
 > **v2.0 棄用語意**：舊 SP 之 `LIKE '%val$$%' OR LIKE '%$$val' OR = 'val'` 三段比對**已棄用**；新實作一律改用 SQL `IN (...)` / `BETWEEN`；遷移時保留原始字串不拆分為陣列或正規化表。
 
@@ -911,7 +911,7 @@ PK：`list_no`
 
 完整 migration SQL 見 architecture-spec.md AD-E07-14；v2.1 Phase 3 migration 詳見 **architecture-spec.md AD-E07-18 §18.3**（Phase 3a 落地，2026-05-20；M3 於 2026-05-21 二次更正為 TBL_ID='12' 52 筆）：M1（m281）ADD COLUMN condition_payload + GIN index、M2（m282）backfill、M3（m283）**spec_tp 52 筆 UPSERT（OBMCODEDF TBL_ID='12'）**、M4（m284）case_status whitelist + options seed、M5（m285）刪除 ob_code_df 重疊 tbl_id（deployment gate：與 F069 service 改讀 pooldata_field_option 同 PR）。
 
-**索引**：`list_no`（PK）、`(project_workym, card_type)`（複合索引，月跑查詢）、`(project_workym, stage, status)`（M01 入口 F048 列表 + 階段篩選）、`(created_by)`（處長轄區過濾，F074 / F077 BR-10）
+**索引**：`list_no`（PK）、`(project_workym, card_type)`（複合索引，月名單分派查詢）、`(project_workym, stage, status)`（M01 入口 F048 列表 + 階段篩選）、`(created_by)`（處長轄區過濾，F074 / F077 BR-10）
 
 **舊名單遷移規則（I-5，2026-05-15 / F077 BR-5）**：
 
@@ -919,13 +919,13 @@ PK：`list_no`
 
 | 欄位 | 遷移處置 |
 |------|---------|
-| `stage` | **全數初始為 `'ready'`**（視為已完成五階段流程）；確保歷史月份名單可正常被 F061 月跑引用、F048 列表正確顯示「準備完成」階段標籤 |
+| `stage` | **全數初始為 `'ready'`**（視為已完成五階段流程）；確保歷史月份名單可正常被 F061 月名單分派引用、F048 列表正確顯示「準備完成」階段標籤 |
 | `status` | 沿用既有資料中的有效值；缺值預設 `'active'` |
 | 其他業務欄位 | 沿用既有 OBMLISTDF 欄位邏輯（PROD_KIND / CASEYEAR / SPEC_TP / SETTLE_SRC 等），不受 F075 白名單影響（沿用 F075 BR-3 / US-102 §舊名單相容規則） |
 
 > **說明**：舊系統無「五階段流程」概念，所有舊名單已歷經 IT 手動執行 SP 完成分派，等同於新流程的「準備完成」階段。新建名單（F050）始於 `stage = 'draft'`，依 F077 §10 圖表 [F077-stage-overview.mmd](diagrams/F077-stage-overview.mmd) 流轉。
 
-> **v2.1 補述（2026-05-20 / F050 v2.1 重構，D4 / E2 / J6 / US-122 AC-4 / US-123 AC-3）**：舊 OBMLISTDF 遷移名單之 `condition_payload` 初始為 NULL；月跑 Stage 1 對此類名單採 **backward-compat fallback** 讀取 5 個 entity column（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）並以 `IN (...)` 對應比對（D4），fallback 路徑不報錯，月跑不中斷；F051 v2.1 編輯頁載入此類名單時篩選條件區塊呈現為唯讀「（舊格式）」摘要（F051 v2.1 AC-11 / US-123 AC-2），非篩選欄位仍可改。E2 backfill（entity column → condition_payload 一次性轉換）由 **Phase 3a system-architect** 執行；**拍板 2 / 拍板 Q3**：不提供「per-user confirm 轉換」流程，避免部分名單轉換、部分未轉換的混亂狀態；繞過直接寫入 condition_payload 之請求由後端回 422 `LEGACY_LIST_CONDITION_READONLY`（defense-in-depth；F051 v2.1 BR-11）。
+> **v2.1 補述（2026-05-20 / F050 v2.1 重構，D4 / E2 / J6 / US-122 AC-4 / US-123 AC-3）**：舊 OBMLISTDF 遷移名單之 `condition_payload` 初始為 NULL；月名單分派 Stage 1 對此類名單採 **backward-compat fallback** 讀取 5 個 entity column（`prod_kind` / `caseyear` / `spec_tp` / `case_status` / `settle_src`）並以 `IN (...)` 對應比對（D4），fallback 路徑不報錯，月名單分派不中斷；F051 v2.1 編輯頁載入此類名單時篩選條件區塊呈現為唯讀「（舊格式）」摘要（F051 v2.1 AC-11 / US-123 AC-2），非篩選欄位仍可改。E2 backfill（entity column → condition_payload 一次性轉換）由 **Phase 3a system-architect** 執行；**拍板 2 / 拍板 Q3**：不提供「per-user confirm 轉換」流程，避免部分名單轉換、部分未轉換的混亂狀態；繞過直接寫入 condition_payload 之請求由後端回 422 `LEGACY_LIST_CONDITION_READONLY`（defense-in-depth；F051 v2.1 BR-11）。
 
 **m12 migration `stage` active 名單範圍規則（2026-05-16 / system-architect 決議 #3）**：
 
@@ -983,7 +983,7 @@ F050 v2.1 提供「從上月名單複製」起點，行為規則如下：
 
 > **2026-05-15 / F077 BR-1, BR-2, BR-12 引入**
 
-E07 月跑與 M01 名單定義之「目前作業月份（current_work_ym）」由後端統一計算，前端不自行計算。本規則為唯一權威來源。
+E07 月名單分派與 M01 名單定義之「目前作業月份（current_work_ym）」由後端統一計算，前端不自行計算。本規則為唯一權威來源。
 
 | 項目 | 規則 |
 |------|------|
@@ -1014,11 +1014,11 @@ E07 月跑與 M01 名單定義之「目前作業月份（current_work_ym）」�
 
 #### ob_pool_data（OBPOOLDATA — 案件池）
 
-> **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步：E04 通用擷取任務從舊 OB DB（SQL Server `OBPOOLDATA`）抓取至 raw_{task_id_short} 中介表（既有機制，每月跑前執行），再由 E05 Pipeline TargetLoad 將資料載入本表（full replace 模式）。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**。
+> **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步：E04 通用擷取任務從舊 OB DB（SQL Server `OBPOOLDATA`）抓取至 raw_{task_id_short} 中介表（既有機制，每月名單分派前執行），再由 E05 Pipeline TargetLoad 將資料載入本表（full replace 模式）。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**。
 >
-> ⚠️ **本表為共享案件池**（對應 OBPOOLDATA 原表結構，120 欄位中**無 LIST_NO 欄位**），不直接綁定特定名單。per-LIST_NO 候選由月跑 Stage 1 透過 join `ob_list_definition` 的篩選條件（`prod_kind` / `caseyear` / `spec_tp` / `list_period_start ~ list_period_end` / `settle_src` 等）動態取得；分派結果（含 LIST_NO）寫入 `ob_pool_data_list`。
+> ⚠️ **本表為共享案件池**（對應 OBPOOLDATA 原表結構，120 欄位中**無 LIST_NO 欄位**），不直接綁定特定名單。per-LIST_NO 候選由月名單分派 Stage 1 透過 join `ob_list_definition` 的篩選條件（`prod_kind` / `caseyear` / `spec_tp` / `list_period_start ~ list_period_end` / `settle_src` 等）動態取得；分派結果（含 LIST_NO）寫入 `ob_pool_data_list`。
 >
-> ob_pool_data 欄位達 120 個（Q-B 決策）。以下列出 E07 月跑邏輯使用的關鍵欄位，其餘欄位完整映射 OBPOOLDATA，命名規範同上。
+> ob_pool_data 欄位達 120 個（Q-B 決策）。以下列出 E07 月名單分派邏輯使用的關鍵欄位，其餘欄位完整映射 OBPOOLDATA，命名規範同上。
 
 PK：`(orgno, appl_no)`
 
@@ -1071,7 +1071,7 @@ PK：`(list_no, orgno, appl_no)`
 | dept_name | VARCHAR(30) | NULL | DEPT_NAME | 部門名稱 |
 | emplid | VARCHAR(10) | NULL | EMPLID | 業務員工號（分派結果） |
 | emplid_deptid | VARCHAR(6) | NULL | EMPLID_DEPTID | 業務員所屬部門 |
-| score | INTEGER | NULL | SCORE | 月跑 Stage 2 計分結果（由 `fn_calc_tier_level` 計算後寫入；初始為 NULL）。對應舊系統 OBPOOLDATA_LIST.SCORE。F055 preview API 讀取此欄位套用新門檻計算 CARD_LEVEL 分佈（AD-E07-10） |
+| score | INTEGER | NULL | SCORE | 月名單分派 Stage 2 計分結果（由 `fn_calc_tier_level` 計算後寫入；初始為 NULL）。對應舊系統 OBPOOLDATA_LIST.SCORE。F055 preview API 讀取此欄位套用新門檻計算 CARD_LEVEL 分佈（AD-E07-10） |
 | card_level | VARCHAR(1) | NULL | CARD_LEVEL | 計分卡等級 |
 | tier_level | VARCHAR(5) | NULL | TIER_LEVEL | 名單層級 |
 | settle_src | TEXT | NOT NULL | SETTLE_SRC | 結案來源（DEFAULT 'N'） |
@@ -1088,19 +1088,19 @@ PK：`(list_no, orgno, appl_no)`
 | is_cr | VARCHAR(1) | NULL | IS_CR | 是否為前業務員管理案件 |
 | cr_id | VARCHAR(20) | NULL | CR_ID | 前業務員工號 |
 | cr_nm | VARCHAR(50) | NULL | CR_NM | 前業務員姓名 |
-| data_source | VARCHAR(20) | NULL | —（本系統新增）| **資料來源標記**（AD-E07-21 DP-AD21-2 方案 A；AD-E07-25 DP-AD25-1 更新）。**AD-E07-25 Phase A 後值域**：`'etl_load'`（由 `E07-OBPOOLDATA_LIST-Load` ETL 載入的 legacy 派案歷史，單一值）。**舊值域（廢止）**：`'etl_legacy'` / `'monthly_run'`（Phase A deploy 前存在）/ NULL（migration 前既有資料）。月跑提案結果自 Phase A 起改寫入 `ob_monthly_run_result`，不再寫入本表。非 legacy 欄位，OBPOOLDATA_LIST 來源無此欄位；migration `1711360000291-AddObPoolDataListDataSource` 新增。 |
+| data_source | VARCHAR(20) | NULL | —（本系統新增）| **資料來源標記**（AD-E07-21 DP-AD21-2 方案 A；AD-E07-25 DP-AD25-1 更新）。**AD-E07-25 Phase A 後值域**：`'etl_load'`（由 `E07-OBPOOLDATA_LIST-Load` ETL 載入的 legacy 派案歷史，單一值）。**舊值域（廢止）**：`'etl_legacy'` / `'monthly_run'`（Phase A deploy 前存在）/ NULL（migration 前既有資料）。月名單分派提案結果自 Phase A 起改寫入 `ob_monthly_run_result`，不再寫入本表。非 legacy 欄位，OBPOOLDATA_LIST 來源無此欄位；migration `1711360000291-AddObPoolDataListDataSource` 新增。 |
 
 > 其餘業務欄位（貸款明細、車輛資訊、業務員資訊等）完整映射 OBPOOLDATA_LIST，命名規範同上（snake_case，nvarchar → VARCHAR/TEXT，datetime → TIMESTAMP，numeric → NUMERIC，money → NUMERIC(19,4)）。
 
 **索引**：`(list_no, orgno, appl_no)`（PK）、`(list_no, emplid)`、`(list_no, dept_id)`、`(data_source)`（ETL DELETE 與路由用）、`(assignday)`（近 3 個月去重視窗查詢用，建議加 WHERE assignday IS NOT NULL，AD-E07-22 §22.3）
 
-> **AD-E07-25（2026-05-27）**：`data_source` 值域自 AD-E07-25 Phase A 起改為 `'etl_load'`（單一值）。`'etl_legacy'` / `'monthly_run'` 為舊值域，Phase A deploy 後廢止。月跑分派提案改寫入 `ob_monthly_run_result`（見下節）。
+> **AD-E07-25（2026-05-27）**：`data_source` 值域自 AD-E07-25 Phase A 起改為 `'etl_load'`（單一值）。`'etl_legacy'` / `'monthly_run'` 為舊值域，Phase A deploy 後廢止。月名單分派提案改寫入 `ob_monthly_run_result`（見下節）。
 
 ---
 
-#### ob_monthly_run_result（月跑分派結果 — 本系統新增）
+#### ob_monthly_run_result（月名單分派結果 — 本系統新增）
 
-**新建表（migration `1711360000292-CreateObMonthlyRunResult`）**。承載每次月跑對各名單的分派提案結果，為 AD-E07-25 單源化設計的核心產出。
+**新建表（migration `1711360000292-CreateObMonthlyRunResult`）**。承載每次月名單分派對各名單的分派提案結果，為 AD-E07-25 單源化設計的核心產出。
 
 PK：`(run_id, list_no, orgno, appl_no)`
 
@@ -1129,15 +1129,15 @@ PK：`(run_id, list_no, orgno, appl_no)`
 **外鍵**：`fk_omrr_run` → `assignment_run(run_id)` ON DELETE CASCADE
 
 **索引**：
-- `idx_omrr_run_id`：`(run_id)`（月跑結果整批查詢）
-- `idx_omrr_list_run`：`(list_no, run_id)`（按名單查詢某次月跑結果）
+- `idx_omrr_run_id`：`(run_id)`（月名單分派結果整批查詢）
+- `idx_omrr_list_run`：`(list_no, run_id)`（按名單查詢某次月名單分派結果）
 - `idx_omrr_custo_no`：`(custo_no) WHERE custo_no IS NOT NULL`（客戶號查詢）
 - `idx_omrr_assignday`：`(assignday) WHERE assignday IS NOT NULL`（派案日期查詢）
 
 **設計原則**：
 - 僅保留 Stage 2~4 計算結果欄位，不複製 `ob_pool_data_list` 的全部業務欄位（DP-AD25-2 方案 A）
 - Stage 2 計算所需業務欄位（spec_name、year_produ、payt_term 等）在計算時由 `ob_pool_data` JOIN 取得
-- `run_id` FK + CASCADE DELETE：月跑 run 刪除時自動清除對應所有結果列
+- `run_id` FK + CASCADE DELETE：月名單分派 run 刪除時自動清除對應所有結果列
 - `assignment_run_snapshot` type=result 短期雙軌保留（DP-AD25-3），`collectCrCandidates()` 短期維持讀 snapshot
 
 **F064 v2.0 匯出 join 路徑**（AD-E07-31 / US-155，2026-06-17）：
@@ -1190,7 +1190,7 @@ PK：`(project_workym, list_no, obdeptid, ration)`
 | obdeptnm | VARCHAR(10) | NOT NULL | OBDEPTNM | 催收部門名稱 |
 | ration | NUMERIC(9,2) | NOT NULL | RATION | **PK**，分配比例（**v2 修訂，2026-05-25 / commit 98a2f56**：scale 1→2；原 NUMERIC(9,1) 會將 FE 之 2-decimal 值 round 至 1-decimal，22 員工均等分配 4.55 round 成 4.6 導致 sum=101.1。Follow-up：prod migration 需手動 ALTER；dev synchronize 已生效，prod `migration:run` **不會自動 ALTER**） |
 
-**索引**：複合 PK 即為主索引。`(project_workym, list_no)` 為月跑查詢索引。
+**索引**：複合 PK 即為主索引。`(project_workym, list_no)` 為月名單分派查詢索引。
 
 **比例驗證規則（I-8，2026-05-15 / F079 v1.0 / E07 重構批次 4 文件化）**：
 
@@ -1239,7 +1239,7 @@ PK：`(list_no, deptid_m, emplid, ration)`
 | ration | NUMERIC(10,2) | NOT NULL | RATION | **PK**，分配比例（**v2 修訂，2026-05-25 / commit 98a2f56**：scale 1→2；原 NUMERIC(10,1) 會將 FE 之 2-decimal 值 round 至 1-decimal，22 員工均等分配 4.55 round 成 4.6 導致 sum=101.1。Follow-up：prod migration 需手動 ALTER；dev synchronize 已生效，prod `migration:run` **不會自動 ALTER**） |
 | prod_type | VARCHAR(255) | NULL | PROD_TYPE | 商品類型（多值） |
 
-> ⚠️ **`deptid_m` 尾隨空白填充處理**：舊 `OBEMPLSETMF.DEPTID_M` 雖宣告 `VARCHAR(50)`，dump 觀察實際業務值為 4 字元部門代碼（如 `XTC0`）但被 padded 至 50 字元（範例：`"XTC0                                              "`）。遷移時統一執行 `RTRIM(deptid_m)`，AppDB 存入 trim 後的值（即實際 4 字元代碼），避免 join `ob_emphire.dept_code`（不含 padding）失敗。AppDB 寫入路徑（F082 / 月跑 Stage 4）亦不可保留尾隨空白。
+> ⚠️ **`deptid_m` 尾隨空白填充處理**：舊 `OBEMPLSETMF.DEPTID_M` 雖宣告 `VARCHAR(50)`，dump 觀察實際業務值為 4 字元部門代碼（如 `XTC0`）但被 padded 至 50 字元（範例：`"XTC0                                              "`）。遷移時統一執行 `RTRIM(deptid_m)`，AppDB 存入 trim 後的值（即實際 4 字元代碼），避免 join `ob_emphire.dept_code`（不含 padding）失敗。AppDB 寫入路徑（F082 / 月名單分派 Stage 4）亦不可保留尾隨空白。
 
 **索引**：複合 PK 即為主索引。`(list_no, deptid_m)` 為查詢索引（per-DEPT 加總 / Rollback 清空 / F082 GET 之 SQL filter 共用）。
 
@@ -1613,7 +1613,7 @@ SELECT COUNT(*) FROM ob_levelcard_column
 
 PK：`(card_type, COALESCE(card_level, ''))`（[ASSUMPTION] — 原 OBTIER 無 PK constraint，本表於遷移至 AppDB 時依 SP join 邏輯補建；當 `card_level IS NULL`（fallback CARD_TYPE 如 M5）時以空字串納入 PK 唯一性比對，亦可採 PostgreSQL 15+ 的 `NULLS NOT DISTINCT` 索引語法等價表達）
 
-用途：將「計分卡類型 CARD_TYPE × 計分卡等級 CARD_LEVEL」對應到外部系統使用的分群代碼 TIER_LEVEL。月跑 Stage 2 計算出 `ob_pool_data_list.card_level` 後，依本表 join 取得 `tier_level` 寫回。
+用途：將「計分卡類型 CARD_TYPE × 計分卡等級 CARD_LEVEL」對應到外部系統使用的分群代碼 TIER_LEVEL。月名單分派 Stage 2 計算出 `ob_pool_data_list.card_level` 後，依本表 join 取得 `tier_level` 寫回。
 
 | 欄位名 | 型別 | NULL | 原欄位 | 說明 |
 |--------|------|------|--------|------|
@@ -1676,7 +1676,7 @@ VALUES ('C3', NULL, 'T3C', '汽車C3名單');
 >
 > **遷移腳本責任**：以上 seed 由 TDD 開發者在 D3 migration 腳本末段執行，本 agent 不直接寫 migration 程式碼。D11 驗證 SQL 需補入確認 M3 / HC / C3 各有 1 筆 `card_level IS NULL` 的對應紀錄。
 >
-> **計分設定缺漏**：M3 / HC / C3 同樣缺少 `ob_levelcard_version` 計分設定（與 HM 相同）；遷移後月跑這些 CARD_TYPE 名單時 score=0，tier_level 由 fallback 取得（T5M / THC / T3C）。業務語意上這與舊 SP 的硬編碼行為等效（舊 SP 對這三種 CARD_TYPE 完全略過計分步驟，直接覆寫 TIER_LEVEL）——因此**月跑結果語意一致**，但計分數值不可信。詳見 [architecture-spec.md AD-E07-15](architecture-spec.md#ad-e07-15hm-計分卡獨立化決策)。
+> **計分設定缺漏**：M3 / HC / C3 同樣缺少 `ob_levelcard_version` 計分設定（與 HM 相同）；遷移後月名單分派這些 CARD_TYPE 名單時 score=0，tier_level 由 fallback 取得（T5M / THC / T3C）。業務語意上這與舊 SP 的硬編碼行為等效（舊 SP 對這三種 CARD_TYPE 完全略過計分步驟，直接覆寫 TIER_LEVEL）——因此**月名單分派結果語意一致**，但計分數值不可信。詳見 [architecture-spec.md AD-E07-15](architecture-spec.md#ad-e07-15hm-計分卡獨立化決策)。
 
 **Stage 2 fallback join 語意**：當 `ob_pool_data_list.card_level` 在 `ob_tier` 找不到對應紀錄時，回退以 `CARD_TYPE` 比對 `card_level IS NULL` 的 fallback 紀錄（如 M5 → T5M）。F056 編輯時允許新增 `card_level IS NULL` 紀錄但需 UI 提示為 fallback 規則。
 
@@ -1812,11 +1812,11 @@ const fallbackExists = await repo.exists({
 
 #### ob_arreturndf_min_cap（OB_ARRETURNDF_MIN_CAP — ARRETURNDF 累積未償本金彙總） {#ob-arreturndf-min-cap-entity}
 
-> **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步：E04 通用擷取任務從舊 OB DB（SQL Server `OB_ARRETURNDF_MIN_CAP`）抓取至 `raw_{task_id_short}` 中介表，再由 E05 Pipeline TargetLoad 將資料載入本表（`fullMode: true` 全量替換）。OB 端 `OB_ARRETURNDF_MIN_CAP` 為 `ARRETURNDF` 還款明細表的預先彙總結果（`MIN(ADD_UN_CAPITAL) GROUP BY APPL_NO`）；每月月跑前由業務主管手動依序觸發 E04→E05（同 OBPOOLDATA 同步策略）。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**，所有資料維護於舊 OB 端進行。
+> **資料同步機制**：本表採 **E04 + E05 雙層 ETL** 同步：E04 通用擷取任務從舊 OB DB（SQL Server `OB_ARRETURNDF_MIN_CAP`）抓取至 `raw_{task_id_short}` 中介表，再由 E05 Pipeline TargetLoad 將資料載入本表（`fullMode: true` 全量替換）。OB 端 `OB_ARRETURNDF_MIN_CAP` 為 `ARRETURNDF` 還款明細表的預先彙總結果（`MIN(ADD_UN_CAPITAL) GROUP BY APPL_NO`）；每月月名單分派前由業務主管手動依序觸發 E04→E05（同 OBPOOLDATA 同步策略）。詳見 [architecture-spec.md §E07-C](architecture-spec.md#e07-c-etl-設計) ETL 設計。**E07 不提供 CRUD 維護介面**，所有資料維護於舊 OB 端進行。
 
 PK：`appl_no` [ASSUMPTION] 原表（`OB_ARRETURNDF_MIN_CAP`）無 PK constraint 亦無索引；遷移時補建 `PRIMARY KEY (appl_no)` 以利 `fn_calc_tier_level` 內部 LEFT JOIN 查詢。DBA 需確認 OB 端 SP 重建後 `APPL_NO` 唯一性（若存在重複 key，需在 ETL 層以 `MIN(ADD_UN_CAPITAL) GROUP BY APPL_NO` 或 `DISTINCT ON (appl_no)` 去重後再寫入）。
 
-用途：E07 月跑 Stage 2 計分時，`fn_calc_tier_level` 以 LEFT JOIN 取得個別案件的累積未償本金（`ADD_UN_CAPITAL` 維度），適用 H / HM 等需要此計分維度的計分卡類型。缺值時 default 為 0。
+用途：E07 月名單分派 Stage 2 計分時，`fn_calc_tier_level` 以 LEFT JOIN 取得個別案件的累積未償本金（`ADD_UN_CAPITAL` 維度），適用 H / HM 等需要此計分維度的計分卡類型。缺值時 default 為 0。
 
 | 欄位名 | 型別 | NULL | 原欄位 | 說明 |
 |--------|------|------|--------|------|
@@ -1831,7 +1831,7 @@ PK：`appl_no` [ASSUMPTION] 原表（`OB_ARRETURNDF_MIN_CAP`）無 PK constraint
 - 不納入 ORM Entity CRUD（僅讀取）；所有資料修改皆於舊 OB 端進行後 ETL 同步
 - `fn_calc_tier_level` 以 `LEFT JOIN ob_arreturndf_min_cap ON appl_no = (p_pool_data).appl_no` 取值；查無資料時以 `COALESCE(add_un_capital, 0)` 處理，行為等價 SP `ISNULL(ADD_UN_CAPITAL, 0)`
 
-**相關功能**：[F061](features/F061-trigger-assignment-run.md)（月跑 Stage 2 計分）
+**相關功能**：[F061](features/F061-trigger-assignment-run.md)（月名單分派 Stage 2 計分）
 
 ---
 
@@ -1843,7 +1843,7 @@ PK：`appl_no` [ASSUMPTION] 原表（`OB_ARRETURNDF_MIN_CAP`）無 PK constraint
 
 PK：`emp_id` [ASSUMPTION] 原 OBEMPHIRE 表無 PK constraint，遷移時補建 `PRIMARY KEY (emp_id)` 以利 join。
 
-用途：提供 E07 月跑（Stage 4 人員指派）、F058 編輯人員比例設定、F064 匯出分派結果（員工姓名 join 來源）等 Feature 取得員工基本資料。
+用途：提供 E07 月名單分派（Stage 4 人員指派）、F058 編輯人員比例設定、F064 匯出分派結果（員工姓名 join 來源）等 Feature 取得員工基本資料。
 
 | 欄位名 | 型別 | NULL | 原欄位 | 說明 |
 |--------|------|------|--------|------|
@@ -1903,7 +1903,7 @@ PK：`calendar_date`
 
 **業務規則**：
 - 工作日判定：`rest_flg = '0'`
-- 月跑期間之工作日數計算：`SELECT COUNT(*) FROM ob_calendar WHERE rest_flg = '0' AND calendar_date BETWEEN :startDate AND :endDate`
+- 月名單分派期間之工作日數計算：`SELECT COUNT(*) FROM ob_calendar WHERE rest_flg = '0' AND calendar_date BETWEEN :startDate AND :endDate`
 - 假日定義由舊 OB 端 Admin 維護，包含週末與國定假日
 
 **相關功能**：[F049](features/F049-stage0-daily-estimate.md)
@@ -1912,11 +1912,11 @@ PK：`calendar_date`
 
 ### E07 新建表（非 ob_ 前綴）
 
-#### assignment_run（月跑執行紀錄）
+#### assignment_run（月名單分派執行紀錄）
 
 | 欄位名 | 型別 | NULL | 說明 |
 |--------|------|------|------|
-| run_id | UUID | NOT NULL | **PK**，月跑唯一識別碼（系統自動產生） |
+| run_id | UUID | NOT NULL | **PK**，月名單分派唯一識別碼（系統自動產生） |
 | project_workym | VARCHAR(6) | NOT NULL | 作業年月（YYYYMM） |
 | status | VARCHAR(20) | NOT NULL | 執行狀態：`pending` / `running` / `completed` / `failed` |
 | triggered_by | UUID | NOT NULL | 觸發者 user_id（FK → users.id） |
@@ -1926,7 +1926,7 @@ PK：`calendar_date`
 | total_cases | INTEGER | NULL | 本次分派總案件數 |
 | total_lists | INTEGER | NULL | 本次處理名單數 |
 | error_message | TEXT | NULL | 失敗錯誤訊息 |
-| report_payload | JSONB | NULL | **v1.2 / 2026-05-18 更新（F061 v1.3）**：月跑警告紀錄與輔助資訊容器；目前已定義子鍵：`skippedCases[]`（邊緣 CARD_TYPE 跳過案件清單）+ `skippedCaseCount`（跳過總數）+ `warningSummary`（計分完整性警告摘要，含 `SCORING_INTEGRITY_WARN` 子鍵）+ `warnings[]`（其他警告，如 `WHITELIST_OPTION_INACTIVE`）；非錯誤訊息，月跑仍可 `status = 'completed'`；schema 詳見下方「report_payload 結構」段落 |
+| report_payload | JSONB | NULL | **v1.2 / 2026-05-18 更新（F061 v1.3）**：月名單分派警告紀錄與輔助資訊容器；目前已定義子鍵：`skippedCases[]`（邊緣 CARD_TYPE 跳過案件清單）+ `skippedCaseCount`（跳過總數）+ `warningSummary`（計分完整性警告摘要，含 `SCORING_INTEGRITY_WARN` 子鍵）+ `warnings[]`（其他警告，如 `WHITELIST_OPTION_INACTIVE`）；非錯誤訊息，月名單分派仍可 `status = 'completed'`；schema 詳見下方「report_payload 結構」段落 |
 | created_at | TIMESTAMP | NOT NULL | 紀錄建立時間（UTC） |
 
 **索引**：`run_id`（PK）、`(project_workym, status)`（查詢索引）
@@ -1975,13 +1975,13 @@ PK：`calendar_date`
 - `skippedCases[].reason`：ENUM；目前定義 `UNSUPPORTED_CARD_TYPE`（邊緣 CARD_TYPE，如 HB / SEB / SEC，無對應計分卡且無 `ob_tier` fallback）；未來可擴充
 - `skippedCases[].caseId`：跳過案件之 `appl_no`（或 `(orgno, appl_no)` 字串化）
 - `skippedCases[].stage`：跳過時所處 Stage（目前固定為 2，計分階段）
-- `warningSummary.SCORING_INTEGRITY_WARN`：**v1.3 / 2026-05-18 新增**；Stage 2 前 `ScoringIntegrityCheckService` 執行計分設定完整性稽核時若發現 `match_type` 與 score 記錄不一致，寫入此子鍵；`affectedCount` 為問題 column 數量；`details[]` 每筆含 `cardType` / `cardVersion` / `columnName` / `issue`（`MATCH_TYPE_FIELD_MISMATCH` 或 `CATEGORY_DUPLICATE`）/ `description`；月跑不中斷，以警告繼續執行
+- `warningSummary.SCORING_INTEGRITY_WARN`：**v1.3 / 2026-05-18 新增**；Stage 2 前 `ScoringIntegrityCheckService` 執行計分設定完整性稽核時若發現 `match_type` 與 score 記錄不一致，寫入此子鍵；`affectedCount` 為問題 column 數量；`details[]` 每筆含 `cardType` / `cardVersion` / `columnName` / `issue`（`MATCH_TYPE_FIELD_MISMATCH` 或 `CATEGORY_DUPLICATE`）/ `description`；月名單分派不中斷，以警告繼續執行
 - `warnings[].code`：對應 [error-handling.md#assignment-run-warnings](error-handling.md#assignment-run-warnings) 警告碼
 - 前端 F062 / F063 依此欄位顯示黃色警示 banner（沿用 `RUN_REPORT_SKIPPED_CASES` / `WHITELIST_OPTION_INACTIVE` 警告紀錄；`warningSummary.SCORING_INTEGRITY_WARN.affectedCount > 0` 時另行顯示黃色 integrity 警示）
 
 ---
 
-#### assignment_run_snapshot（月跑快照）
+#### assignment_run_snapshot（月名單分派快照）
 
 | 欄位名 | 型別 | NULL | 說明 |
 |--------|------|------|------|
@@ -1992,7 +1992,7 @@ PK：`calendar_date`
 | created_at | TIMESTAMP | NOT NULL | 快照建立時間（UTC） |
 
 **業務規則**：
-- 每次月跑產生 3 筆快照（config、input_list、result）
+- 每次月名單分派產生 3 筆快照（config、input_list、result）
 - 快照保留期限與 `assignment_run` 相同（3 年）
 
 **索引**：`snapshot_id`（PK）、`(run_id, snapshot_type)`（查詢索引）
@@ -2053,8 +2053,8 @@ PK：`calendar_date`
 ```
 
 - `entity_type`：`'assignment_run'`；`entity_id`：`run_id`
-- `actor_id`：系統自動寫入，填入觸發月跑之 `triggered_by`（無互動式操作者，沿用月跑觸發者 ID）
-- 此 action 為警告記錄，不影響月跑繼續執行；對應 `report_payload.warningSummary.SCORING_INTEGRITY_WARN` 子鍵
+- `actor_id`：系統自動寫入，填入觸發月名單分派之 `triggered_by`（無互動式操作者，沿用月名單分派觸發者 ID）
+- 此 action 為警告記錄，不影響月名單分派繼續執行；對應 `report_payload.warningSummary.SCORING_INTEGRITY_WARN` 子鍵
 
 **索引**：`log_id`（PK）、`(entity_type, entity_id)`、`(actor_id, created_at)`、`created_at`（保留期排程清理）
 
@@ -2179,7 +2179,7 @@ PK：`calendar_date`
 | field_type | VARCHAR(20) | NOT NULL | 欄位類別列舉：`numeric` / `categorical` / `date`（CHECK constraint 限三值） |
 | is_active | BOOLEAN | NOT NULL DEFAULT TRUE | 啟用狀態；停用後新名單表單不再顯示，但既有名單條件不受影響（F075 BR-3） |
 | is_system_fixed | BOOLEAN | NOT NULL DEFAULT FALSE | **v1.7 新增（2026-05-28 / US-144 / AD-E07-18 §18.12 / migration m295）**：標記此欄位為「系統固定篩選條件」；`true` 時：(1) F050 v2.3 / F051 v2.2 `injectSystemFixedConditions` 於 createList / updateList 強制注入且不可移除；(2) F075 BR-15 不可停用（422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`）；(3) F050 / F051「新增條件」dropdown 排除（BR-16）。目前唯一 `true` 值：`best_case`（優質案件，對齊舊系統 `OBMLISTDF.PROD_BEST` 恆 `'Y'` 業務語意）。PG 型別 `BOOLEAN`；SQLite 映射為 `INTEGER 0/1`（TypeORM boolean column） |
-| data_source | VARCHAR(20) | NOT NULL DEFAULT 'ob_pool_data'（PG 另附 CHECK；SQLite 無 CHECK，同 `field_type` 慣例） | **v1.17 新增 / v1.18 定案（2026-07-02 / US-172 / F109 / AD-E07-37）**：標記此篩選欄位之資料來源，合法值 `'ob_pool_data'`（案件資料）/ `'customer_core'`（客戶資料，CHECK constraint 限兩值）。既有 7 筆透過 `ALTER TABLE ADD COLUMN ... DEFAULT` 自動 backfill 為 `'ob_pool_data'`（免 UPDATE）；F109 新增 8 個客戶屬性欄位為 `'customer_core'`。`GET /api/v1/pooldata-fields` 回應暴露 `dataSource`；M06 列表以「資料來源」欄呈現、F050 / F051「新增條件」選單依此分組（案件資料 / 客戶資料）。**月跑 Stage 1 語意**：名單 `condition_payload.conditions[].dataSource`（見下方 `condition_payload` 欄位說明）決定是否注入 `LEFT JOIN customer_core cc ON ob_pool_data.custo_no = cc.source_customer_no`，LEFT JOIN 後客戶欄位 NULL → 案件排除（F109 §6 BR-2 / BR-3）。**Migration：m305**（`1711360000305-AddDataSourceToPooldataFieldWhitelist`，schema-only）**+ m306**（`1711360000306-SeedCustomerCoreFilterFields`，8 筆白名單 + 106 筆可選值 seed）。完整契約見 [AD-E07-37](implementation-log/AD-E07-37-f109-customer-source-filter.md) |
+| data_source | VARCHAR(20) | NOT NULL DEFAULT 'ob_pool_data'（PG 另附 CHECK；SQLite 無 CHECK，同 `field_type` 慣例） | **v1.17 新增 / v1.18 定案（2026-07-02 / US-172 / F109 / AD-E07-37）**：標記此篩選欄位之資料來源，合法值 `'ob_pool_data'`（案件資料）/ `'customer_core'`（客戶資料，CHECK constraint 限兩值）。既有 7 筆透過 `ALTER TABLE ADD COLUMN ... DEFAULT` 自動 backfill 為 `'ob_pool_data'`（免 UPDATE）；F109 新增 8 個客戶屬性欄位為 `'customer_core'`。`GET /api/v1/pooldata-fields` 回應暴露 `dataSource`；M06 列表以「資料來源」欄呈現、F050 / F051「新增條件」選單依此分組（案件資料 / 客戶資料）。**月名單分派 Stage 1 語意**：名單 `condition_payload.conditions[].dataSource`（見下方 `condition_payload` 欄位說明）決定是否注入 `LEFT JOIN customer_core cc ON ob_pool_data.custo_no = cc.source_customer_no`，LEFT JOIN 後客戶欄位 NULL → 案件排除（F109 §6 BR-2 / BR-3）。**Migration：m305**（`1711360000305-AddDataSourceToPooldataFieldWhitelist`，schema-only）**+ m306**（`1711360000306-SeedCustomerCoreFilterFields`，8 筆白名單 + 106 筆可選值 seed）。完整契約見 [AD-E07-37](implementation-log/AD-E07-37-f109-customer-source-filter.md) |
 | created_at | TIMESTAMP | NOT NULL | 紀錄建立時間（UTC） |
 | updated_at | TIMESTAMP | NOT NULL | 最後更新時間（UTC） |
 | created_by | UUID | NULL | 建立者 user_id（[ASSUMPTION] 由 system-architect 確認是否必填） |
@@ -2190,7 +2190,7 @@ PK：`calendar_date`
 - `field_type` 僅允許三種列舉值；其他值由業務層 + DB CHECK 雙層驗證
 - 停用為軟刪除（`is_active = false`），MVP 不支援硬刪除（F075 BR-9，OQ-102-02 暫定）
 - 與 PostgreSQL `ob_pool_data` 之欄位名稱為字串映射關係，不維護外鍵約束（F075 BR-8）
-- 月跑 Stage 1 不 join 本表做欄位有效性驗證，直接讀取 `ob_list_definition.condition_payload`（避免停用後月跑失敗）
+- 月名單分派 Stage 1 不 join 本表做欄位有效性驗證，直接讀取 `ob_list_definition.condition_payload`（避免停用後月名單分派失敗）
 - **`is_system_fixed = true` 欄位不可停用**（F075 BR-15）；service 層回 422 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`；前端 M06 管理頁停用按鈕 disabled（F075 AC-20）
 - **`data_source` 決定 Stage 1 JOIN 策略（v1.17 / F109）**：`'customer_core'` 之欄位被名單引用時，Stage 1 條件式 LEFT JOIN `customer_core`（NULL = 排除）；`'ob_pool_data'` 欄位維持單表 `FROM ob_pool_data o`。condition 之 `data_source` 判定機制（固化於 condition_payload vs runtime 查詢 vs 靜態常數）由 system-architect 決定（AD-E07-37 / OQ-F109-01），須與「Stage 1 不 join 白名單做有效性驗證」相容
 
@@ -2232,8 +2232,8 @@ PK：`calendar_date`
 - 複合 PK：`(column_name, option_value)`；新增時不分啟用 / 停用一律檢查重複（F076 BR-1）
 - FK 約束：`column_name` 必須存在於 `field_whitelist` 且 `field_type = 'categorical'`（業務層強制檢查；DB 層 FK 級聯行為由 system-architect 決定，[ASSUMPTION]）
 - 停用為軟刪除，MVP 不支援硬刪除（F076 BR-8）；不支援排序（F076 BR-9）
-- 月跑 Stage 1 不 join 本表做有效性驗證（與 `field_whitelist` 同語意）
-- **父表 `field_whitelist.field_type` 由 `categorical` 改為其他值時（v1.1 / 2026-05-16 修訂 / PO 決議 F076-C）**：本表既有資料**批次 SET `is_active = false` + `deactivation_reason = 'field_type_changed'`**（軟停用，不 CASCADE 刪除；F076 v1.1 BR-7 + BR-10）；F075 編輯欄位 service 層觸發批次 UPDATE，建議同 transaction 完成；既有名單若引用 inactive 值月跑不阻擋（沿用 F076 BR-3 不回溯規則）
+- 月名單分派 Stage 1 不 join 本表做有效性驗證（與 `field_whitelist` 同語意）
+- **父表 `field_whitelist.field_type` 由 `categorical` 改為其他值時（v1.1 / 2026-05-16 修訂 / PO 決議 F076-C）**：本表既有資料**批次 SET `is_active = false` + `deactivation_reason = 'field_type_changed'`**（軟停用，不 CASCADE 刪除；F076 v1.1 BR-7 + BR-10）；F075 編輯欄位 service 層觸發批次 UPDATE，建議同 transaction 完成；既有名單若引用 inactive 值月名單分派不阻擋（沿用 F076 BR-3 不回溯規則）
 
 **索引**：`(column_name, option_value)`（PK）、`(column_name, is_active)`（多選元件查詢）
 

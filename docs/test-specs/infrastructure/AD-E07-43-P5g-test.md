@@ -31,7 +31,7 @@ last_updated: 2026-07-08
 > 1. **🔴🔴 I-ETL-ATOMIC-LOAD-01 文字範圍缺口（本文件新查證，AD 未提及）**：不變式條文字面僅列「fullMode（TRUNCATE+INSERT）與 partition_replace（DELETE+INSERT）路徑」，但 `target-load-handler-mssql.ts` 之 customer_core UPSERT 路徑（lines 248-266）為**兩段式獨立陳述式**（`UPDATE...FROM` 既有列 → `INSERT...WHERE NOT EXISTS` 新列），兩者間同樣無交易保護——若 `updateSql` 成功但 `insertSql` 失敗，會產生「既有列已被更新為新值、但本應新增的客戶列缺失」之不一致中間態（非「先清空」型資料遺失，但同屬「本應原子的多陳述式操作缺乏交易保護」同一根因家族）。PG 版 UPSERT 為單句 `INSERT...SELECT...ON CONFLICT DO UPDATE`（lines 269-270），天生原子，不受影響。已獨立立 §四 UPSERT-ATOMIC 群組，因屬「同一輪修法之同一支檔案」自然延伸而納入範圍（非另開新任務），並設計決策關卡建議 architect 後續將不變式文字擴大涵蓋。
 > 2. **🔴🔴 交易範圍必須窄於整個 pipeline（呼應任務指示，本文件操作化為可斷言的黑盒不變式）**：`pipeline-runner.ts` 之 `queryRunner` 為單一實例貫穿整條 DAG（所有節點共用同一連線），若交易包裝在 `target_load` 節點的 `execute()` 內部自行管理（`startTransaction`→...→`commitTransaction`/`rollbackTransaction`），此交易絕不可在節點執行完畢（無論成功/失敗）後仍保持開啟——已操作化為 TypeORM 既有公開屬性 `queryRunner.isTransactionActive` 之斷言（§五 SCOPE-001），不需臆測交易確切起訖語句位置即可黑盒驗證範圍正確性。
 > 3. **🔴🔴 PG「中止交易污染連線」特性與清理機制之交互風險（本文件新查證，AD/P5b 皆未提及）**：PostgreSQL 於顯式交易內任一陳述式失敗後，連線進入 aborted 狀態，後續任何陳述式（含 `SELECT`/`DROP TABLE`）皆被拒絕、僅接受 `ROLLBACK`，直到明確執行 `ROLLBACK` 為止。若 handler 於 catch 區塊直接 `throw` 而未先呼叫 `rollbackTransaction()`，`pipeline-runner.ts` 外層 catch 呼叫的 `outputStore.cleanupAll(queryRunner)`（DROP 上游節點暫存表）會**連帶失敗**——這不是資料完整性問題本身，而是修法若實作不完整（漏補 rollback）會產生的**新副作用**，且此副作用在 PG 上會直接拋出可觀察錯誤（清理失敗），是絕佳的「實作是否確實呼叫 rollback」MUST-FIX 守門訊號，比直接斷言「呼叫了 rollbackTransaction()」（白盒 spy）更貼近黑盒精神。MSSQL 之對稱行為（無 `SET XACT_ABORT ON` 時是否同樣中止整個交易）**不可假設**，已列為 §九 CLEANUPTXN-002 決策關卡 Probe。
-> 4. **🔴 架構師 §7.2「Read Committed 下讀者不會看到中間態」聲明對兩引擎的實際使用者體感不同（本文件新查證，需真實環境驗證非僅信任文字）**：PostgreSQL 之 Read Committed 為 MVCC 實作，並行讀者不受寫入方鎖阻擋、立即讀到交易開始前的已提交快照。SQL Server 之預設 Read Committed（除非資料庫已啟用 `READ_COMMITTED_SNAPSHOT`，本專案 `docker/mssql-init.sql` 逐行核對未見任何 RCSI/SNAPSHOT 設定）為**鎖based**實作，並行讀者於寫入方持有排他鎖期間會**被阻塞等待**，而非立即讀到舊資料。兩者最終皆不會導致「讀到空表」（符合架構師核心論證），但「等待」與「立即讀到舊資料」是使用者/其他月跑排程可感知的不同體感，已獨立立 §六 ISOLATION 群組真實探測，不預設答案。
+> 4. **🔴 架構師 §7.2「Read Committed 下讀者不會看到中間態」聲明對兩引擎的實際使用者體感不同（本文件新查證，需真實環境驗證非僅信任文字）**：PostgreSQL 之 Read Committed 為 MVCC 實作，並行讀者不受寫入方鎖阻擋、立即讀到交易開始前的已提交快照。SQL Server 之預設 Read Committed（除非資料庫已啟用 `READ_COMMITTED_SNAPSHOT`，本專案 `docker/mssql-init.sql` 逐行核對未見任何 RCSI/SNAPSHOT 設定）為**鎖based**實作，並行讀者於寫入方持有排他鎖期間會**被阻塞等待**，而非立即讀到舊資料。兩者最終皆不會導致「讀到空表」（符合架構師核心論證），但「等待」與「立即讀到舊資料」是使用者/其他月名單分派排程可感知的不同體感，已獨立立 §六 ISOLATION 群組真實探測，不預設答案。
 > 5. **影響面盤點**：`target-load-handler.ts`/`target-load-handler-mssql.ts` 為 **6 條** pipeline 共用（P5b 已驗證之 5 條 fullMode/partition_replace + P4d customer_core UPSERT 1 條），本輪修法之異動半徑=此 6 條路徑全數；`pipeline-runner.ts`/`node-dispatcher.ts` 是否需要異動取決於交易管理位置之實作決策（§一 GATE-001），本文件不預設。
 > 6. **🔴 P5b 既有 ATOMIC-001~006 案例將與本輪修法後行為直接矛盾**：`p5b-e2e.mssql.spec.ts` 現行斷言「分支 A（資料遺失、列數=0）」，修法後正確行為應翻轉為「分支 B（列數=既存值）」——此為本文件 §八 IMPACT-003 之 MUST-FIX 靜態守門，避免下游誤判 P5b 套件變紅燈為回歸失敗（實為預期之行為翻轉，需同步更新 P5b 測試檔或明確標記為 pre-fix baseline）。
 
@@ -264,8 +264,8 @@ CDMP_P5B 未建 `customer_core` 表（P5b 範圍明確排除 customer_core）。
 
 ---
 
-### TS-MSSQL-P5G-ISO-003（決策關卡，記錄性）：若 ISO-002 確認為分支 (b)，需將此記錄為架構師 §7.2 聲明之 MSSQL 版本精確化說明（「不會讀到空表，但可能短暫阻塞等待」而非「無感知」），供業務評估月跑期間查詢阻塞是否可接受
-- **Related Requirement**：★發現 4；呼應既有 project memory「月跑改 worker 抽離後 API 8–34ms」效能基準——若阻塞時間達秒級，需確認是否影響該基準之既有結論（非本文件裁定，僅記錄供評估）
+### TS-MSSQL-P5G-ISO-003（決策關卡，記錄性）：若 ISO-002 確認為分支 (b)，需將此記錄為架構師 §7.2 聲明之 MSSQL 版本精確化說明（「不會讀到空表，但可能短暫阻塞等待」而非「無感知」），供業務評估月名單分派期間查詢阻塞是否可接受
+- **Related Requirement**：★發現 4；呼應既有 project memory「月名單分派改 worker 抽離後 API 8–34ms」效能基準——若阻塞時間達秒級，需確認是否影響該基準之既有結論（非本文件裁定，僅記錄供評估）
 - **Test Type**：Decision Gate（文件化守門，交 architect/業務參考）
 
 ---
@@ -398,7 +398,7 @@ CDMP_P5B 未建 `customer_core` 表（P5b 範圍明確排除 customer_core）。
 
 ---
 
-### TS-MSSQL-P5G-REG-005：F098/F101/F102/F104 等既有真實月跑相關套件不受影響（本輪修法僅影響 ETL 載入層，不改變月跑 Stage 1-4 邏輯本身）
+### TS-MSSQL-P5G-REG-005：F098/F101/F102/F104 等既有真實月名單分派相關套件不受影響（本輪修法僅影響 ETL 載入層，不改變月名單分派 Stage 1-4 邏輯本身）
 
 ---
 

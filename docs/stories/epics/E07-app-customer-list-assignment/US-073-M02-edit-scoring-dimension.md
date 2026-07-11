@@ -46,15 +46,15 @@
 
 - **Given** 業務主管點擊選中 CARD_TYPE 某維度的「停用」按鈕並確認
 - **When** 確認停用動作
-- **Then** 該維度標記為 status = 'inactive'，不再參與後續月跑的評分計算
-- **And** 不刪除既有資料，停用後仍可透過 US-086 快照詳情查詢歷史月跑中該維度的使用記錄
+- **Then** 該維度標記為 status = 'inactive'，不再參與後續月名單分派的評分計算
+- **And** 不刪除既有資料，停用後仍可透過 US-086 快照詳情查詢歷史月名單分派中該維度的使用記錄
 
-### AC-5：月跑執行中禁止修改（資料鎖）
+### AC-5：月名單分派執行中禁止修改（資料鎖）
 
-- **Given** 目前有月跑正在執行（`assignment_run` status IN ('pending', 'running')）
+- **Given** 目前有月名單分派正在執行（`assignment_run` status IN ('pending', 'running')）
 - **When** 業務主管嘗試進入計分設定編輯模式（Tab 2）
 - **Then** 編輯功能全部停用，頁面顯示「分派執行中，無法修改計分設定」提示
-- **And** 月跑完成後，編輯功能自動恢復可用
+- **And** 月名單分派完成後，編輯功能自動恢復可用
 
 ### AC-7：修改 match_type 自動清空 scores（強制重設）
 
@@ -65,7 +65,7 @@
 - **And** 業務主管須重新輸入該維度所有分數區間後才能完成設定
 - **And** 清空動作與 match_type 更新在同一 DB transaction 中執行（原子性）；若任一失敗則整體 rollback
 
-> **業務理由**：CATEGORY / RANGE / COMPOSITE 三種模式的分數資料結構不相容（欄位語意不同），允許保留舊 scores 會導致後續月跑計分邏輯錯誤。自動清空比手動警告提示更能防止資料污染。
+> **業務理由**：CATEGORY / RANGE / COMPOSITE 三種模式的分數資料結構不相容（欄位語意不同），允許保留舊 scores 會導致後續月名單分派計分邏輯錯誤。自動清空比手動警告提示更能防止資料污染。
 
 > **三模式定義**：
 > - `CATEGORY`（類別符合）：level1 欄位為離散類別值（如字串代碼），score 依完全比對 level1 值給予。level2_s / level2_e 不使用，存 NULL。
@@ -86,9 +86,9 @@
 - 計分維度定義：`reference/TableSchema/OB/OBLEVELCARD_COLUNM.sql`（AppDB：`ob_levelcard_column`）
 - 計分分數設定：`reference/TableSchema/OB/OBLEVELCARD_SCORE.sql`（AppDB：`ob_levelcard_score`）
 - 計分邏輯範例 Stored Procedure：`reference/SP/SP_OBLEVELCARD_S.sql`（可參照業務邏輯）
-- **覆寫式編輯**：計分設定採覆寫式更新，無草稿版本、無發布流程、無 rollback 機制；「舊設定」僅透過每次月跑自動產生的快照（US-086）查詢，不提供設定版本切換 UI
+- **覆寫式編輯**：計分設定採覆寫式更新，無草稿版本、無發布流程、無 rollback 機制；「舊設定」僅透過每次月名單分派自動產生的快照（US-086）查詢，不提供設定版本切換 UI
 - **CARD_TYPE 篩選脈絡**：由 Tab 1（US-093）的選中狀態提供，API 請求帶入 `cardType` param；F054 spec 的 API 設計需反映此變更
-- 月跑執行中禁止修改屬於**資料鎖保護**（防止運算中途參數異動），與版本管理概念無關
+- 月名單分派執行中禁止修改屬於**資料鎖保護**（防止運算中途參數異動），與版本管理概念無關
 - 此 Story 的計分結果直接影響 US-081 的 Stage 2 計分流程
 
 > **[ASSUMPTION]** OBLEVELCARD_VERSION 原表無 STATUS 欄位（原表以 SDATE/EDATE 兩個 VARCHAR(8) 欄位表達計分版本生效期間，dump 中 6 筆全部 EDATE='20991231'）。遷移至 AppDB 時補加 `status VARCHAR(10) NOT NULL DEFAULT 'active'`，初值由 SDATE/EDATE 計算（SDATE ≤ 今日 < EDATE 者設為 'active'，否則設為 'inactive'）。本 Story 中「現行設定」視圖即讀取 status='active' 版本，基於此遷移後欄位。
@@ -115,7 +115,7 @@
 - **When**：業務主管點擊「停用」並確認
 - **Then**：`ob_levelcard_column` 該維度 status 更新為 'inactive'，清單中不再顯示（或標示已停用）
 
-### TC-073-04：月跑執行中禁止修改
+### TC-073-04：月名單分派執行中禁止修改
 
 - **Given**：`assignment_run` 有 status = 'running' 的紀錄
 - **When**：業務主管嘗試點擊「編輯」任何維度
@@ -156,7 +156,7 @@
 - [ ] match_type 變更自動清空 scores 測試（TC-073-06）
 - [ ] match_type 清空 rollback 測試（TC-073-07）
 - [ ] 新增 / 修改 / 停用維度功能測試
-- [ ] 月跑執行中資料鎖保護測試
+- [ ] 月名單分派執行中資料鎖保護測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新
@@ -168,5 +168,5 @@
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **對應 Spec**：F054（編輯計分維度與分數）
 - **NFR**：[NFR-005](../../non-functional/NFR-005-result-accuracy.md)
-- **相關 Stories**：US-072（查看計分設定）、US-093（Tab 1 CARD_TYPE 選中狀態）、US-081（觸發月跑）、US-086（快照詳情，查詢歷史月跑使用的設定）
+- **相關 Stories**：US-072（查看計分設定）、US-093（Tab 1 CARD_TYPE 選中狀態）、US-081（觸發月名單分派）、US-086（快照詳情，查詢歷史月名單分派使用的設定）
 - **Reference**：`reference/TableSchema/OB/OBLEVELCARD_COLUNM.sql`、`reference/TableSchema/OB/OBLEVELCARD_SCORE.sql`、`reference/SP/SP_OBLEVELCARD_S.sql`

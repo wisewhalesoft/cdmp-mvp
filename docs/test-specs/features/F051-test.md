@@ -165,9 +165,9 @@ last_updated: 2026-05-28
 
 ---
 
-## 七、月跑執行中防呆
+## 七、月名單分派執行中防呆
 
-### TS-F051-010：月跑執行中回 409，優先於 stage guard
+### TS-F051-010：月名單分派執行中回 409，優先於 stage guard
 
 - **關聯需求**：F051 AC-5 / F051 AC-12
 - **測試類型**：Negative / Integration（Supertest）
@@ -175,7 +175,7 @@ last_updated: 2026-05-28
 - **步驟**：
   1. PUT `/api/v1/assignment/list-definitions/OB202605005`，body 含有效 `conditionPayload`
   2. 驗證回應
-- **預期結果**：HTTP 409，`error_code: ASSIGNMENT_RUN_ALREADY_RUNNING`（月跑鎖優先）
+- **預期結果**：HTTP 409，`error_code: ASSIGNMENT_RUN_ALREADY_RUNNING`（月名單分派鎖優先）
 
 ---
 

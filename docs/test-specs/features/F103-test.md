@@ -1,7 +1,7 @@
 ---
 type: test-design-feature
 feature_id: F103
-feature_name: 月跑計分引擎欄位來源修正（ADD_UN_CAPITAL 補 JOIN + 通用 fallback + PROJECT_TP 衍生 + 移除 COMMISSION 死碼 + JS oracle 補齊 customer_core + 202606 重跑驗收）
+feature_name: 月名單分派計分引擎欄位來源修正（ADD_UN_CAPITAL 補 JOIN + 通用 fallback + PROJECT_TP 衍生 + 移除 COMMISSION 死碼 + JS oracle 補齊 customer_core + 202606 重跑驗收）
 priority: P0-MVP
 related_spec: /docs/specs/features/F103-stage2-score-column-source-fix.md
 source_ad: /docs/specs/implementation-log/AD-E07-v3.5-f103-stage2-score-column-source-fix.md
@@ -11,7 +11,7 @@ last_updated: 2026-06-24
 blocked_by: [F100, F101]
 ---
 
-# F103：月跑計分引擎欄位來源修正 — 測試設計
+# F103：月名單分派計分引擎欄位來源修正 — 測試設計
 
 > ⚠️ **範圍**：本文件為測試設計（test design），**不含** production code、測試實作碼（spec 檔）、migration、entity 定義，由 tdd-implementation agent 承接落地。
 >
@@ -21,7 +21,7 @@ blocked_by: [F100, F101]
 > 3. **FALLBACK 群組**（I-SCORE-FALLBACK-01：`resolveColumnSource` default 永不回 undefined）= 回歸紅線。
 > 4. **COMMISSION 移除**（I-SCORE-COMMISSION-01：兩路徑 switch + `MAPPED_SCORING_COLUMNS` 全清）= 靜態掃描紅線。
 > 5. **AGE 統一演算法**（I-SCORE-AGE-01：生日前一天/當天/後一天三邊界，JS = PG）= EQ 子項必測。
-> 6. **幽靈欄位**（I-SCORE-GHOST-01：+0 + logger.warn，不拋例外，不阻擋月跑）= 行為紅線。
+> 6. **幽靈欄位**（I-SCORE-GHOST-01：+0 + logger.warn，不拋例外，不阻擋月名單分派）= 行為紅線。
 > 7. **`pnpm test` 全綠 + `tsc --noEmit -p tsconfig.build.json` 零錯誤**（AC-13）= 回歸門檻。
 >
 > **已裁定決策（所有 OQ 已 RESOLVED，測試據此驗收）**：
@@ -56,7 +56,7 @@ blocked_by: [F100, F101]
 | **Mock / Seed 注意** | OQ-3 裁定：單元測試直接傳 cc / arCap fixture（`CustomerCoreRow | null` / `ArCapitalRow | null`），**無需建 customer_core / ob_arreturndf_min_cap 表**。PG EQ 測試走真庫（PG-only gate，與 F100/F101/F102 pattern 一致）。AGE 測試須固定 `today` 基準（PG `CURRENT_DATE` 與 JS `new Date()` 同步）。 |
 | **CI 序列執行** | F103 pg.spec 與 F098/F099/F100/F101/F102 共用 cdmp_test DB，**必須序列執行**，禁並行。 |
 | **型別 gate** | 實作後必須跑 `tsc --noEmit -p tsconfig.build.json`（feedback_vitest_no_typecheck 教訓）。 |
-| **幽靈欄位** | 幽靈欄位不拋例外、不阻擋月跑；PG 端靠 `COALESCE(NULL::numeric, 0)` 靜默=0；JS 端靠 `logger.warn` + 回傳 0。兩路徑行為各別驗測。 |
+| **幽靈欄位** | 幽靈欄位不拋例外、不阻擋月名單分派；PG 端靠 `COALESCE(NULL::numeric, 0)` 靜默=0；JS 端靠 `logger.warn` + 回傳 0。兩路徑行為各別驗測。 |
 
 ### 案例群組與自動化就緒度
 
@@ -66,7 +66,7 @@ blocked_by: [F100, F101]
 | EQ（JS↔SQL 逐列等價，DoD） | 8 | PG Integration | **是** | 高 | **DoD 門檻**；8 場景涵蓋全欄位；誤差=0 |
 | AGE（統一演算法三邊界，I-SCORE-AGE-01） | 4 | Unit + PG Integration | 是（EQ 子集） | 高 | 生日前一天/當天/後一天；cc=null fallback 0 |
 | FALLBACK（通用 fallback 三邊界，I-SCORE-FALLBACK-01） | 5 | PG Integration + Unit | **是** | 高 | pool 有值/幽靈 key/非數值文字；PG+JS 各測 |
-| GHOST（幽靈欄位，I-SCORE-GHOST-01） | 4 | Unit + PG Integration | 是（行為） | 高 | 不拋例外；logger.warn；+0；月跑繼續 |
+| GHOST（幽靈欄位，I-SCORE-GHOST-01） | 4 | Unit + PG Integration | 是（行為） | 高 | 不拋例外；logger.warn；+0；月名單分派繼續 |
 | COMMISSION（靜態移除，I-SCORE-COMMISSION-01） | 4 | Unit（靜態） | 否 | 高 | resolveColumnSource / resolveColumnValue / MAPPED_SCORING_COLUMNS 掃描 |
 | CC（customer_core 各欄 JS 取值，AC-8） | 10 | Unit | 否 | 高 | 10 個欄位逐欄驗測（含 cc=null default）；與 EQ 配合 |
 | PROJECT_TP（衍生邏輯兩路徑，AC-3） | 4 | Unit + PG Integration | 是（EQ 子集） | 高 | spec_name 含/不含「專案」；PG CASE WHEN；JS includes() |
@@ -318,7 +318,7 @@ blocked_by: [F100, F101]
   1. 呼叫 `resolveColumnSource('XYZ_COL')`
   2. 驗證回傳 `{ kind: 'range', expr: "COALESCE((to_jsonb(o)->>'xyz_col')::numeric, 0)" }`
   3. 實際 PG 執行：`to_jsonb(o)->>'xyz_col'` = NULL → COALESCE 取 0
-- **Expected Result**：PG 計分貢獻 0；月跑**不中斷**；`resolveColumnSource` 永不回 undefined（I-SCORE-FALLBACK-01）
+- **Expected Result**：PG 計分貢獻 0；月名單分派**不中斷**；`resolveColumnSource` 永不回 undefined（I-SCORE-FALLBACK-01）
 
 ### TS-F103-FALLBACK-003：PG — 非數值文字（pool 欄值為 'N/A'）→ cast numeric 失敗 → COALESCE → 0
 
@@ -328,7 +328,7 @@ blocked_by: [F100, F101]
 - **Steps**：
   1. PG 執行 `COALESCE((to_jsonb(o)->>'abc_str')::numeric, 0)`
   2. 驗證 'N/A'::numeric 回傳 NULL（PG cast failure）→ COALESCE 取 0
-- **Expected Result**：PG 計分貢獻 0；無例外；月跑繼續
+- **Expected Result**：PG 計分貢獻 0；無例外；月名單分派繼續
 
 ### TS-F103-FALLBACK-004：JS — pool 有值（pool.loan_amount=50000）→ 回傳 50000
 
@@ -355,7 +355,7 @@ blocked_by: [F100, F101]
 
 > **設計依據**：F103 spec §4 AC-6；BR-F103-08；AD-E07-v3.5 §7 I-SCORE-GHOST-01；OQ-156-01 裁定。
 
-### TS-F103-GHOST-001：幽靈欄位不拋例外、月跑繼續（JS 路徑）
+### TS-F103-GHOST-001：幽靈欄位不拋例外、月名單分派繼續（JS 路徑）
 
 - **Related Requirement**：AC-6 / BR-F103-08 / I-SCORE-GHOST-01
 - **Test Type**：Negative / Unit
@@ -367,7 +367,7 @@ blocked_by: [F100, F101]
   4. 確認最終 score 為其他正常欄之總和（幽靈欄貢獻 0）
 - **Expected Result**：不拋例外；logger.warn 含 column_name='UNKNOWN_COL' + card_type；幽靈欄貢獻 +0
 
-### TS-F103-GHOST-002：幽靈欄位不拋例外、月跑繼續（PG 路徑，PG Integration）
+### TS-F103-GHOST-002：幽靈欄位不拋例外、月名單分派繼續（PG 路徑，PG Integration）
 
 - **Related Requirement**：AC-6 / BR-F103-08 / I-SCORE-GHOST-01
 - **Test Type**：Negative / PG Integration
@@ -376,7 +376,7 @@ blocked_by: [F100, F101]
   1. PG 執行 `buildStage2ScoreExpr` 含 'UNKNOWN_COL'
   2. 確認生成 SQL 含 `COALESCE((to_jsonb(o)->>'unknown_col')::numeric, 0)`（fallback 表達式）
   3. 實際 PG 執行，確認不報 SQL 錯誤，結果正常回傳
-- **Expected Result**：PG 不拋例外；幽靈欄位貢獻 COALESCE(NULL,0)=0；月跑不中斷
+- **Expected Result**：PG 不拋例外；幽靈欄位貢獻 COALESCE(NULL,0)=0；月名單分派不中斷
 
 ### TS-F103-GHOST-003：非數值文字幽靈欄位（PG 端 cast 失敗靜默=0）
 
@@ -386,7 +386,7 @@ blocked_by: [F100, F101]
 - **Steps**：
   1. PG 執行含通用 fallback 的計分 SQL
   2. `'XYZ'::numeric` 回 NULL → COALESCE 取 0
-- **Expected Result**：計分貢獻 0；無 PG 例外；月跑繼續
+- **Expected Result**：計分貢獻 0；無 PG 例外；月名單分派繼續
 
 ### TS-F103-GHOST-004：JS 端非數值文字幽靈欄位（Number.isNaN → 0）
 
@@ -649,7 +649,7 @@ blocked_by: [F100, F101]
 
 - **Related Requirement**：AC-11 / BR-F103-10
 - **Test Type**：Positive / PG Integration（人工驗收）
-- **Preconditions**：dev 環境，F103 修正已部署；202606 月跑已完成（含 Stage 2 計分修正）。
+- **Preconditions**：dev 環境，F103 修正已部署；202606 月名單分派已完成（含 Stage 2 計分修正）。
 - **Steps**：
   1. 執行驗收 SQL：
      ```sql
@@ -751,7 +751,7 @@ blocked_by: [F100, F101]
 | 風險 ID | 描述 | 嚴重度 | 緩解措施 |
 |---------|------|--------|---------|
 | RISK-F103-01 | AGE EQ 測試中 PG `CURRENT_DATE` 與 JS `new Date()` 若不在同一毫秒內執行，恰好跨日可能導致 AGE 差 1 年（邊界案件） | 中 | EQ 測試中 PG 端使用固定日期 `CAST('YYYY-MM-DD' AS DATE)` 替換 `CURRENT_DATE`，確保同一基準；calcAgeYears 第二個參數設計為 injectable（非 hardcode `new Date()`） |
-| RISK-F103-02 | `ob_arreturndf_min_cap` ETL 若未在月跑前完成，ADD_UN_CAPITAL 全為 0，計分仍偏低（BR-F103-02） | 高 | 月跑前置條件檢核（文件化），UPGR-001 驗收時須確認 ETL 狀態；測試層可用 ~100% 覆蓋已確認（§3.2 前置條件）|
+| RISK-F103-02 | `ob_arreturndf_min_cap` ETL 若未在月名單分派前完成，ADD_UN_CAPITAL 全為 0，計分仍偏低（BR-F103-02） | 高 | 月名單分派前置條件檢核（文件化），UPGR-001 驗收時須確認 ETL 狀態；測試層可用 ~100% 覆蓋已確認（§3.2 前置條件）|
 | RISK-F103-03 | `computeScore` 簽章擴充（新增 `cc` / `arCap` 參數）若呼叫端漏補，TypeScript 編譯報錯但 vitest 不攔截（feedback_vitest_no_typecheck 教訓） | 高 | REG-003 強制跑 `tsc --noEmit` 作型別 gate |
 | RISK-F103-04 | EQ-007 AGE 測試中 JS `calcAgeYears` 第二個參數 `now` 若 hardcode `new Date()`，EQ 測試難以注入固定日期，造成非確定性 | 中 | `calcAgeYears(dateOfBirth, now: Date)` 設計為 injectable；EQ 測試傳入固定 today；AD-E07-v3.5 §6.5 已明示 |
 | RISK-F103-05 | 通用 fallback `column_name.toLowerCase()` 與 PG `to_jsonb(o)->>'...'` 大小寫處理一致性（若 ob_pool_data 欄名為大寫） | 低 | 兩路徑均 lower()；FALLBACK-001 PG 整合測試驗證實際取值；假設 ObPoolData entity 欄名一致（小寫 snake_case）|

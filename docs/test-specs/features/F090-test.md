@@ -17,12 +17,12 @@ last_updated: 2026-05-27
 >
 > **【v2.0 變更 1】data_source 值域單源化（DP-AD25-1 方案 A）**
 > - 值域由 `'etl_legacy'` / `'monthly_run'` 雙值改為**單一值 `'etl_load'`**
-> - `ob_pool_data_list` 不再混入月跑資料；月跑改寫 `ob_monthly_run_result`（F094）
+> - `ob_pool_data_list` 不再混入月名單分派資料；月名單分派改寫 `ob_monthly_run_result`（F094）
 > - **v2.0 不新建 migration**：`1711360000291` 已於 v1.0 建立，值域單一化為應用層說明變更
 >
 > **【v2.0 變更 2】ETL Load 前置 DELETE 放寬**
 > - v1.0：`DELETE WHERE data_source='etl_legacy'`（保護 `monthly_run` 列）
-> - v2.0：全量 `DELETE FROM ob_pool_data_list`（或等效 `DELETE WHERE data_source='etl_load'`）— 因本表不再有月跑資料需保護
+> - v2.0：全量 `DELETE FROM ob_pool_data_list`（或等效 `DELETE WHERE data_source='etl_load'`）— 因本表不再有月名單分派資料需保護
 >
 > **【v2.0 變更 3】歷史限定過濾欄位修正（v1.0.1 已修正）**
 > - 來源表 `OBPOOLDATA_LIST` **無 `PROJECT_WORKYM` 欄位**；唯一可用時間欄為 `ASSIGNDAY`
@@ -30,12 +30,12 @@ last_updated: 2026-05-27
 >
 > **對既有 F090 test spec（v1.0）的影響**：
 > - TS-F090-ETL-001（歷史限定過濾）：更新過濾欄位為 `ASSIGNDAY` 而非 `PROJECT_WORKYM`
-> - TS-F090-ETL-002（DELETE 不傷 monthly_run）：**廢棄**（v2.0 無月跑資料需保護；全量 DELETE 合法）
+> - TS-F090-ETL-002（DELETE 不傷 monthly_run）：**廢棄**（v2.0 無月名單分派資料需保護；全量 DELETE 合法）
 > - TS-F090-ETL-003（插入標記）：更新期望值為 `data_source = 'etl_load'`（取代 `'etl_legacy'`）
 > - TS-F090-ETL-004（欄位映射）：更新期望 `data_source = 'etl_load'`
-> - TS-F090-MON-001~002（月跑標記）：**廢棄**（月跑不再寫入本表，改寫 F094 `ob_monthly_run_result`）
+> - TS-F090-MON-001~002（月名單分派標記）：**廢棄**（月名單分派不再寫入本表，改寫 F094 `ob_monthly_run_result`）
 > - TS-F090-MON-003（去重聯集）：更新說明（去重來源僅 `'etl_load'` 單值）
-> - 新增 Regression 場景：月跑不再寫入本表
+> - 新增 Regression 場景：月名單分派不再寫入本表
 
 ---
 
@@ -53,7 +53,7 @@ last_updated: 2026-05-27
 | 項目 | 說明 |
 |---|---|
 | 主要測試層 | Unit（schema 靜態驗證 + fullMode 護欄）、Integration（PostgreSQL TestContainer：migration up/down + ETL Load 行為） |
-| v2.0 重點 | `data_source = 'etl_load'`（單值）；Load 前置全量 DELETE；月跑不再寫入本表（regression）；歷史限定過濾使用 `ASSIGNDAY` 欄位 |
+| v2.0 重點 | `data_source = 'etl_load'`（單值）；Load 前置全量 DELETE；月名單分派不再寫入本表（regression）；歷史限定過濾使用 `ASSIGNDAY` 欄位 |
 | SQLite E2E 慣例 | migration 在 SQLite E2E 環境為 no-op（既有慣例）；migration up/down 需 PostgreSQL TestContainer |
 
 ### 案例群組自動化就緒度
@@ -64,7 +64,7 @@ last_updated: 2026-05-27
 | TS-F090-ENT-001~002（entity 靜態，v2.0 更新）| 2 | 高 | Unit（靜態）| 更新 entity 值域說明驗證 |
 | TS-F090-ETL-001v2~ETL-004v2（ETL Load，v2.0 更新）| 4 | 高（需 PG TC）| Integration | 歷史限定用 ASSIGNDAY；DELETE 全量；標記 `etl_load` |
 | TS-F090-ETL-005（fullMode 護欄，維持）| 1 | 高 | Unit（靜態）| 不受 v2.0 影響 |
-| TS-F090-RGv2-001~003（月跑不再寫入，v2.0 新增）| 3 | 高（需 PG TC）| Integration / Unit | 確認月跑寫入改至 F094 表，本表無月跑資料 |
+| TS-F090-RGv2-001~003（月名單分派不再寫入，v2.0 新增）| 3 | 高（需 PG TC）| Integration / Unit | 確認月名單分派寫入改至 F094 表，本表無月名單分派資料 |
 
 ---
 
@@ -136,7 +136,7 @@ last_updated: 2026-05-27
 
 ---
 
-### TS-F090-ETL-002v2：ETL Load 前置 DELETE 全量（v2.0 放寬，不含月跑保護）
+### TS-F090-ETL-002v2：ETL Load 前置 DELETE 全量（v2.0 放寬，不含月名單分派保護）
 
 - **關聯需求**：F090 v2.0 AC-3（「全量 `DELETE FROM ob_pool_data_list`，無需 per-data_source 保護性截斷」）；AD-E07-25 §25.3
 - **測試類型**：Positive / Integration
@@ -214,30 +214,30 @@ last_updated: 2026-05-27
 
 ---
 
-## 四、月跑不再寫入本表（v2.0 Regression 群組）
+## 四、月名單分派不再寫入本表（v2.0 Regression 群組）
 
-> **設計依據**：F090 v2.0 AC-3（「本表不再有月跑提案資料需保護」）；AD-E07-25 §25.1 / §25.3；F094（月跑改寫 `ob_monthly_run_result`）
+> **設計依據**：F090 v2.0 AC-3（「本表不再有月名單分派提案資料需保護」）；AD-E07-25 §25.1 / §25.3；F094（月名單分派改寫 `ob_monthly_run_result`）
 
 ---
 
-### TS-F090-RGv2-001：月跑 Stage 1 不再寫入 ob_pool_data_list（regression guard）
+### TS-F090-RGv2-001：月名單分派 Stage 1 不再寫入 ob_pool_data_list（regression guard）
 
-- **關聯需求**：F090 v2.0 AC-3（「月跑改寫 F094 `ob_monthly_run_result`」）；AD-E07-25 DP-AD25-1 / §25.7 Phase A；F094 AC-2
+- **關聯需求**：F090 v2.0 AC-3（「月名單分派改寫 F094 `ob_monthly_run_result`」）；AD-E07-25 DP-AD25-1 / §25.7 Phase A；F094 AC-2
 - **測試類型**：Regression / Integration
 - **測試層**：Integration（PostgreSQL TestContainer）
 - **前置條件**：
   - `ob_pool_data_list` 初始含 3 筆 `data_source = 'etl_load'`（ETL 歷史，不應被改動）
   - `ob_monthly_run_result` 表已建立（F094 migration m292 已執行）
-  - 月跑 Stage 1（`AssignmentRunPipelineService.runStage1ForList` / `executeStage1Chain({ dryRun: false })`）已依 F094 修改寫入目標
+  - 月名單分派 Stage 1（`AssignmentRunPipelineService.runStage1ForList` / `executeStage1Chain({ dryRun: false })`）已依 F094 修改寫入目標
 - **步驟**：
-  1. 執行月跑 Stage 1 對某名單（seed 足夠的 `ob_pool_data` 案件）
+  1. 執行月名單分派 Stage 1 對某名單（seed 足夠的 `ob_pool_data` 案件）
   2. 查詢 `ob_pool_data_list WHERE data_source = 'etl_load'`，統計筆數（應不變）
   3. 查詢 `ob_pool_data_list WHERE data_source = 'monthly_run'`，統計筆數（應為 0）
-  4. 查詢 `ob_monthly_run_result`，確認月跑提案寫入此表
+  4. 查詢 `ob_monthly_run_result`，確認月名單分派提案寫入此表
 - **預期結果**：
-  - `ob_pool_data_list` 中 `'etl_load'` 仍為 3 筆（未受月跑影響）
+  - `ob_pool_data_list` 中 `'etl_load'` 仍為 3 筆（未受月名單分派影響）
   - `ob_pool_data_list` 中**不存在** `data_source = 'monthly_run'` 的列（regression guard）
-  - `ob_monthly_run_result` 含當次月跑的提案列（run_id 對應）
+  - `ob_monthly_run_result` 含當次月名單分派的提案列（run_id 對應）
 - **DB 需求**：PostgreSQL TestContainer
 - **關聯**：與 F094 TS-F094-ST1-001 聯合驗收
 
@@ -289,9 +289,9 @@ last_updated: 2026-05-27
 
 | 廢棄場景 | 廢棄原因 | v2.0 替代 |
 |---|---|---|
-| TS-F090-ETL-002（DELETE 不傷 monthly_run）| v2.0 全量 DELETE，月跑資料已改寫 F094 | TS-F090-ETL-002v2（全量 DELETE 合法）|
-| TS-F090-MON-001（月跑標記 'monthly_run'）| 月跑不再寫入本表（F094）| TS-F090-RGv2-001（regression guard）|
-| TS-F090-MON-002（月跑不傷 etl_legacy 列）| 同上 | 同上 |
+| TS-F090-ETL-002（DELETE 不傷 monthly_run）| v2.0 全量 DELETE，月名單分派資料已改寫 F094 | TS-F090-ETL-002v2（全量 DELETE 合法）|
+| TS-F090-MON-001（月名單分派標記 'monthly_run'）| 月名單分派不再寫入本表（F094）| TS-F090-RGv2-001（regression guard）|
+| TS-F090-MON-002（月名單分派不傷 etl_legacy 列）| 同上 | 同上 |
 | TS-F090-MON-003（去重聯集 etl_legacy + monthly_run）| 單源化後無 monthly_run 來源 | TS-F090-RGv2-002（單源化去重驗證）|
 
 ---
@@ -305,6 +305,6 @@ last_updated: 2026-05-27
 | TS-F090-ENT-001v2~002（entity 靜態）| 高 | TypeORM metadata + JSDoc 驗證 |
 | TS-F090-ETL-001v2~004v2（ETL Load 行為）| 高（需 PG TC）| 歷史限定 `ASSIGNDAY` + 全量 DELETE + `etl_load` 標記 |
 | TS-F090-ETL-005（fullMode 護欄）| 高 | 靜態 grep，無 DB |
-| TS-F090-RGv2-001（月跑不再寫入）| 高（需 PG TC）| 需 F094 migration 配套；與 F094 TS 聯合驗收 |
+| TS-F090-RGv2-001（月名單分派不再寫入）| 高（需 PG TC）| 需 F094 migration 配套；與 F094 TS 聯合驗收 |
 | TS-F090-RGv2-002（去重單源化）| 高（需 PG TC）| 真實 PostgreSQL SQL 驗證 |
 | TS-F090-RGv2-003（Grep etl_legacy）| 高 | 靜態 grep，無 DB |

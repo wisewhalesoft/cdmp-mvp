@@ -13,19 +13,19 @@
 ## User Story
 
 **As a** 業務部長（Director）或 處長（Section Chief）
-**I want** 在 E07 工作流的四個功能頁（名單定義、準備完成摘要、Stage 0 試算、月跑觸發）共享同一個「分派作業月份」選擇，且預設選到下個月
-**So that** 我切換分派作業月份後，四頁保持一致，不需在每頁重複選取，確保名單定義、估算與月跑觸發全程針對同一目標月份
+**I want** 在 E07 工作流的四個功能頁（名單定義、準備完成摘要、Stage 0 試算、月名單分派觸發）共享同一個「分派作業月份」選擇，且預設選到下個月
+**So that** 我切換分派作業月份後，四頁保持一致，不需在每頁重複選取，確保名單定義、估算與月名單分派觸發全程針對同一目標月份
 
 ---
 
 ## 背景說明
 
-F097 核心問題：目前五個頁面各有獨立的 `new Date()` local state，彼此互不同步，且全部預設本月（`current_work_ym`）。5 月下旬準備 6 月名單時，使用者必須在每頁手動切換月份，仍無法保證月跑觸發頁使用正確月份（見 US-138）。
+F097 核心問題：目前五個頁面各有獨立的 `new Date()` local state，彼此互不同步，且全部預設本月（`current_work_ym`）。5 月下旬準備 6 月名單時，使用者必須在每頁手動切換月份，仍無法保證月名單分派觸發頁使用正確月份（見 US-138）。
 
 **設計決策（已拍板）**：
 - 共享狀態實作 = **React Context**，Provider 掛載於 assignment 區段的 layout 元件（`AssignmentWorkYmProvider`），涵蓋四頁路由。
 - 預設值 = `current_work_ym + 1`（下月），`current_work_ym` 由後端 `GET /api/v1/system/current-work-ym` 取得，前端**不得自行 `new Date()`**。
-- `run-history-page`（F065 月跑歷史）的 MonthPicker 維持獨立 local state（查詢任意月歷史 run，與作業月語意不同），**不納入共享 Context**。
+- `run-history-page`（F065 月名單分派歷史）的 MonthPicker 維持獨立 local state（查詢任意月歷史 run，與作業月語意不同），**不納入共享 Context**。
 
 ---
 
@@ -33,7 +33,7 @@ F097 核心問題：目前五個頁面各有獨立的 `new Date()` local state�
 
 ### AC-1：共享狀態初始值為下月
 
-- **Given** 使用者首次進入 E07 assignment 區段任一四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月跑觸發）
+- **Given** 使用者首次進入 E07 assignment 區段任一四頁（名單定義 / 準備完成摘要 / Stage 0 試算 / 月名單分派觸發）
 - **When** `AssignmentWorkYmProvider` 初始化，呼叫後端 `GET /api/v1/system/current-work-ym`
 - **Then** 取得 `currentWorkYm`（YYYYMM）後，`target_work_ym` 預設 = `currentWorkYm + 1`（若當月為 12 月，+1 為次年 1 月）
 - **And** 四頁均以此 `target_work_ym` 作為月份篩選預設值
@@ -54,7 +54,7 @@ F097 核心問題：目前五個頁面各有獨立的 `new Date()` local state�
 
 ### AC-4：`run-history-page` 不共享此 Context
 
-- **Given** 使用者在月跑歷史頁（F065）操作 MonthPicker
+- **Given** 使用者在月名單分派歷史頁（F065）操作 MonthPicker
 - **When** 選擇任意月份
 - **Then** 歷史頁的月份選取**不影響**共享 `target_work_ym`
 - **And** 反之，共享 `target_work_ym` 變更**不影響**歷史頁已選的查詢月份
@@ -92,7 +92,7 @@ F097 核心問題：目前五個頁面各有獨立的 `new Date()` local state�
 ## 依賴關係
 
 - **Blocked By**：`GET /api/v1/system/current-work-ym`（已存在於 SystemController）
-- **Blocks**：US-138（月跑觸發頁讀 Context）、US-139（前端傳 `workYm` 給後端）
+- **Blocks**：US-138（月名單分派觸發頁讀 Context）、US-139（前端傳 `workYm` 給後端）
 
 ---
 

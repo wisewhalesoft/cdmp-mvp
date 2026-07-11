@@ -32,9 +32,9 @@
 - **Then** CR 回分規則狀態切換（啟用 → 停用 或 停用 → 啟用），並更新 OBASSIGNSET 對應設定欄位
 - **And** 記錄操作者與操作時間，頁面顯示切換成功提示
 
-### AC-3：月跑執行中禁止切換
+### AC-3：月名單分派執行中禁止切換
 
-- **Given** 目前有月跑正在執行
+- **Given** 目前有月名單分派正在執行
 - **When** 業務主管嘗試點擊 CR 回分切換開關
 - **Then** 切換開關為停用狀態，提示「分派執行中，無法變更 CR 回分規則」
 
@@ -62,7 +62,7 @@
 - **When**：業務主管點擊切換開關並確認
 - **Then**：OBASSIGNSET 更新為停用，頁面顯示切換成功，狀態顯示「CR 回分：停用」
 
-### TC-080-03：月跑執行中鎖定
+### TC-080-03：月名單分派執行中鎖定
 
 - **Given**：AssignmentRun status = 'running'
 - **When**：業務主管嘗試點擊切換開關
@@ -73,7 +73,7 @@
 ## 依賴關係
 
 - **Blocked By**：US-001（登入驗證）
-- **Blocks**：US-081（月跑的 Stage 4 CR 回分邏輯受此開關控制）
+- **Blocks**：US-081（月名單分派的 Stage 4 CR 回分邏輯受此開關控制）
 
 ---
 
@@ -81,7 +81,7 @@
 
 - [ ] 驗收標準全部通過
 - [ ] 切換確認對話框測試
-- [ ] 月跑執行中鎖定測試
+- [ ] 月名單分派執行中鎖定測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新
@@ -91,5 +91,5 @@
 ## 相關文件
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
-- **相關 Stories**：US-081（觸發月跑，CR 設定影響 Stage 4）
+- **相關 Stories**：US-081（觸發月名單分派，CR 設定影響 Stage 4）
 - **Reference**：`reference/TableSchema/OB/OBASSIGNSET.sql`、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st4_exchange.sql`

@@ -20,7 +20,7 @@ last_updated: 2026-05-21
 
 > **v1.3 測試設計範圍（2026-05-21）**：本文件為 F077 首次建立的 test spec，覆蓋 v1.3 重點：
 > 1. **5 stage × 4 role 操作矩陣（BR-7）**：21 個 Component 場景，驗證各 cell 按鈕渲染正確性
-> 2. **5 個橫切條件（C-1~C-5）**：歷史月份 / 月跑鎖 / 已停用 / 處長轄區 / 查看通用性
+> 2. **5 個橫切條件（C-1~C-5）**：歷史月份 / 月名單分派鎖 / 已停用 / 處長轄區 / 查看通用性
 > 3. **section_chief 轄區隔離（BR-4）**：後端 Integration 驗證 GET lists API 過濾行為
 > 4. **BR-10 user 整頁封鎖**：Component 驗證封鎖說明卡渲染
 >
@@ -64,7 +64,7 @@ last_updated: 2026-05-21
 
 - **關聯需求**：F077 v1.3 BR-7 矩陣（admin, draft）
 - **測試類型**：Positive / Component（RTL）
-- **前置條件**：AdminToken（`role='admin'`）；MSW stub 1 筆 `stage='draft'` 名單；非歷史月份；無月跑鎖
+- **前置條件**：AdminToken（`role='admin'`）；MSW stub 1 筆 `stage='draft'` 名單；非歷史月份；無月名單分派鎖
 - **預期結果**：
   - 「編輯」按鈕存在
   - 「推進」按鈕存在（或對應 F078 action text）
@@ -100,7 +100,7 @@ last_updated: 2026-05-21
 
 - **關聯需求**：F077 v1.3 BR-7 矩陣（admin, dept_ratio）
 - **測試類型**：Positive / Component（RTL）
-- **前置條件**：AdminToken；MSW stub 1 筆 `stage='dept_ratio'` 名單；非歷史月份；無月跑鎖
+- **前置條件**：AdminToken；MSW stub 1 筆 `stage='dept_ratio'` 名單；非歷史月份；無月名單分派鎖
 - **預期結果**：
   - 「設定」按鈕存在（對應 F079 部門比例設定）
   - 「退回」按鈕存在（對應 F081 Rollback）
@@ -198,19 +198,19 @@ last_updated: 2026-05-21
 
 ---
 
-### TS-F077-M-013：admin / ready → 渲染「退回」/「查看」；無 per-card 月跑觸發按鈕
+### TS-F077-M-013：admin / ready → 渲染「退回」/「查看」；無 per-card 月名單分派觸發按鈕
 
-- **關聯需求**：F077 v1.3 BR-7 矩陣（admin, ready）/ US-132（月跑唯一入口為 CTA Banner）
+- **關聯需求**：F077 v1.3 BR-7 矩陣（admin, ready）/ US-132（月名單分派唯一入口為 CTA Banner）
 - **測試類型**：Positive / Component（RTL）
 - **前置條件**：AdminToken；MSW stub 1 筆 `stage='ready'` 名單
 - **預期結果**：
   - 「退回」按鈕存在（F089 Rollback）
   - 「查看」按鈕存在
-  - **無**「執行月跑」/「觸發月跑」per-card 按鈕（DOM 不存在）
+  - **無**「執行月名單分派」/「觸發月名單分派」per-card 按鈕（DOM 不存在）
 
 ---
 
-### TS-F077-M-014：director / ready → 渲染「退回」/「查看」；無 per-card 月跑觸發按鈕
+### TS-F077-M-014：director / ready → 渲染「退回」/「查看」；無 per-card 月名單分派觸發按鈕
 
 - **關聯需求**：F077 v1.3 BR-7 矩陣（director, ready）
 - **測試類型**：Positive / Component（RTL）
@@ -248,17 +248,17 @@ last_updated: 2026-05-21
 
 ---
 
-### TS-F077-C2-001：月跑鎖中 → 所有寫入按鈕 disabled；「查看」按鈕 enabled
+### TS-F077-C2-001：月名單分派鎖中 → 所有寫入按鈕 disabled；「查看」按鈕 enabled
 
-- **關聯需求**：F077 v1.3 BR-7 C-2（月跑鎖中）/ F048 v2.0 AC-4
+- **關聯需求**：F077 v1.3 BR-7 C-2（月名單分派鎖中）/ F048 v2.0 AC-4
 - **測試類型**：Positive / Component（RTL）
 - **前置條件**：
-  - DirectorToken；MSW stub 月跑執行中（`assignment_run.status='running'`）
+  - DirectorToken；MSW stub 月名單分派執行中（`assignment_run.status='running'`）
   - MSW stub GET lists 回正常月份資料，含各 stage 名單
 - **預期結果**：
   - 所有卡片上的寫入按鈕（編輯 / 推進 / 停用 / 設定 / 退回 / 核准 / 拒絕 / 快速模板）均 disabled
   - 「查看」按鈕 enabled（`not.toBeDisabled()`）
-  - Ready 欄頂 CTA Banner 的月跑主按鈕 disabled
+  - Ready 欄頂 CTA Banner 的月名單分派主按鈕 disabled
 
 ---
 
@@ -293,15 +293,15 @@ last_updated: 2026-05-21
 
 ---
 
-### TS-F077-C5-001：「查看」按鈕在月跑鎖 + 歷史月份雙重條件下仍可觸發 Drawer
+### TS-F077-C5-001：「查看」按鈕在月名單分派鎖 + 歷史月份雙重條件下仍可觸發 Drawer
 
 - **關聯需求**：F077 v1.3 BR-7 C-5（查看按鈕通用性）
 - **測試類型**：Positive / Component（RTL）
 - **前置條件**：
-  - DirectorToken；歷史月份（`isHistorical: true`）+ 月跑執行中（`assignment_run.status='running'`）同時成立
+  - DirectorToken；歷史月份（`isHistorical: true`）+ 月名單分派執行中（`assignment_run.status='running'`）同時成立
   - MSW stub GET full-snapshot 回 200
 - **步驟**：
-  1. render `<ListKanbanPage />` 呈現歷史月份 + 月跑鎖狀態
+  1. render `<ListKanbanPage />` 呈現歷史月份 + 月名單分派鎖狀態
   2. 點擊卡片「查看」按鈕
   3. 驗證 Drawer
 - **預期結果**：

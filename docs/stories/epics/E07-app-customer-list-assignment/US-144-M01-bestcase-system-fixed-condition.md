@@ -86,7 +86,7 @@ US-128 / US-129 已將 `best_case` 加入 F075 白名單（categorical，display
 - **Then** 停用按鈕（ban icon）處於停用狀態（disabled）或不顯示，使用者無法對 `best_case` 執行停用操作
 - **And** 若繞過前端直接呼叫 `PATCH /api/v1/pooldata-fields/best_case`，傳入 `{ isActive: false }`，後端回傳 422，`error_code: SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`
 
-### AC-7：Stage1 月跑執行時 best_case = 'Y' 篩選條件必定存在
+### AC-7：Stage1 月名單分派執行時 best_case = 'Y' 篩選條件必定存在
 
 - **Given** 一份 `stage = 'ready'` 的名單定義，其 condition_payload 已在 createList / updateList 時注入 best_case: ['Y']
 - **When** AssignmentRun 觸發 Stage 1 查詢，`stage1-query-composer.ts` 解析 condition_payload

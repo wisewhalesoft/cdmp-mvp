@@ -50,13 +50,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 
 ## 1. 功能摘要
 
-提供業務部長編輯既有 `status = 'active'` 名單定義之 `condition_payload`（覆寫式，無草稿；限 `stage = 'draft'`）。`list_no` 不可修改；系統管理欄位（`list_type` / `project_workym` / `status` / `stage` / audit 欄位）完全不在表單中呈現。**表單必填 `condition_payload`（至少 1 個 conditions）**，欄位來源 F075 v1.5 白名單 active 集合；類別型 / 數值型 / 日期型分別以對應 UI 元件呈現（詳見 §5 / §8）。月跑執行中禁止編輯；`status = 'inactive'` 或 `stage != 'draft'` 的名單不提供編輯入口。**舊遷移名單（`condition_payload IS NULL`）之篩選條件區塊為唯讀**，僅非篩選欄位（`list_nm` / `list_period_*` / `cr_enabled`）可改（拍板 2 / US-123 AC-2）；不提供「confirm 轉換」流程，E2 backfill 由 Phase 3a system-architect 一次性執行。與 F050 v2.1 共用表單欄位規範。
+提供業務部長編輯既有 `status = 'active'` 名單定義之 `condition_payload`（覆寫式，無草稿；限 `stage = 'draft'`）。`list_no` 不可修改；系統管理欄位（`list_type` / `project_workym` / `status` / `stage` / audit 欄位）完全不在表單中呈現。**表單必填 `condition_payload`（至少 1 個 conditions）**，欄位來源 F075 v1.5 白名單 active 集合；類別型 / 數值型 / 日期型分別以對應 UI 元件呈現（詳見 §5 / §8）。月名單分派執行中禁止編輯；`status = 'inactive'` 或 `stage != 'draft'` 的名單不提供編輯入口。**舊遷移名單（`condition_payload IS NULL`）之篩選條件區塊為唯讀**，僅非篩選欄位（`list_nm` / `list_period_*` / `cr_enabled`）可改（拍板 2 / US-123 AC-2）；不提供「confirm 轉換」流程，E2 backfill 由 Phase 3a system-architect 一次性執行。與 F050 v2.1 共用表單欄位規範。
 
 ## 2. 使用者故事
 
 **As a** 業務部長
 **I want** 編輯既有名單定義的篩選條件
-**So that** 在月跑前調整本月各 Stage 的名單條件，確保分派結果符合業務策略
+**So that** 在月名單分派前調整本月各 Stage 的名單條件，確保分派結果符合業務策略
 
 ## 3. 前置條件
 
@@ -99,7 +99,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - **Then** 每列不顯示「編輯」按鈕，僅供唯讀查閱
 - **And** 若直接 HTTP 請求編輯已停用名單的 API，後端回傳 422 `ASSIGNMENT_LIST_INACTIVE`（訊息：「已停用名單不可編輯」）
 
-### AC-5：月跑執行中禁止編輯
+### AC-5：月名單分派執行中禁止編輯
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
 - **When** 業務部長嘗試點擊任何名單的「編輯」按鈕
@@ -161,7 +161,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - **Given** 名單 `stage` 不為 `'draft'`
 - **When** 業務部長嘗試對該名單 PUT condition_payload
 - **Then** 回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`（沿用既有錯誤碼）
-- **And** 月跑執行中（AssignmentRun status='running'）優先於 stage guard，即使 stage='draft' 仍回 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`（AC-5）
+- **And** 月名單分派執行中（AssignmentRun status='running'）優先於 stage guard，即使 stage='draft' 仍回 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`（AC-5）
 - **And** Rollback 操作完成後（M03a/b/c/d）stage 回 'draft'，condition_payload 重新可寫入（K3）
 
 ### AC-13：backward-compat 衍生欄位（v2.1 新增 / J6 / BR-7）
@@ -223,7 +223,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派執行中 |
 | 422 | ASSIGNMENT_LIST_INACTIVE | 已停用名單不可編輯 |
 | 422 | CONDITION_COLUMN_NOT_IN_WHITELIST | `conditions[].columnName` 不在 F075 v1.5 白名單或對應欄位 `is_active=false`（AC-8 / 拍板 1） |
 | 422 | LEGACY_LIST_CONDITION_READONLY | 對 `condition_payload IS NULL` 之舊遷移名單寫入 `conditionPayload`（AC-11 / 拍板 Q3） |
@@ -262,7 +262,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
   - `condition_payload IS NULL`（舊名單）：篩選條件區塊以「（舊格式）」灰色 read-only 摘要呈現 5 個 backward-compat entity column 值；所有條件輸入元件 disabled；顯示提示「此名單使用舊格式儲存，篩選條件暫時無法編輯」（AC-11）
 - 若 `status = 'inactive'`：前端隱藏編輯按鈕，僅於已停用頁籤顯示「查看詳情」
 - 若 `stage != 'draft'`：前端隱藏編輯按鈕（依 F077 BR-9 角色 × 階段操作矩陣）
-- 月跑鎖定時：編輯按鈕 disabled + hover 提示
+- 月名單分派鎖定時：編輯按鈕 disabled + hover 提示
 - **多值欄位 backward-compat 儲存規範（v2.1）**：v2.0 之「UI 載入 `$$` 分隔字串解析回多選 + 提交序列化寫回」規範**已廢除**；v2.1 起前端載入 `conditionPayload` JSON 結構並依 `fieldType` 渲染元件；後端衍生填入 entity column 時才轉為 `$$` 分隔（BR-13）。詳見 [data-model.md `ob_list_definition` 多值欄位儲存規範](../data-model.md#ob-list-definition-obmlistdf--名單定義)
 - **caseyear 選項來源（v2.1 重寫）**：與 F050 v2.1 同 — caseyear 8 筆（`0` / `1` / `2` / `3` / `4` / `5` / `6` / `99`）由 `GET /api/v1/pooldata-fields/caseyear/options?active=true`（F076 v1.5）動態載入；編輯時將 `condition_payload` 中 caseyear 條件 `values` 解析回多選勾選狀態。**v2.0 之「前端 hard-coded 11 個 0~10」規範已廢除**（A4 / J5）。舊系統 dump 可能含 `7`~`10` 之歷史值（舊名單 `condition_payload IS NULL` fallback 場景）；condition_payload 中之 caseyear values 應僅含 `0~6` / `99` 之 seed 範圍內值，若繞過送出範圍外值，後端 columnName 白名單驗證雖通過但 INACTIVE 選項警示（BR-12）會觸發
 - **case_status 選項來源（v2.1 新增）**：與 F050 v2.1 同 — case_status 4 筆由 `GET /api/v1/pooldata-fields/case_status/options?active=true`（F076 v1.5）動態載入；業務語意對照 tooltip 沿用 F050 v2.1 §5.1.1

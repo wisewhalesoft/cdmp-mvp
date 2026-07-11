@@ -1,7 +1,7 @@
 ---
 type: implementation-log
 feature_id: AD-E07-43-P5c
-feature_name: MSSQL 全面遷移 P5c — MONTHRUN-DIFF 真實完整月跑跨引擎逐列比對（F067 式簽核之技術底稿）
+feature_name: MSSQL 全面遷移 P5c — MONTHRUN-DIFF 真實完整月名單分派跨引擎逐列比對（F067 式簽核之技術底稿）
 status: complete
 last_updated: 2026-07-08
 ---
@@ -9,12 +9,12 @@ last_updated: 2026-07-08
 # AD-E07-43 P5c — MONTHRUN-DIFF 真實 PG vs MSSQL 逐列比對 實作紀錄
 
 > 本文件為 **P5e F067 式業務簽核報告之技術附件**（非報告本體），亦是 **I-MSSQL-SIGNOFF-GATE-01** 條件 (a)
-> 之直接證據來源。定調（AD §3.1）：manual/script，比照 F101/F102/F104 前例（觸發真實月跑鏈路、SQL 直接
+> 之直接證據來源。定調（AD §3.1）：manual/script，比照 F101/F102/F104 前例（觸發真實月名單分派鏈路、SQL 直接
 > 查表比對、輸出人工可讀差異記錄），**非新 CI 測試套件**。
 >
 > **🔴🔴 方法論升級（相對於 test-spec 撰寫時之環境假設）**：test-spec AD-E07-43-P5c-test.md 撰寫時
 > `postgres-test`(5433) 不可達，故裁定 Tier 1（JS oracle 代理）為主要可行路徑、真實 PG（Tier 2）為 degradable
-> 加強。**本輪實作時 dev PG（localhost:5432 / cdmp_dev）唯讀可達且存有真實生產月跑結果**，故直接執行 Tier 2
+> 加強。**本輪實作時 dev PG（localhost:5432 / cdmp_dev）唯讀可達且存有真實生產月名單分派結果**，故直接執行 Tier 2
 > ——**真實 PG run 逐列比對**，取代 JS oracle 代理。此使 **I-MSSQL-SIGNOFF-GATE-01 條文字面「PG/MSSQL 結果
 > 一致」可被字面滿足**（非僅 JS 代理），大幅強於 test-spec §0.2 GATE-002 所憂慮之 proxy 性質。
 
@@ -26,7 +26,7 @@ last_updated: 2026-07-08
 
 | 項目 | 值 |
 |---|---|
-| PG 生產月跑 run | `07944a82-cc59-4d30-bda5-f9a873cba197`（`project_workym=202607`，完成於 2026-07-06 09:00） |
+| PG 生產月名單分派 run | `07944a82-cc59-4d30-bda5-f9a873cba197`（`project_workym=202607`，完成於 2026-07-06 09:00） |
 | PG run 規模 | 115,197 案 / 12 名單（含案件之 13 名單定義，1 名單 0 案）|
 | pool 覆蓋率 | 現行 PG `ob_pool_data` **100% 覆蓋**該 run 案件集（115,197 / 115,197）→ 無 pool 輸入漂移 |
 | MSSQL 隔離窗 | `CDMP_TEST` dbo（SQL Server 2022，`Chinese_Taiwan_Stroke_BIN`），前綴 `run_id=a5c00000-…-05c1`，收尾清理 |
@@ -171,7 +171,7 @@ MSSQL=2026-07-30；…全 9,376 案一致 −1 日）。`dept_id`/`emplid` 分�
 
 ### 4.3 影響面
 
-- **月跑 Stage 4 ASSIGNDAY**（`loadWorkingDayRatios` → `computeWorkingDayRatios` → `distributeStage3to4` /
+- **月名單分派 Stage 4 ASSIGNDAY**（`loadWorkingDayRatios` → `computeWorkingDayRatios` → `distributeStage3to4` /
   `runStage3to4RationSqlMssql`）：**於 UTC+ 時區（如 Asia/Taipei）之 MSSQL 部署，每案分派日全早一天**。
 - **Stage 0 每日負荷試算**（`calculateDailyEstimate` / `toUtcDate` / `formatDate`，同 `getUTC*` 模式）：
   日期標籤同樣 −1，逐日部門投影錯位。
@@ -240,7 +240,7 @@ executor 皆凍結；STATIC-001 守門）。未 commit。未動記憶檔。
 
 ## 8. Architectural Decisions
 
-- **AD-1（Tier 2 取代 Tier 1）**：dev PG 唯讀可達且存有真實生產月跑 → 直接以真實 PG run 逐列比對（Tier 2），
+- **AD-1（Tier 2 取代 Tier 1）**：dev PG 唯讀可達且存有真實生產月名單分派 → 直接以真實 PG run 逐列比對（Tier 2），
   取代 test-spec 因 5433 不可達而裁定之 JS oracle 代理（Tier 1）。I-MSSQL-SIGNOFF-GATE-01「PG/MSSQL」可字面滿足。
 - **AD-2（Approach A：釘選案件集）**：釘選 PG 案件集 + 重建 Stage 1 seed（非重跑 Stage 1 篩選），隔離
   Stage 2~4/CR 引擎、消除 Stage 1 選案漂移。對稱 test-spec §0.4 之 customer_core 名單「單次 Stage 1、雙寫」
@@ -297,7 +297,7 @@ executor 皆凍結；STATIC-001 守門）。未 commit。未動記憶檔。
 
 ## 11. 需回報使用者之業務級發現
 
-1. **🔴🔴 assignday −1 日（cutover-blocker，真實跨引擎缺陷）**：見 §4。UTC+ 時區 MSSQL 部署下月跑每案分派日
+1. **🔴🔴 assignday −1 日（cutover-blocker，真實跨引擎缺陷）**：見 §4。UTC+ 時區 MSSQL 部署下月名單分派每案分派日
    全早一天、Stage 0 試算逐日錯位。根因＝tedious 回 MSSQL `date` 為本地午夜 JS Date + `computeWorkingDayRatios`
    用 `getUTC*`。凍結檔未改，交 system-architect 修（建議修法見 §4.4）。
 2. **score 計分邏輯 PG≡MSSQL 等價**：8/10 欄含計分結果 card_level/tier_level 全 0-diff；唯 5 案 score 差異＝

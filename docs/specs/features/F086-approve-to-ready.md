@@ -29,7 +29,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 > 4. **本 v1.2.1 不變動 entity / migration / code / prototype / Transaction / Guard**；僅修 AC 字串 + 新增說明 sub-section。
 >
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-116 + AD-E07 v3.0 一致性決議完整重建；Guard 為 `DirectorGuard`；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議。
-> **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：月跑並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`（決議 #6）；Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
+> **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：月名單分派並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`（決議 #6）；Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
 ## Agent Loading Guide
 
@@ -52,7 +52,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 ## 1. 功能摘要
 
-部長 / Admin 對 `stage = 'approval'` 名單執行核准，使 `stage` 由 `'approval'` 推進至 `'ready'`，名單進入「準備完成」狀態，可供月跑使用。
+部長 / Admin 對 `stage = 'approval'` 名單執行核准，使 `stage` 由 `'approval'` 推進至 `'ready'`，名單進入「準備完成」狀態，可供月名單分派使用。
 
 **範圍**：
 - 僅 `stage = 'approval'` 名單可核准；非此階段一律 422 `LIST_STAGE_TRANSITION_FORBIDDEN`
@@ -65,7 +65,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 **As a** 部長 / Admin
 **I want** 在確認名單設定無誤後正式核准，使其進入「準備完成」階段
-**So that** 名單通過最終審核，標記為可用於月跑的狀態，並在準備完成清單中可見
+**So that** 名單通過最終審核，標記為可用於月名單分派的狀態，並在準備完成清單中可見
 
 ## 3. 前置條件
 
@@ -94,7 +94,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 - **Given** 部長 / Admin 點擊「核准」
 - **When** 系統彈出確認對話框
-- **Then** 對話框顯示：「確認核准名單『{listNm}』（{listNo}）？核准後名單將進入準備完成階段，可用於月跑。」
+- **Then** 對話框顯示：「確認核准名單『{listNm}』（{listNo}）？核准後名單將進入準備完成階段，可用於月名單分派。」
 - **And** 提供「確認核准」與「取消」兩個按鈕
 
 ### AC-4：執行核准
@@ -112,7 +112,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - **When** 部長或處長進入準備完成查詢摘要頁（F088 / US-118）
 - **Then** 該名單出現於準備完成清單，可查看完整摘要
 
-### AC-6：月跑執行中禁止核准
+### AC-6：月名單分派執行中禁止核准
 
 - **Given** `assignment_run.status IN ('pending', 'running')`
 - **When** 部長 / Admin 嘗試點擊「核准」
@@ -196,7 +196,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | 403 | AUTH_FORBIDDEN | 處長嘗試核准 |
 | 403 | LIST_HISTORICAL_READONLY | 歷史月份 |
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑進行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派進行中 |
 | 422 | ASSIGNMENT_LIST_INACTIVE | 名單已停用 |
 | 422 | LIST_STAGE_TRANSITION_FORBIDDEN | `stage != 'approval'` |
 | 503 | FEATURE_NOT_ENABLED | Feature Flag `ENABLE_E07_REFACTOR_PHASE3 = false` |
@@ -212,7 +212,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | BR-5 | **無獨立 Rollback**：簽核階段不提供「Rollback」按鈕；退回機制由拒絕（F087）提供，將名單退回 `personnel_ratio` 並清空處長設定；`ready` 狀態之退回由 F089 提供（Rollback 至 approval） |
 | BR-6 | **稽核失敗不 rollback**：稽核寫入失敗僅 Logger.error，不 rollback 業務 commit（沿用 F050 v2.0 BR-11） |
 | BR-7 | **DB 操作原子性**：`stage` 更新 + 稽核寫入須於同一 transaction 中執行（[ASSUMPTION] 待 system-architect 決議） |
-| BR-8 | **月跑並發守衛（v1.1 / 決議 #6）**：F086 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()` |
+| BR-8 | **月名單分派並發守衛（v1.1 / 決議 #6）**：F086 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()` |
 | BR-9 | **Feature Flag fallback（v1.1 / 決議 #2）**：F086 端點受 `FeatureFlagGuard` 保護；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 503 + `FEATURE_NOT_ENABLED` |
 | BR-10 | **核准後 ready 名單可由 F089 退回**：核准後若需修改，部長可透過 F089 將 `ready` 退回 `approval`，再透過 F087 拒絕退回 `personnel_ratio` |
 | BR-11 | **核准雙寫 `assignment_approval`（v1.3 新增）**：approve→ready 於**同一 transaction** 內 mirror F087 reject 之寫入範式，新增 `INSERT INTO assignment_approval`（`action='approve'`（小寫）、`list_no`、`approver_id = currentUserId`、`approver_name`、`approver_role`（admin 為 `'admin'`，否則 `actor.businessRole`）、`approved_at`）。此寫入與 stage 更新 + audit log 同 transaction（沿用 BR-7 原子性）；任一失敗整體 rollback。實作上由 `approveToReady()` 傳入 `advanceTo()` 之 `postActionFn`（原為 `async () => undefined`），mirror `rejectToPersonnelRatio()` 之 `postActionFn`。**此 BR resolve v1.2.1 §6.X 之「F086 不寫 approval 表」差距 flag**。 |
@@ -264,13 +264,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
   - 位於 F048 / F077 清單頁「簽核」階段名單操作欄，與「拒絕」並排
   - 處長身份**完全不渲染**
   - 已停用 / 非 `approval` 階段 / 歷史月份**完全不渲染**
-  - 月跑進行中 disabled + hover 提示
+  - 月名單分派進行中 disabled + hover 提示
 - **核准前摘要面板**（建議）：
   - 顯示完整設定摘要：篩選條件、部門比例（含 RATION）、個別業務比例（每部門業務員 RATION）、CR 開關
   - 摘要為唯讀，無修改入口
 - **確認對話框**：
   - 標題：「核准確認」
-  - 內容：「確認核准名單『{listNm}』（{listNo}）？核准後名單將進入準備完成階段，可用於月跑。」
+  - 內容：「確認核准名單『{listNm}』（{listNo}）？核准後名單將進入準備完成階段，可用於月名單分派。」
   - 按鈕：「確認核准」（primary）/「取消」
 - **成功提示 toast**：「名單『{listNm}』已核准，進入準備完成階段」
 - **核准後狀態**：清單頁該名單階段標籤更新為「準備完成」，操作欄顯示「退回簽核」（F089 提供）
@@ -282,7 +282,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
   - F048 v2.0 / F077（M01 入口骨架 + 角色 × 階段操作矩陣）
 - **Blocks**：
   - F088（準備完成階段查詢摘要，核准後名單可見）
-  - F061 / F081（月跑觸發，依賴 `stage = 'ready'` 名單）
+  - F061 / F081（月名單分派觸發，依賴 `stage = 'ready'` 名單）
 - **Rollback 反向**：
   - F087（拒絕，退回至 personnel_ratio）
   - F089（準備完成 Rollback 至簽核）
@@ -315,7 +315,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
   - Admin 核准 → 200 OK
   - 處長核准 → 403 `AUTH_FORBIDDEN`
   - 核准 `stage = 'draft'` / `'dept_ratio'` / `'personnel_ratio'` / `'ready'` 名單 → 422 `LIST_STAGE_TRANSITION_FORBIDDEN`
-  - 月跑進行中核准 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
+  - 月名單分派進行中核准 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
   - 歷史月份核准 → 403 `LIST_HISTORICAL_READONLY`
   - Feature Flag 關閉時核准 → 503 `FEATURE_NOT_ENABLED`
   - 已停用名單核准 → 422 `ASSIGNMENT_LIST_INACTIVE`
@@ -327,7 +327,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - 前端關鍵測試案例：
   - 處長 / 非 `approval` 階段 / 已停用 / 歷史月份「核准」按鈕**完全不渲染**
   - 確認對話框文案 / 按鈕渲染
-  - 月跑進行中按鈕 disabled
+  - 月名單分派進行中按鈕 disabled
 - E2E：F084 推進至 approval → F086 核准 → F088 準備完成清單顯示
 
 ## 11. 實作 Checklist

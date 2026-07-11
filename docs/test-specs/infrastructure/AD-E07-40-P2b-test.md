@@ -345,7 +345,7 @@ reentrancy guard（`polling` flag）與生命週期案例需要精確控制「�
 
 > 沿用 §0.6 harness：真實 `RunQueueProducer`/`RunQueueConsumer`/`MssqlQueueService(dataSource)`，`pipeline` 以簡化 stub（直接 SQL 更新 `assignment_run.status`）取代真實 `AssignmentRunPipelineService`，schema `p2b_e2e`。
 
-### TS-MSSQL-P2B-E2E-001（🔴 P2b DoD #3 核心）：`producer.send()` 觸發一次「月跑」→ worker 輪詢 loop 於數個 tick 內撿到 job → 呼叫 stub pipeline → `assignment_run.status` 推進至 `completed`
+### TS-MSSQL-P2B-E2E-001（🔴 P2b DoD #3 核心）：`producer.send()` 觸發一次「月名單分派」→ worker 輪詢 loop 於數個 tick 內撿到 job → 呼叫 stub pipeline → `assignment_run.status` 推進至 `completed`
 - **Related Requirement**：P2b DoD #3
 - **Test Type**：Positive / Integration（真實 MSSQL，DoD 紅線）
 - **Preconditions**：seed 一筆 `assignment_run`（`status='pending'`）；啟動真實輪詢（短 `pollIntervalMs`，如 200ms，不等真實 2000ms）

@@ -83,7 +83,7 @@
 ## 依賴關係
 
 - **Blocked By**：US-001（登入驗證）
-- **Blocks**：US-079（編輯人員比例需先了解現有設定）、US-081（月跑使用人員比例）
+- **Blocks**：US-079（編輯人員比例需先了解現有設定）、US-081（月名單分派使用人員比例）
 
 ---
 
@@ -100,5 +100,5 @@
 ## 相關文件
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
-- **相關 Stories**：US-079（編輯人員比例）、US-081（觸發月跑）
+- **相關 Stories**：US-079（編輯人員比例）、US-081（觸發月名單分派）
 - **Reference**：`reference/TableSchema/OB/OBEMPLSETMF.sql`、`reference/TableSchema/OB/OBPOOLDATA.sql`

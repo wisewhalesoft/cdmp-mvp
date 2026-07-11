@@ -1,4 +1,4 @@
-# US-138：月跑觸發頁加入分派作業月份選擇器，並傳選定月給後端
+# US-138：月名單分派觸發頁加入分派作業月份選擇器，並傳選定月給後端
 
 > **Story ID**：US-138
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
@@ -14,8 +14,8 @@
 ## User Story
 
 **As a** 業務部長（Director）
-**I want** 在觸發月跑前可確認並選定「分派作業月份」，且觸發後系統確實以我選定的月份執行
-**So that** 當我在 5 月下旬為 6 月準備好名單後，按下「啟動月跑」時跑的是 6 月名單，而不是系統自行決定的 5 月
+**I want** 在觸發月名單分派前可確認並選定「分派作業月份」，且觸發後系統確實以我選定的月份執行
+**So that** 當我在 5 月下旬為 6 月準備好名單後，按下「啟動月名單分派」時跑的是 6 月名單，而不是系統自行決定的 5 月
 
 ---
 
@@ -33,7 +33,7 @@
 
 ### AC-1：觸發頁顯示月份選擇器，預設值來自共享 Context
 
-- **Given** 業務部長進入月跑觸發頁（`/assignment/trigger-run`）
+- **Given** 業務部長進入月名單分派觸發頁（`/assignment/trigger-run`）
 - **When** 頁面載入
 - **Then** 頁面標題區塊顯示 MonthPicker，label 為「分派作業月份」
 - **And** MonthPicker 預設值 = 共享 `target_work_ym`（由 US-137 `AssignmentWorkYmContext` 提供）
@@ -54,16 +54,16 @@
 
 ### AC-4：觸發 API 攜帶選定月份（breaking change — 配合 US-139 AC-1）
 
-- **Given** 部長點擊「啟動月跑」並在確認 modal 確認
+- **Given** 部長點擊「啟動月名單分派」並在確認 modal 確認
 - **When** 前端呼叫 `POST /api/v1/assignment/runs`
 - **Then** request body 包含 `{ workYm: '202606' }`（選定月，YYYYMM 格式）
 - **And** `api/assignment-run.ts` 中 `triggerRun()` 函式簽名改為 `triggerRun(workYm: string): Promise<TriggerRunResponse>`
 
 ### AC-5：confirm modal 顯示正確目標月
 
-- **Given** 部長點擊「啟動月跑」
+- **Given** 部長點擊「啟動月名單分派」
 - **When** 確認 modal 開啟
-- **Then** modal 標題顯示「確認觸發 {target_work_ym 格式化} 月跑？」（例：「確認觸發 2026-06 月跑？」）
+- **Then** modal 標題顯示「確認觸發 {target_work_ym 格式化} 月名單分派？」（例：「確認觸發 2026-06 月名單分派？」）
 - **And** modal 不顯示 `new Date()` 算出的月份
 
 ### AC-6：處長唯讀，MonthPicker 顯示但不可互動
@@ -86,7 +86,7 @@
 
 - `triggerRun()` API client 函式需新增 `workYm` 參數，對應後端 `TriggerRunDto.workYm`（US-139 新增）。
 - 現有 `data-testid="btn-start-run"` 與 `data-testid="confirm-trigger-modal"` 保留；新增 MonthPicker 的 `data-testid="trigger-run-month-picker"` 供 E2E 驗證。
-- 頁面標題「觸發 {ym} 月跑」中的 `{ym}` 改用 `target_work_ym`（來自 Context），移除舊的 `const ym = currentWorkYm()`。
+- 頁面標題「觸發 {ym} 月名單分派」中的 `{ym}` 改用 `target_work_ym`（來自 Context），移除舊的 `const ym = currentWorkYm()`。
 
 ---
 

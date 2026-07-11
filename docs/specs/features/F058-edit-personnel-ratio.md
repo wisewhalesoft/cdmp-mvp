@@ -39,7 +39,7 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 
 ## 1. 功能摘要
 
-提供業務主管調整各部門內業務人員的名單分配比例（`ob_empl_set.ration`）。同一 `list_no + deptid_m` 下所有人員比例加總必須 = 100%；0% 為合法值（視為「本月不分配」）。月跑執行中禁止修改。
+提供業務主管調整各部門內業務人員的名單分配比例（`ob_empl_set.ration`）。同一 `list_no + deptid_m` 下所有人員比例加總必須 = 100%；0% 為合法值（視為「本月不分配」）。月名單分派執行中禁止修改。
 
 ## 2. 使用者故事
 
@@ -83,7 +83,7 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 - **And** 寫入 `assignment_audit_log`（`action = 'UPDATE'`）
 - **And** 頁面顯示儲存成功提示
 
-### AC-5：月跑執行中禁止修改
+### AC-5：月名單分派執行中禁止修改
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
 - **When** 業務主管嘗試進入編輯模式
@@ -130,7 +130,7 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派執行中 |
 | 422 | PERSONNEL_RATIO_SUM_INVALID | 部門人員比例加總 ≠ 100% |
 | 422 | VALIDATION_ERROR | 欄位驗證失敗（`ration` 超出 0~100 範圍等） |
 
@@ -140,7 +140,7 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 |---|---|
 | BR-1 | 同一 `list_no + deptid_m` 下所有人員比例加總必須 = 100% |
 | BR-2 | 0% 為合法值，視為「本月不分配」；0% 員工仍保留於清單 |
-| BR-3 | 月跑鎖定：`assignment_run.status IN ('pending', 'running')` 時禁止修改 |
+| BR-3 | 月名單分派鎖定：`assignment_run.status IN ('pending', 'running')` 時禁止修改 |
 | BR-4 | `ration` 範圍：0.0 ~ 100.0（`NUMERIC(10,1)`） |
 | BR-5 | 修改僅針對指定 `list_no + deptid_m`，不影響其他 LIST_NO 或部門 |
 | BR-6 | 「新增人員」員工下拉清單來源為 AppDB `ob_emphire`（採 E04 + E05 雙層 ETL 從舊 OB DB 同步，OBEMPHIRE 採 full 全量重抓策略，詳見 [architecture-spec.md §E07-C](../architecture-spec.md#e07-c-etl-設計)），過濾條件 `WHERE resign_date IS NULL`（在職員工）；可進一步依目標 `deptid_m` 過濾 `dept_code = :deptIdM` |
@@ -150,12 +150,12 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 - 即時加總顯示於部門行底部
 - 儲存按鈕依加總狀態動態啟用/停用
 - 新增人員 Modal：員工下拉 + 比例輸入
-- 月跑鎖定時：編輯按鈕 disabled + hover 提示
+- 月名單分派鎖定時：編輯按鈕 disabled + hover 提示
 
 ## 8. 相依性
 
 - **Blocked By**：F057（需先查看人員比例設定）
-- **Blocks**：F061（月跑 Stage 4 人員分配需要人員比例已設定正確）
+- **Blocks**：F061（月名單分派 Stage 4 人員分配需要人員比例已設定正確）
 
 ## 9. 交叉參考
 

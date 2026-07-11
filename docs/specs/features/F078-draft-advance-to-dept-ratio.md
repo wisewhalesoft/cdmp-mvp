@@ -18,7 +18,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 > **v1.2.1（2026-05-21 / Phase 5 TDD code drift 修正 D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）：將 spec 內 `action = 'STAGE_ADVANCE'` 字串修正為 **`action = 'STAGE_ADVANCE'`**（entity 實際 enum 為 `STAGE_ADVANCE`，VARCHAR(30)）；real flow 經 `StageTransitionService.advanceTo()` 統一寫入（`apps/api/src/modules/assignment/services/stage-transition.service.ts:89`）。不變動 entity / migration / code / prototype；不變更其他 BR / AC / 業務邏輯。
 >
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-108 + AD-E07 v3.0 一致性決議完整重建；Guard 為 `DirectorGuard`；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議。
-> **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：月跑並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`（決議 #6）；Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
+> **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：月名單分派並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`（決議 #6）；Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
 ## Agent Loading Guide
 
@@ -102,7 +102,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 - **Then** 後端回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`（「只有草稿階段才能修改篩選條件」）
 - **And** UI 上篩選條件以唯讀方式呈現
 
-### AC-6：月跑執行中禁止推進
+### AC-6：月名單分派執行中禁止推進
 
 - **Given** `assignment_run.status IN ('pending', 'running')`
 - **When** 部長 / Admin 嘗試推進
@@ -159,7 +159,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 | 403 | AUTH_FORBIDDEN | 處長嘗試推進 |
 | 403 | LIST_HISTORICAL_READONLY | 歷史月份 |
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑進行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派進行中 |
 | 422 | ASSIGNMENT_LIST_INACTIVE | 名單已停用 |
 | 422 | LIST_STAGE_TRANSITION_FORBIDDEN | `stage != 'draft'` |
 | 422 | STAGE_ADVANCE_PRECONDITION_FAILED | 篩選條件為空 |
@@ -177,7 +177,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 | BR-6 | **CR 開關鎖定**：同 BR-5，依 stage 鎖定 CR 開關寫入 API |
 | BR-7 | **稽核失敗不 rollback**：沿用 F050 v2.0 BR-11 |
 | BR-8 | **DB 操作原子性**：`stage` 更新 + 稽核寫入須於同一 transaction |
-| BR-9 | **月跑並發守衛（v1.1 / 決議 #6）**：F078 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()` |
+| BR-9 | **月名單分派並發守衛（v1.1 / 決議 #6）**：F078 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()` |
 | BR-10 | **Feature Flag fallback（v1.1 / 決議 #2）**：F078 端點受 `FeatureFlagGuard` 保護；flag = false 時回 503 `FEATURE_NOT_ENABLED` |
 
 ## 7. UI/UX 需求
@@ -186,7 +186,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
   - 位於 F048 / F077 清單頁草稿階段名單操作欄
   - 處長身份**完全不渲染**
   - 已停用 / 非 `draft` 階段 / 歷史月份**完全不渲染**
-  - 月跑進行中 disabled + hover 提示
+  - 月名單分派進行中 disabled + hover 提示
   - 篩選條件為空時 disabled + hover 提示「請先設定至少一個篩選條件」
 - **確認對話框**：
   - 標題：「推進確認」
@@ -233,7 +233,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
   - 處長推進 → 403 `AUTH_FORBIDDEN`
   - 推進無篩選條件名單 → 422 `STAGE_ADVANCE_PRECONDITION_FAILED`
   - 推進 `stage = 'dept_ratio'` / `'personnel_ratio'` / `'approval'` / `'ready'` 名單 → 422 `LIST_STAGE_TRANSITION_FORBIDDEN`
-  - 月跑進行中推進 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
+  - 月名單分派進行中推進 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
   - 歷史月份推進 → 403 `LIST_HISTORICAL_READONLY`
   - Feature Flag 關閉時推進 → 503 `FEATURE_NOT_ENABLED`
   - 推進後嘗試修改篩選條件 → 422 `LIST_STAGE_TRANSITION_FORBIDDEN`

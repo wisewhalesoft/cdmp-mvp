@@ -1,14 +1,14 @@
 ---
 type: implementation-log
 feature_id: F098
-feature_name: 月跑 Worker 抽離（pg-boss 入列 + cdmp-worker 容器 + cancellation / orphan 回收）
+feature_name: 月名單分派 Worker 抽離（pg-boss 入列 + cdmp-worker 容器 + cancellation / orphan 回收）
 scope: P1-only
 status: complete
 last_updated: 2026-06-02
 branch: feat/F098-monthly-run-worker-extraction
 ---
 
-# F098：月跑 Worker 抽離（AD-E07-28 P1）— Implementation Log
+# F098：月名單分派 Worker 抽離（AD-E07-28 P1）— Implementation Log
 
 > 範圍限定 **P1**（執行容器抽離 + cancellation + orphan 回收）。**不**改 Stage 1~4 演算法（仍 JS 版），
 > 只改「pipeline 在哪裡、由誰執行」。不碰 P2（F099 Stage 1 SQL 下推）/ P3（F100）。
@@ -89,7 +89,7 @@ branch: feat/F098-monthly-run-worker-extraction
 1. **pg-boss v10 contract**（與多數網路 v9 範例不同，已驗實庫）：work handler 收 **job 陣列**（非單一 job）；v10 **已無 `teamConcurrency`/`teamSize`** → 序列化採 `batchSize:1` + 單 worker；`retryLimit` 於 `createQueue` + per-send 設；`cancel(name,id)`（queue name 第一參數）；migration DDL = `getConstructionPlans(schema)`。
 2. **CommonJS interop（關鍵）**：pg-boss 為 `export = PgBoss`。本專案 tsconfig `module:commonjs` 無 `esModuleInterop` → `import PgBoss from 'pg-boss'` 在 **ts-node**（worker entrypoint / migration runner）下會變 `pg_boss_1.default`（undefined）→ "is not a constructor"，但 swc/vitest 有 interop → **vitest 全綠卻 prod 崩潰**。已全面改 `import PgBoss = require('pg-boss')`（值使用處）；`import type` 處不受影響。已用 ts-node 實跑 worker bootstrap + migration 驗證。
 3. **CancellationPoller 註冊於 AssignmentModule**（非僅 worker module）：使 worker 之 pipeline（同 module scope）可注入取消檢查，避免重複宣告 pipeline 的龐大依賴；API 程序之 pipeline 雖也注入但不執行 → 無副作用；既有 pipeline unit test 未提供 poller（`@Optional` undefined）→ baseline 不變。
-4. **閾值 / 週期可注入**（OQ-F098-02）：`RUN_QUEUE_TUNING` provider + env（`RUN_QUEUE_JOB_EXPIRE_SECONDS` / `RUN_QUEUE_REAPER_INTERVAL_MS` / `RUN_QUEUE_ORPHAN_THRESHOLD_MS`）；預設保守（4h job expire / 60s reaper / 4h orphan threshold，明顯大於 P1 JS 版最長月跑）；測試以極短閾值 + 注入時鐘驗邏輯。
+4. **閾值 / 週期可注入**（OQ-F098-02）：`RUN_QUEUE_TUNING` provider + env（`RUN_QUEUE_JOB_EXPIRE_SECONDS` / `RUN_QUEUE_REAPER_INTERVAL_MS` / `RUN_QUEUE_ORPHAN_THRESHOLD_MS`）；預設保守（4h job expire / 60s reaper / 4h orphan threshold，明顯大於 P1 JS 版最長月名單分派）；測試以極短閾值 + 注入時鐘驗邏輯。
 5. **OrphanReaper 偵測不新增 schema 欄位**（OQ-AD28-02）：靠 running/pending 持續時間 > 閾值（`started_at` / `created_at` vs cutoff）+ pg-boss job expiration；不依賴 jobId 持久化。
 6. **OQ-F098-01 = 採納**：OrphanReaper 一併掃 `pending` 逾時孤兒（入列失敗 / 遺留）；另 triggerRun 入列失敗即時補償標 failed（雙保險，TS-F098-OQ-001 + OQ-002）。
 7. **cancelRun API 側不變**（C-2 / RG-CANCEL-005）：仍標 failed + `'使用者取消'` + audit CANCEL；P1 只**新增** worker 側 poller。pending-not-yet-consumed 取消快路徑：因不持久 jobId，由 consumer 消費前檢查 `status==='failed'` 略過（+ PG 真庫驗證 `pgboss.cancel` 可取消未消費 job，TS-F098-CANCEL-006）。
@@ -100,7 +100,7 @@ branch: feat/F098-monthly-run-worker-extraction
 |---|---|
 | **PG Integration CI 化** | 18 個強制需 Postgres 之案例中，本次以**最具代表性的 6 個**（入列→消費→completed、retry=0 不重派、序列化、payload 往返、pending cancel、worker 重啟接續）對真 Postgres（5433）實跑通過；其餘（如 PGINT-003 冪等 PK、ORPHAN-007 真 expire 端到端、NFR-001/003 E2E 可用性 / OOM 隔離）之**邏輯**已由 unit + 6 個 PG 案例覆蓋其核心契約。完整 18 案例之 E2E（含 docker kill worker）建議於 CI 起 Postgres 容器後補跑（沿用 F038/F075/M01 慣例）。CI 須能起 Postgres（RISK-F098-003）。 |
 | **`pgboss.cancel` 快路徑未綁 jobId** | 因 OQ-AD28-02 不新增 schema 欄位、未持久化 jobId，`cancelRun` 無法直接 `cancel(jobId)`；改由 consumer 消費前 `status==='failed'` 略過達同等效果（worker 不執行該 run）。真 `pgboss.cancel` 能力已於 TS-F098-CANCEL-006 對真庫驗證。若未來要在 pending 階段「主動」自佇列移除 job（而非消費時略過），需評估是否持久化 jobId（牴觸 OQ-AD28-02，留待 P2/P3 觀察）。 |
-| **NFR-001/003（月跑期間 API 可回應 / worker OOM 隔離）** | 結構性保證已由 TS-F098-TRIG（runPipeline 0 次）+ worker 程序分離（docker-compose）達成；真實可用性 / kill 容器之 E2E 屬 QA / staging 環境驗證（測試設計亦標 E2E）。 |
+| **NFR-001/003（月名單分派期間 API 可回應 / worker OOM 隔離）** | 結構性保證已由 TS-F098-TRIG（runPipeline 0 次）+ worker 程序分離（docker-compose）達成；真實可用性 / kill 容器之 E2E 屬 QA / staging 環境驗證（測試設計亦標 E2E）。 |
 | **pre-existing baseline 失敗** | 6 檔 / 10 tests（report/scope/snapshot + ETL）F098 前即失敗，非本次引入；未修（超出 F098 範圍）。 |
 
 ## 如何實跑 PG Integration（需 Postgres）

@@ -38,9 +38,9 @@ DELETE FROM ob_empl_set WHERE list_no = 'OB202506001';
 -- 清空稽核（僅驗證環境，方便斷言 STAGE_ADVANCE 筆數）
 DELETE FROM assignment_audit_log WHERE entity_id = 'OB202506001';
 
--- 確認無進行中月跑
+-- 確認無進行中月名單分派
 SELECT run_id, status FROM assignment_run WHERE status IN ('pending','running');
--- 預期 0 列；若有，先結束或刪除測試月跑
+-- 預期 0 列；若有，先結束或刪除測試月名單分派
 ```
 
 ---

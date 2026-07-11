@@ -12,7 +12,7 @@
 ## User Story
 
 **As a** 業務主管
-**I want** 在月跑完成後查看分派結果的摘要統計
+**I want** 在月名單分派完成後查看分派結果的摘要統計
 **So that** 快速確認本月名單總量、各部門分配量、各等級分佈是否符合預期，決定是否需要調整後重跑
 
 ---
@@ -21,9 +21,9 @@
 
 ### AC-1：顯示整體摘要數據
 
-- **Given** 月跑已完成（status = 'completed'）
+- **Given** 月名單分派已完成（status = 'completed'）
 - **When** 業務主管進入結果摘要頁
-- **Then** 顯示本次月跑（run_id）的整體統計：
+- **Then** 顯示本次月名單分派（run_id）的整體統計：
   - 作業年月、run_id、執行完成時間
   - 總分派客戶數
   - 各 Stage 產出筆數（Stage 1 原始名單數 / Stage 4 最終分派數）
@@ -55,7 +55,7 @@
 
 ### TC-083-01：顯示整體摘要
 
-- **Given**：月跑 completed，Stage 1 產出 10,000 筆，Stage 4 最終 9,500 筆
+- **Given**：月名單分派 completed，Stage 1 產出 10,000 筆，Stage 4 最終 9,500 筆
 - **When**：業務主管進入結果摘要頁
 - **Then**：總分派 9,500，名單覆蓋率 95%
 
@@ -75,7 +75,7 @@
 
 ## 依賴關係
 
-- **Blocked By**：US-081（月跑已完成）
+- **Blocked By**：US-081（月名單分派已完成）
 - **Blocks**：（無）
 
 ---
@@ -94,4 +94,4 @@
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **NFR**：[NFR-005](../../non-functional/NFR-005-result-accuracy.md)
-- **相關 Stories**：US-081（觸發月跑）、US-082（執行進度）、US-084（匯出結果）
+- **相關 Stories**：US-081（觸發月名單分派）、US-082（執行進度）、US-084（匯出結果）

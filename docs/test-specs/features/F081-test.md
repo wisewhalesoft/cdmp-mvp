@@ -17,7 +17,7 @@ last_updated: 2026-05-21
 > **v1.3 測試設計範圍（2026-05-21）**：本文件為 F081 首次建立的 test spec，覆蓋 v1.3 核心變更：
 > 1. **入口變更**：由 F048 v1.0 表格列改為 F048 v2.0 Kanban 主頁 `dept_ratio` 欄卡片「退回」按鈕
 > 2. **Rollback 成功後行為**：toast 訊息（info 樣式）+ Kanban 卡片即時欄位遷移（`dept_ratio` → `draft`，無跳頁）
-> 3. **既有業務邏輯保留**：API endpoint / `ob_dept_pct` DELETE / Transaction 原子性 / 月跑鎖 / 稽核 / Feature Flag
+> 3. **既有業務邏輯保留**：API endpoint / `ob_dept_pct` DELETE / Transaction 原子性 / 月名單分派鎖 / 稽核 / Feature Flag
 
 ---
 
@@ -83,9 +83,9 @@ last_updated: 2026-05-21
 
 ---
 
-### TS-F081-003：月跑執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
+### TS-F081-003：月名單分派執行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
 
-- **關聯需求**：F081 v1.3 AC-1（月跑鎖）/ BR-7 C-2
+- **關聯需求**：F081 v1.3 AC-1（月名單分派鎖）/ BR-7 C-2
 - **測試類型**：Negative / Integration（Supertest）
 - **前置條件**：
   - `assignment_run` seed 1 筆 `status='running'`；**必填 4 欄位**：`run_id`（UUID）、`project_workym='202605'`、`triggered_by`（operator UUID）、`created_at`（ISO timestamp）

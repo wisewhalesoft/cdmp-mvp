@@ -1,7 +1,7 @@
 ---
 type: test-design-feature
 feature_id: F101
-feature_name: 月跑 Stage 3/4 真實比例分派（dept ration + empl ration + ASSIGNDAY 確定性設計）
+feature_name: 月名單分派 Stage 3/4 真實比例分派（dept ration + empl ration + ASSIGNDAY 確定性設計）
 priority: P0-MVP
 related_spec: /docs/specs/features/F101-stage3-4-proportional-assignment.md
 spec_version: "1.0"
@@ -12,7 +12,7 @@ source_stories: [US-145, US-146, US-149, US-150, US-151]
 last_updated: 2026-06-05
 ---
 
-# F101：月跑 Stage 3/4 真實比例分派 — 測試設計
+# F101：月名單分派 Stage 3/4 真實比例分派 — 測試設計
 
 > ⚠️ **範圍**：本文件為測試設計（test design），**不含** production code、測試實作碼（spec 檔）、migration、entity 定義，由 tdd-implementation agent 承接落地。
 >
@@ -63,7 +63,7 @@ last_updated: 2026-06-05
 | ASGD（ASSIGNDAY 千分比，AC-12/16） | 5 | PG Integration | **是** | 高 | per-casedt FLOOR；最末吸收；DIVIDE_LEFT round-robin；estimate≡run |
 | EQ（JS↔SQL 逐列等價，AC-15，DoD） | 8 | PG Integration | **是** | 高 | **DoD 門檻**；代表性名單矩陣；四欄位逐列精確比對 |
 | IDEM（重跑安全 / 冪等，AC-4） | 3 | PG Integration | **是** | 高 | Stage 3 前清除；is_cr 保留；兩次執行四元組相同 |
-| FALL（Fallback / 警告通道，AC-5/11/17） | 6 | PG Integration + Unit | **是** | 高 | 無 ration / 無 empl / 無 calendar → NULL + 警告；月跑不中斷 |
+| FALL（Fallback / 警告通道，AC-5/11/17） | 6 | PG Integration + Unit | **是** | 高 | 無 ration / 無 empl / 無 calendar → NULL + 警告；月名單分派不中斷 |
 | REG（回歸保護，AC-10/AC-2/I-NO-ST4-EXCHANGE） | 5 | PG Integration + Unit | **是** | 高 | emplid 不為 NULL（有員工設定）；determinism 兩次相同；senior swap 不發生 |
 | DET（確定性靜態掃描，AC-2/I-DET-01） | 3 | Unit（靜態） | 否 | 高 | grep：NEWID/random/randomUUID 為空；ob_assign_set 無引用；AC-18 |
 | UPGR（分派差異報告 + 業務驗收，NFR-005） | 4 | PG Integration + 人工 | **是** | 中（報告自動、驗收人工） | 上線前硬性前置 |
@@ -250,9 +250,9 @@ last_updated: 2026-06-05
 - **測試類型**：負向（無 ration 設定 fallback）
 - **測試層**：PG Integration
 - **前置條件**：某 (dept_id, list_no, tier_level) 分組，`ob_dept_pct WHERE list_no=<list_no>` 無任何 ration>0 記錄（或整個 list_no 缺席）
-- **步驟**：執行 Stage 3；查詢 assignment_run.skipped_cases 及月跑最終 status
+- **步驟**：執行 Stage 3；查詢 assignment_run.skipped_cases 及月名單分派最終 status
 - **期望結果**：
-  - 月跑 `status = 'completed'`（**不中斷**）
+  - 月名單分派 `status = 'completed'`（**不中斷**）
   - 該分組案件 `dept_id` 保持 NULL（不指派）
   - `assignment_run.skipped_cases` JSONB 內含：
     ```json
@@ -402,7 +402,7 @@ last_updated: 2026-06-05
 - **前置條件**：Stage 3 後 AI000 / T1 有 51 件；`ob_empl_set WHERE deptid_m='AI000' AND ration>0` = **空集合**
 - **步驟**：執行 Stage 4（AI000 / T1）；查詢 emplid 值 + skipped_cases
 - **期望結果**：
-  - 月跑 `status = 'completed'`（**不中斷**）
+  - 月名單分派 `status = 'completed'`（**不中斷**）
   - 51 件 `emplid` = NULL（無員工可指派）
   - `skipped_cases.warnings[]` 含：
     ```json
@@ -541,11 +541,11 @@ last_updated: 2026-06-05
 - **測試類型**：負向（無 calendar fallback）
 - **測試層**：PG Integration
 - **前置條件**：`ob_calendar` 該月（ym='202607'）無任何 `rest_flg='0'` 記錄
-- **步驟**：執行 ASSIGNDAY；查詢月跑 status + skipped_cases
+- **步驟**：執行 ASSIGNDAY；查詢月名單分派 status + skipped_cases
 - **期望結果**：
   - `calculateDailyEstimate` 返回空清單（workingDays=0）
   - 全部案件 `assignday` 保持 NULL
-  - 月跑 `status = 'completed'`（**不中斷**）
+  - 月名單分派 `status = 'completed'`（**不中斷**）
   - `skipped_cases.warnings[]` 含 `{ "event": "ASSIGNDAY_NO_CALENDAR_WARN", "list_no": "<list_no>", "work_ym": "202607" }`
   - `warning_summary` 含 `"ASSIGNDAY_NO_CALENDAR_WARN"`
 
@@ -616,10 +616,10 @@ last_updated: 2026-06-05
 - **測試類型**：正向（重跑安全）
 - **測試層**：PG Integration
 - **前置條件**：
-  1. 第一次月跑（run_id=R1）完成，ob_monthly_run_result 有 dept_id / emplid / assignday 值
+  1. 第一次月名單分派（run_id=R1）完成，ob_monthly_run_result 有 dept_id / emplid / assignday 值
   2. 某些案件 is_cr='Y'
 - **步驟**：
-  1. 觸發同月份第二次月跑（run_id=R2）
+  1. 觸發同月份第二次月名單分派（run_id=R2）
   2. 驗證 Stage 3 開始前（Stage 3 清除 UPDATE 後）之 ob_monthly_run_result 狀態
   3. 驗證 Stage 3/4 完成後結果
 - **期望結果**：
@@ -653,7 +653,7 @@ last_updated: 2026-06-05
 - **期望結果**：
   - L1 重跑後結果與第一次 L1 結果相同
   - L2 結果正確（不受 L1 重跑影響）
-  - 月跑最終 status = completed
+  - 月名單分派最終 status = completed
 
 ---
 
@@ -688,9 +688,9 @@ last_updated: 2026-06-05
   - 名單 L1：`ob_dept_pct` 無 ration → STAGE3_NO_DEPT_RATION
   - 名單 L2：ob_empl_set 無員工 → STAGE4_NO_EMPL_WARN
   - 名單 L3：ob_calendar 無工作日 → ASSIGNDAY_NO_CALENDAR_WARN
-- **步驟**：執行含 L1/L2/L3 的月跑；查詢 skipped_cases + warning_summary + status
+- **步驟**：執行含 L1/L2/L3 的月名單分派；查詢 skipped_cases + warning_summary + status
 - **期望結果**：
-  - 月跑 `status = 'completed'`（全程不中斷）
+  - 月名單分派 `status = 'completed'`（全程不中斷）
   - `skipped_cases.warnings[]` 含三類事件碼（各一筆以上）
   - `warning_summary` 含 `"STAGE3_NO_DEPT_RATION|STAGE4_NO_EMPL_WARN|ASSIGNDAY_NO_CALENDAR_WARN"`
   - 對應 null 欄位：dept_id NULL / emplid NULL / assignday NULL（不寫錯值）
@@ -702,8 +702,8 @@ last_updated: 2026-06-05
 - **相關 AC**：AC-5/11/17（警告通道設計）
 - **測試類型**：回歸（JSONB 結構合并）
 - **測試層**：PG Integration
-- **前置條件**：月跑已有 `skipped_cases = { "cases": [...] }`（先前其他步驟寫入）；F101 寫入 warnings
-- **步驟**：檢查月跑完成後 `skipped_cases` JSONB 結構
+- **前置條件**：月名單分派已有 `skipped_cases = { "cases": [...] }`（先前其他步驟寫入）；F101 寫入 warnings
+- **步驟**：檢查月名單分派完成後 `skipped_cases` JSONB 結構
 - **期望結果**：
   - `skipped_cases.cases` 陣列保持原值（不被覆蓋）
   - `skipped_cases.warnings` 為新增子鍵（JSONB merge，非覆蓋）
@@ -717,7 +717,7 @@ last_updated: 2026-06-05
 - **測試類型**：負向（audit_log 不汙染）
 - **測試層**：PG Integration
 - **前置條件**：觸發 STAGE3_NO_DEPT_RATION 警告
-- **步驟**：月跑完成後查詢 `assignment_audit_log WHERE action IN ('STAGE3_NO_DEPT_RATION', 'STAGE4_NO_EMPL_WARN', 'ASSIGNDAY_NO_CALENDAR_WARN')`
+- **步驟**：月名單分派完成後查詢 `assignment_audit_log WHERE action IN ('STAGE3_NO_DEPT_RATION', 'STAGE4_NO_EMPL_WARN', 'ASSIGNDAY_NO_CALENDAR_WARN')`
 - **期望結果**：查詢結果 = **空集合**（警告不寫 audit_log，僅寫 skipped_cases/warning_summary）
 
 ---
@@ -964,7 +964,7 @@ last_updated: 2026-06-05
 | 風險 | 等級 | 緩解策略 |
 |---|---|---|
 | JS↔SQL 等價失敗（FLOOR 邊界、per-list scope 差異） | 高 | EQ-001~008 為 DoD 門檻；所有 EQ 案例在 PG 真庫逐列 toEqual；未過不上線 |
-| ob_calendar ETL 未在月跑前執行 → assignday 全 NULL | 中 | ASGD-005 fallback 測試驗證不中斷行為；seed 直接寫 ob_calendar 不依賴 ETL 時機 |
+| ob_calendar ETL 未在月名單分派前執行 → assignday 全 NULL | 中 | ASGD-005 fallback 測試驗證不中斷行為；seed 直接寫 ob_calendar 不依賴 ETL 時機 |
 | skipped_cases JSONB merge 衝突（warnings 與 cases 鍵） | 低 | FALL-005 明確驗證兩鍵共存；tdd 實作時使用 JSONB 合并（非覆蓋） |
 | F101 測試修改 F100 st4_exchange 行為 | 中 | REG-002/003/DET-003 確認 senior swap 完全移除；EMPL 群組全以 oracle 手算（非 F100 baseline）驗收 |
 | CI 並行執行 DB 衝突 | 高 | 明確要求 `--runInBand` 或分 step 序列執行 F098/F099/F100/F101 pg.spec |

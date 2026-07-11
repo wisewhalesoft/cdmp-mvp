@@ -33,7 +33,7 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 
 **核心語意**：
 - 每個 categorical 欄位（`column_name`）對應多個可選值（`option_value`），並附帶顯示標籤（`option_label`）
-- **停用的可選值「不回溯」既有名單條件**：已在現有名單定義中選取某值的條件，即使該值後來被停用，仍維持原有設定不變，月跑讀取時也不因停用而失敗
+- **停用的可選值「不回溯」既有名單條件**：已在現有名單定義中選取某值的條件，即使該值後來被停用，仍維持原有設定不變，月名單分派讀取時也不因停用而失敗
 
 ---
 
@@ -117,11 +117,11 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 - **And** 已在**現有**名單定義條件中選取此值的設定**不受影響**（不回溯修改、不自動移除）
 - **And** 操作寫入 `assignment_audit_log`（`action = 'DISABLE'`）
 
-### AC-7：停用可選值不中斷月跑（不回溯既有名單）
+### AC-7：停用可選值不中斷月名單分派（不回溯既有名單）
 
 - **Given** 名單定義 LIST_NO `OB202604010` 的 PROD_KIND 條件包含值 `02`（機車）；部長停用白名單 PROD_KIND 欄位的可選值 `02`
-- **When** 觸發月跑（US-081），月跑 Stage 1 讀取 `OB202604010` 的篩選條件
-- **Then** 月跑仍正確以 `PROD_KIND INCLUDE ['02', ...]` 過濾 OBPOOLDATA，月跑完成不報錯
+- **When** 觸發月名單分派（US-081），月名單分派 Stage 1 讀取 `OB202604010` 的篩選條件
+- **Then** 月名單分派仍正確以 `PROD_KIND INCLUDE ['02', ...]` 過濾 OBPOOLDATA，月名單分派完成不報錯
 - **And** 結果準確性不受可選值停用影響
 
 ### AC-8：部長 / Admin 重新啟用已停用的可選值
@@ -148,8 +148,8 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 > **涵蓋 GAP**：A4、A5（caseyear / case_status 選項管理行為與其他 categorical 欄位一致）
 
 - **Given** 某名單定義的篩選條件已包含 caseyear IN ['1', '2'] 或 case_status IN ['01']；管理員事後透過本頁（Tab 2）停用 caseyear 的某個可選值（如 `2`）或 case_status 的某個值（如 `01`）
-- **When** 觸發月跑（US-081）
-- **Then** 月跑 Stage 1 仍以既有 condition_payload 中固化的值過濾 OBPOOLDATA，不因 caseyear / case_status 可選值被停用而報錯或移除條件
+- **When** 觸發月名單分派（US-081）
+- **Then** 月名單分派 Stage 1 仍以既有 condition_payload 中固化的值過濾 OBPOOLDATA，不因 caseyear / case_status 可選值被停用而報錯或移除條件
 - **And** 停用的可選值不再出現在**新建**名單定義的 caseyear / case_status 多選元件選項中
 - **And** caseyear / case_status 的不回溯語意與 PROD_KIND / SPEC_TP 等其他 categorical 欄位**完全一致**（沿用 AC-6 / AC-7 既有規則）
 
@@ -158,7 +158,7 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 ## 技術備註
 
 - 建議新建 `pooldata_field_option` 表（AppDB），含 `column_name`（FK → `pooldata_field_whitelist`）、`option_value`、`option_label`、`is_active`、`created_at`、`updated_at`；複合唯一鍵 `(column_name, option_value)`；schema 由 system-architect 決策
-- 「不回溯」實作語意：月跑 Stage 1 讀取名單條件時，直接讀取 `ob_list_definition` 儲存的條件 JSONB（值已固化），不 join `pooldata_field_option` 做有效性驗證
+- 「不回溯」實作語意：月名單分派 Stage 1 讀取名單條件時，直接讀取 `ob_list_definition` 儲存的條件 JSONB（值已固化），不 join `pooldata_field_option` 做有效性驗證
 - 前端多選元件選項來源：`GET /api/v1/pooldata-fields/{columnName}/options?active=true`，只返回 `is_active = true` 的值
 - **權限實作**：本頁所有寫入操作使用 `DirectorGuard`（部長 + Admin 可通過）；查看操作使用 `SalesManagerGuard`（部長 + 處長 + Admin 均可進入）
 
@@ -196,11 +196,11 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 - **When**：部長嘗試新增 `option_value = '02'`
 - **Then**：顯示錯誤「此可選值已存在（狀態：停用），請改為啟用操作」，不新增
 
-### TC-103-06：停用值不影響既有名單月跑
+### TC-103-06：停用值不影響既有名單月名單分派
 
 - **Given**：名單 `OB202604010` 的 PROD_KIND 條件含值 `02`；部長停用 PROD_KIND 的可選值 `02`
-- **When**：觸發月跑
-- **Then**：月跑 Stage 1 仍以 `PROD_KIND INCLUDE '02'` 過濾 OBPOOLDATA，不報錯，分派結果正常
+- **When**：觸發月名單分派
+- **Then**：月名單分派 Stage 1 仍以 `PROD_KIND INCLUDE '02'` 過濾 OBPOOLDATA，不報錯，分派結果正常
 
 ### TC-103-07：停用值從新名單表單消失
 
@@ -234,7 +234,7 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 | ID | 問題 | 負責方 | 狀態 |
 |----|------|--------|------|
 | OQ-103-02 | 可選值是否支援**排序**（`sort_order`）？若支援，部長是否需要能手動拖拉調整順序？MVP 暫不設計，留此 OQ 供後續評估。 | 業務主管 | 待確認（暫定 MVP 不支援） |
-| OQ-103-03 | 可選值是否支援硬刪除？MVP 建議僅支援停用（軟刪除），避免歷史月跑資料參照失效問題。 | 業務主管 + system-architect | 待確認（建議停用） |
+| OQ-103-03 | 可選值是否支援硬刪除？MVP 建議僅支援停用（軟刪除），避免歷史月名單分派資料參照失效問題。 | 業務主管 + system-architect | 待確認（建議停用） |
 
 ---
 
@@ -246,7 +246,7 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 - [ ] 初始 Seed 冪等性測試通過（TC-103-03）
 - [ ] 新增可選值測試通過（TC-103-04）
 - [ ] 重複值阻擋測試通過（TC-103-05）
-- [ ] 停用值不影響月跑（不回溯）測試通過（TC-103-06）
+- [ ] 停用值不影響月名單分派（不回溯）測試通過（TC-103-06）
 - [ ] 停用值從新名單表單消失測試通過（TC-103-07）
 - [ ] 重新啟用測試通過（TC-103-08）
 - [ ] numeric 欄位無可選值入口測試通過（TC-103-09）
@@ -260,7 +260,7 @@ US-102 定義了 OBPOOLDATA 篩選欄位白名單，其中 `field_type = categor
 ## 相關文件
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
-- **相關 Stories**：US-102（POOLDATA 篩選欄位白名單，本 Story 的父資料）、~~US-092（現有 M06 代碼維護基礎）~~（v2.1 DEPRECATED）、US-081（月跑 Stage 1 篩選條件讀取）、US-100（部長角色定義）、US-101（處長唯讀規則）、US-106（新名單定義草稿階段，動態多選選項來源）、US-124（篩選欄位合併頁 Tab 2 入口，v2.1）、US-125（caseyear / case_status Seed 遷移，v2.1）
+- **相關 Stories**：US-102（POOLDATA 篩選欄位白名單，本 Story 的父資料）、~~US-092（現有 M06 代碼維護基礎）~~（v2.1 DEPRECATED）、US-081（月名單分派 Stage 1 篩選條件讀取）、US-100（部長角色定義）、US-101（處長唯讀規則）、US-106（新名單定義草稿階段，動態多選選項來源）、US-124（篩選欄位合併頁 Tab 2 入口，v2.1）、US-125（caseyear / case_status Seed 遷移，v2.1）
 - **GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`（A4、A5、E4、E5、E6、J5）
 - **Reference SP**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`（篩選欄位與可選值初始 seed 來源）
 - **Reference Table**：`reference/TableSchema/OB/OBPOOLDATA.sql`、`reference/TableSchema/OB/OBMCODEDF.sql`（現有代碼維護，categorical 欄位初始值的參照來源）

@@ -54,7 +54,7 @@ decode 涵蓋**全部衍生欄**（OQ-decode-2 拍板）：PROJECT_TP / SALES_ST
 - 讀取（含查看 decode）：`businessRole IN ('director', 'section_chief', 'admin')`（沿用 Tab 3 / `GET /assignment/scoring` 既有讀取規則，class 級 `DirectorOrSectionChiefGuard`；讀取開放至處長，不因 decode 收緊）。
 - F069 Tab 1 已選中某 CARD_TYPE，且該 CARD_TYPE 於 `ob_card_type.status='active'`。
 - 該 CARD_TYPE 於 `ob_levelcard_version` 至少有一筆 `status='active'` 版本紀錄（否則沿用既有空狀態，見 AC-5）。
-- 本功能**無寫入動作**，故無月跑鎖、無寫入權限（部長）前置；decode 一律唯讀。
+- 本功能**無寫入動作**，故無月名單分派鎖、無寫入權限（部長）前置；decode 一律唯讀。
 
 ## 4. 驗收標準
 

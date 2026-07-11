@@ -5,11 +5,11 @@
 > **類型**：下游應用
 > **階段**：Phase 1（MVP）
 > **Stories 數量**：57（含 A~H 組 + v2.1 重構 + 2026-05-20 業務複核補強 + 2026-06-24 F103 計分修正；廢棄 US-088/089/079/091/092；US-078 保留為流程外查詢入口）
-> **最後更新**：2026-06-24（F103 月跑計分引擎欄位來源修正：新增 US-156/157/158）
+> **最後更新**：2026-06-24（F103 月名單分派計分引擎欄位來源修正：新增 US-156/157/158）
 
 ## Epic 目標
 
-讓業務主管（Sales Manager）能夠**獨立完成客戶名單分派全流程**，從條件設定、計分維度調整、部門與人員比例配置，到觸發月跑、查看結果、匯出清單，以及回顧歷史快照比對差異，**全程無需 IT 介入**。
+讓業務主管（Sales Manager）能夠**獨立完成客戶名單分派全流程**，從條件設定、計分維度調整、部門與人員比例配置，到觸發月名單分派、查看結果、匯出清單，以及回顧歷史快照比對差異，**全程無需 IT 介入**。
 
 現行系統由 IT 人員手動執行 SQL Stored Procedure，業務主管無可視化介面、無法自助調整參數、亦無執行快照可追溯。本 Epic 將上述流程完整搬移至 CDMP 平台，提供五個配置面板（名單定義 / 計分設定 / 分派比例 / 分派執行 / 快照歷史），讓業務主管在每月作業週期內自助完成所有操作。
 
@@ -98,14 +98,14 @@
 
 | Story ID | 標題 | 優先級 | 檔案 |
 |----------|------|--------|------|
-| US-081 | 觸發分派月跑 | Must Have | [US-081-M04-trigger-assignment-run.md](US-081-M04-trigger-assignment-run.md) |
+| US-081 | 觸發分派月名單分派 | Must Have | [US-081-M04-trigger-assignment-run.md](US-081-M04-trigger-assignment-run.md) |
 | US-082 | 查看分派執行進度 | Must Have | [US-082-M04-view-run-progress.md](US-082-M04-view-run-progress.md) |
 | US-083 | 查看分派結果摘要 | Must Have | [US-083-M04-view-run-result-summary.md](US-083-M04-view-run-result-summary.md) |
 | US-084 | 匯出分派結果 | Must Have | [US-084-M04-export-assignment-result.md](US-084-M04-export-assignment-result.md) |
-| **US-122** | **月跑 Stage 1 動態 WHERE 條件執行（condition_payload 驅動）**（v2.1 新增）| Must Have | [US-122-M04-stage1-dynamic-filter.md](US-122-M04-stage1-dynamic-filter.md) |
-| US-137 | 月跑觸發共用目標作業月狀態（F097）| Must Have | [US-137-M04-shared-target-work-ym-state.md](US-137-M04-shared-target-work-ym-state.md) |
-| US-138 | 月跑觸發月份選擇器（F097）| Must Have | [US-138-M04-trigger-run-month-picker.md](US-138-M04-trigger-run-month-picker.md) |
-| US-139 | 月跑後 API 路由以 project_workym 守衛（F097）| Must Have | [US-139-M04-post-runs-accept-workym-guard.md](US-139-M04-post-runs-accept-workym-guard.md) |
+| **US-122** | **月名單分派 Stage 1 動態 WHERE 條件執行（condition_payload 驅動）**（v2.1 新增）| Must Have | [US-122-M04-stage1-dynamic-filter.md](US-122-M04-stage1-dynamic-filter.md) |
+| US-137 | 月名單分派觸發共用目標作業月狀態（F097）| Must Have | [US-137-M04-shared-target-work-ym-state.md](US-137-M04-shared-target-work-ym-state.md) |
+| US-138 | 月名單分派觸發月份選擇器（F097）| Must Have | [US-138-M04-trigger-run-month-picker.md](US-138-M04-trigger-run-month-picker.md) |
+| US-139 | 月名單分派後 API 路由以 project_workym 守衛（F097）| Must Have | [US-139-M04-post-runs-accept-workym-guard.md](US-139-M04-post-runs-accept-workym-guard.md) |
 | US-140 | 整合 current_work_ym service（F097）| Must Have | [US-140-M04-consolidate-current-work-ym-service.md](US-140-M04-consolidate-current-work-ym-service.md) |
 | US-141 | 下游讀取 run 的 project_workym（F097）| Must Have | [US-141-M04-downstream-read-run-project-workym.md](US-141-M04-downstream-read-run-project-workym.md) |
 | US-142 | Stage 1 去重視窗對齊目標月（F097）| Must Have | [US-142-M04-stage1-dedup-window-target-month.md](US-142-M04-stage1-dedup-window-target-month.md) |
@@ -145,7 +145,7 @@
 ### M07 — 角色與可見範圍
 
 > **重要（2026-05-15 決策）**：E07 角色矩陣最終定案如下：
-> - **部長 + Admin**：對 E07 全模組（白名單維護、計分設定、部門比例、簽核、月跑觸發、名單 CRUD）擁有完整操作權限
+> - **部長 + Admin**：對 E07 全模組（白名單維護、計分設定、部門比例、簽核、月名單分派觸發、名單 CRUD）擁有完整操作權限
 > - **處長**：**僅限**「個別業務比例設定」（可操作）+ 「準備完成階段查詢」（可查詢唯讀）；其他所有 E07 功能無操作權限（M02 計分設定可唯讀查看）
 > - **角色指派入口**：E02 帳號管理頁（US-014），E07 不另設指派 UI
 > - 此矩陣為 **F002（auth/permission feature spec）** 的更新依據，需通知 spec-writer 同步
@@ -163,7 +163,7 @@
 
 ## 關鍵資料實體
 
-### AssignmentRun（分派月跑紀錄）
+### AssignmentRun（分派月名單分派紀錄）
 
 | 欄位 | 類型 | 說明 |
 |------|------|------|
@@ -180,7 +180,7 @@
 
 | 欄位 | 類型 | 說明 |
 |------|------|------|
-| run_id | UUID (FK) | 關聯月跑 |
+| run_id | UUID (FK) | 關聯月名單分派 |
 | snapshot_type | ENUM('config','input_list','result') | 快照類型 |
 | payload | JSONB | 快照內容 |
 | created_at | TIMESTAMP | 快照時間 |
@@ -211,7 +211,7 @@
 
 **待解決**：需確認是否為既有 OBPCTLIST 或需新建（見「待解決問題」第 4 點）。
 
-參照 Story：US-091（設定 per-LIST_NO 部門比例）、US-081（月跑 Stage 2 讀取）
+參照 Story：US-091（設定 per-LIST_NO 部門比例）、US-081（月名單分派 Stage 2 讀取）
 
 ### 既有 OB 相關表
 
@@ -226,14 +226,14 @@
 | OBLEVELCARD_SCORE | 計分維度分數設定 | 業務主管於 E07 M02 維護 | US-073 |
 | OBLEVELCARD_LEVEL | CARD_LEVEL 分級設定（總分區間 → CARD_LEVEL=A/B/C/D…） | 業務主管於 E07 M02 維護 | US-074 |
 | OBTIER | TIER_LEVEL 對應表（CARD_TYPE × CARD_LEVEL → TIER_LEVEL=T1/T2/T3…）；AppDB 對應名 `ob_tier`；原表 4 欄（LIST_NM / CARD_TYPE / CARD_LEVEL / TIER_LEVEL，皆 nullable，無 PK constraint，無稽核欄位）；schema 已確認（2026-05-05）；dump 顯示 8 種 CARD_TYPE（H/S/E/S5/E5/M/HM/M5），HM/M5 為計分卡外 fallback，其 CARD_LEVEL 可為空；複合 PK `(card_type, card_level)` **[ASSUMPTION：遷移時補建，非原表既有；CARD_LEVEL 為空時以 CARD_TYPE 唯一]** | 業務主管於 E07 M02 維護 | US-075 |
-| OBPOOLDATA | 案件池（OB 月跑輸入案件清單） | E04 ETL 擷取 | US-081（Stage 1 讀取） |
-| OBPOOLDATA_LIST | per-LIST_NO 案件池 / 分派結果寫回表（OB_DEPT、OB_EMPLID） | 月跑寫入 | US-081（Stage 3/4 寫入）、US-083、US-086 |
+| OBPOOLDATA | 案件池（OB 月名單分派輸入案件清單） | E04 ETL 擷取 | US-081（Stage 1 讀取） |
+| OBPOOLDATA_LIST | per-LIST_NO 案件池 / 分派結果寫回表（OB_DEPT、OB_EMPLID） | 月名單分派寫入 | US-081（Stage 3/4 寫入）、US-083、US-086 |
 | OBEMPLSETMF | 人員比例設定（業務員 RATION） | 業務主管於 E07 M03 維護 | US-078、US-079、US-081 |
 
 ## 成功標準
 
 1. 業務主管能夠在不需要 IT 協助的情況下，完成每月名單分派全流程
-2. 執行月跑後，系統產生唯一 `run_id`，三份快照（條件設定 / 輸入清單 / 結果明細）原子性寫入，可完整追溯
+2. 執行月名單分派後，系統產生唯一 `run_id`，三份快照（條件設定 / 輸入清單 / 結果明細）原子性寫入，可完整追溯
 3. 新系統分派結果與舊系統 Stored Procedure 結果誤差 < 3%（以件數計算）
 4. 五個配置面板（M01 ~ M05）全部可操作，無任何功能需跳出至資料庫工具
 5. 歷史快照支援任意兩次執行的差異比對，業務主管可清楚看出人員配置或參數變動的影響
@@ -251,13 +251,13 @@
 7. ✅ **OBEMPHIRE / OBCALENDAR 同步機制（2026-05-04 決議）** → 採 E04 通用擷取任務：Admin 於系統初始化時建立兩個擷取任務（`ob_emphire` 每日擷取、`ob_calendar` 定期擷取），E07 業務邏輯直接 query AppDB。不在 E07 額外新增 CRUD Story，業務主管不維護這兩張表。
 8. ✅ **OBTIER schema 已取得（2026-05-05）** → 確認為 4 欄結構（LIST_NM nvarchar(30) / CARD_TYPE varchar(5) / CARD_LEVEL varchar(5) / TIER_LEVEL varchar(5)，皆 nullable，原表無 PK constraint，無稽核欄位）。LIST_NM 為描述性輔助欄位，不參與 SP join 邏輯。複合 PK `(card_type, card_level)` 從 SP join 條件推論業務上唯一，遷移至 AppDB 時補建。操作稽核由 `assignment_audit_log` 統一記錄，`ob_tier` 本表不含稽核欄位。
 
-相關架構決策：AD-E07-1（OB 資料遷移）、AD-E07-2（月跑非同步 + 快照原子性）、AD-E07-3（複雜計分保留為 PostgreSQL function）。
+相關架構決策：AD-E07-1（OB 資料遷移）、AD-E07-2（月名單分派非同步 + 快照原子性）、AD-E07-3（複雜計分保留為 PostgreSQL function）。
 
 9. ✅ **2026-05-05 dump 驗證後 6 項 Story 層決議**：
 
    a. **OBLEVELCARD_VERSION 補加 STATUS 欄位**（差異 1）：原表無 STATUS 欄位，以 SDATE/EDATE（VARCHAR(8) YYYYMMDD）表達計分版本生效期間（dump 6 筆全部 EDATE='20991231'）。採選項 B：遷移至 AppDB 時補加 `status VARCHAR(10) NOT NULL DEFAULT 'active'`，初值由 SDATE/EDATE 計算（SDATE ≤ 今日 < EDATE 則設 'active'）。與 ob_list_definition 採相同設計。影響：US-072、US-073、US-074。
 
-   b. **OBTIER 接受 HM/M5 等計分卡外 fallback，CARD_LEVEL 可空**（差異 2）：OBTIER dump 顯示 8 種 CARD_TYPE（H/S/E/S5/E5/M/HM/M5），HM（機車期中名單）、M5（機車中結滿期名單）為計分卡體系外 fallback；M5 的 CARD_LEVEL 為空字串，月跑 Stage 2 僅比對 CARD_TYPE 即輸出 TIER_LEVEL。複合 PK 假設附加但書：CARD_LEVEL 為空時以 CARD_TYPE 唯一。TIER_LEVEL 有效值約 13 種（T1/T2/T3/T1M/T3M/T32/T4/T51/T52/T1HM/T2HM/T3HM/T5M）。影響：US-075；OQ 待解決項（TIER_LEVEL 有效值範圍 / CARD_TYPE 有效值來源）標記 Resolved。
+   b. **OBTIER 接受 HM/M5 等計分卡外 fallback，CARD_LEVEL 可空**（差異 2）：OBTIER dump 顯示 8 種 CARD_TYPE（H/S/E/S5/E5/M/HM/M5），HM（機車期中名單）、M5（機車中結滿期名單）為計分卡體系外 fallback；M5 的 CARD_LEVEL 為空字串，月名單分派 Stage 2 僅比對 CARD_TYPE 即輸出 TIER_LEVEL。複合 PK 假設附加但書：CARD_LEVEL 為空時以 CARD_TYPE 唯一。TIER_LEVEL 有效值約 13 種（T1/T2/T3/T1M/T3M/T32/T4/T51/T52/T1HM/T2HM/T3HM/T5M）。影響：US-075；OQ 待解決項（TIER_LEVEL 有效值範圍 / CARD_TYPE 有效值來源）標記 Resolved。
 
    c. **OBEMPLSETMF.DEPTID_M 遷移時 RTRIM**（差異 4）：原表 DEPTID_M 宣告 VARCHAR(50)，業務值為 4 字元部門代碼，dump 顯示 46 個空白填充。遷移腳本需 `RTRIM`，新系統 `ob_empl_set.deptid_m` 存入 trim 後值。影響：US-079。
 

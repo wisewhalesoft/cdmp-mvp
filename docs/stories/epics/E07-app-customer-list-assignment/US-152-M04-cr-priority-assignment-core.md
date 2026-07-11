@@ -4,7 +4,7 @@ version: v1.0
 change-summary: "新增 story：F102 CR 優先分派核心——失效規則兩條（逾2年 + 離職）＋ CR 優先指派（ob_empl_set ration>0 前提）＋ 扣量（F101 Stage 3/4 只跑 is_cr<>'Y' 案件）；跑在 F101 比例分派之前。"
 ---
 
-# US-152：月跑 CR 優先分派核心（失效清空 + 優先指派 + 扣量）
+# US-152：月名單分派 CR 優先分派核心（失效清空 + 優先指派 + 扣量）
 
 > **Story ID**：US-152
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
@@ -12,21 +12,21 @@ change-summary: "新增 story：F102 CR 優先分派核心——失效規則兩�
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：8
-> **Feature**：F102 月跑 CR 優先分派
+> **Feature**：F102 月名單分派 CR 優先分派
 
 ---
 
 ## User Story
 
 **As a** 業務主管
-**I want** 月跑在 Stage 3 比例分派之前，先執行 CR 優先分派邏輯——清空失效的 CR 標記（逾2年或業代已離職），再將有效 CR 案件優先指派給原 CR 業代，並讓後續 Stage 3/4 比例分派只跑尚未被 CR 預指派的案件
-**So that** CR 客戶（曾被特定業代服務的歷史客戶）能回到原業代手中，月跑結果中 CR 三欄（`cr_id`/`cr_nm`/`is_cr`）有值，對齊 legacy 名單約 1.9% 的 CR 案件比例
+**I want** 月名單分派在 Stage 3 比例分派之前，先執行 CR 優先分派邏輯——清空失效的 CR 標記（逾2年或業代已離職），再將有效 CR 案件優先指派給原 CR 業代，並讓後續 Stage 3/4 比例分派只跑尚未被 CR 預指派的案件
+**So that** CR 客戶（曾被特定業代服務的歷史客戶）能回到原業代手中，月名單分派結果中 CR 三欄（`cr_id`/`cr_nm`/`is_cr`）有值，對齊 legacy 名單約 1.9% 的 CR 案件比例
 
 ---
 
 ## 背景說明
 
-F101（月跑 Stage 3/4 真實比例分派，commit `1ac93da`）在「Legacy 差異聲明」中刻意將 `is_cr` 簡化為被動標記，未實作 CR 優先分配機制。本 story 補足此差距。
+F101（月名單分派 Stage 3/4 真實比例分派，commit `1ac93da`）在「Legacy 差異聲明」中刻意將 `is_cr` 簡化為被動標記，未實作 CR 優先分配機制。本 story 補足此差距。
 
 **Legacy 依據**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st2_dept.sql`（第 116–310 行，UTF-16LE；`@SYS_DT = PROJECT_WORKYM+'01'`，即名單月第一天），四個步驟跑在 Stage 3 比例分派之前：
 
@@ -58,7 +58,7 @@ F101（月跑 Stage 3/4 真實比例分派，commit `1ac93da`）在「Legacy 差
 - **When** CR 優先分派前置步驟（步驟 1）執行
 - **Then** 案件 A 的 `cr_id` 清空為 NULL（或空字串）、`cr_nm` 清空、`is_cr = 'N'`
 - **And** 案件 B 的 `cr_id`/`cr_nm`/`is_cr` **不受影響**，維持原值
-- **And** 清空操作限於目前月跑的 `ob_monthly_run_result` 工作集，不修改 `ob_pool_data_list` 原始資料
+- **And** 清空操作限於目前月名單分派的 `ob_monthly_run_result` 工作集，不修改 `ob_pool_data_list` 原始資料
 
 ### AC-2：失效規則——CR 業代已離職清空 CR 標記
 
@@ -91,7 +91,7 @@ F101（月跑 Stage 3/4 真實比例分派，commit `1ac93da`）在「Legacy 差
 
 ### AC-6：確定性可重現（align F101 I-DET-01）
 
-- **Given** 相同月跑設定（相同 list_no、work_ym、ob_empl_set、ob_emphire 資料）執行兩次
+- **Given** 相同月名單分派設定（相同 list_no、work_ym、ob_empl_set、ob_emphire 資料）執行兩次
 - **When** CR 優先分派步驟執行
 - **Then** 兩次執行中，步驟 1/2 清空的案件集合完全相同（確定性判斷）
 - **And** 步驟 3 指派的 emplid/dept_id/is_cr 完全相同
@@ -99,7 +99,7 @@ F101（月跑 Stage 3/4 真實比例分派，commit `1ac93da`）在「Legacy 差
 
 ### AC-7：F064 匯出驗證——CR 三欄有值（對齊 legacy 1.9%）
 
-- **Given** 202606 月跑重跑後，F064 匯出 `ob_monthly_run_result`
+- **Given** 202606 月名單分派重跑後，F064 匯出 `ob_monthly_run_result`
 - **When** 以 `is_cr = 'Y'` 過濾
 - **Then** CR 案件筆數約佔總筆數 1.9%（允許 ±0.3%，因失效規則清空部分案件）
 - **And** `is_cr = 'Y'` 的每筆案件，`cr_id`/`cr_nm` 均非 NULL 且非空字串
@@ -121,7 +121,7 @@ F101（月跑 Stage 3/4 真實比例分派，commit `1ac93da`）在「Legacy 差
 
 ## [SCHEMA GAP] / [OPEN QUESTION]
 
-- **[SCHEMA GAP-1]**：`ob_monthly_run_result` 中 `cr_id`/`cr_nm` 的型別是 VARCHAR(20)/VARCHAR(50)（對應 `ob_pool_data_list` 的來源欄位），需 spec-writer 確認這兩欄在 Stage 1 輸出後是否已從 `ob_pool_data_list` 正確複製至 `ob_monthly_run_result`，或需在月跑開始時補填。**若此欄在月跑開始時為 NULL，步驟 1/2 的清空邏輯須改為「確保值為 NULL」，步驟 3 的指派來源須從 `ob_pool_data_list` join 讀取。**
+- **[SCHEMA GAP-1]**：`ob_monthly_run_result` 中 `cr_id`/`cr_nm` 的型別是 VARCHAR(20)/VARCHAR(50)（對應 `ob_pool_data_list` 的來源欄位），需 spec-writer 確認這兩欄在 Stage 1 輸出後是否已從 `ob_pool_data_list` 正確複製至 `ob_monthly_run_result`，或需在月名單分派開始時補填。**若此欄在月名單分派開始時為 NULL，步驟 1/2 的清空邏輯須改為「確保值為 NULL」，步驟 3 的指派來源須從 `ob_pool_data_list` join 讀取。**
 
 - **[OPEN QUESTION-1]**：`ob_pool_data_list.cr_id` 在 Stage 1 之後是否已複製到 `ob_monthly_run_result`？現有 Stage 1 SQL 是否 SELECT `cr_id`/`cr_nm`/`is_cr` 到 result 表？需架構師確認欄位流向。
 
@@ -167,7 +167,7 @@ F101（月跑 Stage 3/4 真實比例分派，commit `1ac93da`）在「Legacy 差
 
 ### TC-152-06：F064 202606 CR 三欄有值回歸
 
-- **Given**：202606 月跑已完成 CR 優先分派
+- **Given**：202606 月名單分派已完成 CR 優先分派
 - **When**：F064 匯出
 - **Then**：is_cr='Y' 筆數約佔 1.9%；所有 is_cr='Y' 案件 cr_id 非空、emplid=cr_id
 

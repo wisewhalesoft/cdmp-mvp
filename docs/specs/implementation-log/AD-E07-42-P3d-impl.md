@@ -67,7 +67,7 @@ case ID；部分 case 折疊入單一 block，見下方對照）。靜態守門�
 計分（`runStage2and3SqlMssql`）→ 前清除（`clearStage3Fields`）→ **CR 前置（`runCrPrioritySqlMssql`）**
 → 比例分派（`runStage3to4RationSqlMssql`）。順序即 I-CR-ORDER-01（清除 → CR 前置 → 比例分派）：
 CR 步驟 3 寫入之 emplid/dept_id 若在清除之前執行會被 `clearStage3Fields` 覆蓋清空，故 CR 前置必在
-清除之後、比例分派之前。經 P3d 後 mssql 月跑之 CR 三欄不再恆維持 Stage 1 帶入原值（DISPATCH-004 DoD）。
+清除之後、比例分派之前。經 P3d 後 mssql 月名單分派之 CR 三欄不再恆維持 Stage 1 帶入原值（DISPATCH-004 DoD）。
 
 ### 2. 🔴🔴 appl_date datetime2 日期轉型（與 P3c ASSIGNDAY 結論相反，不可類推）
 逐行查證 `1751884800000-MssqlBaselineSchema.ts` 確認 `ob_monthly_run_result.appl_date` 為 `datetime2`

@@ -303,7 +303,7 @@ const sortedEmplids = [...(agg.emplidsPerDept.get(dept) ?? [])].sort();
 
 ## 7. 空結果邊界處理（BR-F108-09）
 
-當 cursor 串流回傳 0 列（月跑 0 筆 或 scope filter 後無轄區資料）：
+當 cursor 串流回傳 0 列（月名單分派 0 筆 或 scope filter 後無轄區資料）：
 
 - `pivotAgg.listNos` 為空 → `sortedListNos = []`
 - `pivotAgg.deptNames` 為空 → 無資料列
@@ -511,7 +511,7 @@ cellTotal    = { 北區電銷1: { E1: 8, E2: 2 }, 南區電銷: { E3: 10 } }
 
 - **直接延伸 AD-E07-v3.4（F064 v2.1）**：繼承 `buildExportXlsxStreaming` / `cursorRows` / `formatRow` / `RawExportRow` / `EXPORT_HEADER_V2` 設計；補充第 2 頁籤寫入機制，不修改既有邏輯。
 - **繼承 AD-E07-v3.2（F101）/ AD-E07-v3.3（F102）**：`ob_monthly_run_result.emplid` 已由 F101/F102 填值，F108 聚合可讀取 `emplid`；舊 snapshot NULL 歸「(空白)」（A-4）。
-- **不影響 AD-E07-v3.1（月跑 worker 抽離）**：匯出為獨立 GET 端點，不在 pg-boss job 內。
+- **不影響 AD-E07-v3.1（月名單分派 worker 抽離）**：匯出為獨立 GET 端點，不在 pg-boss job 內。
 - **不影響 AD-E07-v3.6（F049 Stage 0）**：不同模組，互不干涉。
 
 ---

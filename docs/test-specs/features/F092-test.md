@@ -15,13 +15,13 @@ last_updated: 2026-05-26
 
 > **測試設計範圍（v1.0 / 2026-05-26）**：覆蓋 Stage 1 精確化工程 Phase 3 的 dry-run 升級驗收。核心驗收方向：
 > 1. `executeStage1Chain({ dryRun: true })` 唯讀性（不寫入任何表）
-> 2. dry-run COUNT ≡ 正式月跑 Stage 1 案件數（同鏈一致性，關鍵場景）
+> 2. dry-run COUNT ≡ 正式月名單分派 Stage 1 案件數（同鏈一致性，關鍵場景）
 > 3. `Stage0EstimateService.estimateListCount` 升級為完整鏈 dry-run（取代欄位篩選版）
 > 4. F049 Stage 0 試算頁 total 與 F088 estimateCases 物化升級
 > 5. 逾時保護沿用 F049 10 秒
 > 6. Regression：與舊版欄位篩選版相比，案件數通常更少（regression guard）
 >
-> **注意**：本 Phase 對 production 月跑案件數無影響（[AD-E07-24 §24.2](../../../specs/architecture-spec.md)）；僅改變估算計算路徑。
+> **注意**：本 Phase 對 production 月名單分派案件數無影響（[AD-E07-24 §24.2](../../../specs/architecture-spec.md)）；僅改變估算計算路徑。
 
 ---
 
@@ -41,7 +41,7 @@ last_updated: 2026-05-26
 | 主要測試層 | Unit（mock `executeStage1Chain`）；Integration（PostgreSQL TestContainer，dry-run ≡ run 精確一致）|
 | 關鍵依賴 | F091 `Stage1FilterChain` 已實作（TS-F091-CH-004 通過是本 feature 的前置條件）|
 | 唯讀保護 | dry-run 不寫 `ob_pool_data_list` / `assignment_run` / `assignment_run_snapshot`；透過 spy / mock 驗證無寫入呼叫 |
-| 一致性驗證 | 同一名單 / workdt / 資料快照下，dry-run count = 月跑 Stage 1 案件數（Integration 層精確比對）|
+| 一致性驗證 | 同一名單 / workdt / 資料快照下，dry-run count = 月名單分派 Stage 1 案件數（Integration 層精確比對）|
 | 逾時測試 | 沿用 F049 10 秒逾時保護；注入 timeoutMs 參數 |
 | Regression | 升級後 estimateListCount 回傳值 ≤ 舊版（含去重 + 特殊 DELETE，通常更少）|
 
@@ -79,7 +79,7 @@ last_updated: 2026-05-26
   - `poolDataListRepo.insert` 呼叫次數 = 0
   - `poolDataListRepo.delete`（或含 `data_source = 'monthly_run'` 的 DELETE）呼叫次數 = 0
   - **允許** `poolDataListRepo.createQueryBuilder().select()...` 的**讀取**呼叫（去重查詢需要）
-- **備註**：區分「讀」（去重 SELECT）與「寫」（月跑 DELETE + INSERT），只有「寫」需被 spy 確認為 0
+- **備註**：區分「讀」（去重 SELECT）與「寫」（月名單分派 DELETE + INSERT），只有「寫」需被 spy 確認為 0
 
 ---
 
@@ -138,13 +138,13 @@ last_updated: 2026-05-26
 
 ---
 
-## 二、Dry-run ≡ 正式月跑 Stage 1 精確一致性
+## 二、Dry-run ≡ 正式月名單分派 Stage 1 精確一致性
 
 > **設計依據**：F092 AC-3 / AC-4；AD-E07-23 §23.3~§23.4；BR-3（DP-AD23-1 完整鏈精確模式）
 
 ---
 
-### TS-F092-EQ-001：同一名單 / workdt / 資料快照 — dry-run count ≡ 月跑 Stage 1 案件數（關鍵場景）
+### TS-F092-EQ-001：同一名單 / workdt / 資料快照 — dry-run count ≡ 月名單分派 Stage 1 案件數（關鍵場景）
 
 - **關聯需求**：F092 AC-3；BR-3（DP-AD23-1）
 - **測試類型**：Positive / Integration（關鍵）
@@ -171,7 +171,7 @@ last_updated: 2026-05-26
 
 ---
 
-### TS-F092-EQ-002：EMPTY_CONDITIONS skip — dry-run count=0 與月跑 skip 一致
+### TS-F092-EQ-002：EMPTY_CONDITIONS skip — dry-run count=0 與月名單分派 skip 一致
 
 - **關聯需求**：F092 AC-3（「一致性對 EMPTY_CONDITIONS skip 成立」）；F092 §8（錯誤場景）
 - **測試類型**：Positive / Unit
@@ -185,14 +185,14 @@ last_updated: 2026-05-26
   3. 驗證 `result.skipped === true`
   4. 驗證 `result.skipReason === 'EMPTY_CONDITIONS'`
 - **預期結果**：
-  - dry-run count = 0（與月跑 skip 行為一致）
+  - dry-run count = 0（與月名單分派 skip 行為一致）
   - 不 throw（skip 為正常業務行為）
 
 ---
 
-### TS-F092-EQ-003：ob_pool_data_list 無歷史時 — dry-run 退化（與月跑同步退化，仍滿足 AC-3）
+### TS-F092-EQ-003：ob_pool_data_list 無歷史時 — dry-run 退化（與月名單分派同步退化，仍滿足 AC-3）
 
-- **關聯需求**：F092 AC-3（「一致性的退化邊界」）；F092 §8（「去重退化為不過濾，dry-run count 偏高，與月跑同步退化，仍滿足 AC-3 一致性」）
+- **關聯需求**：F092 AC-3（「一致性的退化邊界」）；F092 §8（「去重退化為不過濾，dry-run count 偏高，與月名單分派同步退化，仍滿足 AC-3 一致性」）
 - **測試類型**：Positive / Unit
 - **測試層**：Unit（mock `poolDataListRepo` 回空集合）
 - **前置條件**：
@@ -260,7 +260,7 @@ last_updated: 2026-05-26
   1. 呼叫 `estimateListCount`
   2. 驗證回傳 `{ listNo, count: 0 }`（HTTP 200，非錯誤）
 - **預期結果**：
-  - count = 0（與月跑 skip 一致）
+  - count = 0（與月名單分派 skip 一致）
   - HTTP 200（不拋 Exception）
   - 回傳格式不變（regression guard：F049 現有行為）
 
@@ -390,11 +390,11 @@ last_updated: 2026-05-26
 
 ### TS-F092-RG-002：F049 BR-6 語意矛盾標注（「估算為上界」描述已過時）
 
-- **關聯需求**：F092 §11（「F049 BR-6 升級前：per-list 試算僅套欄位篩選，為案件數上界；升級後：≡ 月跑，不再是上界」）；F092 A-3
+- **關聯需求**：F092 §11（「F049 BR-6 升級前：per-list 試算僅套欄位篩選，為案件數上界；升級後：≡ 月名單分派，不再是上界」）；F092 A-3
 - **測試類型**：Regression（文件標注）
 - **測試層**：文件（F049-test.md 追加 note）
 - **步驟**：
-  1. 確認 `docs/test-specs/features/F049-test.md` 的 TS-F049-EST 群組中，有關「試算為上界」的描述已加標注：「F092 升級後此語意改變，estimate ≡ 月跑（精確），不再偏高」
+  1. 確認 `docs/test-specs/features/F049-test.md` 的 TS-F049-EST 群組中，有關「試算為上界」的描述已加標注：「F092 升級後此語意改變，estimate ≡ 月名單分派（精確），不再偏高」
   2. 確認 F049 spec v1.2 BR-6 的描述在下一輪 spec-writer 處理前有交叉引用 F092
 - **預期結果**：
   - F049-test.md TS-F049-EST-010（Integration 層 COUNT 一致性）新增備註：「F092 後此場景的 estimateCount 應更精確（含去重 / 期別 / 特殊排除），預期值需更新」
@@ -407,7 +407,7 @@ last_updated: 2026-05-26
 - **關聯需求**：F092 §7（「建議（非強制）：可於估算說明區補一行語意說明」）
 - **測試類型**：Positive / Component（RTL）
 - **測試層**：Component（RTL，optional）
-- **前置條件**：若 UI 有新增說明文字「預估值已含期別過濾 / 近 3 個月去重 / 特殊排除，與實際月跑一致」
+- **前置條件**：若 UI 有新增說明文字「預估值已含期別過濾 / 近 3 個月去重 / 特殊排除，與實際月名單分派一致」
 - **步驟**：
   1. render `Stage0EstimatePage`
   2. 查詢說明文字元素

@@ -39,7 +39,7 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 
 ## 1. 功能摘要
 
-提供業務主管為特定 `list_no` 設定各部門的分配比例（`ob_dept_pct.ration`）。依 OQ-E07-5 決策，`ob_dept_pct` 即為 per-LIST_NO 設定（無全域比例概念）；每個 `list_no` 的部門比例加總必須 = 100%。月跑執行中禁止修改。
+提供業務主管為特定 `list_no` 設定各部門的分配比例（`ob_dept_pct.ration`）。依 OQ-E07-5 決策，`ob_dept_pct` 即為 per-LIST_NO 設定（無全域比例概念）；每個 `list_no` 的部門比例加總必須 = 100%。月名單分派執行中禁止修改。
 
 ## 2. 使用者故事
 
@@ -91,9 +91,9 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 - **Then** 系統刪除該 `list_no` 當月的所有 `ob_dept_pct` 紀錄
 - **And** 頁面顯示提示「已清除 {list_nm}（{list_no}）的所有部門比例設定」
 - **And** 寫入 `assignment_audit_log`（`action = 'DELETE'`）
-- **And** 清除後，該 `list_no` 在月跑時觸發前置條件失敗，需由業務主管重新設定
+- **And** 清除後，該 `list_no` 在月名單分派時觸發前置條件失敗，需由業務主管重新設定
 
-### AC-6：月跑執行中禁止修改
+### AC-6：月名單分派執行中禁止修改
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
 - **When** 業務主管嘗試進入 per-LIST_NO 比例設定的編輯模式
@@ -115,7 +115,7 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 ```json
 {
   "listNo": "OB202605001",
-  "listNm": "車貸月跑名單",
+  "listNm": "車貸月名單分派名單",
   "projectWorkym": "202605",
   "deptRatios": [
     { "obdeptId": "D01", "obdeptNm": "業務一部", "ration": 30.0 },
@@ -153,7 +153,7 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | AUTH_FORBIDDEN | `is_sales_manager` 未啟用 |
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在或已停用 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派執行中 |
 | 422 | RATIO_SUM_INVALID | 部門比例加總 ≠ 100% |
 | 422 | VALIDATION_ERROR | `ration` 超出 0~100 範圍 |
 
@@ -165,8 +165,8 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 | BR-2 | 同一 `list_no` 下所有部門比例加總必須 = 100% |
 | BR-3 | `ration` 範圍：0.0 ~ 100.0（`NUMERIC(9,1)`） |
 | BR-4 | `project_workym` 由後端依當前作業年月自動填入 |
-| BR-5 | 清除比例設定後，該 `list_no` 月跑前置條件失敗（F061 AC-1） |
-| BR-6 | 月跑鎖定：`assignment_run.status IN ('pending', 'running')` 時禁止修改 |
+| BR-5 | 清除比例設定後，該 `list_no` 月名單分派前置條件失敗（F061 AC-1） |
+| BR-6 | 月名單分派鎖定：`assignment_run.status IN ('pending', 'running')` 時禁止修改 |
 
 ## 7. UI/UX 需求
 
@@ -174,12 +174,12 @@ Priority: P0-MVP | Status: Deprecated | Last Updated: 2026-05-16
 - 部門比例表格：部門代碼 / 名稱 / `ration` 輸入框
 - 底部即時加總 + 儲存按鈕啟用狀態
 - 「清除比例設定」按鈕（紅色警示按鈕）+ 確認 Modal
-- 月跑鎖定時：編輯 disabled + hover 提示
+- 月名單分派鎖定時：編輯 disabled + hover 提示
 
 ## 8. 相依性
 
 - **Blocked By**：F048（清單頁入口）、F050（需先有名單才能為其設定比例）
-- **Blocks**：F061（月跑 Stage 3 部門分配需讀取各 `list_no` 部門比例；前置條件驗證每個 active `list_no` 均有部門比例設定）
+- **Blocks**：F061（月名單分派 Stage 3 部門分配需讀取各 `list_no` 部門比例；前置條件驗證每個 active `list_no` 均有部門比例設定）
 
 ## 9. 交叉參考
 

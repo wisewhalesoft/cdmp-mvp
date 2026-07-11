@@ -75,7 +75,7 @@ F109（US-172）在既有「案件資料」（`ob_pool_data`）篩選欄位白�
 
 **理由**：
 - 純方案 (a)：對「事後停用白名單欄位」的既有名單決定性良好，但無法涵蓋 F109 上線**之前**寫入的 `condition_payload`（那些 JSONB 完全沒有 `dataSource` key）。
-- 純方案 (b)（runtime 查白名單）：違反 F075 BR-4「Stage 1 不 join 白名單做欄位有效性驗證」的既定分工，且欄位停用後 runtime 查詢會找不到 row，破壞決定性（月跑失敗或誤判）。
+- 純方案 (b)（runtime 查白名單）：違反 F075 BR-4「Stage 1 不 join 白名單做欄位有效性驗證」的既定分工，且欄位停用後 runtime 查詢會找不到 row，破壞決定性（月名單分派失敗或誤判）。
 - 雙層機制：**新名單** 100% 由固化值決定（欄位停用不影響，滿足 BR-4 相容 + AC-9 決定性）；**舊名單**（F109 上線前）因 8 個 customer_core 欄名在 F109 之前**不存在於白名單**，不可能出現在舊 `condition_payload` 中（除非欄位名稱巧合碰撞——見 §10 殘留風險），故靜態 Set fallback 對舊資料 100% 正確且不需要資料庫 backfill migration。
 - **不需要對既有 `condition_payload` JSONB 做 UPDATE backfill**：所有 F109 之前的名單條件只可能引用 7 個既有 `ob_pool_data` 白名單欄位，靜態 fallback 天然覆蓋。
 
@@ -506,4 +506,4 @@ private async stampConditionDataSource<T extends ObListDefinitionConditionPayloa
 
 ### 10.4 效能觀察建議（非阻擋）
 
-建議在 prod 上線後首次含 customer_core 條件之月跑，人工 `EXPLAIN ANALYZE` 驗證 PG 實際採用 Nested Loop / Hash Join（而非因統計資訊過舊誤選 Seq Scan），作為 post-deploy 觀察項，非本 AD 阻擋項。
+建議在 prod 上線後首次含 customer_core 條件之月名單分派，人工 `EXPLAIN ANALYZE` 驗證 PG 實際採用 Nested Loop / Hash Join（而非因統計資訊過舊誤選 Seq Scan），作為 post-deploy 觀察項，非本 AD 阻擋項。

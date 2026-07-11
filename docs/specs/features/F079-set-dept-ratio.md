@@ -17,7 +17,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
 > **v1.3 修訂（2026-05-25 / commit 38eb0dc 落地）**：§7 UI/UX 補述「Prototype 29a 對齊」項目（5-step stage breadcrumb / Sum Banner / 預估案件數欄）。`directorName` GET response 欄位 v1.x 已有定義，commit 38eb0dc 為實作落地，spec 本身無欄位變動。
 > **v1.2 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔內容，本版本依 US-109 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorGuard`（廢除 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim 為 `businessRole`；保留 v1.0 / v1.1 所有設計決議與 Phase 1 風險決議落地。
-> **v1.1 修訂（2026-05-16 / E07 衍生補修 / system-architect Phase 1 風險決議 #6 落地）**：月跑並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`；Feature Flag fallback 沿用 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
+> **v1.1 修訂（2026-05-16 / E07 衍生補修 / system-architect Phase 1 風險決議 #6 落地）**：月名單分派並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`；Feature Flag fallback 沿用 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
 ## Agent Loading Guide
 
@@ -57,7 +57,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
 **As a** 部長 / Admin
 **I want** 在名單推進至「部門比例設定」階段後，為每個在職部門設定 RATION，使加總 = 100%
-**So that** 月跑 Stage 3 可依 per-LIST_NO 部門比例分配案件，每份名單可有獨立的部門策略
+**So that** 月名單分派 Stage 3 可依 per-LIST_NO 部門比例分配案件，每份名單可有獨立的部門策略
 
 ## 3. 前置條件
 
@@ -133,7 +133,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 - **Then** 後端回 403 `AUTH_FORBIDDEN`
 - **And** 清單頁中**完全不渲染**「設定部門比例」按鈕
 
-### AC-9：月跑執行中禁止寫入
+### AC-9：月名單分派執行中禁止寫入
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 紀錄
 - **When** 部長 / Admin 嘗試進入編輯模式或呼叫 PUT
@@ -225,7 +225,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 | 403 | AUTH_FORBIDDEN | 非 admin / director 任一身份（含處長嘗試設定） |
 | 403 | LIST_HISTORICAL_READONLY | `project_workym < current_work_ym` |
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑進行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派進行中 |
 | 422 | ASSIGNMENT_LIST_INACTIVE | 名單已停用 |
 | 422 | LIST_STAGE_TRANSITION_FORBIDDEN | `stage != 'dept_ratio'` |
 | 422 | RATIO_OUT_OF_RANGE | 任一 RATION 超出 [0, 100] |
@@ -247,7 +247,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 | BR-8 | **歷史月份攔截（沿用 F077 BR-3）**：`project_workym < current_work_ym` 回 403 `LIST_HISTORICAL_READONLY` |
 | BR-9 | **DB 操作原子性**：DELETE 既有 + INSERT 新 RATION + 稽核寫入須於同一 DB transaction 中執行（[ASSUMPTION] 待 system-architect 決議）；若稽核採非同步 queue 模式，業務 commit 後可允許 retry |
 | BR-10 | **稽核失敗不 rollback**：操作寫入 `assignment_audit_log` 失敗僅 Logger.error，不 rollback 業務 commit（沿用 F050 v2.0 BR-11） |
-| BR-11 | **不可在月跑進行中操作**：`assignment_run.status IN ('pending', 'running')` 時禁止寫入；GET 不受影響。**`assertNoRunningRun()` 由 `AssignmentRunGuardService` 集中實現（v1.1 / 決議 #6）**：F079 PUT service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()`；月跑結束後（`status = 'completed'` / `'failed'`）即可重新操作 |
+| BR-11 | **不可在月名單分派進行中操作**：`assignment_run.status IN ('pending', 'running')` 時禁止寫入；GET 不受影響。**`assertNoRunningRun()` 由 `AssignmentRunGuardService` 集中實現（v1.1 / 決議 #6）**：F079 PUT service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()`；月名單分派結束後（`status = 'completed'` / `'failed'`）即可重新操作 |
 | BR-12 | **`obdeptnm` 由 request 攜帶**：寫入時 request 帶入之 `obdeptnm` 寫入 `ob_dept_pct.obdeptnm`；GET 時自 `ob_emphire` 即時填入 `dept_name`（避免改名後 UI 顯示舊值） |
 | BR-13 | **Feature Flag fallback（v1.1 / 決議 #2）**：F079 端點受 `FeatureFlagGuard` 保護；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 **503 + `FEATURE_NOT_ENABLED`**（沿用 F050 v2.0 §13.2 統一行為） |
 | BR-14 | **處長欄位來源（v1.3 / 2026-05-21）**：GET response 之 `directorName` 由 `ob_emphire` 推導，SQL 規格：`SELECT TRIM(emp_nm) FROM ob_emphire WHERE TRIM(dept_code)=? AND resign_date IS NULL AND TRIM(jfun_nm)='處長' ORDER BY hire_date ASC LIMIT 1`。同部門有多位處長時取最早入職者；查無對應人員時回傳 `null`。不過濾 `noDeputy` 旗標（v1.3 PO 決議：MVP 不引入代理機制，部長/Admin 在 dept_ratio 與 personnel_ratio 階段直接可寫，不需處長代理） |
@@ -258,7 +258,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
   - 位於 F048 / F077 清單頁「部門比例設定」階段名單操作欄
   - 處長身份**完全不渲染**
   - 已停用名單 / 非 `dept_ratio` 階段 / 歷史月份**完全不渲染**
-  - 月跑進行中 disabled + hover 提示
+  - 月名單分派進行中 disabled + hover 提示
 - **設定頁布局**：
   - 頁首：「名單：{listNm}（{listNo}）— 部門比例設定」
   - 表格欄位：部門代碼 / 部門名稱 / RATION 輸入框 / 是否離線徽章
@@ -281,7 +281,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
   - F048 v2.0（M01 入口骨架）
 - **Blocks**：
   - F080（推進至個別業務比例設定，前置條件為 RATION 加總 = 100%）
-  - F061（月跑 Stage 3 部門分派讀取 `ob_dept_pct`）
+  - F061（月名單分派 Stage 3 部門分派讀取 `ob_dept_pct`）
 - **Rollback 反向**：F081（M03a Rollback 至草稿，清空本 Feature 寫入之 `ob_dept_pct`）
 - **取代**：[F060 v1.x DEPRECATED](F060-edit-per-list-dept-ratio.md)
 
@@ -303,7 +303,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
   - [F080](F080-advance-to-personnel-ratio.md)（部門比例推進至個別業務比例，本 Feature 後續）
   - [F081](F081-rollback-to-draft.md)（部門比例 Rollback 至草稿）
   - [F060 v1.x DEPRECATED](F060-edit-per-list-dept-ratio.md)
-  - [F061](F061-trigger-assignment-run.md)（月跑 Stage 3 讀取）
+  - [F061](F061-trigger-assignment-run.md)（月名單分派 Stage 3 讀取）
 - **圖表**：
   - [diagrams/F079-dept-ratio-flow.mmd](../diagrams/F079-dept-ratio-flow.mmd)（部門比例設定流程，含 advance / rollback 分支說明）
   - [diagrams/F077-stage-overview.mmd](../diagrams/F077-stage-overview.mmd)（五階段總覽流程）
@@ -323,7 +323,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
   - PUT 對 `stage = 'personnel_ratio'` 名單 → 422 `LIST_STAGE_TRANSITION_FORBIDDEN`（推進後拒絕）
   - PUT 處長帳號 → 403 `AUTH_FORBIDDEN`
   - PUT 歷史月份 → 403 `LIST_HISTORICAL_READONLY`
-  - PUT 月跑進行中 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
+  - PUT 月名單分派進行中 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
   - PUT 覆寫式寫入：原有 5 筆，新寫入 3 筆，DB 應剩 3 筆
   - 稽核 `before_value` / `after_value` 完整寫入
 - 前端關鍵測試案例：
@@ -337,7 +337,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
 - [ ] 後端新增 `GET /api/v1/assignment/ratios/dept/{listNo}` 端點 + Service
 - [ ] 後端新增 `PUT /api/v1/assignment/ratios/dept/{listNo}` 端點 + Service
-- [ ] 後端套 `DirectorGuard` + `assertStageEquals(listNo, 'dept_ratio')` + `LIST_HISTORICAL_READONLY` Guard + 月跑鎖檢查
+- [ ] 後端套 `DirectorGuard` + `assertStageEquals(listNo, 'dept_ratio')` + `LIST_HISTORICAL_READONLY` Guard + 月名單分派鎖檢查
 - [ ] 後端共用部門比例驗證 helper（建議封裝為 `RatioValidationService.assertSumEquals100(ratios)` + `assertEachInRange(ratios, 0, 100)`，供後續 M03b 個別業務比例共用）
 - [ ] error-handling.md 新增 `RATIO_SUM_NOT_100` / `RATIO_OUT_OF_RANGE` / `STAGE_ADVANCE_PRECONDITION_FAILED` / `STAGE_ROLLBACK_BLOCKED` 4 個錯誤碼（供 F080 / F081 共用）
 - [ ] 前端「設定部門比例」按鈕渲染條件

@@ -38,7 +38,7 @@ invariants:
 
 ## 0. 關鍵前提差異（本 AD 開頭必讀，決定測試策略）
 
-延續 [AD-E07-38](AD-E07-38-mssql-p1-driver-entity-schema.md)（P1）與 [AD-E07-39](AD-E07-39-mssql-p1b-full-baseline.md)（P1b），P1（P1a/P1b1/P1b2/P1b3/P1c）已全數 commit，CI 骨架已建立。P2 是全遷移計畫**風險最高、無逃生門**的階段：**佇列必須完全自建於 T-SQL**（硬約束②，不得新增 Redis/BullMQ），取代 PostgreSQL-only 的 pg-boss，且此子系統是先前 F098/AD-E07-28 用來解決「月跑卡死整站」生產事故的關鍵修復，替換若做壞有回歸該事故的風險。
+延續 [AD-E07-38](AD-E07-38-mssql-p1-driver-entity-schema.md)（P1）與 [AD-E07-39](AD-E07-39-mssql-p1b-full-baseline.md)（P1b），P1（P1a/P1b1/P1b2/P1b3/P1c）已全數 commit，CI 骨架已建立。P2 是全遷移計畫**風險最高、無逃生門**的階段：**佇列必須完全自建於 T-SQL**（硬約束②，不得新增 Redis/BullMQ），取代 PostgreSQL-only 的 pg-boss，且此子系統是先前 F098/AD-E07-28 用來解決「月名單分派卡死整站」生產事故的關鍵修復，替換若做壞有回歸該事故的風險。
 
 **P0 已用 `apps/api/scripts/mssql-smoke.mjs` 對本機 Linux 容器實測驗證佇列核心語法**：
 
@@ -309,7 +309,7 @@ graph LR
 **DoD**：
 1. 現行 `f098-producer.spec.ts`/`f098-consumer.spec.ts`/`f098-static-guards.spec.ts` 對應行為在 mssql 分支下重新驗證（新增 `.mssql.spec.ts` 或擴充既有測試矩陣，視 test-designer 判斷）：`send` 回傳 jobId、`cancel` 對已消費 job 吞錯、`processPayload` 對 `status==='failed'` 略過、pipeline 拋錯不使 worker 崩潰。
 2. `OrphanReaper`／`CancellationPoller` 既有測試**原樣通過**（零改動的驗證）。
-3. 端對端：`DB_TYPE=mssql` 下觸發一次月跑（`POST /api/v1/assignment/runs`），worker 輪詢 loop 撿到 job、呼叫 `pipeline.runPipeline`、`assignment_run.status` 正確推進至 `completed`/`failed`。
+3. 端對端：`DB_TYPE=mssql` 下觸發一次月名單分派（`POST /api/v1/assignment/runs`），worker 輪詢 loop 撿到 job、呼叫 `pipeline.runPipeline`、`assignment_run.status` 正確推進至 `completed`/`failed`。
 4. Worker 程序 SIGTERM 優雅關閉：`pollTimer` 正確 clear，不留孤兒 interval。
 
 ### P2c — Expire Sweep 整合 + 完整回歸
@@ -341,7 +341,7 @@ graph LR
 
 ## 9. 風險與殘留議題
 
-### 9.1 `pollIntervalMs` 預設值（2000ms）尚未實測對月跑觸發延遲的實際影響
+### 9.1 `pollIntervalMs` 預設值（2000ms）尚未實測對月名單分派觸發延遲的實際影響
 
 輪詢間隔越短，job 從入列到被領取的延遲越低，但輪詢頻率越高對 DB 負擔越大（即使空轉查詢成本很低）。建議 P2b 端對端測試順便量測「trigger → worker 開始執行」的實際延遲分佈，作為是否需要調整預設值的依據，非阻擋項。
 

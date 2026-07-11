@@ -31,12 +31,12 @@ last_updated: 2026-07-08
 > 1. **🔴🔴 三處 `~` 正則站點語意皆為 `^[0-9]+$`（含 `$` 錨點，全字串驗證），與 P3a year-above 之 `^[0-9]+`（無 `$` 錨點，前導擷取）語意層級不同——可直接複用 P4a `type-cast-handler-mssql.ts` 已驗證公式，非需要如 P3a 般自行推導新公式**：`SAFE_INT_CUS_SEX`（`stage2to4-sql-builder.ts:116`）、`IS_PERSONAL_GATING`（:124-126）、EDUCAT_BACK `numExpr`（:236）三處皆為 `X ~ '^[0-9]+$'` 形態（全字串數字驗證，回傳布林後接 `::int` 轉型），與 P4a `getValidationRegex` 已驗證解法（`NOT LIKE '%[^0-9]%'` + `LEN(x)>0` 守空字串陷阱 + `TRY_CAST`）**同一語意層級**，理論上可直接複用而非如 P3a year-above 般需要 `PATINDEX` 自行推導。AD §2.2 表格將此三站點標「高風險」，若僅因「風險」標籤誤判為需要全新設計，可能導致重工；但三處**組合輸入**互不相同（原始欄位 vs `COALESCE(NULLIF(...),'1')` 包裝 vs 巢狀 `CASE` 產生之補零字串），仍須逐一針對各自實際輸入分別驗證邊界（不可僅驗證一處就假設其餘兩處同樣正確）。已獨立立 §三/四/五 REGEX-SAFESEX/REGEX-GATING/REGEX-EDUCAT 三群組 + §六 REGEX-META 記錄此語意區分。
 > 2. **🔴🔴 `resolveStage2to4Strategy`（`assignment-run-pipeline.service.ts:174-180`）現行為二元-ish gate，MSSQL 環境會落入 in-memory JS 執行路徑而非 SQL 下推，AD 完全未提及此站點，同型於 P3a/P1c/P2b 已反覆出現之 DISPATCH 陷阱**：現行邏輯 `DB_TYPE==='postgres' → 'pushdown'；否則依 ASSIGNMENT_PIPELINE_V2 選 'v2Inmemory'/'v1Inmemory'`。`DB_TYPE='mssql'` 環境下會落入 else 分支，依 `ASSIGNMENT_PIPELINE_V2` 旗標選擇 in-memory JS 路徑（`executeV2`/`executeV1`），**不會**拋錯（`executeV2` 為純 TypeORM repo 查詢，DB-agnostic，可在 MSSQL 上正常執行），但會靜默違反 I-NOLOAD-01（re-hydrate 全 pool 回 heap 計分），是一個「功能正確但架構退化」的隱蔽缺口，比 P3a Stage1 DISPATCH 更難被功能測試揪出（不會有任何錯誤或資料錯誤）。已獨立立 §二 DISPATCH 群組，MUST-FIX。
 > 3. **🔴🔴 `to_jsonb(o)->>'col'` 通用 fallback（`stage2to4-sql-builder.ts:290`）為 live production path（未 hardcode 之計分欄位皆走此路，非死碼），MSSQL 無單一 SQL 表達式等價機制，需架構性調整（I-MSSQL-DYNAMIC-FALLBACK-01）**：PG 版對任意 `column_name`（未列於 `MAPPED_SCORING_COLUMNS`）動態讀取 `ob_pool_data` 同名欄位並優雅降級（欄位不存在→NULL→COALESCE 0）。MSSQL 需改為「SQL 生成前，TS 端先查 `INFORMATION_SCHEMA.COLUMNS`（大寫，I-MSSQL-CATALOG-CASE-01）判斷欄位是否存在，存在→產生直接欄位參照；不存在（幽靈欄位）→SQL 生成時直接產生字面值 `0`」，此為 P3b 範圍內**唯一非純語法轉換而是設計調整**的站點，風險本質與其餘轉換站點不同（非「翻譯錯誤」而是「機制不存在，需重新設計」）。已獨立立 §七 FALLBACK 群組。
-> 4. **🔴 Stage 2 計分之 AGE 為獨立站點，參考日期（reference date）與 Stage 1 之 AGE 站點不同，複製貼上 P3a 公式時極易誤植 `@ccWorkdt`**：`resolveColumnSource('AGE',...)` 使用 PG `age(cc.date_of_birth)`（單引數形式，隱含以 `CURRENT_DATE`／執行當下實際日期為參考），對應 JS golden oracle `calcAgeYears(cc.date_of_birth, new Date())`（同樣是「今日」而非月跑工作月）；Stage 1 之 AGE（`stage1-customer-core-clause.ts:141`）則明確以 `:ccWorkdt`（PROJECT_WORKYM 對應之月初日）為參考日。AD §2.2 表格文字寫「同 §2.1 AGE 轉換公式，須各自轉換與各自驗證，不可假設改一處兩處都對」，已提醒公式須各自驗證，但**未明講兩處參考日期參數本身不同**——P3a 已驗證正確之 `DATEDIFF(YEAR, dob, @ccWorkdt) - CASE...` 公式**形狀**可複用，但 `@ccWorkdt` 必須替換為 `SYSDATETIME()`/`GETDATE()`，若複製貼上時未替換此參數，本站點會計算出「以月跑工作月為基準的年齡」而非「以執行當下實際日期為基準的年齡」，兩者在跨月份查驗時會產生系統性偏差且不會拋錯（靜默錯誤）。已獨立立 §八 AGESCORE 群組 AGESCORE-META-001 MUST-FIX 守門。
+> 4. **🔴 Stage 2 計分之 AGE 為獨立站點，參考日期（reference date）與 Stage 1 之 AGE 站點不同，複製貼上 P3a 公式時極易誤植 `@ccWorkdt`**：`resolveColumnSource('AGE',...)` 使用 PG `age(cc.date_of_birth)`（單引數形式，隱含以 `CURRENT_DATE`／執行當下實際日期為參考），對應 JS golden oracle `calcAgeYears(cc.date_of_birth, new Date())`（同樣是「今日」而非月名單分派工作月）；Stage 1 之 AGE（`stage1-customer-core-clause.ts:141`）則明確以 `:ccWorkdt`（PROJECT_WORKYM 對應之月初日）為參考日。AD §2.2 表格文字寫「同 §2.1 AGE 轉換公式，須各自轉換與各自驗證，不可假設改一處兩處都對」，已提醒公式須各自驗證，但**未明講兩處參考日期參數本身不同**——P3a 已驗證正確之 `DATEDIFF(YEAR, dob, @ccWorkdt) - CASE...` 公式**形狀**可複用，但 `@ccWorkdt` 必須替換為 `SYSDATETIME()`/`GETDATE()`，若複製貼上時未替換此參數，本站點會計算出「以月名單分派工作月為基準的年齡」而非「以執行當下實際日期為基準的年齡」，兩者在跨月份查驗時會產生系統性偏差且不會拋錯（靜默錯誤）。已獨立立 §八 AGESCORE 群組 AGESCORE-META-001 MUST-FIX 守門。
 > 5. **🔴 LOAN_RATE `CAST(o.loan_rate AS numeric)`（`stage2to4-sql-builder.ts:277`，無精度宣告）——T-SQL 未指定精度之裸 `NUMERIC` 預設為 `NUMERIC(18,0)`，會將小數部分四捨五入去除，AD 完全未點名此具體站點**：test-designer 查證 `ob_pool_data.loan_rate` 之 MSSQL baseline 型別為 `numeric(5,2)`（保留 2 位小數，如 12.50）。PG `CAST(x AS numeric)`（無精度）對已具型別之來源欄位值原樣保留（PG 之未限定精度 numeric 為「無額外約束」，非「強制整數」）；但 T-SQL `CAST(x AS NUMERIC)` 等同 `CAST(x AS NUMERIC(18,0))`，若逐字翻譯會將 `12.50` 轉為 `13`（四捨五入去小數），使 LOAN_RATE range 計分比對之數值系統性偏移，且不會拋錯（靜默數值錯誤，與 I-MSSQL-DECIMAL-NORMALIZE-01 揭示之 FINDING-P4D-01 同型缺陷家族，僅發生位置從 ETL type_cast 節點換成計分 SQL 本身）。此陷阱同樣適用於 §七 FALLBACK 群組之「命中真實欄位」路徑（若該欄位本身帶小數精度）。已獨立立 §十四 DECIMAL 群組 DECIMAL-LOANRATE-001 MUST-FIX 旗艦守門。
 > 6. **🔴 `stage2to4-sql-builder.ts` 檔頭 docblock（1-26 行）內容與實際程式碼不符，可能誤導 tdd-implementation 誤判 P3b 範圍含 Stage 4**：檔頭註解仍描述「Stage 4 st4_exchange：T1/T2 案件 `CEIL(n*0.1)`（保底 1）...轉該部門單一 senior」，但實際 `runStage4Sql` 已於 F101/AD-E07-29（I-NO-ST4-EXCHANGE）移除（`stage2to4-sql-executor.ts:137-142` 明文記錄移除理由與去向：Stage 4 真實比例分派已改由 `stage3to4-ration-sql.ts` 之 `runStage3to4RationSql` 處理，屬 P3c 範圍）。此為過時殘留註解，非程式邏輯缺陷，但足以誤導範圍判斷。已於 §二十三 STATIC 群組設計靜態守門確認 P3b 實際範圍僅 `runStage2and3Sql`（score/card_level/tier_level 三欄，不含 dept_id/emplid/emplid_deptid/assignday 任何 Stage 4 欄位）。
 > 7. **Harness 改善（依任務指示，本輪起消除 P3a 已知盲點）**：P3a impl log 明文記錄「正式 CI 需先 bootstrap dbo baseline 才能執行本套件 DB 案例」（P3a §0.2「共用既有表」策略要求六表已存在，本檔不自建）。本文件在此基礎上**新增**：`beforeAll` 對 P3b 額外依賴之 6 張計分專屬表（`ob_levelcard_version`/`ob_levelcard_column`/`ob_levelcard_score`/`ob_levelcard_level`/`ob_tier`/`ob_arreturndf_min_cap`，連同 P3a 已依賴之 6 張，合計 12 張）逐一以 `OBJECT_ID` 探測，缺表者以「零 drift」DDL（逐字複製 `1751884800000-MssqlBaselineSchema.ts` 對應 `CREATE TABLE` 陳述式，不改寫/簡化欄位定義）自建；`afterAll` 對「本次自建」之表額外執行 `DROP TABLE` 還原（對「原本已存在」之共用表**絕不** `DROP`/`TRUNCATE`，僅前綴 `DELETE`）。使套件在全新/部分缺表 dbo 上仍可獨立完整重跑，不再依賴外部人工 bootstrap 步驟。詳見 §零 0.2。
 > 8. **`IS_PERSONAL_GATING` 為五個計分維度（CAREA_NO1/NO2/CELLULAR/AGE/EDUCAT_BACK）共用之 gating 判斷式，AD §2.2 已提及「任何轉換誤差連帶波及全部五欄」，本文件據此設計交叉驗證手法**：若 gating 轉換有誤，理論上應同步影響全部五欄（而非僅單欄）；反之若僅單一欄位偏差、其餘四欄正確，代表問題出在該欄獨立分支（如 EDUCAT_BACK 額外疊加之 `numExpr` 正則），而非 gating 本身。§十五 CCDIM-GATING 群組據此設計「五欄同步觀察」案例，供除錯時快速定位根因層級。
-> 9. **customer_core 之「真實資料」語意延續 P3a §頂部查證發現 6 之澄清**：`customer_core` 表結構已存在（92 欄，P4-0）且 P4d 已證明可透過 56 節點 ETL pipeline 灌入合成 fixture，但**不保證** P4d 執行後之 fixture 列仍殘留於 `dbo.customer_core`（依 P4d 自身 harness 之 `afterAll` 清理策略，執行完畢後極可能已被清空）。本文件 CCDIM/FULLEQ/SCORE 等群組**不依賴** P4d 殘留列，一律比照 P3a 手法自行以顯著前綴（`source_customer_no` 以 `P3BC` 開頭）INSERT 合成測試列。僅 §二十一 MONTHRUN-DIFF 群組（AD §4.2 建議之「真實月重跑」DoD 收尾項）**待 tdd-impl 真庫驗證**是否有可用之既有生產規模資料，若無則以完整月跑觸發真實 ETL pipeline 現場產生。
+> 9. **customer_core 之「真實資料」語意延續 P3a §頂部查證發現 6 之澄清**：`customer_core` 表結構已存在（92 欄，P4-0）且 P4d 已證明可透過 56 節點 ETL pipeline 灌入合成 fixture，但**不保證** P4d 執行後之 fixture 列仍殘留於 `dbo.customer_core`（依 P4d 自身 harness 之 `afterAll` 清理策略，執行完畢後極可能已被清空）。本文件 CCDIM/FULLEQ/SCORE 等群組**不依賴** P4d 殘留列，一律比照 P3a 手法自行以顯著前綴（`source_customer_no` 以 `P3BC` 開頭）INSERT 合成測試列。僅 §二十一 MONTHRUN-DIFF 群組（AD §4.2 建議之「真實月重跑」DoD 收尾項）**待 tdd-impl 真庫驗證**是否有可用之既有生產規模資料，若無則以完整月名單分派觸發真實 ETL pipeline 現場產生。
 
 ---
 
@@ -222,13 +222,13 @@ last_updated: 2026-07-08
 ### TS-MSSQL-P3B-REGEX-META-002：三站點皆需獨立 `TRY_CAST`（非裸 `CAST`）守門
 - **Related Requirement**：BR-F104-13（NULL-safe cast 紅線）
 - **Test Type**：Static Guard
-- **Expected Result**：三處轉換後的數值化陳述式皆使用 `TRY_CAST`（防禦性轉型，失敗回 NULL 而非拋例外），對齊 PG 版「先正則驗證通過才轉型」但 T-SQL 環境仍以 `TRY_CAST` 作雙重防線（防止正則轉換本身若有邊界疏漏時仍不拋例外中斷月跑，符合 BR-F104-13「不拋 invalid input syntax」之業務紅線精神延伸）
+- **Expected Result**：三處轉換後的數值化陳述式皆使用 `TRY_CAST`（防禦性轉型，失敗回 NULL 而非拋例外），對齊 PG 版「先正則驗證通過才轉型」但 T-SQL 環境仍以 `TRY_CAST` 作雙重防線（防止正則轉換本身若有邊界疏漏時仍不拋例外中斷月名單分派，符合 BR-F104-13「不拋 invalid input syntax」之業務紅線精神延伸）
 
 ---
 
 ## 七、FALLBACK — `to_jsonb(o)->>'col'` 動態 fallback → TS 端 schema 檢查（🔴🔴 I-MSSQL-DYNAMIC-FALLBACK-01，P3b 唯一「非純語法轉換」站點）
 
-**背景**：`resolveColumnSource` default 分支（`stage2to4-sql-builder.ts:282-291`）為任意未 hardcode 之 `column_name`（`ob_levelcard_column.column_name` 由 DB 管理者設定，非外部輸入）產生動態欄位讀取：PG `COALESCE((to_jsonb(o)->>'${columnName.toLowerCase()}')::numeric, 0)`；幽靈欄位（`ob_pool_data` 無此 key）→ NULL → COALESCE 0（BR-F103-08，不阻擋月跑）。JS golden oracle 對應為 `pool[columnName.toLowerCase()]` 屬性讀取（`assignment-run-pipeline.service.ts:1324-1335`），`raw == null` 時 warn+回 0。此為**唯一 live production path 依賴之通用 fallback**（非死碼，任何未來新增之計分卡欄位若未 hardcode 皆會觸發），MSSQL 無等價單一 SQL 表達式可做「動態欄名讀取＋欄位不存在則優雅降級」，須依 I-MSSQL-DYNAMIC-FALLBACK-01 改為 SQL 生成前 TS 端 `INFORMATION_SCHEMA.COLUMNS` schema 檢查（大寫，I-MSSQL-CATALOG-CASE-01），SQL 生成時即決定產生「直接欄位參照」或「字面值 `0`」，不留待執行期動態解析。
+**背景**：`resolveColumnSource` default 分支（`stage2to4-sql-builder.ts:282-291`）為任意未 hardcode 之 `column_name`（`ob_levelcard_column.column_name` 由 DB 管理者設定，非外部輸入）產生動態欄位讀取：PG `COALESCE((to_jsonb(o)->>'${columnName.toLowerCase()}')::numeric, 0)`；幽靈欄位（`ob_pool_data` 無此 key）→ NULL → COALESCE 0（BR-F103-08，不阻擋月名單分派）。JS golden oracle 對應為 `pool[columnName.toLowerCase()]` 屬性讀取（`assignment-run-pipeline.service.ts:1324-1335`），`raw == null` 時 warn+回 0。此為**唯一 live production path 依賴之通用 fallback**（非死碼，任何未來新增之計分卡欄位若未 hardcode 皆會觸發），MSSQL 無等價單一 SQL 表達式可做「動態欄名讀取＋欄位不存在則優雅降級」，須依 I-MSSQL-DYNAMIC-FALLBACK-01 改為 SQL 生成前 TS 端 `INFORMATION_SCHEMA.COLUMNS` schema 檢查（大寫，I-MSSQL-CATALOG-CASE-01），SQL 生成時即決定產生「直接欄位參照」或「字面值 `0`」，不留待執行期動態解析。
 
 ### TS-MSSQL-P3B-FALLBACK-001（🔴 DoD 核心，對稱 F103 FALLBACK-001）：未 hardcode 但**存在**於 `ob_pool_data` schema 之欄位（如 `loan_totamt`）→ 產生直接欄位參照
 - **Related Requirement**：§頂部查證發現 3；I-MSSQL-DYNAMIC-FALLBACK-01；I-SCORE-FALLBACK-01
@@ -242,7 +242,7 @@ last_updated: 2026-07-08
 - **Test Type**：MUST-FIX Gate / EQ（DoD 核心）
 - **Preconditions**：`ob_levelcard_column` 種一筆 `column_name='XYZ_COL'`（保證不存在於 `ob_pool_data` 任何欄位）
 - **Steps**：SQL 生成前 schema 檢查應判定 `xyz_col` 不存在
-- **Expected Result**：生成之 SQL 字面**於該欄位計分表達式處直接為字面 `0`**（非 `NULL`、非執行期動態判斷、非拋錯），且**不因幽靈欄位而中斷月跑**（BR-F103-08 語意保留）；若 score row 涵蓋 `[0,100]` 之類含 0 之區間，計分結果應為該 row 之 score（對稱 PG GHOST-002「0 ∈ [0,100] → 50」情境）；靜態掃描生成之 SQL 字串確認**不含**任何 `INFORMATION_SCHEMA`/動態欄名相關 token 殘留在最終 SQL 本身（schema 檢查應僅發生於 SQL 生成前的 TS 端，不應洩漏進最終 SQL 字面）
+- **Expected Result**：生成之 SQL 字面**於該欄位計分表達式處直接為字面 `0`**（非 `NULL`、非執行期動態判斷、非拋錯），且**不因幽靈欄位而中斷月名單分派**（BR-F103-08 語意保留）；若 score row 涵蓋 `[0,100]` 之類含 0 之區間，計分結果應為該 row 之 score（對稱 PG GHOST-002「0 ∈ [0,100] → 50」情境）；靜態掃描生成之 SQL 字串確認**不含**任何 `INFORMATION_SCHEMA`/動態欄名相關 token 殘留在最終 SQL 本身（schema 檢查應僅發生於 SQL 生成前的 TS 端，不應洩漏進最終 SQL 字面）
 
 ### TS-MSSQL-P3B-FALLBACK-003（對稱 F103 FALLBACK-003/GHOST-003）：欄位存在但為非數值文字（如 `list_type`）→ `TRY_CAST` 失敗回 NULL → COALESCE 0
 - **Related Requirement**：I-SCORE-FALLBACK-01
@@ -283,7 +283,7 @@ last_updated: 2026-07-08
 ### TS-MSSQL-P3B-AGESCORE-META-001（🔴🔴 MUST-FIX 旗艦守門，呼應 §頂部查證發現 4）：參考日期須為 `SYSDATETIME()`/`GETDATE()`，不得誤植 `@ccWorkdt`
 - **Related Requirement**：§頂部查證發現 4；`resolveColumnSource('AGE',...):215-226`；`calcAgeYears(dob, new Date())`
 - **Test Type**：MUST-FIX Gate（已知具體數值斷言，非僅邊界關係，呼應 ad-based-infra 記憶「方向敏感雙引數函式需已知具體期望值」原則）
-- **Steps**：以動態計算之 `dob`（相對「執行當下今日」回推 30 年整，如 `dobForAge(30)` 既有 helper 手法）與月跑工作月 `ym` 刻意設為**非當月**（如工作月為 3 個月前或 3 個月後）兩種情境分別跑 MSSQL pushdown
+- **Steps**：以動態計算之 `dob`（相對「執行當下今日」回推 30 年整，如 `dobForAge(30)` 既有 helper 手法）與月名單分派工作月 `ym` 刻意設為**非當月**（如工作月為 3 個月前或 3 個月後）兩種情境分別跑 MSSQL pushdown
 - **Expected Result**：計分結果之年齡分量在兩種 `ym` 設定下**完全相同**（皆為 30，因為參考日是「今日」而非工作月）；若計分結果隨 `ym` 變動而變動，代表誤植 `@ccWorkdt` 為參考日，判定為 MUST-FIX 紅燈
 
 ### TS-MSSQL-P3B-AGESCORE-002：age=100/101/−1 邊界（EQ，對稱 F104 AGE100-005）
@@ -579,7 +579,7 @@ last_updated: 2026-07-08
 
 > **執行方式說明**：本群組性質同專案既有 F101/F102/F104 之「202606 真實重跑」慣例（見 project memory `project_f104_scoring_legacy_align.md`/`project_f101_stage34_assignment.md`），建議以**腳本/手動觸發**方式執行並記錄於 impl log，而非併入常駐 `.mssql.spec.ts` 自動化套件（資料規模與執行時間不適合 CI 每次跑）。
 
-### TS-MSSQL-P3B-MONTHRUN-DIFF-001（🔴 DoD 收尾核心）：同月同輸入資料，PG 與 MSSQL 各跑一次完整月跑，逐欄逐列比對 score/card_level/tier_level
+### TS-MSSQL-P3B-MONTHRUN-DIFF-001（🔴 DoD 收尾核心）：同月同輸入資料，PG 與 MSSQL 各跑一次完整月名單分派，逐欄逐列比對 score/card_level/tier_level
 - **Related Requirement**：AD §4.2「建議一次對真實 customer_core 資料的 202606（或最新月）計分結果重跑，與 PG 版本結果逐欄逐列比對」；AD §5 P3b DoD #4
 - **Test Type**：Integration（非阻擋 P3b 核心 DoD，但為 AD 明文建議之補充驗收）
 - **Preconditions**：待 GATE-006 查證結果決定資料來源（既有殘留列或現場觸發 ETL）

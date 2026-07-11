@@ -724,7 +724,7 @@ last_updated: 2026-07-09
 
 - **問題**：P3 LEFT JOIN customer_core 之 entity 在 `apps/api/src/database/entities/` **目前不存在**（僅 data-model.md / F036 定義目標表）。
 - **影響**：CJOIN 群組無從 join；P3 前置 blocker。
-- **建議**：tdd 須先確認 customer_core 表於月跑 PG 庫存在且可 join；缺則先補 entity / 確認 F036 ETL 已產出。
+- **建議**：tdd 須先確認 customer_core 表於月名單分派 PG 庫存在且可 join；缺則先補 entity / 確認 F036 ETL 已產出。
 - **風險等級**：高（P3 LEFT JOIN 前置硬性依賴）
 
 ### OQ-F100-T4（tdd 交接項，非 blocker）：customer_core 計分欄位精確映射
@@ -935,23 +935,23 @@ last_updated: 2026-07-09
 ### R-MSSQL-P2B-01（🔴 高，本輪最重要發現，與 P1c DISPATCH-001 同型陷阱重演）：`RunQueueProducer.send`/`cancel`／`RunQueueConsumer.onModuleInit` 三處現行程式碼皆為「`this.boss` 是否為 `null`」二元 gate，`DB_TYPE='mssql'` 環境下 `this.boss` 必然為 `null`，與現行 sqlite 測試環境訊號完全相同
 
 - **問題**：直接查證三處現行程式碼——`producer.send()`＝`if (!this.boss) { throw new Error(...) }`；`producer.cancel()`＝`if (!this.boss) return;`；`consumer.onModuleInit()`＝`if (!this.boss) { logger.warn(...); return; }`——皆是「`boss` 是否為 `null`」之二元判斷，無 else if 分支。而 pg-boss 本就不支援 MSSQL，`createPgBoss()` 對非 postgres 環境一律回傳 `null`，故 `DB_TYPE='mssql'` 下 `this.boss` **必然為 null**，與現行測試環境（sqlite，未 override）判斷 `boss` 為 `null` 時的訊號**完全相同、無法區分**。
-- **影響**：若 tdd-implementation 只在三處程式碼「內部」新增 mssql 分支邏輯（例如加一段 `if (dbType==='mssql') {...}`）卻未同步把既有二元 gate 本身改為三分支判斷順序，新增的 mssql 分支程式碼可能被放在既有 `if (!this.boss)` 判斷「之後」而變成永遠不會執行到的死碼——mssql 環境下 `send()` 會誤拋出「pg-boss 實例未提供」錯誤（觸發現行防呆訊息，而非真正呼叫 `mssqlQueue.send`）、`cancel()` 會誤靜默 no-op、`onModuleInit()` 會誤 warn+return 完全不啟動輪詢（worker 永遠不消費任何 job，且僅一行 warn log，非常難以察覺，直到有人發現月跑卡在 pending 才會回頭排查）。此為 `AD-E07-38-P1c` 之 `DISPATCH-001`（`isPostgres()` 二元 gate 陷阱）在自建佇列子系統的同型態重演，證明此類陷阱在本專案「新增第 N 個 driver 分支」場景具有一定的重複發生率，值得列為通用施工檢查項。
+- **影響**：若 tdd-implementation 只在三處程式碼「內部」新增 mssql 分支邏輯（例如加一段 `if (dbType==='mssql') {...}`）卻未同步把既有二元 gate 本身改為三分支判斷順序，新增的 mssql 分支程式碼可能被放在既有 `if (!this.boss)` 判斷「之後」而變成永遠不會執行到的死碼——mssql 環境下 `send()` 會誤拋出「pg-boss 實例未提供」錯誤（觸發現行防呆訊息，而非真正呼叫 `mssqlQueue.send`）、`cancel()` 會誤靜默 no-op、`onModuleInit()` 會誤 warn+return 完全不啟動輪詢（worker 永遠不消費任何 job，且僅一行 warn log，非常難以察覺，直到有人發現月名單分派卡在 pending 才會回頭排查）。此為 `AD-E07-38-P1c` 之 `DISPATCH-001`（`isPostgres()` 二元 gate 陷阱）在自建佇列子系統的同型態重演，證明此類陷阱在本專案「新增第 N 個 driver 分支」場景具有一定的重複發生率，值得列為通用施工檢查項。
 - **建議**：`infrastructure/AD-E07-40-P2b-test.md` 之 `DISPATCH-001~003`（🔴 MUST-FIX）已針對「目標狀態」設計 spy 斷言（驗證呼叫了哪個依賴，而非僅驗證最終回傳值），對現行未修改程式碼刻意設計為紅燈，逼 tdd-implementation 確實把三處二元 gate 改為三分支（先判斷 mssql、再判斷 boss 是否存在，最後才是現行防呆分支）；`DISPATCH-005` 同時守住「未知/sqlite 環境不可被誤判為 mssql」之反向邊界。
-- **風險等級**：高（若遺漏，mssql 環境下月跑觸發/取消/消費三大功能皆可能靜默失效，且現行程式碼結構下沒有任何自然的執行期錯誤會提示此問題——`onModuleInit` 分支尤其危險，僅記一行 warn log）
+- **風險等級**：高（若遺漏，mssql 環境下月名單分派觸發/取消/消費三大功能皆可能靜默失效，且現行程式碼結構下沒有任何自然的執行期錯誤會提示此問題——`onModuleInit` 分支尤其危險，僅記一行 warn log）
 
 ### R-MSSQL-P2B-02（🔴 高，test-designer 查證出之 AD 文件本身缺口，非既有程式碼問題）：AD §4.2 檔案改動清單僅列 `assignment-worker.module.ts` 加入 `MssqlQueueService`，未列 `assignment.module.ts`，但 `RunQueueProducer`（mssql 分支之直接依賴）依現行結構註冊於 API 程序
 
 - **問題**：AD-E07-40 §4.2「檔案改動清單」明確只列一處 provider 註冊改動：「`assignment-worker.module.ts` | `providers` 加入 `MssqlQueueService`」。然而查證既有 `f098-static-guards.spec.ts` 之 `TS-F098-WORKER-004`（已鎖定驗證多輪未變）：`RunQueueProducer` 是註冊在 **`assignment.module.ts`**（API 程序），而非 `assignment-worker.module.ts`（worker 程序）；`RunQueueConsumer`/`OrphanReaper` 才是 worker-only。`RunQueueProducer.send()`/`cancel()` 之 mssql 分支需要呼叫 `MssqlQueueService` 的方法，但 AD 文件的檔案改動清單完全沒有提到 API 程序（`assignment.module.ts`）也需要能取得這個依賴。
-- **影響**：若 tdd-implementation 字面依照 AD §4.2 清單只改 `assignment-worker.module.ts`，`assignment.module.ts`（API 程序）不會有 `MssqlQueueService` 可注入——`RunQueueProducer` 建構時若採用強制依賴注入（非 `@Optional()`），API 程序啟動會直接因缺少 provider 而崩潰；若採用 `@Optional()` 寬鬆處理，則會在 `DB_TYPE='mssql'` 環境下呼叫 `send()`/`cancel()` 時因該依賴為 `undefined` 而拋出執行期錯誤或靜默失效——不論哪種情形，使用者透過 API 觸發月跑（`POST /api/v1/assignment/runs`）這個最基本的操作在 mssql 環境下會直接故障，且問題根源（AD 文件本身遺漏）不容易在 code review 時被發現，因為改動者很自然地會「依 AD 清單逐項核對」而非額外檢查清單本身是否完整。
+- **影響**：若 tdd-implementation 字面依照 AD §4.2 清單只改 `assignment-worker.module.ts`，`assignment.module.ts`（API 程序）不會有 `MssqlQueueService` 可注入——`RunQueueProducer` 建構時若採用強制依賴注入（非 `@Optional()`），API 程序啟動會直接因缺少 provider 而崩潰；若採用 `@Optional()` 寬鬆處理，則會在 `DB_TYPE='mssql'` 環境下呼叫 `send()`/`cancel()` 時因該依賴為 `undefined` 而拋出執行期錯誤或靜默失效——不論哪種情形，使用者透過 API 觸發月名單分派（`POST /api/v1/assignment/runs`）這個最基本的操作在 mssql 環境下會直接故障，且問題根源（AD 文件本身遺漏）不容易在 code review 時被發現，因為改動者很自然地會「依 AD 清單逐項核對」而非額外檢查清單本身是否完整。
 - **建議**：`infrastructure/AD-E07-40-P2b-test.md` 之 `DISPATCH-006`（🔴 MUST-FIX，新增，非 P2a 涵蓋範圍）已設計為靜態守門，直接掃描 `assignment.module.ts` 之 `providers`/`imports` 是否含 `MssqlQueueService`；此案例對「僅依 AD §4.2 字面清單實作」之版本預期為紅燈。建議 system-architect 於下次修訂 AD-E07-40 時於 §4.2 補上此行（`assignment.module.ts | providers 加入 MssqlQueueService（供 API 程序之 RunQueueProducer mssql 分支使用）`），避免未來 P2c 或其他讀者重新踩雷。
-- **風險等級**：高（阻擋性——若未修正，mssql 環境下 API 程序的月跑觸發功能直接故障，屬 P2b DoD #3「端對端」案例會自然揭露此問題，但若 tdd-implementation 未跑 E2E 群組、只跑 unit 群組就自認完成，可能會被遺漏；DISPATCH-006 提供更早、更便宜的靜態守門防線）
+- **風險等級**：高（阻擋性——若未修正，mssql 環境下 API 程序的月名單分派觸發功能直接故障，屬 P2b DoD #3「端對端」案例會自然揭露此問題，但若 tdd-implementation 未跑 E2E 群組、只跑 unit 群組就自認完成，可能會被遺漏；DISPATCH-006 提供更早、更便宜的靜態守門防線）
 
 ### R-MSSQL-P2B-03（中，實作細節陷阱，非既有測試/AD 缺陷）：pg-boss 路徑 `job.data` 為已解析物件，mssql 路徑 `claimed.payload`（P2a 已驗證）為原始 JSON 字串，`processPayload` 共用重構時容易漏做 `JSON.parse`
 
 - **問題**：P2a 已驗證 `MssqlQueueService.claimNext()` 回傳之 `payload` 欄位型別為 **`string`**（`queue_job.payload` 欄位存的是 `JSON.stringify(RunJobPayload)`，見 AD-E07-40-P2a-impl.md 與 `TS-MSSQL-P2A-CLAIM-006`）；而 pg-boss 的 `job.data` 是 pg-boss 套件本身已完成 JSON 解析後的物件。`processPayload(jobId, payload)` 若設計為統一接受「已解析物件」形狀（`{runId, ym}`），mssql 路徑的呼叫端（`pollOnce`）**必須**在呼叫 `processPayload` 之前額外執行一次 `JSON.parse(claimed.payload)`，這是 pg-boss 與 mssql 兩條路徑轉接層之間唯一的資料形狀落差，容易在專注於「兩路徑呼叫同一函式」（I-MSSQL-QUEUE-PAYLOAD-UNITY-01）這個大方向時被忽略這個小細節。
-- **影響**：若漏做 `JSON.parse`，`processPayload` 收到的 `payload` 參數會是原始字串而非物件，後續 `payload.runId`/`payload.ym` 存取皆為 `undefined`——由於 `processPayload` 內部對 `runId`/`ym` 缺失已有既有防禦邏輯（既有 F098「job payload 不完整」分支：記 log、視為已處理、不拋例外），此 bug 不會讓程序崩潰或拋出明顯錯誤，而是**每一個 mssql 環境下的月跑 job 都會被靜默判定為「payload 不完整」並直接略過**，不執行任何 pipeline——是一個會被輕易誤判為「測試通過但功能完全不動」的隱蔽性 bug。
+- **影響**：若漏做 `JSON.parse`，`processPayload` 收到的 `payload` 參數會是原始字串而非物件，後續 `payload.runId`/`payload.ym` 存取皆為 `undefined`——由於 `processPayload` 內部對 `runId`/`ym` 缺失已有既有防禦邏輯（既有 F098「job payload 不完整」分支：記 log、視為已處理、不拋例外），此 bug 不會讓程序崩潰或拋出明顯錯誤，而是**每一個 mssql 環境下的月名單分派 job 都會被靜默判定為「payload 不完整」並直接略過**，不執行任何 pipeline——是一個會被輕易誤判為「測試通過但功能完全不動」的隱蔽性 bug。
 - **建議**：`infrastructure/AD-E07-40-P2b-test.md` 之 `PAYLOAD-008`（🔴）已針對此設計專屬案例，明確以字串形式的 fake `claimed.payload` 驅動 `pollOnce()`，斷言 `processPayload` 收到的是**已還原之物件**而非原始字串。
-- **風險等級**：中（若遺漏，功能性影響嚴重——mssql 環境下月跑完全不執行——但因表現為「安靜略過」而非崩潰，較難在偶然的手動測試中被發現，屬於需要專屬自動化案例才能可靠捕捉的類型）
+- **風險等級**：中（若遺漏，功能性影響嚴重——mssql 環境下月名單分派完全不執行——但因表現為「安靜略過」而非崩潰，較難在偶然的手動測試中被發現，屬於需要專屬自動化案例才能可靠捕捉的類型）
 
 ---
 
@@ -1048,7 +1048,7 @@ last_updated: 2026-07-09
 
 ### R-MSSQL-P4B-01（🔴🔴 最高，本輪查證出之最基礎、保證失敗的未提及站點）：`lookup-handler.ts` 之 `ALTER TABLE ADD COLUMN IF NOT EXISTS ... TEXT` 為 T-SQL 保證語法錯誤，AD 與任務書皆完全未提及
 
-- **問題**：`lookup-handler.ts` 於 `null`/`skip_row`/`default_value` 三種 `noMatchStrategy` 分支皆執行 `ALTER TABLE "${inputTable}" ADD COLUMN IF NOT EXISTS "${alias}" TEXT`（每個 outputColumn 一次）。T-SQL `ALTER TABLE` 新增欄位語法為 `ALTER TABLE t ADD col_name data_type`——**不接受 `COLUMN` 保留字於此位置，亦無 `IF NOT EXISTS` 子句**（PG 9.6+ 專屬語法糖，SQL Server 從未支援）。且目標型別 `TEXT` 為 SQL Server 已棄用型別，與後續 `TRIM`/字串比較操作相容性差。test-designer grep `apps/api/src/database/seeds/data/etl-pipelines.json` 確認真實 customer_core pipeline **31 個 lookup 節點、每節點恰 1 個 outputColumn**，即完整月跑會執行 31 次此陳述式。AD-E07-41 §3.2 lookup-handler 列僅提及「`UPDATE...FROM` 重構」「`::text`→`CAST`」「`DELETE...WHERE NOT EXISTS` 不需改」三點，**完全未提及此 `ALTER TABLE` 站點**；上層任務書同樣僅點名 `UPDATE...FROM` 重構，未提及此站點。
+- **問題**：`lookup-handler.ts` 於 `null`/`skip_row`/`default_value` 三種 `noMatchStrategy` 分支皆執行 `ALTER TABLE "${inputTable}" ADD COLUMN IF NOT EXISTS "${alias}" TEXT`（每個 outputColumn 一次）。T-SQL `ALTER TABLE` 新增欄位語法為 `ALTER TABLE t ADD col_name data_type`——**不接受 `COLUMN` 保留字於此位置，亦無 `IF NOT EXISTS` 子句**（PG 9.6+ 專屬語法糖，SQL Server 從未支援）。且目標型別 `TEXT` 為 SQL Server 已棄用型別，與後續 `TRIM`/字串比較操作相容性差。test-designer grep `apps/api/src/database/seeds/data/etl-pipelines.json` 確認真實 customer_core pipeline **31 個 lookup 節點、每節點恰 1 個 outputColumn**，即完整月名單分派會執行 31 次此陳述式。AD-E07-41 §3.2 lookup-handler 列僅提及「`UPDATE...FROM` 重構」「`::text`→`CAST`」「`DELETE...WHERE NOT EXISTS` 不需改」三點，**完全未提及此 `ALTER TABLE` 站點**；上層任務書同樣僅點名 `UPDATE...FROM` 重構，未提及此站點。
 - **影響**：若 tdd-implementation 僅依 AD §3.2 表格文字與任務書逐項改寫，會完全遺漏此站點——這不是語意風險（如 `UPDATE...FROM` 翻譯錯誤仍可能「恰好」執行但結果錯誤），而是**保證編譯期/執行期語法錯誤**，一旦觸及即 100% 崩潰，且是本切片測試覆蓋率要求最高的 handler（lookup，31 個真實節點）之**每一次呼叫**皆會觸發的必經路徑。風險優先權高於任務書已明確點名的 `UPDATE...FROM` 重構本身。
 - **建議**：`infrastructure/AD-E07-41-P4b-test.md` 已將此站點獨立立為文件最優先章節（§一 ALTERCOL，8 個案例）：`ALTERCOL-UNIT-001~003`（🔴 MUST-FIX，分別鎖定「不得含 `ADD COLUMN`」「不得含 `IF NOT EXISTS`」「型別須為 `NVARCHAR(MAX)` 非裸 `TEXT`」）+ `ALTERCOL-GATE-001`（🔴 決策關卡，欄位存在性冪等檢查之實作位置——JS 端 `getMssqlTempTableColumns` 預查 vs SQL 端條件式 `IF NOT EXISTS (SELECT...) BEGIN...END`——不預設答案，要求 impl log 明確記錄）+ `ALTERCOL-MSSQL-001~003`（真實 MSSQL 執行 + 冪等性 + 多欄位鏈式新增規模驗證）+ `ALTERCOL-TRAP-001`（陷阱佐證，手動組裝 naive SQL 對真實 MSSQL 執行證實拋錯，非假設性風險）。強烈建議 system-architect 於下次修訂 AD-E07-41 §3.2 時同步補列此站點，並建議未來若有 P4c（`target-load-handler.ts` 之兩段式 UPDATE/INSERT）等其餘 handler 若有類似「動態欄位新增」模式，優先查證是否有同型 `ADD COLUMN IF NOT EXISTS` 陷阱。
 - **風險等級**：高（已有明確測試守門可完整攔截，非阻擋 P4b 本身；記錄為「高」而非「中」是因為此站點的失敗機率遠高於其餘查證站點——不需要特定邊界輸入即會觸發，只要 lookup 節點被執行就必然觸及，且完全未被 AD/任務書提及，若無 test-designer 主動 grep 查證，極可能被下游完全遺漏至 P4d 端對端測試才被發現，屆時除錯成本遠高於 P4b 階段單元測試層級)
@@ -1063,7 +1063,7 @@ last_updated: 2026-07-09
 ### R-MSSQL-P4B-03（中，真實資料查證：三個分支/模式於真實 pipeline 0% 觸發，測試密度應相應調整）：`lookup-handler.ts` 之 dual-input mode、`skip_row`、`default_value` 三者於真實 customer_core pipeline 完全未被使用
 
 - **問題**：test-designer grep `etl-pipelines.json` 之 31 個 lookup 節點設定，確認：(a) 全部 31 個節點 `data.lookupRef` 皆有值且無任何節點之上游邊連接至 `lookup-input` handle → **100% legacy mode**，dual-input mode 於真實 pipeline 0% 觸發；(b) 全部 31 個節點 `noMatchStrategy` 欄位皆為 `'null'`（或未設定、走預設）→ `skip_row`（`INNER JOIN` + `DELETE...WHERE NOT EXISTS`）與 `default_value` 兩分支 0% 觸發。
-- **影響**：若測試設計對三者投入與 `null` 分支同等密度，會誤導資源分配——`null` 分支（LEFT JOIN 語意，經 `UPDATE...FROM` 重構之核心路徑）才是 P4d 端對端測試會真實驗證、且真實月跑會執行的路徑，理應獲得最高測試密度與最多真實 MSSQL EQ 案例；另外三者若完全不覆蓋則存在「未來若其他 pipeline 用到這些分支才第一次發現破損」之風險，但過度投入亦非高效資源分配。
+- **影響**：若測試設計對三者投入與 `null` 分支同等密度，會誤導資源分配——`null` 分支（LEFT JOIN 語意，經 `UPDATE...FROM` 重構之核心路徑）才是 P4d 端對端測試會真實驗證、且真實月名單分派會執行的路徑，理應獲得最高測試密度與最多真實 MSSQL EQ 案例；另外三者若完全不覆蓋則存在「未來若其他 pipeline 用到這些分支才第一次發現破損」之風險，但過度投入亦非高效資源分配。
 - **建議**：`infrastructure/AD-E07-41-P4b-test.md` 已比照 P4a `FIELDMAP-UNIT-004`（boolean defaultValue 防禦性覆蓋）之既定精神分層——`null` 分支獲得 §二 UPDATEFROM 全部 EQ 案例 + §八 LOOKUP-EQ 之 5 個真實代表情境案例（仿真實 `lk_edu1`/`lk_hcity` 節點設定）；`skip_row`/`default_value`/dual-input 三者僅設計 UNIT 文字結構驗證 + 各保留 1~3 個真實 MSSQL 執行案例證明語法正確可執行（`SKIP-MSSQL-001~003`/`DEFAULT-MSSQL-001`/`LOOKUP-UNIT-003`），不視為 P4d 端對端可自然覆蓋之路徑。
 - **風險等級**：中（非功能性缺陷，屬測試資源分配之設計決策；若未依真實資料查證盲目均攤測試密度，會在有限開發時程下錯置驗證重點於低價值路徑）
 
@@ -1262,7 +1262,7 @@ last_updated: 2026-07-09
 ### R-MSSQL-P3B-01（🔴🔴 高，test-designer 全新查證出之隱蔽架構退化缺口，AD 完全未提及，同型於 P3a/P1c/P2b 已反覆出現之 DISPATCH 陷阱）：`resolveStage2to4Strategy` 現行二元-ish gate 使 `DB_TYPE='mssql'` 靜默落入 in-memory JS 執行路徑而非 SQL 下推
 
 - **問題**：`assignment-run-pipeline.service.ts:174-180` 現行邏輯 `DB_TYPE==='postgres' → 'pushdown'；否則依 ASSIGNMENT_PIPELINE_V2 選 'v2Inmemory'/'v1Inmemory'`。`DB_TYPE='mssql'` 落入 else 分支。與 P3a/P1c/P2b 已知陷阱不同之處：本站點**不會拋錯**（`executeV2` 為 DB-agnostic 純 TypeORM repo 查詢，可在 MSSQL 上正常執行且計分結果正確），純屬「功能正確但違反 I-NOLOAD-01 架構意圖（re-hydrate 全 pool 回 heap）」之隱蔽缺口，不會被任何功能正確性測試揪出，僅能靠明確 spy 呼叫路徑之 DISPATCH 測試發現。
-- **影響**：MSSQL 生產環境下若此缺口未修復，月跑會持續以 in-memory 全量載入方式執行（而非 SQL 下推），在大規模資料量下重現 P3 系列意圖解決之效能/記憶體問題（呼應 `project_monthly_run_inprocess_execution.md` 記錄之历史 OOM 教訓）。
+- **影響**：MSSQL 生產環境下若此缺口未修復，月名單分派會持續以 in-memory 全量載入方式執行（而非 SQL 下推），在大規模資料量下重現 P3 系列意圖解決之效能/記憶體問題（呼應 `project_monthly_run_inprocess_execution.md` 記錄之历史 OOM 教訓）。
 - **建議**：`infrastructure/AD-E07-42-P3b-test.md` §二 DISPATCH 已設計 4 案 MUST-FIX 守門（對現行未修改程式碼刻意設計為紅燈），要求 `Stage2to4Strategy` 型別升級為三態（`pushdownPg`/`pushdownMssql`/`v1Inmemory`/`v2Inmemory` 之明確區分）。
 - **風險等級**：高（不影響功能正確性，但直接違反 P3 系列最核心之架構目標 I-NOLOAD-01；且因不拋錯、不產生錯誤資料，極易在 code review 或功能測試中被忽略，只能靠專門設計的 spy 測試攔截）
 
@@ -1275,7 +1275,7 @@ last_updated: 2026-07-09
 
 ### R-MSSQL-P3B-03（🔴 高，test-designer 全新查證出之靜默偏差缺口，AD 提醒「須各自驗證」但未點出具體參數混淆風險）：Stage 2 AGE/CAR_YEAR 之參考日期為「今日」而非 Stage 1 之 `ccWorkdt`，複製貼上易誤植錯誤參數
 
-- **問題**：Stage 2 計分之 AGE（PG `age(cc.date_of_birth)` 單引數，隱含 `CURRENT_DATE`）與 CAR_YEAR（`EXTRACT(YEAR FROM CURRENT_DATE)`）皆以「執行當下實際日期」為參考，JS golden oracle 對應為 `calcAgeYears(dob, new Date())`；Stage 1 篩選之 AGE 站點則明確以 `:ccWorkdt`（月跑工作月）為參考日。AD §2.2 表格文字提醒「須各自轉換與各自驗證，不可假設改一處兩處都對」，但未明講兩處參考日期參數本身不同。P3a 已驗證之 `DATEDIFF(YEAR, dob, @ccWorkdt) - CASE...` 公式**形狀**可複用於本站點，但若複製貼上時未將 `@ccWorkdt` 替換為 `SYSDATETIME()`/`GETDATE()`，會計算出「以月跑工作月為基準的年齡/車齡」而非「以執行當下實際日期為基準」，且**不會拋錯**（兩者皆是合法日期運算，僅數值系統性偏移）。
+- **問題**：Stage 2 計分之 AGE（PG `age(cc.date_of_birth)` 單引數，隱含 `CURRENT_DATE`）與 CAR_YEAR（`EXTRACT(YEAR FROM CURRENT_DATE)`）皆以「執行當下實際日期」為參考，JS golden oracle 對應為 `calcAgeYears(dob, new Date())`；Stage 1 篩選之 AGE 站點則明確以 `:ccWorkdt`（月名單分派工作月）為參考日。AD §2.2 表格文字提醒「須各自轉換與各自驗證，不可假設改一處兩處都對」，但未明講兩處參考日期參數本身不同。P3a 已驗證之 `DATEDIFF(YEAR, dob, @ccWorkdt) - CASE...` 公式**形狀**可複用於本站點，但若複製貼上時未將 `@ccWorkdt` 替換為 `SYSDATETIME()`/`GETDATE()`，會計算出「以月名單分派工作月為基準的年齡/車齡」而非「以執行當下實際日期為基準」，且**不會拋錯**（兩者皆是合法日期運算，僅數值系統性偏移）。
 - **影響**：跨月份查驗（如月底跑上月資料）時，AGE/CAR_YEAR 計分結果會產生月份相依之系統性偏差，且無明顯錯誤徵兆，可能長期潛伏至業務端發現分數異常才被追查。
 - **建議**：`infrastructure/AD-E07-42-P3b-test.md` §七 AGESCORE-META-001（MUST-FIX 旗艦守門）與 §八 CARYEAR-002 已設計「刻意以非當月工作月驗證計分結果不隨之變動」之測試手法，直接攔截此類參數混淆。
 - **風險等級**：高（靜默錯誤、無崩潰徵兆，且發生條件〔複製貼上既有驗證過的公式〕相當自然，任何未特別留意此細節的實作方式都可能踩入）
@@ -1303,18 +1303,18 @@ last_updated: 2026-07-09
 
 ## MSSQL 全面遷移 P5c 風險與待決問題（AD-E07-43，2026-07-08 新增，P5 全量 CI + 業務簽核第三片，接續 P5b）
 
-> 完整測試設計見 [infrastructure/AD-E07-43-P5c-test.md](infrastructure/AD-E07-43-P5c-test.md)。本節彙整 P5c（MONTHRUN-DIFF 真實完整月跑跨引擎逐列比對）範圍內識別之風險；P5d（datetime2 業務裁示）/P5e（F067 式簽核報告與業務簽核本身）/P5f（部署 bootstrap）為業務/維運流程，非 test-designer 職責範圍，風險另由對應流程承接人記錄。⚠️ **本節同時是 risks-and-gaps.md 自 P3c 起累積之既有文件紀律缺口的部分補救**——`infrastructure/AD-E07-42-P3c-test.md`／`AD-E07-42-P3d-test.md`／`AD-E07-43-P5b-test.md` 三份測試設計文件目前於本檔案**皆無對應風險段落**（僅 P3a/P3b 有），建議未來一次性稽核補齊，非本輪 P5c 範圍但一併記錄供追蹤。
+> 完整測試設計見 [infrastructure/AD-E07-43-P5c-test.md](infrastructure/AD-E07-43-P5c-test.md)。本節彙整 P5c（MONTHRUN-DIFF 真實完整月名單分派跨引擎逐列比對）範圍內識別之風險；P5d（datetime2 業務裁示）/P5e（F067 式簽核報告與業務簽核本身）/P5f（部署 bootstrap）為業務/維運流程，非 test-designer 職責範圍，風險另由對應流程承接人記錄。⚠️ **本節同時是 risks-and-gaps.md 自 P3c 起累積之既有文件紀律缺口的部分補救**——`infrastructure/AD-E07-42-P3c-test.md`／`AD-E07-42-P3d-test.md`／`AD-E07-43-P5b-test.md` 三份測試設計文件目前於本檔案**皆無對應風險段落**（僅 P3a/P3b 有），建議未來一次性稽核補齊，非本輪 P5c 範圍但一併記錄供追蹤。
 
 ### R-MSSQL-P5C-01（🔴🔴 高，決策關卡，交 system-architect/業務裁定，非 test-designer 或 tdd-implementation 可自行裁定）：Tier 1（JS oracle vs MSSQL）是否足以滿足 I-MSSQL-SIGNOFF-GATE-01 條文字面「PG/MSSQL 結果一致」要求
 
-- **問題**：AD-E07-43 §6 I-MSSQL-SIGNOFF-GATE-01 條文字面明確要求「MONTHRUN-DIFF 對至少一個完整生產規模月跑顯示 **PG/MSSQL** 結果一致」，但現行環境約束（`postgres-test` 5433 本機不可達、`dev PG` 5432 視為唯讀不可注入測試）使得「PG 實際執行結果」現行不可直接取得。test-designer 裁定之 Tier 1（JS oracle vs MSSQL 全鏈比對）雖有 P3a-d 逐站點 EQ 佐證其可信度（JS oracle 已被專案自身程式碼註解標註為「golden oracle，與 PG SQL 下推逐列確定性等價」），但嚴格而言 JS oracle 是「PG 版本應該產出什麼」的程式碼層級代理，不是「PG 版本實際執行產出什麼」的直接觀測，兩者是否可視為等價證據，屬於證據力道判斷，非技術查證可單方面裁定。
+- **問題**：AD-E07-43 §6 I-MSSQL-SIGNOFF-GATE-01 條文字面明確要求「MONTHRUN-DIFF 對至少一個完整生產規模月名單分派顯示 **PG/MSSQL** 結果一致」，但現行環境約束（`postgres-test` 5433 本機不可達、`dev PG` 5432 視為唯讀不可注入測試）使得「PG 實際執行結果」現行不可直接取得。test-designer 裁定之 Tier 1（JS oracle vs MSSQL 全鏈比對）雖有 P3a-d 逐站點 EQ 佐證其可信度（JS oracle 已被專案自身程式碼註解標註為「golden oracle，與 PG SQL 下推逐列確定性等價」），但嚴格而言 JS oracle 是「PG 版本應該產出什麼」的程式碼層級代理，不是「PG 版本實際執行產出什麼」的直接觀測，兩者是否可視為等價證據，屬於證據力道判斷，非技術查證可單方面裁定。
 - **影響**：若 architect/業務最終認定 Tier 1 不足以滿足字面要求，cutover 前需額外投入 Tier 2（等待 5433 恢復可達）或 Tier 3（PG 快照資料工程，額外腳本工作量）才能完成簽核，可能影響 cutover 排程；若未經明確裁定就逕行以 Tier 1 結果簽核，可能在未來稽核時被質疑證據力道不足。
 - **建議**：`infrastructure/AD-E07-43-P5c-test.md` §一 GATE-002（決策關卡）+ §六 REPORT-004（MUST-FIX）已要求最終差異報告於最顯著位置明確聲明實際涵蓋之 Tier 範圍，並列出待裁示選項，供 P5e 簽核流程之業務利害關係人於報告呈現時一併裁定，不由本文件或 tdd-implementation 逕自認定「已經夠好」。
 - **風險等級**：高（直接影響 P5e 簽核是否成立、進而影響 cutover 排程，且屬於本專案既有慣例「業務簽核不可由工程團隊自行認定已足夠」之核心紅線，AD 本身亦於 §5 P5e DoD 明文強調此點）
 
 ### R-MSSQL-P5C-02（中，已知限制之新情境延伸，非本文件新發現但屬本文件首次需要在「全鏈組合」層級妥善處理其後果）：`executeStage1Chain` 內部 customer_core 片段為 PG-only SQL，限制 Tier 1 JS oracle 對含 customer_core 條件名單之直接可用性
 
-- **問題**：P3a 已查證 `buildCustomerCoreClause`（`executeStage1Chain` 內部呼叫）含 `AGE()`/`EXTRACT()`/`::date` 等 PG-only SQL 字面，若對 MSSQL 連線之 repo 執行、且名單篩選條件包含 customer_core 維度，會拋語法錯誤。P5c 為首次需要在「完整月跑全鏈」情境下處理此限制之切片（P3a 當時僅需獨立驗證 Stage 1 本身、可直接繞開；P5c 需要含 customer_core 條件之名單仍完整流入 Stage 2-4/CR 比對）。
+- **問題**：P3a 已查證 `buildCustomerCoreClause`（`executeStage1Chain` 內部呼叫）含 `AGE()`/`EXTRACT()`/`::date` 等 PG-only SQL 字面，若對 MSSQL 連線之 repo 執行、且名單篩選條件包含 customer_core 維度，會拋語法錯誤。P5c 為首次需要在「完整月名單分派全鏈」情境下處理此限制之切片（P3a 當時僅需獨立驗證 Stage 1 本身、可直接繞開；P5c 需要含 customer_core 條件之名單仍完整流入 Stage 2-4/CR 比對）。
 - **影響**：若 tdd-implementation 未正確理解此限制、誤將含 customer_core 條件之名單導入 `runStage1JsChain` 直接呼叫路徑，會導致腳本執行期間拋錯而非優雅處理，且可能誤判為新缺陷（而非已知限制）浪費除錯時間。
 - **建議**：`infrastructure/AD-E07-43-P5c-test.md` §0.4 已設計「Stage 1 單次執行（走 MSSQL 下推）、雙寫兩個 run_id」之繞開機制，§一 GATE-004（Regression / Static Guard）要求腳本原始碼掃描確認名單分流邏輯確實存在。
 - **風險等級**：中（已有明確設計因應方案，剩餘風險為「tdd-implementation 落地時是否確實遵循此分流設計」之執行面待辦，非設計缺陷本身）
@@ -1344,12 +1344,12 @@ last_updated: 2026-07-09
 
 > 完整測試設計見 [infrastructure/AD-E07-43-P5-followup-display-test.md](infrastructure/AD-E07-43-P5-followup-display-test.md)。本節彙整兩項獨立顯示層 follow-up（`ob_monthly_run_result.cr_nm` varchar→nvarchar；`assignment-run-report.service.ts::formatApplDate` 匯出 SQL 端格式化）之風險。⚠️ **命名更正記錄**：任務指示原稱本切片為「P4-followup」，test-designer 逐行查證兩項來源皆明文記錄於 `AD-E07-43-P5i-impl.md`／`AD-E07-43-P5h-impl.md`（P5 階段），非 P4，已更正檔名為 `AD-E07-43-P5-followup-display-test.md`，與既有 `AD-E07-41-P4-followup-rawdata-test.md`（不同階段、不同主題）之命名慣例保持一致但不混淆。
 
-### R-MSSQL-P5FU-01（🔴🔴 高，test-designer 本輪真庫新查證，改變 AD/impl log 原始風險定性）：`cr_nm` varchar→nvarchar 並非單純顯示截斷風險，而是 Stage 1 月跑批次寫入之潛在可用性風險
+### R-MSSQL-P5FU-01（🔴🔴 高，test-designer 本輪真庫新查證，改變 AD/impl log 原始風險定性）：`cr_nm` varchar→nvarchar 並非單純顯示截斷風險，而是 Stage 1 月名單分派批次寫入之潛在可用性風險
 
 - **問題**：`cr_nm` 之唯一寫入站點（`stage1-sql-executor(.ts/-mssql.ts)`）為單一 set-based `INSERT INTO ob_monthly_run_result ... SELECT ...` 陳述式（非逐列 cursor）。真庫探針證實 SQL Server 對 `varchar(N)` 容量溢位之 INSERT 採**明確拋錯**（`String or binary data would be truncated`），非靜默截斷。若任一列之 `'CR'+emp_nm` 超過 50 bytes，會使**整批 Stage 1 INSERT 失敗**（該名單整批案件寫入失敗），而非僅該列顯示錯誤或該列被跳過——此為比 P5i 原始 framing（「中文顯示欄位截斷」）更嚴重的可用性風險等級。
-- **影響**：若 MSSQL cutover 後某月遇到超長 CR 業代姓名（現行系統無長度前端驗證機制），可能導致該名單整批 Stage 1 寫入失敗、月跑中斷，需人工排查方能定位根因（錯誤訊息不會直接指向「業代姓名過長」，需追查至 SQL 層級錯誤）。
+- **影響**：若 MSSQL cutover 後某月遇到超長 CR 業代姓名（現行系統無長度前端驗證機制），可能導致該名單整批 Stage 1 寫入失敗、月名單分派中斷，需人工排查方能定位根因（錯誤訊息不會直接指向「業代姓名過長」，需追查至 SQL 層級錯誤）。
 - **建議**：`infrastructure/AD-E07-43-P5-followup-display-test.md` §四 CRNM-WRITEPATH 群組（WRITEPATH-001/002）已設計透過真實生產寫入路徑（非孤立探針表）驗證修法前後對照，並要求 impl log 明確記錄「整批失敗」現象供 architect 知悉。修法（nvarchar 化）本身即可完全消除此風險（25 字元→實質不可能觸頂的容量）。
-- **風險等級**：高（機率極低但影響面為整批月跑中斷，且修復成本低——僅需採用既有 `nvarcharColumnType` helper，無需新架構）；已有明確修法方向，非開放性問題
+- **風險等級**：高（機率極低但影響面為整批月名單分派中斷，且修復成本低——僅需採用既有 `nvarcharColumnType` helper，無需新架構）；已有明確修法方向，非開放性問題
 
 ### R-MSSQL-P5FU-02（低，記錄性，佐證修法優先度非高危）：`cr_nm` 現行實際觸發機率極低，已用真實生產資料驗證
 

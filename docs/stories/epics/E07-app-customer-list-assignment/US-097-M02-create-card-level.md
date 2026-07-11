@@ -31,7 +31,7 @@ F055 spec（v1.4）的 Tab 4 僅提供 GET / PUT / DELETE，缺少新增等級�
 
 - Tab 4 顯示「+ 新增等級」按鈕（無論目前等級列表是否為空）
 - 點擊按鈕後開啟新增表單（Modal 或 inline row），欄位包含：等級代碼（`cardLevel`）、分數下限（`scoreS`）、分數上限（`scoreE`）
-- 月跑執行中（BR-3）按鈕 disabled，hover 顯示鎖定提示
+- 月名單分派執行中（BR-3）按鈕 disabled，hover 顯示鎖定提示
 
 ### AC-2：新增成功並顯示於列表
 
@@ -45,7 +45,7 @@ F055 spec（v1.4）的 Tab 4 僅提供 GET / PUT / DELETE，缺少新增等級�
 - 驗證僅檢查重疊，**允許 gap**（相鄰等級之間不強制連續，不自動 re-balance 既有列）
 - 若重疊，顯示錯誤提示並阻止送出
 
-### AC-4：月跑鎖（BR-3）與 CARD_TYPE 範圍鎖（BR-7）
+### AC-4：月名單分派鎖（BR-3）與 CARD_TYPE 範圍鎖（BR-7）
 
 - `assignment_run` 有 status IN ('pending', 'running') 時，新增按鈕 disabled，API 回 409 `SCORING_VERSION_LOCKED`
 - 新增操作的 CARD_TYPE 固定為 Tab 1 選中之 CARD_TYPE，後端驗證該 `cardType` 對應 `ob_card_type.status = 'active'`，否則回 404 `CARD_TYPE_NOT_FOUND`
@@ -62,7 +62,7 @@ F055 spec（v1.4）的 Tab 4 僅提供 GET / PUT / DELETE，缺少新增等級�
 | 約束 | 說明 |
 |------|------|
 | BR-1 | 僅驗證區間重疊；允許 gap（不強制 contiguous；不自動 re-balance 既有列）— 用戶決策 Q2 |
-| BR-3 | 月跑鎖：月跑執行中禁止新增 |
+| BR-3 | 月名單分派鎖：月名單分派執行中禁止新增 |
 | BR-7 | CARD_TYPE 範圍鎖：操作範圍限定於 Tab 1 當前選中之 `ob_card_type.status = 'active'` CARD_TYPE |
 
 ---
@@ -104,7 +104,7 @@ F055 spec（v1.4）的 Tab 4 僅提供 GET / PUT / DELETE，缺少新增等級�
 - **When**：送出
 - **Then**：顯示重疊錯誤提示，不允許新增
 
-### TC-097-04：月跑執行中按鈕 disabled
+### TC-097-04：月名單分派執行中按鈕 disabled
 
 - **Given**：`assignment_run` 有 status = 'running' 的紀錄
 - **When**：業務主管查看 Tab 4
@@ -120,7 +120,7 @@ F055 spec（v1.4）的 Tab 4 僅提供 GET / PUT / DELETE，缺少新增等級�
 
 ## 依賴關係
 
-- **Blocked By**：US-074（Tab 4 等級列表框架、月跑鎖邏輯）、US-093（F069 Tab 1 selectedCardType 狀態）
+- **Blocked By**：US-074（Tab 4 等級列表框架、月名單分派鎖邏輯）、US-093（F069 Tab 1 selectedCardType 狀態）
 - **Blocks**：無直接下游 Story（新增等級後可銜接 US-075 TIER_LEVEL 對應設定，但非強依賴）
 
 ---
@@ -137,7 +137,7 @@ F055 spec（v1.4）的 Tab 4 僅提供 GET / PUT / DELETE，缺少新增等級�
 - [ ] 驗收標準全部通過
 - [ ] 空狀態入口可用（AC-5）
 - [ ] 重疊驗證測試通過（TC-097-03）；允許 gap 測試通過（TC-097-02）
-- [ ] 月跑鎖定保護測試通過（TC-097-04）
+- [ ] 月名單分派鎖定保護測試通過（TC-097-04）
 - [ ] 稽核日誌 CREATE 寫入驗證
 - [ ] 新增後 PUT / DELETE 操作正常（TC-097-05）
 - [ ] 單元測試覆蓋率 ≥ 80%
@@ -150,5 +150,5 @@ F055 spec（v1.4）的 Tab 4 僅提供 GET / PUT / DELETE，缺少新增等級�
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **對應 Spec**：F055（編輯 CARD_LEVEL 分級門檻）— 本 Story 完成後需由 spec-writer 補 POST endpoint
-- **相關 Stories**：US-074（編輯／刪除 CARD_LEVEL 門檻）、US-093（Tab 1 CARD_TYPE 選中狀態）、US-075（TIER_LEVEL 對應，CARD_LEVEL 新增後可在此建立對應）、US-081（月跑的等級劃分依賴此設定）
+- **相關 Stories**：US-074（編輯／刪除 CARD_LEVEL 門檻）、US-093（Tab 1 CARD_TYPE 選中狀態）、US-075（TIER_LEVEL 對應，CARD_LEVEL 新增後可在此建立對應）、US-081（月名單分派的等級劃分依賴此設定）
 - **Reference**：`reference/TableSchema/OB/OBLEVELCARD_LEVEL.sql`、`prototypes/28-scoring-config.html`（Tab 4 empty state）

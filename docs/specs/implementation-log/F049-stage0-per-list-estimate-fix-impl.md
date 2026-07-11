@@ -1,7 +1,7 @@
 ---
 type: implementation-log
 feature_id: F049
-feature_name: Stage 0 per-list 案件試算修正（複用月跑 Stage 1 演算法）
+feature_name: Stage 0 per-list 案件試算修正（複用月名單分派 Stage 1 演算法）
 status: complete
 last_updated: 2026-05-26
 ---
@@ -21,9 +21,9 @@ Stage 0 單一 `list_no` 案件試算回傳錯誤的 `0`（實測 OB202605004 �
 
 ## 2. 修法（已拍板）
 
-讓 `buildPoolCountQuery()` **直接複用** 月跑 Stage 1 之純函式 `buildStage1WhereConditions()`
+讓 `buildPoolCountQuery()` **直接複用** 月名單分派 Stage 1 之純函式 `buildStage1WhereConditions()`
 （`assignment/stage1/stage1-query-composer.ts`），消除兩套平行篩選邏輯，確保
-estimate ≡ 月跑 Stage 1。用法與 `AssignmentRunPipelineService.runStage1ForList()` 完全一致：
+estimate ≡ 月名單分派 Stage 1。用法與 `AssignmentRunPipelineService.runStage1ForList()` 完全一致：
 
 - composer 回 `skipReason='EMPTY_CONDITIONS'`（含空 conditions / `_backfill_empty` / wildcard 後零 fragment）→ 試算回 `count = 0`（BR-5，與 Stage 1 skip 一致）
 - 否則 `poolRepo.createQueryBuilder('ob_pool_data').where(fragment.where, fragment.params).getCount()`
@@ -34,7 +34,7 @@ estimate ≡ 月跑 Stage 1。用法與 `AssignmentRunPipelineService.runStage1F
 實作 TS-F049-EST-003 時發現：composer 路徑 A 的 categorical fragment 只對 `caseyear → year_cnt`
 做特殊映射，**漏掉 `case_status → list_type`**——路徑 A 名單（F050 v2.1 後建立、condition_payload
 帶 `columnName: 'case_status'`）會產生 `"case_status" IN (...)` 打到 `ob_pool_data` 不存在的欄位。
-此為**月跑 Stage 1 本身的潛在 bug**（非僅試算）。
+此為**月名單分派 Stage 1 本身的潛在 bug**（非僅試算）。
 
 依 Source of Truth 優先序（F049-test > F049 spec > architecture）修正：
 
@@ -42,7 +42,7 @@ estimate ≡ 月跑 Stage 1。用法與 `AssignmentRunPipelineService.runStage1F
 - architecture §18.5 流程圖 D 節點（L4102）+ 共用映射表（L4169）一致要求
 
 於 composer 新增 `PATH_A_COLUMN_MAPPING`（`case_status → list_type`），由 `buildCategoricalFragment`
-套用；其餘欄位（不在表中者）沿用原 columnName，行為不變。此修正同時讓月跑 Stage 1 與 estimate
+套用；其餘欄位（不在表中者）沿用原 columnName，行為不變。此修正同時讓月名單分派 Stage 1 與 estimate
 逐欄位一致，符合「estimate ≡ Stage 1」目標。
 
 ## 3. Files Changed
@@ -103,7 +103,7 @@ estimate ≡ 月跑 Stage 1。用法與 `AssignmentRunPipelineService.runStage1F
 - 現有 api 測試框架為 vitest + better-sqlite3 in-memory，無 PG TestContainer 基礎設施
 - 依 memory：SQLite 對 `year_cnt` integer IN 之型別親和性與 PG 不同，硬接 SQLite 假測試無法保證 PG 行為
 
-替代覆蓋：篩選演算法一致性已由 EST-001~009 純函式 + SQLite COUNT 充分驗證（estimate 與月跑共用同一
+替代覆蓋：篩選演算法一致性已由 EST-001~009 純函式 + SQLite COUNT 充分驗證（estimate 與月名單分派共用同一
 `buildStage1WhereConditions` 純函式，邏輯一致性可保證）；241,978 之真實基準建議於 staging / E2E
 PostgreSQL 環境手動驗證。
 
@@ -111,7 +111,7 @@ PostgreSQL 環境手動驗證。
 
 - **未動**：`estimateListCount` 的 404/timeout/timeoutMs<=0 流程、`calculateDailyEstimate`（AC-1/2/3）
 - **超出「僅改 buildPoolCountQuery 內部」明面範圍的一處**：composer 路徑 A case_status→list_type 映射。
-  屬與本 bug 同類的既有缺陷（影響月跑 Stage 1），且為 F049 v1.2 AC-4 + architecture §18.5 明確要求、
+  屬與本 bug 同類的既有缺陷（影響月名單分派 Stage 1），且為 F049 v1.2 AC-4 + architecture §18.5 明確要求、
   TS-F049-EST-003 列為實作清單之測試；非自行詮釋，為達成「estimate ≡ Stage 1」之必要修正。
 - **未提交且未碰**：apps/api/src/modules/etl/.../target-load-handler.ts 及其 spec（任務明示不碰）
 
@@ -137,7 +137,7 @@ PostgreSQL 環境手動驗證。
 
 ### 估算範圍澄清
 
-Stage 0 per-list 試算僅套用名單「欄位篩選條件」，**不含** SP 後段另施加的 `MONTH_CNT`（list_period 區間）、近 3 月已派案去重、詐騙/中結/滿期特殊 DELETE 規則。故試算值為「符合名單欄位條件之上界」，實際分派數更少 —— 與 BR-1「實際件數以月跑結果為準」一致。
+Stage 0 per-list 試算僅套用名單「欄位篩選條件」，**不含** SP 後段另施加的 `MONTH_CNT`（list_period 區間）、近 3 月已派案去重、詐騙/中結/滿期特殊 DELETE 規則。故試算值為「符合名單欄位條件之上界」，實際分派數更少 —— 與 BR-1「實際件數以月名單分派結果為準」一致。
 
 ## 9. 既有 ready 名單資料回填（backfill）
 

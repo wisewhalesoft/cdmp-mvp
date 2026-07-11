@@ -1,7 +1,7 @@
 ---
 type: test-design-feature
 feature_id: F098
-feature_name: 月跑 Worker 抽離（pg-boss 入列 + cdmp-worker 容器 + cancellation / orphan 回收）
+feature_name: 月名單分派 Worker 抽離（pg-boss 入列 + cdmp-worker 容器 + cancellation / orphan 回收）
 priority: P0-MVP
 related_spec: /docs/specs/features/F098-monthly-run-worker-extraction.md
 related_ad: /docs/specs/implementation-log/AD-E07-v3.1-monthly-run-execution-model.md
@@ -12,7 +12,7 @@ covers:
 last_updated: 2026-06-02
 ---
 
-# F098：月跑 Worker 抽離（AD-E07-28 P1）— 測試設計
+# F098：月名單分派 Worker 抽離（AD-E07-28 P1）— 測試設計
 
 > ⚠️ **範圍限定 P1**：本測試設計**只**涵蓋 F098 P1（執行容器抽離 + cancellation + orphan 回收）。
 > **不**涵蓋 P2（[F099](F099-stage1-sql-pushdown.md) Stage 1 SQL 下推）/ P3（[F100](F100-stage2-4-sql-pushdown-scoring.md) Stage 2~4 SQL 下推）。
@@ -58,7 +58,7 @@ last_updated: 2026-06-02
 |---|---|---|---|
 | **Unit** | `triggerRun` 入列行為、`RunQueueConsumer` handler 邏輯、`CancellationPoller` 純判定、`OrphanReaper` 純判定 | **mock / fake** `RunQueueProducer`（`send` spy）、`pgboss` work handler 以直呼 handler 模擬派發 | SQLite（沿用專案多數 spec）或 mock repo |
 | **PG Integration** | 真實入列→消費→冪等→job expiration orphan、pg-boss schema migration | **真實 pg-boss**（`boss.start()` 對真 Postgres） | **Postgres Test Container（強制）** |
-| **E2E** | 觸發 API → worker 容器消費 → 前端 polling 看到 status 推進；月跑期間 API 仍可回應（非功能） | 真實 pg-boss + 真實 `cdmp-worker` 容器 | Postgres（docker-compose） |
+| **E2E** | 觸發 API → worker 容器消費 → 前端 polling 看到 status 推進；月名單分派期間 API 仍可回應（非功能） | 真實 pg-boss + 真實 `cdmp-worker` 容器 | Postgres（docker-compose） |
 | **Regression（靜態 / 結果不變）** | 既有 pipeline spec baseline 不變；`triggerRun` 不再呼叫 `kickoffPipeline`（grep） | 不涉入 | 既有 |
 
 ### 時鐘 / 計時器控制策略
@@ -66,7 +66,7 @@ last_updated: 2026-06-02
 | 項目 | 策略 |
 |---|---|
 | `CancellationPoller` 輪詢間隔 | 測試**注入**極短間隔（或直接呼叫 `poll()` 一次），不依賴真實 `setInterval`；沿用專案 fake timer 慣例（如 F035 / F023 `scanAndExecute(fakeNow)` 模式） |
-| `OrphanReaper` 掃描週期 / job expiration 閾值 | 閾值設為**可注入參數**（env / config），測試以極短閾值觸發；不等真實逾時（沿用 F098 OQ-F098-02：閾值由 tdd-implementation 對齊最長月跑時間，但測試環境須可縮短） |
+| `OrphanReaper` 掃描週期 / job expiration 閾值 | 閾值設為**可注入參數**（env / config），測試以極短閾值觸發；不等真實逾時（沿用 F098 OQ-F098-02：閾值由 tdd-implementation 對齊最長月名單分派時間，但測試環境須可縮短） |
 | job expiration（pg-boss `expireInSeconds`） | PG Integration 測試以極短 `expireInSeconds` 觸發 expire，再驗證 OrphanReaper 回收 |
 
 ### mock 必須模擬真實 pg-boss contract（feedback_mock_real_system_contract）
@@ -89,7 +89,7 @@ last_updated: 2026-06-02
 | TS-F098-CANCEL-001~007（cancellation 真生效） | 7 | Unit + PG Integration | 部分 | AC-5 | poller 偵測 failed → 提早結束、不寫快照；pending job `cancel(jobId)` 快路徑 |
 | TS-F098-ORPHAN-001~007（orphan 回收） | 7 | Unit + PG Integration | 部分 | AC-6 / §9.2 | running + job 消失/expire → failed + 正確 error_message；邊界（執行中不誤殺） |
 | TS-F098-PGINT-001~005（真實佇列端到端 + schema migration） | 5 | PG Integration | **是** | AC-1~AC-6 | 真 pg-boss 入列→消費→冪等→expiration；migration 固定 schema |
-| TS-F098-NFR-001~003（月跑期間 API 仍可回應） | 3 | E2E + PG Integration | **是** | F098 spec §1 價值點 / I-TRIGGER-01 | 解 F1：worker 跑 pipeline 時 API 路由仍即時回應 |
+| TS-F098-NFR-001~003（月名單分派期間 API 仍可回應） | 3 | E2E + PG Integration | **是** | F098 spec §1 價值點 / I-TRIGGER-01 | 解 F1：worker 跑 pipeline 時 API 路由仍即時回應 |
 | TS-F098-WORKER-001~004（worker entrypoint / docker-compose） | 4 | 靜態 / E2E | 部分 | AC-8 / §5 | worker 不掛 HTTP；共用 flag；不 expose port |
 | TS-F098-RG-001~005（回歸基準 / 靜態 guard） | 5 | 靜態 + 既有 spec | 否 | I-TRIGGER-01 / C-1 / C-2 | 既有 pipeline 結果不變；`setImmediate` 移除 grep |
 | TS-F098-OQ-001~002（OQ-F098-01 待裁） | 2 | Unit | 否 | OQ-F098-01 | pending 入列失敗 orphan 涵蓋（拍板後啟用） |
@@ -316,7 +316,7 @@ last_updated: 2026-06-02
 - **Related**: AC-6 / A-3 / OQ-F098-02
 - **Preconditions**: `status='running'` 但對應 job **仍 active / 未 expire**（worker 正常執行中）
 - **Then**: OrphanReaper **不**回收；run 維持 running
-- **驗證方式**: 斷言 update **未被呼叫**；此為「閾值須大於最長月跑時間以免誤殺」之核心驗證
+- **驗證方式**: 斷言 update **未被呼叫**；此為「閾值須大於最長月名單分派時間以免誤殺」之核心驗證
 
 ### TS-F098-ORPHAN-004：剛 expire 邊界 —— 閾值前後分開驗證
 - **Test Type**: Boundary | **Level**: Unit | **需 Postgres**: 否
@@ -381,17 +381,17 @@ last_updated: 2026-06-02
 
 ---
 
-## 8. 非功能驗收：月跑期間 API 仍可回應（解 F1 的可行驗證）
+## 8. 非功能驗收：月名單分派期間 API 仍可回應（解 F1 的可行驗證）
 
-> F1 = 月跑 pipeline 在 API 同程序卡滿 event loop → 整站逾時。P1 抽離後，pipeline 在 worker 程序，
-> API 程序不再承載運算。以下為「月跑期間 API 仍可回應」之**可行**驗證方式（非需 prod 量級壓測）。
+> F1 = 月名單分派 pipeline 在 API 同程序卡滿 event loop → 整站逾時。P1 抽離後，pipeline 在 worker 程序，
+> API 程序不再承載運算。以下為「月名單分派期間 API 仍可回應」之**可行**驗證方式（非需 prod 量級壓測）。
 
 ### TS-F098-NFR-001【PG / E2E】：worker 跑 pipeline 期間，API 健康 / 查詢端點即時回應
 - **Test Type**: Non-Functional（可用性）| **Level**: E2E / PG Integration | **需 Postgres**: **是**
 - **Related**: F098 spec §1 價值點 / I-TRIGGER-01
 - **Preconditions**: 真 worker 執行一個刻意慢的 pipeline（注入延遲 / 多 list）；API 與 worker 為**分離程序**
 - **When**: pipeline 執行中，對 API 發送輕量請求（如 `GET /api/v1/system/...` 或登入 / `getRunById`）
-- **Then**: 該請求於合理上限（如 < 1s）回應，**不**逾時；證明 API event loop 未被月跑佔據
+- **Then**: 該請求於合理上限（如 < 1s）回應，**不**逾時；證明 API event loop 未被月名單分派佔據
 - **驗證方式**: 並行請求計時；對比「P1 前同程序版本會逾時」作為說明性基準（非自動門檻）
 
 ### TS-F098-NFR-002【Unit】：triggerRun 回應延遲與 pipeline 規模無關
@@ -509,13 +509,13 @@ last_updated: 2026-06-02
 
 | ID | 風險 / 待決 | 等級 | 處置 |
 |---|---|---|---|
-| RISK-F098-001 | OrphanReaper 閾值設太短 → 誤殺執行中長月跑（P1 JS 版最壞數十分鐘） | 高 | TS-F098-ORPHAN-003/004 守邊界；閾值須 > 最長月跑時間（OQ-F098-02 由 tdd-implementation 定，測試環境可注入縮短） |
+| RISK-F098-001 | OrphanReaper 閾值設太短 → 誤殺執行中長月名單分派（P1 JS 版最壞數十分鐘） | 高 | TS-F098-ORPHAN-003/004 守邊界；閾值須 > 最長月名單分派時間（OQ-F098-02 由 tdd-implementation 定，測試環境可注入縮短） |
 | RISK-F098-002 | mock pg-boss 用 happy-path 同形式假設（payload 直接當參數、自動重派） | 高 | 「mock 模擬真實 contract」段 + TS-F098-PGINT-004 真庫往返驗證 |
 | RISK-F098-003 | CI 未起 Postgres → PGINT / NFR 群組（18 案例）無法執行，pg-boss 真實行為失覆蓋 | 高 | CI 決策：必須能起 Postgres Test Container（與 F038 / F075 / M01 PG 整合慣例一致） |
 | RISK-F098-004 | 單一 list 內無讓出點 → 取消「秒停」期待落空 | 中 | TS-F098-CANCEL-004 誠實揭露取消粒度為 list 級 |
 | RISK-F098-005 | vitest 不檢型別 → pg-boss 型別錯誤潛伏至 prod build（US-144 教訓） | 中 | TS-F098-RG-005 強制 tsc gate |
 | OQ-F098-01 | 入列失敗之 pending run 是否由 OrphanReaper 涵蓋 | — | TS-F098-OQ-001/002 待裁；spec 建議涵蓋 |
-| OQ-F098-02 | OrphanReaper 掃描週期 / job expiration 具體數值 | — | tdd-implementation 依最長月跑時間 + 安全邊際定；測試以可注入閾值驗邏輯 |
+| OQ-F098-02 | OrphanReaper 掃描週期 / job expiration 具體數值 | — | tdd-implementation 依最長月名單分派時間 + 安全邊際定；測試以可注入閾值驗邏輯 |
 
 ---
 

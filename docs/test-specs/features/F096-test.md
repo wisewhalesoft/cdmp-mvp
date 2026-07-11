@@ -21,7 +21,7 @@ last_updated: 2026-05-27
 > 4. **既有名單相容**：既有 `condition_payload` 中已有 `list_type` 條件的名單，Stage 1 `buildStage1WhereConditions()` 仍可解析執行（停用僅影響「新增」入口）
 > 5. **後端 CONDITION_COLUMN_NOT_IN_WHITELIST 防禦**：嘗試新增 `list_type` 條件時，API 回傳 422
 >
-> **範圍說明**：本 feature 為純資料 / 設定變更，不改變月跑案件數。Migration / seed 為唯一實作產物；不新增表 / 欄位。
+> **範圍說明**：本 feature 為純資料 / 設定變更，不改變月名單分派案件數。Migration / seed 為唯一實作產物；不新增表 / 欄位。
 
 ---
 
@@ -212,7 +212,7 @@ last_updated: 2026-05-27
 - **預期結果**：
   - `buildStage1WhereConditions` **不丟 CONDITION_COLUMN_NOT_IN_WHITELIST**（停用僅影響前端新增入口，不影響已存條件解析）
   - 回傳的 WHERE fragment 含 `"list_type" IN (:...catX)` 或等效（既有條件仍可執行）
-  - **Stage 1 月跑對含 list_type 既有條件之名單，案件挑選行為不受 m293 影響**
+  - **Stage 1 月名單分派對含 list_type 既有條件之名單，案件挑選行為不受 m293 影響**
 
 ---
 

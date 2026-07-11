@@ -28,7 +28,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 1. 功能摘要
 
-提供業務部長修改既有 CARD_TYPE 紀錄的 `cardName` 與 `prodKind`。`cardType`（代碼）為系統 join key，所有下游表（`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` / `ob_levelcard_level` / `ob_tier`）均依此 join，**不允許修改**。月跑執行中禁止編輯。
+提供業務部長修改既有 CARD_TYPE 紀錄的 `cardName` 與 `prodKind`。`cardType`（代碼）為系統 join key，所有下游表（`ob_levelcard_version` / `ob_levelcard_column` / `ob_levelcard_score` / `ob_levelcard_level` / `ob_tier`）均依此 join，**不允許修改**。月名單分派執行中禁止編輯。
 
 ## 2. 使用者故事
 
@@ -84,7 +84,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 - **When** 後端驗證
 - **Then** 回 422 `VALIDATION_ERROR`
 
-### AC-7：月跑執行中禁止編輯
+### AC-7：月名單分派執行中禁止編輯
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 紀錄
 - **When** 業務部長嘗試送出 PUT 請求
@@ -139,7 +139,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
 | 404 | CARD_TYPE_NOT_FOUND | 指定的 cardType 不存在於 active 紀錄 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中禁止編輯 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派執行中禁止編輯 |
 | 422 | VALIDATION_ERROR | 必填欄位缺失 / `prodKind` 不在啟用期間內 |
 
 ## 6. 商業規則
@@ -150,14 +150,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | BR-2 | 僅 `card_name` 與 `prod_kind` 可修改；其餘欄位（含稽核欄位）由後端維護 |
 | BR-3 | `prod_kind` 變更**不回溯**：既有 `ob_pool_data_list` 歷史分派結果與 `ob_list_definition` 中已使用該 CARD_TYPE 之紀錄不被修改；audit log 記載變更前後完整內容供追溯 |
 | BR-4 | 編輯 `ob_card_type.card_name` 是否同步更新 `ob_levelcard_version.card_name` 為設計決策：本 spec 採**不同步**（兩表獨立維護），`ob_levelcard_version.card_name` 由 F054 編輯端點維護；理由：兩者語意不同（CARD_TYPE 主資料 vs 計分版本快照），同步會造成歷史快照語意污染 | ✅ Decided |
-| BR-5 | 月跑執行中禁止編輯（`SCORING_VERSION_LOCKED` 不適用此端點；改用 `ASSIGNMENT_RUN_ALREADY_RUNNING` 與 E07 其他 CARD_TYPE 端點一致） |
+| BR-5 | 月名單分派執行中禁止編輯（`SCORING_VERSION_LOCKED` 不適用此端點；改用 `ASSIGNMENT_RUN_ALREADY_RUNNING` 與 E07 其他 CARD_TYPE 端點一致） |
 
 ## 7. UI/UX 需求
 
 - 開啟編輯 Modal，欄位：CARD_TYPE 代碼（input，disabled 灰色背景，附說明）/ CARD_TYPE 名稱（input）/ PROD_KIND（下拉）
 - 「儲存」按鈕：送出 PUT；成功後 Modal 關閉、Tab 1 清單刷新
 - 必填欄位錯誤行內顯示
-- 月跑鎖定時編輯按鈕 disabled
+- 月名單分派鎖定時編輯按鈕 disabled
 
 ## 8. 相依性
 

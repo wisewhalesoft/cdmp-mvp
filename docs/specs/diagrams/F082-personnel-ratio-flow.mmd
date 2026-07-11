@@ -36,7 +36,7 @@ flowchart TD
     RangeCheck -- 是 --> ClickSave[點擊該部門儲存]
 
     ClickSave --> SaveAPI[PUT /assignment/ratios/personnel/listNo<br/>body: deptCode + employees + appliedTemplate?]
-    SaveAPI --> SaveGuards{Guards：<br/>SectionChiefOrAboveGuard +<br/>SectionChiefScopeGuard +<br/>stage = personnel_ratio +<br/>非月跑 + 非歷史月份 +<br/>ob_dept_pct 含此 deptCode}
+    SaveAPI --> SaveGuards{Guards：<br/>SectionChiefOrAboveGuard +<br/>SectionChiefScopeGuard +<br/>stage = personnel_ratio +<br/>非月名單分派 + 非歷史月份 +<br/>ob_dept_pct 含此 deptCode}
     SaveGuards -- 失敗 --> ReturnSaveErr[回對應錯誤碼<br/>PERSONNEL_RATIO_OUT_OF_SCOPE 403 /<br/>PERSONNEL_RATIO_DEPT_NOT_FOUND 422 /<br/>LIST_STAGE_TRANSITION_FORBIDDEN 422 /<br/>ASSIGNMENT_RUN_ALREADY_RUNNING 409 /<br/>LIST_HISTORICAL_READONLY 403]
     SaveGuards -- 通過 --> ValidateSum{PersonnelRatioValidationService<br/>per-DEPT 加總 = 100% +<br/>各 RATION 0~100}
     ValidateSum -- 失敗 --> Return422[422 PERSONNEL_RATIO_SUM_NOT_100 或<br/>RATIO_OUT_OF_RANGE 或<br/>BONUS_PENALTY_TEMPLATE_INVALID]
@@ -48,7 +48,7 @@ flowchart TD
     ButtonGroup -- 推進至簽核 --> F084Click[點擊推進按鈕]
     ButtonGroupSC -- 推進至簽核 --> F084Click
     F084Click --> AdvanceAPI[POST /list-definitions/listNo/advance-to-approval]
-    AdvanceAPI --> AdvanceGuards{Guards：SectionChiefOrAboveGuard +<br/>stage = personnel_ratio +<br/>非月跑 + 非歷史月份}
+    AdvanceAPI --> AdvanceGuards{Guards：SectionChiefOrAboveGuard +<br/>stage = personnel_ratio +<br/>非月名單分派 + 非歷史月份}
     AdvanceGuards -- 失敗 --> ReturnAdvanceAuthErr[回對應錯誤碼]
 
     AdvanceGuards -- 通過 --> Pre1{ob_dept_pct 至少 1 筆？}
@@ -69,7 +69,7 @@ flowchart TD
     RollbackConfirm -- 取消 --> EndCancelRb([結束：取消])
 
     RollbackConfirm -- 確認退回 --> RollbackAPI[POST /list-definitions/listNo/rollback-to-dept-ratio]
-    RollbackAPI --> RollbackGuards{Guards：DirectorGuard +<br/>stage = personnel_ratio +<br/>非月跑 + 非歷史月份}
+    RollbackAPI --> RollbackGuards{Guards：DirectorGuard +<br/>stage = personnel_ratio +<br/>非月名單分派 + 非歷史月份}
     RollbackGuards -- 失敗 --> ReturnRollbackErr[回對應錯誤碼<br/>E07_FORBIDDEN_DIRECTOR_ONLY 403<br/>STAGE_ROLLBACK_BLOCKED 422<br/>reason: wrong_source_stage]
     RollbackGuards -- 通過 --> RollbackTx[DB transaction:<br/>1. UPDATE ob_list_definition<br/>   SET stage = dept_ratio<br/>2. DELETE FROM ob_empl_set<br/>   WHERE list_no = listNo<br/>   跨轄區全部清空<br/>3. INSERT assignment_audit_log<br/>   action = ROLLBACK_STAGE<br/>   before.personnelRatios = 完整快照<br/>   metadata.deletedRowCount]
     RollbackTx --> RollbackSuccess[200 OK<br/>toast：已退回部門比例設定階段<br/>個別業務比例已清空 N 筆<br/>ob_dept_pct 保留]

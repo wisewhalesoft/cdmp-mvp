@@ -51,7 +51,7 @@ flowchart TB
     Block3 -.-> SectionChiefView
 
     subgraph ActionsBar[F088 操作入口]
-        TriggerRun[執行月跑按鈕<br/>限部長 + Admin<br/>連結至 F061]
+        TriggerRun[執行月名單分派按鈕<br/>限部長 + Admin<br/>連結至 F061]
         RollbackBtn[退回簽核按鈕<br/>限部長 + Admin<br/>連結至 F089]
         ReadOnlyMark[完全唯讀<br/>無編輯按鈕<br/>後端 F051/F079/F082 PUT<br/>422 LIST_STAGE_TRANSITION_FORBIDDEN]
     end
@@ -73,7 +73,7 @@ flowchart TB
     RollbackResult -.重新核准 F086.-> ListEndpoint
 
     subgraph CrossSpec[跨 spec 連動]
-        F061Run[F061 月跑觸發<br/>monthlyRunReady.allReady<br/>= 月跑前置條件 1]
+        F061Run[F061 月名單分派觸發<br/>monthlyRunReady.allReady<br/>= 月名單分派前置條件 1]
         F082Banner[F082 v1.1 banner<br/>F089 Rollback 後<br/>latestRejection = null<br/>banner 不顯示]
     end
 

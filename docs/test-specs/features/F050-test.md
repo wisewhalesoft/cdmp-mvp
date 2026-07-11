@@ -47,7 +47,7 @@ last_updated: 2026-05-28
 |---|---|
 | 主要測試層 | 後端 Unit（衍生規則 pure function）、後端 Integration（Service transaction + 唯一性 + Supertest API）、前端 Component（React Testing Library + MSW） |
 | 關鍵依賴 | `pooldata_field_whitelist` 已 seed 6 筆（含 case_status）；`pooldata_field_option` 已 seed caseyear 8 筆、case_status 4 筆 |
-| OQ 拍板引用 | OQ-TEST-001 已拍板（caseyear=99 wildcard 不加 year_cnt 條件）；OQ-TEST-002 已拍板（conditions=[] skip）— 本 spec 僅驗儲存側；月跑側見 IT-M01 |
+| OQ 拍板引用 | OQ-TEST-001 已拍板（caseyear=99 wildcard 不加 year_cnt 條件）；OQ-TEST-002 已拍板（conditions=[] skip）— 本 spec 僅驗儲存側；月名單分派側見 IT-M01 |
 
 ---
 
@@ -358,9 +358,9 @@ last_updated: 2026-05-28
 
 ---
 
-## 八、月跑執行中 / 流水號上限 / LIST_NO 格式
+## 八、月名單分派執行中 / 流水號上限 / LIST_NO 格式
 
-### TS-F050-020：月跑執行中新增名單回 409 ASSIGNMENT_RUN_ALREADY_RUNNING
+### TS-F050-020：月名單分派執行中新增名單回 409 ASSIGNMENT_RUN_ALREADY_RUNNING
 
 - **關聯需求**：F050 AC-6
 - **測試類型**：Negative / Integration（Supertest）
@@ -415,17 +415,17 @@ last_updated: 2026-05-28
 
 ---
 
-## 十、stage 保護與月跑優先序
+## 十、stage 保護與月名單分派優先序
 
-### TS-F050-024：月跑執行中優先於 stage guard（月跑 409 優先回應）
+### TS-F050-024：月名單分派執行中優先於 stage guard（月名單分派 409 優先回應）
 
 - **關聯需求**：F050 AC-14 / K1
 - **測試類型**：Boundary / Integration（Supertest）
-- **前置條件**：`assignment_run` 有 `status = 'running'`（月跑進行中）
+- **前置條件**：`assignment_run` 有 `status = 'running'`（月名單分派進行中）
 - **步驟**：
   1. POST `/api/v1/assignment/list-definitions` 含合法 body
-  2. 驗證回應（此場景驗月跑優先語意）
-- **預期結果**：HTTP 409，`ASSIGNMENT_RUN_ALREADY_RUNNING`（月跑鎖優先於其他驗證）
+  2. 驗證回應（此場景驗月名單分派優先語意）
+- **預期結果**：HTTP 409，`ASSIGNMENT_RUN_ALREADY_RUNNING`（月名單分派鎖優先於其他驗證）
 
 ---
 
@@ -1480,7 +1480,7 @@ last_updated: 2026-05-28
 
 ---
 
-#### TS-F050-SS-012：月跑執行中仍可取得快照（API 不攔截月跑鎖）
+#### TS-F050-SS-012：月名單分派執行中仍可取得快照（API 不攔截月名單分派鎖）
 
 - **關聯需求**：F050 v2.2 §6.2 末段「本端點不攔截 ASSIGNMENT_RUN_ALREADY_RUNNING」/ US-131 AC-1
 - **測試類型**：Positive / Integration（Supertest）
@@ -1602,7 +1602,7 @@ last_updated: 2026-05-28
 
 | Story | AC | 測試場景 |
 |---|---|---|
-| US-131 AC-1 | 歷史月份 / 月跑中均可開啟 Drawer | TS-F050-SS-011、SS-012 |
+| US-131 AC-1 | 歷史月份 / 月名單分派中均可開啟 Drawer | TS-F050-SS-011、SS-012 |
 | US-131 AC-2 | 4 個頁籤呈現（前端驗證見 F048-test.md TS-F048-D-001） | — |
 | US-131 AC-3 | stage-aware null state（5 個 stage） | TS-F050-SS-001~004 |
 | US-131 AC-4 | section_chief personnelRatios 過濾 | TS-F050-SS-006、SS-007 |

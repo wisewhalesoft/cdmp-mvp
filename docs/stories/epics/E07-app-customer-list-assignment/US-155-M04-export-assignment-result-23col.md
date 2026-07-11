@@ -34,7 +34,7 @@ US-084（F064 v1）匯出的欄位清單有兩個嚴重問題：
 2. **欄位數嚴重不足**：舊 spec 僅 8~9 欄，legacy 實際 23 欄，缺少名單名稱、進件日、CR 三欄、姓名/職級/部門名稱、專案類別/專案名稱、逾期天數、客戶利率、STA_CODE 等資訊。
 3. **資料來源錯誤**：BR-1 指定從 `assignment_run_snapshot.payload` JSONB 讀取，但 snapshot 是瘦投影（僅 list_no/appl_no/card_level/tier_level/dept_id/emplid/score/is_cr），無法提供完整 23 欄。正確來源應為 `ob_monthly_run_result` 配合多表 join。
 
-前置依賴已就緒：F102（commit on main）補齊月跑結果的 `cr_id`/`cr_nm`/`is_cr`/`emplid`/`assignday`，join 條件全齊。
+前置依賴已就緒：F102（commit on main）補齊月名單分派結果的 `cr_id`/`cr_nm`/`is_cr`/`emplid`/`assignday`，join 條件全齊。
 
 ---
 
@@ -80,7 +80,7 @@ ob_monthly_run_result (by run_id)
 
 ### AC-1：觸發匯出並下載檔案
 
-- **Given** 月跑已完成（`assignment_run.status = 'completed'`）
+- **Given** 月名單分派已完成（`assignment_run.status = 'completed'`）
 - **When** 業務部長 / 業務處長點擊「匯出結果」並選擇格式（Excel / CSV）
 - **Then** 系統產生對應格式檔案，瀏覽器觸發下載
 - **And** 檔案名稱格式：`assignment_result_{YYYYMM}_{run_id 前 8 碼}.xlsx`（或 `.csv`）
@@ -104,7 +104,7 @@ ob_monthly_run_result (by run_id)
 
 ### AC-4：CR 三欄正確呈現
 
-- **Given** 月跑已執行 F102 CR 優先分派（commit on main）
+- **Given** 月名單分派已執行 F102 CR 優先分派（commit on main）
 - **When** 匯出 is_cr = 'Y' 的案件
 - **Then** `CR_ID` 欄 = `ob_monthly_run_result.cr_id`（非 NULL 且非空字串）
 - **And** `CR_NM` 欄 = `ob_monthly_run_result.cr_nm`（非 NULL 且非空字串）
@@ -131,7 +131,7 @@ ob_monthly_run_result (by run_id)
 - **And** 顯示「正在產生檔案，請稍候…」提示（前端 loading 狀態）
 - **And** 若超過 5 分鐘仍未完成，中斷並回傳 500 `EXPORT_FILE_EXPIRED`
 
-### AC-7：月跑未完成阻擋匯出（維持 US-084 AC-3）
+### AC-7：月名單分派未完成阻擋匯出（維持 US-084 AC-3）
 
 - **Given** 目標 `run_id` 的 `status` 為 `pending` / `running` / `failed`
 - **When** 業務部長 / 業務處長嘗試匯出
@@ -171,7 +171,7 @@ ob_monthly_run_result (by run_id)
 
 - **[OPEN QUESTION-3]**：`ob_list_definition` join 的 key 是否僅 `list_no`，還是需要加上 `orgno`？ob_list_definition 若有 multi-tenant key，left join 條件須調整。請 spec-writer 確認 schema。
 
-- **[OPEN QUESTION-4]**：是否需支援**分頁匯出**或**非同步 job 下載**（先回應 202 Accepted，背景產檔再通知下載 URL）？月跑全量可能超過 200k 筆，5 分鐘 streaming timeout 是否足夠？若不夠，背景 job 方案需額外 API 設計。**目前決策維持 streaming 同步下載（5 min timeout）**，若未來發現不足再另開 story。
+- **[OPEN QUESTION-4]**：是否需支援**分頁匯出**或**非同步 job 下載**（先回應 202 Accepted，背景產檔再通知下載 URL）？月名單分派全量可能超過 200k 筆，5 分鐘 streaming timeout 是否足夠？若不夠，背景 job 方案需額外 API 設計。**目前決策維持 streaming 同步下載（5 min timeout）**，若未來發現不足再另開 story。
 
 ---
 
@@ -179,7 +179,7 @@ ob_monthly_run_result (by run_id)
 
 ### TC-155-01：23 欄表頭與欄序驗證
 
-- **Given**：月跑 completed，結果 100 筆
+- **Given**：月名單分派 completed，結果 100 筆
 - **When**：業務部長觸發 xlsx 匯出
 - **Then**：第一列表頭恰好 23 欄，欄序為「分處、案號、指派日、名單代號、名單名稱、進件日、CR_ID、CR_NM、是否分配CR、TIER、部門代號、部門名稱、員編、姓名、職級、專案類別、專案名稱、逾期天數、客戶利率、STA_CODE、案件狀態、廠牌名稱、名單週期月數」
 - **And** 表頭不含「客戶編號」、「客戶姓名」、「CARD_LEVEL」、「score」
@@ -198,7 +198,7 @@ ob_monthly_run_result (by run_id)
 
 ### TC-155-04：CR 三欄正確輸出
 
-- **Given**：202606 月跑含 2,073 筆 is_cr='Y' 案件（F102 已填值）
+- **Given**：202606 月名單分派含 2,073 筆 is_cr='Y' 案件（F102 已填值）
 - **When**：匯出完整名單
 - **Then**：is_cr='Y' 列的 CR_ID = cr_id（非空）、CR_NM = cr_nm（非空）、是否分配CR = 'Y'
 - **And**：is_cr='N' 列的 CR_ID、CR_NM 輸出空值
@@ -212,12 +212,12 @@ ob_monthly_run_result (by run_id)
 
 ### TC-155-06：streaming 大資料量不 OOM（> 50k 筆）
 
-- **Given**：月跑 completed，結果 100,000 筆
+- **Given**：月名單分派 completed，結果 100,000 筆
 - **When**：業務部長觸發 xlsx 匯出
 - **Then**：後端在 5 分鐘內完成匯出，process 記憶體峰值 < 2GB
 - **And**：CSV 匯出同一資料集，同樣在 5 分鐘內完成
 
-### TC-155-07：月跑未完成阻擋
+### TC-155-07：月名單分派未完成阻擋
 
 - **Given**：assignment_run.status = 'running'
 - **When**：業務處長嘗試匯出
@@ -232,7 +232,7 @@ ob_monthly_run_result (by run_id)
 
 ### TC-155-09：202606 回歸——欄位不含舊 custo_no/cust_name
 
-- **Given**：已有 202606 月跑 completed 的資料
+- **Given**：已有 202606 月名單分派 completed 的資料
 - **When**：匯出 CSV，以欄位名稱搜尋
 - **Then**：表頭不含字串 "custo_no"、"cust_name"、"CARD_LEVEL"、"score"
 
@@ -240,7 +240,7 @@ ob_monthly_run_result (by run_id)
 
 ## 依賴關係
 
-- **Blocked By**：US-152（F102 CR 優先分派，補齊 cr_id/cr_nm/is_cr/emplid/assignday；已 commit on main）、US-081（月跑觸發，assignment_run.status 管理）
+- **Blocked By**：US-152（F102 CR 優先分派，補齊 cr_id/cr_nm/is_cr/emplid/assignday；已 commit on main）、US-081（月名單分派觸發，assignment_run.status 管理）
 - **Blocks**：無
 
 ---
@@ -265,7 +265,7 @@ ob_monthly_run_result (by run_id)
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **取代**：[US-084](US-084-M04-export-assignment-result.md)（已 superseded）
-- **相關 Stories**：US-152（F102 CR 優先分派，前置依賴）、US-081（月跑觸發）、US-083（結果摘要）
+- **相關 Stories**：US-152（F102 CR 優先分派，前置依賴）、US-081（月名單分派觸發）、US-083（結果摘要）
 - **Spec（需修正）**：`docs/specs/features/F064-export-assignment-result.md`（AC-2 欄位 + BR-1 資料來源需同步更新）
 - **Reference**：`reference/202606 分派名單.xlsx`（工作表 1，23 欄 authority）
 - **Reference SP**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st2_dept.sql`（legacy 欄位輸出參考）

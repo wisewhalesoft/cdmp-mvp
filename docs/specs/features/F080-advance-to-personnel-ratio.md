@@ -18,7 +18,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 > **v1.2.1（2026-05-21 / Phase 5 TDD code drift 修正 D1 follow-up）**：對齊 `AssignmentAuditLog.action` entity enum（`apps/api/src/database/entities/assignment-audit-log.entity.ts:26-39`）：將 spec 內 `action = 'STAGE_ADVANCE'` 字串修正為 **`action = 'STAGE_ADVANCE'`**（entity 實際 enum 為 `STAGE_ADVANCE`，VARCHAR(30)）；real flow 經 `StageTransitionService.advanceTo()` 統一寫入。不變動 entity / migration / code / prototype；不變更其他 BR / AC / 業務邏輯。
 >
 > **v1.2 救援重寫（2026-05-16）**：前一輪編碼事故損毀本檔內容，依 US-110 + AD-E07 v3.0 一致性決議完整重建；Guard 為 `DirectorGuard`；業務角色欄位 `business_role`；JWT claim `businessRole`；保留 v1.0 / v1.1 所有設計決議。
-> **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：月跑並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`（決議 #6）；Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
+> **v1.1 修訂（2026-05-16 / Phase 1 決議落地）**：月名單分派並發守衛集中至 `AssignmentRunGuardService.assertNoRunningRun()`（決議 #6）；Feature Flag fallback 503 + `FEATURE_NOT_ENABLED`（決議 #2）。
 
 ## Agent Loading Guide
 
@@ -101,7 +101,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 - **When** 部長嘗試呼叫 PUT `/api/v1/assignment/ratios/dept/{listNo}`
 - **Then** 後端回 422 `LIST_STAGE_TRANSITION_FORBIDDEN`（「只有部門比例設定階段才能修改部門比例」）
 
-### AC-6：月跑執行中禁止推進
+### AC-6：月名單分派執行中禁止推進
 
 - **Given** `assignment_run.status IN ('pending', 'running')`
 - **When** 部長 / Admin 嘗試推進
@@ -158,7 +158,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 | 403 | AUTH_FORBIDDEN | 處長嘗試推進 |
 | 403 | LIST_HISTORICAL_READONLY | 歷史月份 |
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑進行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派進行中 |
 | 422 | ASSIGNMENT_LIST_INACTIVE | 名單已停用 |
 | 422 | LIST_STAGE_TRANSITION_FORBIDDEN | `stage != 'dept_ratio'` |
 | 422 | STAGE_ADVANCE_PRECONDITION_FAILED | 部門比例加總 ≠ 100% 或無紀錄 |
@@ -175,7 +175,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
 | BR-5 | **推進後部門比例鎖定**：後端依 `stage != 'dept_ratio'` 拒絕 `ob_dept_pct` 寫入（由 F079 PUT API 統一檢查） |
 | BR-6 | **稽核失敗不 rollback**：沿用 F050 v2.0 BR-11 |
 | BR-7 | **DB 操作原子性**：`stage` 更新 + 稽核寫入須於同一 transaction |
-| BR-8 | **月跑並發守衛（v1.1 / 決議 #6）**：F080 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()` |
+| BR-8 | **月名單分派並發守衛（v1.1 / 決議 #6）**：F080 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()` |
 | BR-9 | **Feature Flag fallback（v1.1 / 決議 #2）**：F080 端點受 `FeatureFlagGuard` 保護；flag = false 時回 503 `FEATURE_NOT_ENABLED` |
 
 ## 7. UI/UX 需求
@@ -184,7 +184,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
   - 位於 F048 / F077 清單頁部門比例階段名單操作欄
   - 處長身份**完全不渲染**
   - 已停用 / 非 `dept_ratio` 階段 / 歷史月份**完全不渲染**
-  - 月跑進行中 disabled + hover 提示
+  - 月名單分派進行中 disabled + hover 提示
   - 部門比例加總 ≠ 100% 時 disabled + hover 提示「請先確認部門比例加總為 100%」
 - **確認對話框**：
   - 標題：「推進確認」
@@ -235,7 +235,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-21
   - 推進加總 = 100.02 → 422 `STAGE_ADVANCE_PRECONDITION_FAILED`
   - 推進無 `ob_dept_pct` 紀錄 → 422 `STAGE_ADVANCE_PRECONDITION_FAILED`
   - 推進 `stage = 'draft'` / `'personnel_ratio'` / `'approval'` / `'ready'` 名單 → 422 `LIST_STAGE_TRANSITION_FORBIDDEN`
-  - 月跑進行中 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
+  - 月名單分派進行中 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
   - 歷史月份 → 403 `LIST_HISTORICAL_READONLY`
   - Feature Flag 關閉 → 503 `FEATURE_NOT_ENABLED`
   - 推進後嘗試 PUT 部門比例 → 422 `LIST_STAGE_TRANSITION_FORBIDDEN`

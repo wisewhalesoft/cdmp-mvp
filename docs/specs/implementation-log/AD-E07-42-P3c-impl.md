@@ -77,7 +77,7 @@ readResultRowsForSnapshot`）擴為對稱 PG `executeStage2to4Pushdown` 之三�
 `runStage2and3SqlMssql`（計分）→ `clearStage3Fields`（前清除）→ `runStage3to4RationSqlMssql`（比例分派）。
 **刻意不呼叫 `runCrPrioritySql`**（PG-only，P3d 範圍，逐字對 MSSQL 執行會語法錯；DISPATCH-003 靜態負向
 守門：method `.toString()` 掃描不含該識別碼——為此將方法內註解措辭去除該字面 token）。經 P3c 後 mssql
-月跑之 dept_id/emplid/emplid_deptid/assignday 不再恆 NULL（DISPATCH-005 真庫 DoD）。
+月名單分派之 dept_id/emplid/emplid_deptid/assignday 不再恆 NULL（DISPATCH-005 真庫 DoD）。
 
 ### 3. clearStage3Fields 方言中立性（DISPATCH-002 決策＝直接複用 PG 版，不建 mssql 版）
 `clearStage3Fields`（`UPDATE ... SET col=NULL ... updated_at=CURRENT_TIMESTAMP WHERE run_id=:runId AND
@@ -153,7 +153,7 @@ TABLE）** 自建、`selfBuiltTables` 記錄。`afterAll` 自建表 `DROP`（rev
 無。DECIMAL 精度 + DISPATCH 呼叫鏈 + VALUES-CTE + UPDATE...FROM + TOP + 視窗函式 + is_cr 三值全落實、
 56 case 全綠（真 MSSQL）、tsc 乾淨、PG 兩核心檔 byte-identical、SQLite/pipeline 服務層/P3a/P3b 無回歸。
 
-**範圍外後續（P3d/P3e，非本輪）**：`cr-priority-sql.ts`（3d CR 優先分派）之 mssql 化未移植 → mssql 月跑
+**範圍外後續（P3d/P3e，非本輪）**：`cr-priority-sql.ts`（3d CR 優先分派）之 mssql 化未移植 → mssql 月名單分派
 之 CR 前置動態指派（cr_id 寫 emplid、失效清空）尚未接線（is_cr 由 Stage 1 帶入後保留、無 CR 重指派）；
 `fn_calc_tier_level`（3e）收尾。真實月重跑跨引擎逐列比對（MONTHRUN-DIFF）比照 P3b 前例待 P3d 完成 mssql
 全鏈後以 manual/script 執行。

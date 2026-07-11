@@ -96,7 +96,7 @@ P4（AD-E07-41 §1.2）已確立「PG 檔不動、平行 `*-mssql.ts` 新檔、�
 | `EXTRACT(YEAR FROM CURRENT_DATE)`（CAR_YEAR） | `stage2to4-sql-builder.ts:207` | `YEAR(SYSDATETIME())` 或 `DATEPART(YEAR, SYSDATETIME())` | 低 |
 | `SUBSTRING(o.year_produ FROM '^[0-9]+')`（CAR_YEAR，與 Stage1 同 pattern 但獨立站點） | `stage2to4-sql-builder.ts:206-207` | 同 §2.1 PATINDEX 轉換 | 中 |
 | `TRIM(CAST(${src.codeExpr} AS text))` / `TRIM(CAST(${src.keywordExpr} AS text))`（PROJECT_TP composite，F105） | `stage2to4-sql-builder.ts:414-415` | `TRIM(CAST(... AS NVARCHAR(4000)))`——`TRIM()` MSSQL 2017+ 原生支援；此站點在**每個 PROJECT_TP score row** 迴圈內動態展開，須確保轉換不遺漏任何一次展開 | 中 |
-| 🔴 **`to_jsonb(o)->>'${columnName.toLowerCase()}'`**（通用 fallback，未 hardcode 欄位走此路，**live production path，非死碼**） | `stage2to4-sql-builder.ts:290` | **非純語法替換，需架構調整（I-MSSQL-DYNAMIC-FALLBACK-01）**：MSSQL 無單一 SQL 表達式可做「動態欄名讀取、欄位不存在則優雅回 NULL」。改為 **SQL 生成前的 TypeScript 端 schema 檢查**：SQL builder 呼叫前先查 `INFORMATION_SCHEMA.COLUMNS`（大寫，I-MSSQL-CATALOG-CASE-01；一次性查詢、非逐列）取得 `ob_pool_data` 實際欄位集合，若 `columnName.toLowerCase()` 存在→產生直接欄位參照 `TRY_CAST(o.[colname] AS NUMERIC)`；不存在（幽靈欄位）→直接產生字面值 `0`（**SQL 生成時就解掉，不留到執行期**，語意仍等價 BR-F103-08「靜默 +0、不阻擋月跑」，且效能更好——不需要每列 JSON 序列化，此點與 P4 FINDING-P4D-01 教訓一致：優先在建構期解決,而非依賴執行期的動態機制模擬 PG 特性） | **高**——本 stage 中唯一「非純語法轉換而是設計調整」的站點，且是通用 fallback（覆蓋任何未來新增之計分卡欄位），轉換錯誤影響面不可預期 |
+| 🔴 **`to_jsonb(o)->>'${columnName.toLowerCase()}'`**（通用 fallback，未 hardcode 欄位走此路，**live production path，非死碼**） | `stage2to4-sql-builder.ts:290` | **非純語法替換，需架構調整（I-MSSQL-DYNAMIC-FALLBACK-01）**：MSSQL 無單一 SQL 表達式可做「動態欄名讀取、欄位不存在則優雅回 NULL」。改為 **SQL 生成前的 TypeScript 端 schema 檢查**：SQL builder 呼叫前先查 `INFORMATION_SCHEMA.COLUMNS`（大寫，I-MSSQL-CATALOG-CASE-01；一次性查詢、非逐列）取得 `ob_pool_data` 實際欄位集合，若 `columnName.toLowerCase()` 存在→產生直接欄位參照 `TRY_CAST(o.[colname] AS NUMERIC)`；不存在（幽靈欄位）→直接產生字面值 `0`（**SQL 生成時就解掉，不留到執行期**，語意仍等價 BR-F103-08「靜默 +0、不阻擋月名單分派」，且效能更好——不需要每列 JSON 序列化，此點與 P4 FINDING-P4D-01 教訓一致：優先在建構期解決,而非依賴執行期的動態機制模擬 PG 特性） | **高**——本 stage 中唯一「非純語法轉換而是設計調整」的站點，且是通用 fallback（覆蓋任何未來新增之計分卡欄位），轉換錯誤影響面不可預期 |
 | `CROSS JOIN LATERAL (SELECT ... AS score) sub`（`stage2to4-sql-executor.ts`） | 既有盤點記錄 | `CROSS APPLY (...)` | 中低 |
 | `ti.card_level IS NOT DISTINCT FROM lv.card_level`（NULL-aware tier join） | 既有盤點記錄 | `(ti.card_level = lv.card_level OR (ti.card_level IS NULL AND lv.card_level IS NULL))` | 中（F100 OQ-T2 拍板項，需高覆蓋率測試） |
 | `UPDATE r SET ... FROM ob_pool_data o ...`（PG UPDATE-FROM） | 既有盤點記錄 | T-SQL `UPDATE alias SET ... FROM ob_monthly_run_result alias JOIN ... ON ...`（target 併入 FROM 子句，比照 P4 §5.1 已建立之轉換模式） | 中 |
@@ -182,7 +182,7 @@ graph LR
 **DoD**：
 1. 對照現行 `stage2to4-sql-pushdown.pg.spec.ts`/`stage2to4-score-source-f103.pg.spec.ts`/`stage2to4-score-source-f104.pg.spec.ts` 全部案例，對**真實 customer_core 資料** JS↔MSSQL 逐列等價。
 2. `~` 正則轉換的空字串/NULL/髒值邊界有專屬測試通過（比照 P4a `type-cast-handler-mssql.ts` 空字串陷阱教訓）。
-3. `to_jsonb` fallback 改為 TypeScript 端 `INFORMATION_SCHEMA` 檢查後，幽靈欄位（`ob_pool_data` 無此欄）仍正確產生 `+0`（不報錯、不中斷月跑，BR-F103-08 語意保留）之測試通過。
+3. `to_jsonb` fallback 改為 TypeScript 端 `INFORMATION_SCHEMA` 檢查後，幽靈欄位（`ob_pool_data` 無此欄）仍正確產生 `+0`（不報錯、不中斷月名單分派，BR-F103-08 語意保留）之測試通過。
 4. 202606（或最新月）於 MSSQL 環境對真實 customer_core 資料重跑一次計分，與 PG 版本結果逐欄逐列比對（見 §4.2 新增建議），確認完全一致（因 customer_core 已非過渡態，此比對應為完全等價，非「已知系統性偏低」）。
 
 ### P3c — Stage 3/4 比例分派
@@ -205,7 +205,7 @@ graph LR
 
 ### 是否需要 spec-writer（RESOLVED：不需要）
 
-理由與 P1/P2/P4 一致——P3 的不變式仍是「行為不變、僅置換底層 SQL 方言」：JS oracle 定義的業務規則（BR-F102/F103/F104/F105 等）**完全不變**，P3 只是讓同一組已核可的業務規則能在 MSSQL 上以等價 SQL 執行，沒有新業務規則、沒有新使用者可見行為。**唯一非純語法替換的項目**（§2.2 `to_jsonb` fallback 改為 TS 端 schema 檢查）業務語意結果（幽靈欄位→+0、不阻擋月跑）完全不變，仍屬架構師 HOW 層級決策。P3 比照 F099-F105 與 P1/P2/P4 既有模式，直接 system-architect → test-designer → tdd-implementation。
+理由與 P1/P2/P4 一致——P3 的不變式仍是「行為不變、僅置換底層 SQL 方言」：JS oracle 定義的業務規則（BR-F102/F103/F104/F105 等）**完全不變**，P3 只是讓同一組已核可的業務規則能在 MSSQL 上以等價 SQL 執行，沒有新業務規則、沒有新使用者可見行為。**唯一非純語法替換的項目**（§2.2 `to_jsonb` fallback 改為 TS 端 schema 檢查）業務語意結果（幽靈欄位→+0、不阻擋月名單分派）完全不變，仍屬架構師 HOW 層級決策。P3 比照 F099-F105 與 P1/P2/P4 既有模式，直接 system-architect → test-designer → tdd-implementation。
 
 ---
 

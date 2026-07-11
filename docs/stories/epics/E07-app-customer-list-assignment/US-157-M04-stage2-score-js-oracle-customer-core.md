@@ -1,10 +1,10 @@
 ---
 last-updated: 2026-06-24
 version: v1.0
-change-summary: "新增 Story：月跑 Stage 2 計分 JS oracle 補齊 customer_core 欄位取值——resolveColumnValue 目前對 CUS_SEX / AGE / CAREA_NO1/NO2 / CELLULAR / EDUCAT_BACK / HPOST_NUM_NM / CPOST_NUM_NM / CO_NUM_NM / LOAN_RATE 全回空字串（不計分），需補 customer_core JOIN 並對齊 PG 下推表達式"
+change-summary: "新增 Story：月名單分派 Stage 2 計分 JS oracle 補齊 customer_core 欄位取值——resolveColumnValue 目前對 CUS_SEX / AGE / CAREA_NO1/NO2 / CELLULAR / EDUCAT_BACK / HPOST_NUM_NM / CPOST_NUM_NM / CO_NUM_NM / LOAN_RATE 全回空字串（不計分），需補 customer_core JOIN 並對齊 PG 下推表達式"
 ---
 
-# US-157：月跑 Stage 2 計分 JS Oracle 補齊 customer_core 欄位取值
+# US-157：月名單分派 Stage 2 計分 JS Oracle 補齊 customer_core 欄位取值
 
 > **Story ID**：US-157
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
@@ -12,13 +12,13 @@ change-summary: "新增 Story：月跑 Stage 2 計分 JS oracle 補齊 customer_
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：5
-> **Feature**：F103 月跑計分引擎欄位來源修正
+> **Feature**：F103 月名單分派計分引擎欄位來源修正
 
 ---
 
 ## User Story
 
-**As a** 系統（月跑引擎 JS oracle 路徑）
+**As a** 系統（月名單分派引擎 JS oracle 路徑）
 **I want** `resolveColumnValue` 能取得 customer_core 的客戶屬性欄位值
 **So that** JS oracle 計分結果（非 PG 路徑）與 PG 下推計分結果等價（EQ DoD），確保測試的 golden path 能真實驗證計分邏輯
 
@@ -30,7 +30,7 @@ Stage 2 計分有兩套平行實作：
 
 | 路徑 | 入口 | 環境 |
 |------|------|------|
-| PG 下推 SQL | `buildStage2ScoreExpr`（stage2to4-sql-builder.ts） | 正式月跑（DB_TYPE=postgres） |
+| PG 下推 SQL | `buildStage2ScoreExpr`（stage2to4-sql-builder.ts） | 正式月名單分派（DB_TYPE=postgres） |
 | JS oracle | `computeScore` → `resolveColumnValue`（assignment-run-pipeline.service.ts） | 單元測試 golden path / 非 PG 環境 |
 
 目前 `resolveColumnValue` 的 switch 僅處理 `LIST_MONTH`、`PROJECT_TP`、`CAR_YEAR`、`COMMISSION`（已是死碼）；其餘所有欄位（含 CUS_SEX / AGE / CAREA_NO1 等所有 customer_core 欄位）走 default，回傳空字串 `''`，不計分。
@@ -58,7 +58,7 @@ Stage 2 計分有兩套平行實作：
 
 ### AC-1：resolveColumnValue 補齊全部 customer_core 欄位
 
-- **Given** 月跑 JS oracle 路徑（`DB_TYPE != 'postgres'` 或單元測試環境）呼叫 `computeScore`
+- **Given** 月名單分派 JS oracle 路徑（`DB_TYPE != 'postgres'` 或單元測試環境）呼叫 `computeScore`
 - **When** active 欄含 CUS_SEX / AGE / CAREA_NO1 / CAREA_NO2 / CELLULAR / EDUCAT_BACK / HPOST_NUM_NM / CPOST_NUM_NM / CO_NUM_NM
 - **Then** `resolveColumnValue` 對上述每個欄位回傳符合 AD-E07-10-L 語意的值，而非空字串 `''`；具體取值邏輯需與 PG 下推 `resolveColumnSource` 的表達式等價（如 CAREA_NO1 → `home_phone ? 1 : 0` 對應 PG `(cc.home_phone IS NOT NULL)::int`）
 

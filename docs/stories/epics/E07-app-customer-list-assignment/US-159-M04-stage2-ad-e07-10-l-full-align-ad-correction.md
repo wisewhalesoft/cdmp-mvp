@@ -19,7 +19,7 @@ change-summary: "新增 Story：AD-E07-10-L 全欄對齊 legacy SP——修正 A
 ## User Story
 
 **As a** 業務主管（Sales Director）
-**I want** 月跑 Stage 2 計分引擎的欄位映射規則（AD-E07-10-L）完整對齊 legacy SP（`SP_OBLEVELCARD_{H,S,S5,E,E5,M,HM}.sql`）的真實語意
+**I want** 月名單分派 Stage 2 計分引擎的欄位映射規則（AD-E07-10-L）完整對齊 legacy SP（`SP_OBLEVELCARD_{H,S,S5,E,E5,M,HM}.sql`）的真實語意
 **So that** 計分結果不因 AD 本身的欄位語意錯誤而系統性偏差，重跑 202606 後能呈現與 legacy 更接近的 tier spread
 
 ---

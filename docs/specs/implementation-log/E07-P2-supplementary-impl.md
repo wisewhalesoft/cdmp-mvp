@@ -115,7 +115,7 @@ baseline 1184 + 新增 23 = **1207 PASS**；既有 E07 共 665 + 23 = **688 PASS
 
 ## 已知不在範圍 / v2.0 留下輪
 
-1. **`ob_list_definition.condition_payload` 持久化**：本批僅接受 DTO 並計算 warning，未持久化於 entity（data-model.md L850 標明為新欄位）；待後續批次補 column + migration + 月跑 Stage 1 動態 SQL。
+1. **`ob_list_definition.condition_payload` 持久化**：本批僅接受 DTO 並計算 warning，未持久化於 entity（data-model.md L850 標明為新欄位）；待後續批次補 column + migration + 月名單分派 Stage 1 動態 SQL。
 2. **F086 approve 寫入 assignment_approval**：本批僅實作 F087 reject 寫入；F086 approve 寫入留 P3 / FE-4 階段（與簽核 UI 一併）。
 3. **legacy is_sales_manager 移除**：accounts.service / seed.ts / auth.service.ts comments 仍持有，屬 E02 accounts 範圍，沿用 B6 / P2 既有立場。
 4. **scopeByCreator 之 `ob_emphire.created_by` 模型差異**：spec L122 BR-6 描述以 `ob_emphire.created_by` 為 scope source，但實際 `ob_emphire` entity 無此欄位；本批採 `ob_empl_set.created_by` 為 scope source（與既有 PersonnelRatioService pattern 一致）。建議 spec-writer 確認此差異並修正 spec BR-6。
@@ -127,7 +127,7 @@ baseline 1184 + 新增 23 = **1207 PASS**；既有 E07 共 665 + 23 = **688 PASS
 | P0 共用基礎建設 | ✅ 完成 (069bc3b) | 70+ |
 | P1 B1 schema + E02 role | ✅ 完成 (6899cba) | — |
 | P1 B2 SalesManager 全替換 + M01 CRUD | ✅ 完成 (bf636a4) | — |
-| P1 B3+B4 F055 v1.6 + M03 月跑 | ✅ 完成 (04fc403) | — |
+| P1 B3+B4 F055 v1.6 + M03 月名單分派 | ✅ 完成 (04fc403) | — |
 | P1 B5 POOLDATA 白名單 M04 | ✅ 完成 (d313ca3) | 62 |
 | P1 B6 M05 快照歷史 | ✅ 完成 (ef164de) | 49 新 |
 | P2 邊界與錯誤 | ✅ 完成 | 32 新 |
@@ -147,4 +147,4 @@ baseline 1184 + 新增 23 = **1207 PASS**；既有 E07 共 665 + 23 = **688 PASS
 
 FE 階段對應 prototype：
 - FE-3：M03b 個別業務比例設定頁（F082）含 banner 渲染（§7.x）
-- FE-6：M05 月跑結果摘要 / 比對 / 匯出（F063~F067 含 scope-aware UI）
+- FE-6：M05 月名單分派結果摘要 / 比對 / 匯出（F063~F067 含 scope-aware UI）

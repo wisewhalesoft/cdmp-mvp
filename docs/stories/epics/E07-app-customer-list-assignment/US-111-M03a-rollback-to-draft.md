@@ -65,9 +65,9 @@
 - **And** CR 回分開關可再度修改（US-107 的操作再度開放）
 - **And** 「部門比例設定」頁面顯示空值（比例已清空）
 
-### AC-5：月跑執行中禁止 Rollback
+### AC-5：月名單分派執行中禁止 Rollback
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 部長或 Admin 嘗試點擊「退回草稿」按鈕
 - **Then** 按鈕為停用狀態，hover 顯示提示「分派執行中，無法退回階段」
 
@@ -85,7 +85,7 @@
 - 清空部門比例：`DELETE FROM ob_dept_pct WHERE list_no = {LIST_NO}`
 - 解鎖篩選條件：後端依 stage = 'draft' 判斷允許篩選條件寫入 API
 - Rollback 操作的 `assignment_audit_log` 需記錄 before/after stage 以供追溯
-- 月跑中資料鎖判斷：查詢 `assignment_run` 是否有 status = 'running' 記錄
+- 月名單分派中資料鎖判斷：查詢 `assignment_run` 是否有 status = 'running' 記錄
 
 ---
 
@@ -109,7 +109,7 @@
 - **When**：嘗試呼叫 Rollback API
 - **Then**：後端回 403 Forbidden；清單頁無「退回草稿」按鈕
 
-### TC-111-04：月跑中禁止 Rollback
+### TC-111-04：月名單分派中禁止 Rollback
 
 - **Given**：AssignmentRun status = 'running'；LIST_NO = 'OB202506001'，stage = 'dept_ratio'
 - **When**：部長嘗試點擊「退回草稿」
@@ -137,7 +137,7 @@
 - [ ] 正常 Rollback 測試（TC-111-01）
 - [ ] Rollback 後篩選條件可編輯測試（TC-111-02）
 - [ ] 處長被拒測試（TC-111-03）
-- [ ] 月跑中禁止 Rollback 測試（TC-111-04）
+- [ ] 月名單分派中禁止 Rollback 測試（TC-111-04）
 - [ ] Rollback 僅影響指定名單測試（TC-111-05）
 - [ ] AssignmentAuditLog 寫入（before/after stage）測試
 - [ ] 部門比例清空驗證測試

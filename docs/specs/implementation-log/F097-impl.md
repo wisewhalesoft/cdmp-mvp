@@ -111,7 +111,7 @@ last_updated: 2026-05-27
 
 ## 架構決策（spec 邊界內）
 
-1. **POST /runs 成功狀態碼保留 202**（非 201）：F061 既有 `@HttpCode(ACCEPTED)`，月跑為 async（建 pending run + 背景
+1. **POST /runs 成功狀態碼保留 202**（非 201）：F061 既有 `@HttpCode(ACCEPTED)`，月名單分派為 async（建 pending run + 背景
    pipeline），F097 spec / AD-E07-27 均未變更狀態碼。測試設計文件以「201」表「成功」為非載重簡寫，AC-14 僅要求
    `ym='202606'`。改 201 將破壞 F061 既有 RBAC 測試且無 AC 依據 → 保留 202。
 2. **workYm 三分支驗證落於 controller handler**（非 ValidationPipe）：spec §5.6 明列「或等效 DTO / guard 兜底」。

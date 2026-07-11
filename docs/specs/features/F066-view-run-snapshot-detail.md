@@ -30,12 +30,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ## 1. 功能摘要
 
-提供業務部長 / 業務處長查看特定月跑的三份執行快照詳細內容（`config` / `input_list` / `result`）。快照為不可修改的唯讀紀錄（INSERT-only）；JSONB payload 由前端解析並以表格方式呈現。`input_list` 與 `result` 快照提供搜尋功能（依客戶編號 / 人員工號）。
+提供業務部長 / 業務處長查看特定月名單分派的三份執行快照詳細內容（`config` / `input_list` / `result`）。快照為不可修改的唯讀紀錄（INSERT-only）；JSONB payload 由前端解析並以表格方式呈現。`input_list` 與 `result` 快照提供搜尋功能（依客戶編號 / 人員工號）。
 
 ## 2. 使用者故事
 
 **As a** 業務部長 / 業務處長
-**I want** 查看特定月跑的三份執行快照詳細內容
+**I want** 查看特定月名單分派的三份執行快照詳細內容
 **So that** 可完整追溯當時的執行設定、輸入名單與分派結果，作為稽核依據或問題排查參考
 
 ## 3. 前置條件
@@ -48,9 +48,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ### AC-1：顯示快照總覽
 
-- **Given** 業務部長 / 業務處長從 F065 歷史清單進入某月跑的詳情頁
+- **Given** 業務部長 / 業務處長從 F065 歷史清單進入某月名單分派的詳情頁
 - **When** 頁面載入完成
-- **Then** 顯示月跑基本資訊（`run_id`、`project_workym`、`triggered_by`、`triggered_at`、`finished_at`、`status`、`total_cases`）
+- **Then** 顯示月名單分派基本資訊（`run_id`、`project_workym`、`triggered_by`、`triggered_at`、`finished_at`、`status`、`total_cases`）
 - **And** 顯示三個快照分頁索引：「設定快照」、「輸入名單快照」、「結果快照」
 
 ### AC-2：查看設定快照（config）
@@ -93,7 +93,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 - **Given** URL 中的 `run_id` 不存在於 `assignment_run`，或 `assignment_run_snapshot` 缺少某份快照
 - **When** 業務部長 / 業務處長進入詳情頁
-- **Then** 回傳 404 `ASSIGNMENT_RUN_NOT_FOUND`，前端顯示「找不到該月跑紀錄或快照不完整」
+- **Then** 回傳 404 `ASSIGNMENT_RUN_NOT_FOUND`，前端顯示「找不到該月名單分派紀錄或快照不完整」
 
 ## 5. API 規格
 
@@ -146,14 +146,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 |---|---|
 | BR-1 | 快照為 INSERT-only，不可修改或刪除 |
 | BR-2 | JSONB payload 預設由前端解析；資料量 > 100,000 筆時啟用後端搜尋 API（5.2） |
-| BR-3 | `input_list` 快照間接保存月跑當時的名單定義篩選結果，可追溯名單條件變更的影響 |
+| BR-3 | `input_list` 快照間接保存月名單分派當時的名單定義篩選結果，可追溯名單條件變更的影響 |
 | BR-4 | 快照保留期與 `assignment_run` 相同（3 年，AD-E07-3） |
 | BR-5 | **處長轄區分型過濾（v1.1 新增）**：service 層使用 `scopeByCreator(actorUser)` helper，依 `snapshotType` 分流：`config` 不過濾（共用設定）；`input_list` / `result` 過濾僅含處長轄區內案件 / 分派結果；helper pattern 與 F063 BR-6 / F064 BR-6 / F057 v1.1 / F082 BR-3 一致；`businessRole = 'director'` / `role = 'admin'` bypass filter |
 | BR-6 | **過濾語意（v1.1 新增）**：過濾為「縮小回傳集合」而非「拒絕請求」；不會回 403 / 422，僅回 200 OK + 縮小後之 payload；若處長轄區內 `input_list` / `result` 子集為空，回 200 OK + `totalCount = 0`（不回 404，404 仍僅針對 AC-5 之 `run_id` 不存在或快照本身缺失）；一般使用者已於 Guard 階段被擋下 |
 
 ## 7. UI/UX 需求
 
-- 月跑基本資訊卡片：頂部固定顯示
+- 月名單分派基本資訊卡片：頂部固定顯示
 - 三個分頁索引：Config / Input List / Result
 - Config 分頁：階層式表格（部門 → LIST_NO → 人員）
 - Input List / Result 分頁：可搜尋表格
@@ -161,7 +161,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 ## 8. 相依性
 
-- **Blocked By**：F061（快照由月跑完成時寫入）、F065（入口頁）
+- **Blocked By**：F061（快照由月名單分派完成時寫入）、F065（入口頁）
 - **Blocks**：F067（比對差異需要能查看個別快照詳情）
 
 ## 9. 交叉參考

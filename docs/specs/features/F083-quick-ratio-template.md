@@ -17,7 +17,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
 > **v1.4 修訂（2026-05-25 / commit 78e7360 落地）**：弱化後端 `appliedTemplate` 二次校驗以對齊 FE v1.5 baseline + per-employee templates 模型。原 v1.3 用「ration = (100/N) + delta」公式比對失去意義（baseline 已非固定 100/N）；改為「audit hint + invariant 最小校驗」語意：僅保留 `employees.length >= 2`、`targetEmpId ∈ employees[]` 兩項 invariant 檢查，其餘比例驗證交由 setPersonnelRatios 主流程之 `assertEachInRange` + `assertDeptSumEquals100`。`appliedTemplate` 退化為純 audit hint（仍寫入 `assignment_audit_log.after_value` 供追溯），不再作攔截依據。`BONUS_PENALTY_TEMPLATE_INVALID` 觸發條件改為「單員工模板」或「targetEmpId 不存在」。詳 §5.2 / §6 BR-9 / §6 BR-9a。
 > **v1.3 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔內容，本版本依 US-113 user story、F082 v1.3 與 AD-E07 v3.0 一致性決議完整重建；Guard 引用對齊新體系（DirectorGuard / DirectorOrSectionChiefGuard / SectionChiefScopeGuard），業務角色欄位 `business_role`，廢除 `SalesManagerGuard` / `is_sales_manager` / `e07_role`。
-> **v1.2 修訂（2026-05-16）**：補入 BR-11 cross-ref（本 Feature 之儲存路徑透過 F082 PUT、月跑並發守衛沿用 `AssignmentRunGuardService.assertNoRunningRun()`、Feature Flag fallback 503 + `FEATURE_NOT_ENABLED` 沿用 F082）。
+> **v1.2 修訂（2026-05-16）**：補入 BR-11 cross-ref（本 Feature 之儲存路徑透過 F082 PUT、月名單分派並發守衛沿用 `AssignmentRunGuardService.assertNoRunningRun()`、Feature Flag fallback 503 + `FEATURE_NOT_ENABLED` 沿用 F082）。
 > **v1.1 修訂（2026-05-16 / E07 補修）**：PO 確認 F083-A：模板**僅相對於系統預設值**（`100/N`），**不疊加**目前 RATION；§12 A-2 升級為 [RESOLVED]；BR-2 補連續套用語意；UI 顯示提示目前已套用模板。
 
 ## Agent Loading Guide
@@ -62,7 +62,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
 - 使用者已在 F082 個別業務比例設定頁進入編輯模式（沿用 F082 §3 前置條件）
 - 部門業務員人數 ≥ 2（人數 = 1 時模板不可套用，詳 BR-8 / AC-9）
-- 名單 `stage = 'personnel_ratio'` / 名單未停用 / 月跑非執行中 / 轄區符合（沿用 F082）
+- 名單 `stage = 'personnel_ratio'` / 名單未停用 / 月名單分派非執行中 / 轄區符合（沿用 F082）
 
 ## 4. 驗收標準
 
@@ -239,7 +239,7 @@ FE v1.5 已改用 baseline + per-employee templates 模型，baseline 可為任�
 | BR-9 | ~~**後端二次校驗**：F082 PUT 接收 `appliedTemplate` 時，service 層需重算模板結果，若不符合則回 422 `BONUS_PENALTY_TEMPLATE_INVALID`（防範前端 bug 落地，正常流程不會觸發）~~ **【v1.4 修訂，2026-05-25 / commit 78e7360】**：弱化為「audit hint + invariant 最小校驗」語意。FE v1.5 已改用 baseline + per-employee templates 模型（baseline 可為任意值，非固定 100/N），原 v1.3 公式 `(100/N) + delta` 比對失去意義。新後端規則：(1) **invariant 校驗**：`employees.length >= 2` 且 `targetEmpId ∈ employees[]`，否則 422 `BONUS_PENALTY_TEMPLATE_INVALID`；(2) 其餘比例範圍 / 加總驗證交由 setPersonnelRatios 主流程之 `assertEachInRange` + `assertDeptSumEquals100`；(3) `appliedTemplate` 僅作 audit hint，不再作攔截依據。詳 §5.2 |
 | BR-9a | **`appliedTemplate` audit log 寫入語意（v1.4 新增）**：當 PUT request body 含 `appliedTemplate: { template, targetEmpId }`，service 層應將其寫入 `assignment_audit_log.after_value`（連同部門業務員 RATION 快照），作為「此次寫入由 +N% 模板於 {targetEmpId} 觸發」之 audit hint，便於後續追蹤異常設定來源。寫入失敗僅 Logger.error，不 rollback 業務 commit（沿用 F082 BR-9） |
 | BR-10 | **與 F082 共享驗證**：本 Feature 之 RATION 範圍 [0, 100] 與部門加總 100% 規則完全沿用 F082 BR-2 |
-| BR-11 | **月跑並發守衛 + Feature Flag 沿用 F082（v1.2 補修 / system-architect 決議 #6 + #2）**：本 Feature 無獨立後端端點；儲存走 F082 PUT，故月跑並發守衛（`AssignmentRunGuardService.assertNoRunningRun()`）由 F082 service method 統一執行；Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`）亦沿用 F082 端點之 `FeatureFlagGuard` 行為 |
+| BR-11 | **月名單分派並發守衛 + Feature Flag 沿用 F082（v1.2 補修 / system-architect 決議 #6 + #2）**：本 Feature 無獨立後端端點；儲存走 F082 PUT，故月名單分派並發守衛（`AssignmentRunGuardService.assertNoRunningRun()`）由 F082 service method 統一執行；Feature Flag fallback（503 + `FEATURE_NOT_ENABLED`）亦沿用 F082 端點之 `FeatureFlagGuard` 行為 |
 
 ## 7. UI/UX 需求
 
@@ -318,6 +318,6 @@ FE v1.5 已改用 baseline + per-employee templates 模型，baseline 可為任�
 |---|---|---|
 | v1.0 | 2026-05-15 | 初版（對應 US-113，E07 補修批次 5）：OQ-E07-20 確認 → 預設值 = 100% / 部門業務員人數（均等分配）+ 模板 ±10/20% 為相對預設值調整 + 套用後重新平衡；前端計算為主、後端二次校驗；新增 `BONUS_PENALTY_TEMPLATE_INVALID` 錯誤碼；§12 A-3 標 [ASSUMPTION] 待 OQ-E07-40 PO 確認 |
 | v1.1 | 2026-05-16 | **E07 補修批次（PO 決議 F083-A 落地）**：(1) §6 BR-2 補連續套用語意（**僅相對於預設值**，不疊加目前 RATION）；(2) §12 A-2 升級為 ✅ Resolved；(3) 標頭 banner 更新；(4) UI 提示目前已套用模板（§7 「目前已套用：[{template}]」標記） |
-| v1.2 | 2026-05-16 | **E07 補修（system-architect Phase 1 風險決議落地）**：新增 BR-11 cross-ref：本 Feature 無獨立後端端點，月跑並發守衛 + Feature Flag fallback 沿用 F082 端點行為 |
+| v1.2 | 2026-05-16 | **E07 補修（system-architect Phase 1 風險決議落地）**：新增 BR-11 cross-ref：本 Feature 無獨立後端端點，月名單分派並發守衛 + Feature Flag fallback 沿用 F082 端點行為 |
 | **v1.3** | **2026-05-16** | **【救援重寫 / 編碼事故修復】**：依 US-113 + F082 v1.3 + AD-E07 v3.0 一致性決議完整重建本檔；Guard 引用對齊新體系（`DirectorGuard` / `DirectorOrSectionChiefGuard` / `SectionChiefScopeGuard`）；廢除 `SalesManagerGuard` 引用；business_role 欄位語意對齊 F074 v2.0 |
 | **v1.4** | **2026-05-25** | **【弱化 appliedTemplate 後端二次校驗對齊 FE baseline 模型 / commit 78e7360】**：(1) §5.2 改寫「後端二次校驗」為「audit hint + invariant 最小校驗」語意；廢止 v1.0~v1.3 之「重算 `(100/N) + delta` 並比對」邏輯；(2) §6 BR-9 改寫為弱化校驗 + 新增 BR-9a `appliedTemplate` audit log 寫入語意；(3) §4 AC-10 改寫為「invariant 校驗」+ 列出兩項觸發條件（單員工模板 / targetEmpId 不在 payload）；(4) 錯誤碼 `BONUS_PENALTY_TEMPLATE_INVALID` 觸發條件改為「單員工模板」或「targetEmpId 不存在」。**背景**：FE v1.5 已改用 baseline + per-employee templates 模型，baseline 可為任意值（首次進入採後端回傳 ration / 0 或 null 時 fallback 100/N），原公式比對失去意義並造成偽陽性 422 |

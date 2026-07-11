@@ -1,7 +1,7 @@
 ---
 type: architecture-decision
 decision_id: AD-E07-29
-title: F101 月跑 Stage 3/4 真實比例分派（dept ration + empl ration + ASSIGNDAY 確定性設計）
+title: F101 月名單分派 Stage 3/4 真實比例分派（dept ration + empl ration + ASSIGNDAY 確定性設計）
 status: proposed
 last_updated: 2026-06-05
 oq_resolved: [OQ-F101-01, OQ-F101-02, OQ-F101-03, OQ-F101-04, OQ-F101-05]
@@ -12,7 +12,7 @@ related: [AD-E07-28, AD-E07-27, AD-E07-26, AD-E07-25]
 source_stories: [US-145, US-146, US-149, US-150, US-151]
 ---
 
-# AD-E07-29　F101 月跑 Stage 3/4 真實比例分派
+# AD-E07-29　F101 月名單分派 Stage 3/4 真實比例分派
 
 > 本決策記錄為架構設計產出，**不含 production / test 程式碼**。落地由 spec-writer（feature spec）、
 > test-designer（測試策略）、tdd-implementation（實作）後續承接。
@@ -77,7 +77,7 @@ END
 ```
 
 **結論**：st4_exchange（課長主任 T1/T2/T3 案件 ↔ 專員 T32/T4 案件雙向交換）**自 2024 年 8 月起已
-永久停用**，現行 production 月跑從未執行交換邏輯。F100 P3 中以 `runStage4Sql` 實作的 10% senior swap
+永久停用**，現行 production 月名單分派從未執行交換邏輯。F100 P3 中以 `runStage4Sql` 實作的 10% senior swap
 是對一個**已死碼（dead code）** legacy SP 的近似複刻，其 production 意義已消失。
 
 ## 3. 目標架構設計
@@ -149,7 +149,7 @@ final_quota AS (
 ASSIGNDAY 計算複用既有 `Stage0EstimateService.calculateDailyEstimate(ym)`（F049，`ob_calendar` +
 `rest_flg='0'` 工作日），不另建邏輯（BR-F101-13/16，US-151 AC-2）。
 
-**不變式 I-RUN-EST-01（延伸）**：月跑 Stage 4 ASSIGNDAY 日曆來源 = Stage 0 試算日曆來源，同一份
+**不變式 I-RUN-EST-01（延伸）**：月名單分派 Stage 4 ASSIGNDAY 日曆來源 = Stage 0 試算日曆來源，同一份
 `calculateDailyEstimate(ym)` 呼叫結果；`ob_calendar` 未變更時兩者比例一致。
 
 ```
@@ -206,7 +206,7 @@ Stage 3（dept ration 分配）
 
 `runStage4Sql` 將被 F101 完整取代：移除 default/senior 雙路徑，改為 per-list FLOOR + 兩階段補足。
 
-> **Production 行為變化聲明**：F100 P3 上線後之月跑 `dept_id = dept[0]`，`emplid = defaultEmplid 或
+> **Production 行為變化聲明**：F100 P3 上線後之月名單分派 `dept_id = dept[0]`，`emplid = defaultEmplid 或
 > seniorEmplid`（10% 交換），`assignday = NULL`。F101 上線後改為比例真實分派 + 工作日分散 assignday，
 > **分佈將顯著改變**。上線前須以 F067 比對工具量化差異並業務知會（§9 NFR-005）。
 
@@ -322,7 +322,7 @@ warning 另存 `warnings` 子鍵。
 | 確定性可重現（AC-2） | test-designer | 不同 run_id 兩次四元組集合相同；I-DET-01 靜態掃描 |
 | simplified is_cr（AC-8） | test-designer | is_cr Y/N 同池；無 CR 優先/超額移除；is_cr 值不變 |
 | 回歸保護 emplid≠NULL（AC-10） | test-designer | automated；有 dept_id + empl_set 設定者 emplid≠NULL |
-| 無 ration/無員工/無 calendar fallback（AC-5/11/17） | test-designer | 月跑不中斷；警告寫 skipped_cases.warnings |
+| 無 ration/無員工/無 calendar fallback（AC-5/11/17） | test-designer | 月名單分派不中斷；警告寫 skipped_cases.warnings |
 | estimate≡run（AC-16） | test-designer | 同 calculateDailyEstimate 來源；比例一致 |
 | ob_assign_set 無引用（AC-18） | test-designer | Grep 為空 |
 | 確定性鍵/tier_level 來源/警告通道 schema | tdd-implementation | 對齊本 AD §3.3 / §4 OQ 裁示 |
@@ -332,7 +332,7 @@ warning 另存 `warnings` 子鍵。
 | 風險 | 等級 | 緩解 |
 |------|------|------|
 | JS↔SQL 等價失敗（FLOOR 邊界、per-list vs per-run scope） | 高 | AC-15 PG 真庫逐列等價為 DoD 門檻；不過 DoD 不上 prod |
-| ob_calendar ETL 未在月跑前執行 → ASSIGNDAY 全 NULL | 中 | AC-17 fallback：月跑不中斷，寫警告，业务確認後補跑 |
+| ob_calendar ETL 未在月名單分派前執行 → ASSIGNDAY 全 NULL | 中 | AC-17 fallback：月名單分派不中斷，寫警告，业务確認後補跑 |
 | skipped_cases.warnings 與現有 cases 結構合并衝突 | 低 | tdd-implementation 在 JSONB merge 時以 `|| jsonb_build_object('warnings', ...)` 合并；現有 cases 鍵不受影響 |
 | ob_assign_set vestigial 殘留造成混淆 | 低 | 記錄退役決策（OQ-F101-03），排期獨立清理 sprint |
 | 長名單 Stage 3/4 SQL 效能（M×N×T 三維組合） | 低-中 | set-based CTE 操作；需 EXPLAIN ANALYZE 驗證；必要時加 `(run_id, tier_level)` composite index on ob_monthly_run_result |

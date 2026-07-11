@@ -14,9 +14,9 @@ flowchart TD
     MonthCheck -- 歷史月份 --> HideHistorical[「新增名單」按鈕完全不渲染]
     HideHistorical --> EndHistorical([結束：歷史月份唯讀])
 
-    MonthCheck -- 當月或未來月份 --> RunLockCheck{月跑執行中？}
+    MonthCheck -- 當月或未來月份 --> RunLockCheck{月名單分派執行中？}
     RunLockCheck -- 是 --> DisableBtn[按鈕 disabled + hover 提示]
-    DisableBtn --> EndRunLock([結束：月跑執行中])
+    DisableBtn --> EndRunLock([結束：月名單分派執行中])
 
     RunLockCheck -- 否 --> ClickCreate[點擊「新增名單」]
     ClickCreate --> OpenForm[開啟建立表單<br/>basic + condition_payload 動態區塊 + list_period_* + crEnabled + 從上月複製按鈕]

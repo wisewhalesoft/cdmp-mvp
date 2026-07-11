@@ -116,7 +116,7 @@ git stash 前後對照：
 - 結論：pre-existing 失敗數**未擴大**。
 
 ## 範圍決策與偏差（供 review）
-1. **display-only（72）而非 categorical-all（140）**：不變式 I-MSSQL-NVARCHAR-DISPLAY-01 文字為「任何 legacy nvarchar 欄」，但其**目的**為避免「Unicode 顯示內容截斷」，且本 slice 任務範圍明訂為「中文顯示欄」、預估「ob_pool_data/list 各~20+、ob_emphire 4」。純 ASCII 代碼/PK/join key（orgno/custo_no/dept_id/list_no…）在 BIN collation 下 byte 計長＝字元計長、**永不截斷**，轉 nvarchar 無 Unicode 益處，且會與未轉之對手表（ob_monthly_run_result / customer_core，本 slice 不含）varchar 欄產生 cross-type join，觸及 cutover-gating 路徑而無法於本機完整重驗（無 115k 全月跑）。故採**目的性解讀**：自完整機械掃描(140)移除 PK/join/decision key/純代碼欄，套用 72 個中文自由文字顯示欄。emphire 得 4（與預估相符）、pool 得 27/28（符合「~20+」）。
+1. **display-only（72）而非 categorical-all（140）**：不變式 I-MSSQL-NVARCHAR-DISPLAY-01 文字為「任何 legacy nvarchar 欄」，但其**目的**為避免「Unicode 顯示內容截斷」，且本 slice 任務範圍明訂為「中文顯示欄」、預估「ob_pool_data/list 各~20+、ob_emphire 4」。純 ASCII 代碼/PK/join key（orgno/custo_no/dept_id/list_no…）在 BIN collation 下 byte 計長＝字元計長、**永不截斷**，轉 nvarchar 無 Unicode 益處，且會與未轉之對手表（ob_monthly_run_result / customer_core，本 slice 不含）varchar 欄產生 cross-type join，觸及 cutover-gating 路徑而無法於本機完整重驗（無 115k 全月名單分派）。故採**目的性解讀**：自完整機械掃描(140)移除 PK/join/decision key/純代碼欄，套用 72 個中文自由文字顯示欄。emphire 得 4（與預估相符）、pool 得 27/28（符合「~20+」）。
 2. **產生器維持 categorical**：`parse-ob-schema.mjs` 對**所有** legacy nvarchar 輸出 nvarcharColumnType（工具層忠實保留 legacy 訊號、不做 display/code 判斷、§9.5「機械掃描以免遺漏」）。故產生器草稿（pool 58）較 entity 實套（27）為廣——與本專案既有「產生器草稿 → 人工 reconcile entity（nullable/dateColumnType/length 擴充…）」慣例一致；未來 regen 時代碼欄之 nvarcharColumnType 由人工依本決策 reconcile。
 3. **out-of-scope 觀察（未處理）**：`ob_monthly_run_result`（CDMP 內部表、非產生器 entity）之顯示欄 `cr_nm varchar(50)` 承接自 ob_pool_data_list.cr_nm（Chinese），MSSQL 下理論上有截斷風險；CR 姓名 ≤5 中文字（10 bytes）實務不觸頂，且該表非本 slice「產生器 entity」範圍，列為 follow-up 不擴大範圍。
 4. 未觸 P6 / P5f；未 git commit；未動記憶檔（依指示）。

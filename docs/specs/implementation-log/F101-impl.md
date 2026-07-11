@@ -1,12 +1,12 @@
 ---
 type: implementation-log
 feature_id: F101
-feature_name: 月跑 Stage 3/4 真實比例分派（dept ration + empl ration + ASSIGNDAY 確定性設計）
+feature_name: 月名單分派 Stage 3/4 真實比例分派（dept ration + empl ration + ASSIGNDAY 確定性設計）
 status: complete
 last_updated: 2026-06-05
 ---
 
-# F101：月跑 Stage 3/4 真實比例分派 — Implementation Log
+# F101：月名單分派 Stage 3/4 真實比例分派 — Implementation Log
 
 以 legacy SP（`st2_dept` / `st3_emplid`）基底算法取代 F100 P3 placeholder Stage 4
 （dept[0] + 單一 defaultEmpl + st4_exchange 10% senior swap，Bug C 根因），改為依
@@ -77,10 +77,10 @@ JS executeV2（golden oracle）與 PG SQL 下推**逐列四元組等價**（AC-1
 - **JS↔SQL 等價策略**：SQL 下推以 window function 累積邊界 `[lo, hi)` 對應案件 ROW_NUMBER，與 JS
   「依配額循序切片」逐列等價；EQ 群組於同 seed、同 PG 庫比對四元組 `toEqual`（已驗 byte-identical）。
 - **ASSIGNDAY 共用日曆**：抽出純函式 `computeWorkingDayRatios`，Stage 0 試算（`calculateDailyEstimate`）
-  與月跑 Stage 4 共用同算法 + 同 `ob_calendar`（I-RUN-EST-01），避免模組循環依賴（不互 import module）。
+  與月名單分派 Stage 4 共用同算法 + 同 `ob_calendar`（I-RUN-EST-01），避免模組循環依賴（不互 import module）。
 - **警告通道（OQ-F101-05）**：三類警告寫 `assignment_run.skipped_cases.warnings[]`（JSONB merge，與既有
   `cases`/`integrityIssues`/`lists` 共存）+ `warning_summary`（pipe 連接事件碼，VARCHAR 100 截斷）；
-  **不**擴展 `assignment_audit_log.action` enum（FALL-006 守）。月跑保持 `completed`。
+  **不**擴展 `assignment_audit_log.action` enum（FALL-006 守）。月名單分派保持 `completed`。
 - **st4_exchange 廢除（I-NO-ST4-EXCHANGE）**：`runStage4Sql` senior swap CTE + `executeV2` senior 分組
   邏輯整段移除；emplid 純由 ration 決定。`Stage2to4ListContext` 之 deptId/senior/default 欄位刪除。
 - **語意演進（非 regression）**：F101 Stage 3/4 只分派 `tier_level IN ('T1'..'T5')` 案件（BR-F101-01）。

@@ -11,8 +11,8 @@ last_updated: 2026-05-26
 ## 摘要
 
 將 per-list 估算（`Stage0EstimateService.estimateListCount`）由 F049 v1.2「欄位篩選版 COUNT」
-升級為「完整 Stage 1 篩選鏈唯讀 dry-run」，與月跑共用同一 `executeStage1Chain`（dryRun:true），
-使 estimate ≡ 月跑 Stage 1 案件數（DP-AD23-1 完整鏈精確模式）。未 fork Stage 1 邏輯。
+升級為「完整 Stage 1 篩選鏈唯讀 dry-run」，與月名單分派共用同一 `executeStage1Chain`（dryRun:true），
+使 estimate ≡ 月名單分派 Stage 1 案件數（DP-AD23-1 完整鏈精確模式）。未 fork Stage 1 邏輯。
 
 ## 測試結果摘要
 
@@ -22,8 +22,8 @@ last_updated: 2026-05-26
 | TS-F092-DR-002 | dry-run 不建立 assignment_run / snapshot | PASS（covered — chain dryRun:true 路徑完全不觸及 run/snapshot repo；service 亦未注入該 repo） |
 | TS-F092-DR-003 | dry-run cases=undefined、count 仍有值 | PASS |
 | TS-F092-DR-004 | estimateListCount 內部 dryRun:true 呼叫、workdt=WORKYM+'01' | PASS |
-| TS-F092-EQ-001 | 全規則名單 dry-run ≡ 月跑（真實 PG） | DEFERRED（本專案無 PG TestContainer；以 EQ-001-SQLITE 子集替代） |
-| TS-F092-EQ-001-SQLITE | 同名單 dry-run count === 月跑 cases.length（含 month_cnt + 去重，SQLite 真 chain） | PASS |
+| TS-F092-EQ-001 | 全規則名單 dry-run ≡ 月名單分派（真實 PG） | DEFERRED（本專案無 PG TestContainer；以 EQ-001-SQLITE 子集替代） |
+| TS-F092-EQ-001-SQLITE | 同名單 dry-run count === 月名單分派 cases.length（含 month_cnt + 去重，SQLite 真 chain） | PASS |
 | TS-F092-EQ-002 | EMPTY_CONDITIONS → count=0、skipped、skipReason | PASS |
 | TS-F092-EQ-003 | 去重表為空 → 同步退化（dry-run === run） | PASS |
 | TS-F092-EST-001 | 路徑 A condition_payload → 完整鏈 dry-run COUNT | PASS |
@@ -64,7 +64,7 @@ last_updated: 2026-05-26
 ## estimateListCount 改法關鍵 diff（service）
 
 ```ts
-// import：以 namespace import 引用 chain（與月跑同源；使 vi.spyOn(chainModule,'executeStage1Chain') 可攔截）
+// import：以 namespace import 引用 chain（與月名單分派同源；使 vi.spyOn(chainModule,'executeStage1Chain') 可攔截）
 import * as stage1Chain from '@/modules/assignment/stage1/stage1-filter-chain';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 // （移除）import { buildStage1WhereConditions } ... ← 不再於 service 直接用
@@ -93,7 +93,7 @@ private async dryRunChainCount(def: ObListDefinition): Promise<number> {
 
 - TS-F092-DR-001：spy `poolDataListRepo.save/insert/delete` 全 0 次、estimate 前後 `count()` 不變（0→0）。
 - DR-002（assignment_run / snapshot）：`Stage0EstimateService` 根本未注入 run/snapshot repo；`executeStage1Chain` dryRun:true 路徑亦不接觸該表（已於 pipeline F091 測試保證寫入僅在 dryRun:false）。
-- 唯讀本質來自 `executeStage1Chain` dryRun:true 僅 SELECT（撈必要欄位於應用層 filter，回 `count`、`cases=undefined`），與月跑同一函式不同 flag。
+- 唯讀本質來自 `executeStage1Chain` dryRun:true 僅 SELECT（撈必要欄位於應用層 filter，回 `count`、`cases=undefined`），與月名單分派同一函式不同 flag。
 
 ## 更新的既有測試預期值
 
@@ -128,12 +128,12 @@ private async dryRunChainCount(def: ObListDefinition): Promise<number> {
 ## 需主流程 / 下游 agent 確認之處
 
 1. **F049 BR-6 / F049 §5.2 / AC-4 spec 正文待 spec-writer 更新**（F092 §11 + RG-002）：
-   升級後「估算為條件符合上界、實際更少」之描述與新行為矛盾（現為「≡ 月跑」）。
+   升級後「估算為條件符合上界、實際更少」之描述與新行為矛盾（現為「≡ 月名單分派」）。
    F049-test.md TS-F049-EST-010 預期值「≈241,978（欄位篩選版）」亦過時 —— 完整鏈後應 ≤ 該值（去重 + month_cnt + 特殊 DELETE）。
    **本輪未改 F049 / F088 spec 正文與 F049-test.md**（屬 docs/specs 與 docs/test-specs，非 tdd-implementation 邊界；
    F092 spec §11 已明列待 spec-writer 處理）。建議下一輪 spec-writer 同步修 F049 BR-6 + F088 BR-10 + F049-test EST-010 預期值。
 
 2. **F088 BR-10 estimateCases 物化來源 spec 描述**：同上，COUNT 來源已升級為完整鏈 dry-run，spec 文字待 spec-writer 補註。
 
-3. **EQ-001 全規則精確一致性**：需在 staging/dev 真實 PostgreSQL 環境，以同一名單 dry-run vs 月跑實跑驗證
+3. **EQ-001 全規則精確一致性**：需在 staging/dev 真實 PostgreSQL 環境，以同一名單 dry-run vs 月名單分派實跑驗證
    （可作為 F091 §13「部署前 dry-run 驗證」工具）；CI 無 PG TC 故此案例自動化標 DEFERRED。

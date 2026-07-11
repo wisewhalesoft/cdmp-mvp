@@ -38,7 +38,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 ## 1. 功能摘要
 
-定義 E07「業務處長（SectionChief）」應用層角色（v2.0 由 v1.x 之「業務主管 / SalesManager」概念正式重新命名）。處長僅能操作「個別業務比例設定」（M03b，F082~F085）並**唯讀查詢**「準備完成階段」（M03d，F088~F089）；對 M02 計分設定**完全不可見**（Nav 隱藏 + 後端 Guard 防禦），其他 E07 功能（白名單、計分寫入、月跑觸發、名單 CRUD…）一律無權。轄區識別採 `created_by` 欄位過濾，不引入獨立 `section_id` 欄位。
+定義 E07「業務處長（SectionChief）」應用層角色（v2.0 由 v1.x 之「業務主管 / SalesManager」概念正式重新命名）。處長僅能操作「個別業務比例設定」（M03b，F082~F085）並**唯讀查詢**「準備完成階段」（M03d，F088~F089）；對 M02 計分設定**完全不可見**（Nav 隱藏 + 後端 Guard 防禦），其他 E07 功能（白名單、計分寫入、月名單分派觸發、名單 CRUD…）一律無權。轄區識別採 `created_by` 欄位過濾，不引入獨立 `section_id` 欄位。
 
 ## 2. 使用者故事
 
@@ -89,7 +89,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 ### AC-5：處長無法進行部長專屬功能的任何操作
 
 - **Given** 帳號 `business_role = 'section_chief'`
-- **When** 嘗試存取以下任一功能：M01 名單新增（F050）/ 編輯（F051）/ 停用（F052）/ M02 全部端點 / M03a 部門比例設定 / M06 白名單維護（F075）/ M06 可選值管理（F076）/ 月跑觸發（F061）/ M03c 簽核（F086 / F087）
+- **When** 嘗試存取以下任一功能：M01 名單新增（F050）/ 編輯（F051）/ 停用（F052）/ M02 全部端點 / M03a 部門比例設定 / M06 白名單維護（F075）/ M06 可選值管理（F076）/ 月名單分派觸發（F061）/ M03c 簽核（F086 / F087）
 - **Then** 後端 `DirectorGuard` 回 403 `AUTH_FORBIDDEN`
 - **And** 前端 sidebar 對 M02 完全不渲染入口；其他部長專屬功能對應操作按鈕不顯示（或顯示為停用狀態並附提示）
 
@@ -168,7 +168,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 
 ## 7. UI/UX 需求
 
-- 處長登入後 sidebar **完全不渲染**：M02 計分設定群組、M06 白名單維護入口、M06 可選值管理入口、M03 部門比例設定入口、月跑觸發入口、名單新增 / 編輯 / 停用按鈕、M03c 簽核入口
+- 處長登入後 sidebar **完全不渲染**：M02 計分設定群組、M06 白名單維護入口、M06 可選值管理入口、M03 部門比例設定入口、月名單分派觸發入口、名單新增 / 編輯 / 停用按鈕、M03c 簽核入口
 - 處長 sidebar **可見**：個別業務比例設定（M03b，F082）入口、準備完成階段查詢（M03d，F088）入口、M06 GET 唯讀入口（F068 / F075 / F076 唯讀視圖）
 - 處長進入 M03b 頁面時，所有列表 / 編輯 UI 自動以該處長轄區為範圍（無需處長手動篩選）
 - 處長進入 M03d 頁面時，僅顯示唯讀視圖，無「編輯」「儲存」「Rollback」等控件
@@ -200,7 +200,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
   - 處長嘗試 PUT 他人轄區比例 → 403 `E07_FORBIDDEN_SECTION_CHIEF_SCOPE`
   - 處長 GET M02 任意端點（如 `GET /api/v1/assignment/scoring/card-types`） → 403 `AUTH_FORBIDDEN`（由 `DirectorGuard` 攔截）
   - 處長透過直接 URL 訪問 M02 頁面 → 前端路由守衛攔截
-  - 處長嘗試呼叫 `POST /api/v1/assignment/runs`（月跑觸發）→ 403 `AUTH_FORBIDDEN`
+  - 處長嘗試呼叫 `POST /api/v1/assignment/runs`（月名單分派觸發）→ 403 `AUTH_FORBIDDEN`
   - 未指派 `business_role` 之 user 呼叫 E07 任一端點 → 403 `E07_ROLE_NOT_ASSIGNED`
   - Admin 撤銷處長角色 → 下次請求 401 `AUTH_TOKEN_REVOKED`
   - 處長 ↔ 部長互斥切換（F006a 覆寫）後 JWT 失效並依新角色執行
@@ -212,7 +212,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 - [ ] 後端新增 `SectionChiefGuard`（少數處長 only 端點）
 - [ ] service 層新增 `scopeByCreator(query, currentUser)` helper，套用於 M03b / M03d 查詢
 - [ ] 前端 sidebar 渲染依 F002 v2.0 §4.5 矩陣對齊處長最小可見集
-- [ ] 前端路由守衛攔截處長對 M02 / M06 白名單 / 月跑觸發等 URL
+- [ ] 前端路由守衛攔截處長對 M02 / M06 白名單 / 月名單分派觸發等 URL
 - [ ] error-handling.md 新增 `E07_ROLE_NOT_ASSIGNED`（v1.14）；保留既有 `E07_FORBIDDEN_SECTION_CHIEF_SCOPE`
 - [ ] F068 / F055 cross-ref 補 M02 / M06 處長禁用 / Nav 隱藏
 - [ ] F002 v2.0 §4.6 矩陣已更新（本 spec 為下游引用方）
@@ -223,7 +223,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
 | # | 假設 | 標記 |
 |---|---|---|
 | A-1 | E07 應用層角色（含 `section_chief`）採單一欄位 `users.business_role`；Token revoke 沿用 F006a 統一機制 | ✅ Resolved（v2.0） |
-| A-2 | 月跑 `triggered_by` 是否標示處長身份：同 F073 A-3，暫定僅記錄帳號 ID | [ASSUMPTION] 交 product-analyst |
+| A-2 | 月名單分派 `triggered_by` 是否標示處長身份：同 F073 A-3，暫定僅記錄帳號 ID | [ASSUMPTION] 交 product-analyst |
 | A-3 | M03b / M03d 之 `created_by` 過濾語意（究竟是名單建立者、業務員建立者、或比例設定建立者）由各 M03b/d spec 明確化；本 spec 採「該紀錄之 `created_by` 等於目前處長帳號 ID」之通則 | [ASSUMPTION] 交 M03b/d spec-writer |
 
 ## 13. 變更紀錄

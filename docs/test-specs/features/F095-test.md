@@ -16,7 +16,7 @@ last_updated: 2026-05-27
 > **測試設計重點（v1.0）**：
 >
 > 1. **後端推導正確性**：`deriveAppliedSpecialRules(list_nm)` pure function 對各類 `list_nm` 回傳正確規則集（四規則的觸發邏輯、`isSystemMandatory`、`ruleId`、`exclusionDescription`）
-> 2. **觸發一致性（最關鍵）**：`deriveAppliedSpecialRules` 與 `applyListNmSpecialDeletes`（F091 月跑）共用同一 trigger pure utility — UI 顯示規則 = 月跑實際套用規則（防 UI/run drift）
+> 2. **觸發一致性（最關鍵）**：`deriveAppliedSpecialRules` 與 `applyListNmSpecialDeletes`（F091 月名單分派）共用同一 trigger pure utility — UI 顯示規則 = 月名單分派實際套用規則（防 UI/run drift）
 > 3. **API 回傳 appliedSpecialRules[]**：list 詳情 / full-snapshot API 正確序列化
 > 4. **前端唯讀 Component（RTL）**：呈現規則列表、無編輯控制項、`isSystemMandatory` 標籤分流
 > 5. **空集合防護**：任何名單至少含 `R-FRAUD-WHITEBOARD`（無條件規則）
@@ -93,7 +93,7 @@ last_updated: 2026-05-27
   - 順序依照 spec §5.2 推導偽碼順序（fraud → motorcycle → xiaozi）
   - `R-PERIOD-MOTORCYCLE.isSystemMandatory = false`
   - `R-PERIOD-XIAOZI.isSystemMandatory = false`
-- **設計說明**：「期中機車」名單同時觸發 MOTORCYCLE + XIAOZI（與 F091 月跑雙重套用邏輯一致）
+- **設計說明**：「期中機車」名單同時觸發 MOTORCYCLE + XIAOZI（與 F091 月名單分派雙重套用邏輯一致）
 
 ---
 
@@ -205,7 +205,7 @@ last_updated: 2026-05-27
 
 ### TS-F095-CON-002：相同 list_nm — derive 回傳規則集 = apply 實際套用規則集
 
-- **關聯需求**：F095 AC-3（「月跑實際套用之規則 ID 集合 = API 回傳之 appliedSpecialRules[].ruleId 集合」）
+- **關聯需求**：F095 AC-3（「月名單分派實際套用之規則 ID 集合 = API 回傳之 appliedSpecialRules[].ruleId 集合」）
 - **測試類型**：Positive / Integration（一致性驗證）
 - **測試層**：Unit（純函式，對比兩個函式回傳值）
 - **前置條件**：`deriveAppliedSpecialRules` 和 `applyListNmSpecialDeletes` 均已實作
@@ -214,7 +214,7 @@ last_updated: 2026-05-27
   2. 以 pool（含各規則條件之案件）+ 相同 `list_nm` 呼叫 `applyListNmSpecialDeletes`，記錄實際套用的規則（哪條規則觸發 → 哪條 DELETE 執行），取 `ruleId` 集合 `Set B`
   3. 比對 `Set A === Set B`
 - **預期結果**：
-  - `Set A`（API 推導）= `Set B`（月跑實際套用），完全相等
+  - `Set A`（API 推導）= `Set B`（月名單分派實際套用），完全相等
   - 兩集合均含：`R-FRAUD-WHITEBOARD`, `R-PERIOD-MOTORCYCLE`, `R-PERIOD-XIAOZI`（不含 `R-YEAR-ABOVE`，因 list_nm 不含「年以上」）
 
 ---

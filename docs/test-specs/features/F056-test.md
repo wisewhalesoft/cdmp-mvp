@@ -34,7 +34,7 @@ spec_version: "1.5"
 | cardType 範圍鎖（v1.5 新增） | 所有端點之 cardType 必須對應 ob_card_type.status='active'，否則回 404 CARD_TYPE_NOT_FOUND |
 | CARD_TYPE 篩選（v1.5 新增） | GET /tier-mapping?cardType=H 僅回傳 card_type='H' 的紀錄；不同 CARD_TYPE 之資料不混入 |
 | Fallback 路徑（card_level IS NULL） | M5 為標準 fallback 樣本；均需植入 ob_tier seed 並驗證 GET 回傳 cardLevel=null |
-| 月跑鎖 seed 格式 | 月跑鎖 TC 必須 seed AssignmentRun 全部 4 個 NOT NULL 欄位（run_id / project_workym / triggered_by / created_at） |
+| 月名單分派鎖 seed 格式 | 月名單分派鎖 TC 必須 seed AssignmentRun 全部 4 個 NOT NULL 欄位（run_id / project_workym / triggered_by / created_at） |
 | BR-10 fn_calc_tier_level NULL fallback | 跨層整合測試：驗證呼叫 fn_calc_tier_level 後，M5 fallback 對應確實被觸發（card_level IS NULL 路徑生效） |
 | Audit Log 驗證 | PUT / POST / DELETE 成功後查 assignment_audit_log，entity_type='ob_tier'，entity_id='{card_type}\|{card_level ?? ""}' |
 
@@ -54,7 +54,7 @@ spec_version: "1.5"
 
 | 項目 | 內容 |
 |------|------|
-| Given | ob_tier 有 H/A → T1；無月跑鎖；SM Token |
+| Given | ob_tier 有 H/A → T1；無月名單分派鎖；SM Token |
 | When | PUT /tier-mapping，body 含 `{ cardType:'H', cardLevel:'A', tierLevel:'T2' }` |
 | Then | HTTP 200；updatedCount=1，insertedCount=0；DB 中 H/A 的 tier_level='T2'；audit_log action='UPDATE'，entity_id='H|A' |
 
@@ -62,7 +62,7 @@ spec_version: "1.5"
 
 | 項目 | 內容 |
 |------|------|
-| Given | ob_tier 無 H/E 對應；ob_levelcard_level 有 H 型 active 版本的 E 等級（若有）或僅測試現有等級；無月跑鎖；SM Token |
+| Given | ob_tier 無 H/E 對應；ob_levelcard_level 有 H 型 active 版本的 E 等級（若有）或僅測試現有等級；無月名單分派鎖；SM Token |
 | When | POST /tier-mapping，body 含 `{ cardType:'H', cardLevel:'A', tierLevel:'T1', listNm:'期中名單' }` |
 | Then | HTTP 201；DB 新增 H/A → T1；audit_log action='CREATE'，entity_type='ob_tier' |
 
@@ -70,7 +70,7 @@ spec_version: "1.5"
 
 | 項目 | 內容 |
 |------|------|
-| Given | ob_tier 已有 H/A → T1；無月跑鎖；SM Token |
+| Given | ob_tier 已有 H/A → T1；無月名單分派鎖；SM Token |
 | When | POST /tier-mapping，body 含 `{ cardType:'H', cardLevel:'A', tierLevel:'T99' }` |
 | Then | HTTP 422，TIER_LEVEL_DUPLICATE；DB 中 H/A 的 tier_level 仍為 T1（不修改） |
 
@@ -78,7 +78,7 @@ spec_version: "1.5"
 
 | 項目 | 內容 |
 |------|------|
-| Given | ob_levelcard_level 無 H 型的 'Z' 等級；無月跑鎖；SM Token |
+| Given | ob_levelcard_level 無 H 型的 'Z' 等級；無月名單分派鎖；SM Token |
 | When | POST /tier-mapping，body 含 `{ cardType:'H', cardLevel:'Z', tierLevel:'T9' }` |
 | Then | HTTP 422，CARD_LEVEL_NOT_FOUND |
 
@@ -86,11 +86,11 @@ spec_version: "1.5"
 
 | 項目 | 內容 |
 |------|------|
-| Given | M5 無對應 ob_levelcard_level（fallback CARD_TYPE）；無月跑鎖；SM Token |
+| Given | M5 無對應 ob_levelcard_level（fallback CARD_TYPE）；無月名單分派鎖；SM Token |
 | When | POST /tier-mapping，body 含 `{ cardType:'M5', cardLevel:null, tierLevel:'T5M', listNm:'機車中結滿期名單' }` |
 | Then | HTTP 201；DB 新增 M5/null → T5M；不觸發 CARD_LEVEL_NOT_FOUND |
 
-### AC-5：月跑執行中禁止修改
+### AC-5：月名單分派執行中禁止修改
 
 | 項目 | 內容 |
 |------|------|
@@ -102,7 +102,7 @@ spec_version: "1.5"
 
 | 項目 | 內容 |
 |------|------|
-| Given | 無月跑鎖；SM Token |
+| Given | 無月名單分派鎖；SM Token |
 | When | POST /tier-mapping，body tierLevel='T5M'（舊後綴值，非列舉內值） |
 | Then | HTTP 422；errorCode='TIER_LEVEL_INVALID_ENUM'；訊息含「TIER_LEVEL 必須為 T1~T10 之一」；DB 無寫入 |
 
@@ -130,26 +130,26 @@ spec_version: "1.5"
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TS-F056-004 | PUT 更新既有對應（UPDATE） | AC-2 | Integration | ob_tier(H/A→T1)；ob_levelcard_level(H/A 存在)；無月跑鎖；SM Token | PUT mappings=[{cardType:'H',cardLevel:'A',tierLevel:'T2'}] | HTTP 200；updatedCount=1，insertedCount=0；DB 中 H/A tier_level='T2' |
-| TS-F056-005 | PUT 新增不存在對應（INSERT） | AC-2 | Integration | ob_tier 無 H/B 對應；ob_levelcard_level(H/B 存在)；無月跑鎖；SM Token | PUT mappings=[{cardType:'H',cardLevel:'B',tierLevel:'T2'}] | HTTP 200；updatedCount=0，insertedCount=1；DB 新增 H/B→T2 |
+| TS-F056-004 | PUT 更新既有對應（UPDATE） | AC-2 | Integration | ob_tier(H/A→T1)；ob_levelcard_level(H/A 存在)；無月名單分派鎖；SM Token | PUT mappings=[{cardType:'H',cardLevel:'A',tierLevel:'T2'}] | HTTP 200；updatedCount=1，insertedCount=0；DB 中 H/A tier_level='T2' |
+| TS-F056-005 | PUT 新增不存在對應（INSERT） | AC-2 | Integration | ob_tier 無 H/B 對應；ob_levelcard_level(H/B 存在)；無月名單分派鎖；SM Token | PUT mappings=[{cardType:'H',cardLevel:'B',tierLevel:'T2'}] | HTTP 200；updatedCount=0，insertedCount=1；DB 新增 H/B→T2 |
 | TS-F056-006 | PUT 未列出的既有對應不刪除 | AC-2, spec 5.2 | Integration | ob_tier(H/A→T1, H/B→T2)；SM Token | PUT mappings=[{cardType:'H',cardLevel:'A',tierLevel:'T1'}]（只列 H/A） | HTTP 200；DB 中 H/B→T2 仍存在（未刪除） |
-| TS-F056-007 | PUT body 內同一 PK 重複回 422 | AC-3, BR-1 | Integration | 無月跑鎖；SM Token | PUT mappings=[{cardType:'H',cardLevel:'A',tierLevel:'T1'},{cardType:'H',cardLevel:'A',tierLevel:'T2'}]（H/A 重複） | HTTP 422，TIER_LEVEL_DUPLICATE；DB 不執行任何寫入 |
+| TS-F056-007 | PUT body 內同一 PK 重複回 422 | AC-3, BR-1 | Integration | 無月名單分派鎖；SM Token | PUT mappings=[{cardType:'H',cardLevel:'A',tierLevel:'T1'},{cardType:'H',cardLevel:'A',tierLevel:'T2'}]（H/A 重複） | HTTP 422，TIER_LEVEL_DUPLICATE；DB 不執行任何寫入 |
 | TS-F056-008 | PUT 成功後 audit_log 記錄 UPDATE，entity_id 含分隔符 | AC-2 | Integration | PUT TS-F056-004 成功後 | 查詢 assignment_audit_log 最新一筆 | action='UPDATE'；entity_type='ob_tier'；entity_id='H|A'；before_value 含舊 tier_level='T1'；after_value 含新 tier_level='T2' |
-| TS-F056-009 | PUT card_level=null 的 fallback 對應 UPSERT（v1.5：M5 無 Standard 列前提） | AC-4a | Integration | ob_card_type(M5 active)；ob_tier 無 M5 的任何 Standard 列（保持互斥規則）；ob_levelcard_level 無 M5 等級（fallback CARD_TYPE）；無月跑鎖；SM Token | PUT /tier-mapping?cardType=M5，mappings=[{cardType:'M5',cardLevel:null,tierLevel:'T5'}]（注意：v1.5 tierLevel 必須用 T1~T10 列舉值，此處用 T5 替代舊 T5M） | HTTP 200；DB 中 M5/null → T5 存在（或更新）；不觸發 CARD_LEVEL_NOT_FOUND；不觸發 CARD_TYPE_FALLBACK_STANDARD_MUTEX |
-| TS-F056-010 | PUT 月跑 pending 時回 409 | AC-5 | Integration | assignment_run(run_id='r-pend', project_workym='202604', triggered_by='u1', created_at=NOW(), status='pending')；ob_card_type(H active)；SM Token | PUT /tier-mapping?cardType=H | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
-| TS-F056-011 | PUT 月跑 running 時回 409 | AC-5 | Integration | assignment_run(run_id='r-run', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；ob_card_type(H active)；SM Token | PUT /tier-mapping?cardType=H | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
+| TS-F056-009 | PUT card_level=null 的 fallback 對應 UPSERT（v1.5：M5 無 Standard 列前提） | AC-4a | Integration | ob_card_type(M5 active)；ob_tier 無 M5 的任何 Standard 列（保持互斥規則）；ob_levelcard_level 無 M5 等級（fallback CARD_TYPE）；無月名單分派鎖；SM Token | PUT /tier-mapping?cardType=M5，mappings=[{cardType:'M5',cardLevel:null,tierLevel:'T5'}]（注意：v1.5 tierLevel 必須用 T1~T10 列舉值，此處用 T5 替代舊 T5M） | HTTP 200；DB 中 M5/null → T5 存在（或更新）；不觸發 CARD_LEVEL_NOT_FOUND；不觸發 CARD_TYPE_FALLBACK_STANDARD_MUTEX |
+| TS-F056-010 | PUT 月名單分派 pending 時回 409 | AC-5 | Integration | assignment_run(run_id='r-pend', project_workym='202604', triggered_by='u1', created_at=NOW(), status='pending')；ob_card_type(H active)；SM Token | PUT /tier-mapping?cardType=H | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
+| TS-F056-011 | PUT 月名單分派 running 時回 409 | AC-5 | Integration | assignment_run(run_id='r-run', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；ob_card_type(H active)；SM Token | PUT /tier-mapping?cardType=H | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
 
 ### C. API Integration Tests — POST 單筆 INSERT
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TS-F056-012 | POST 正常新增標準對應 | AC-3 | Integration | ob_tier 無 H/A 對應；ob_levelcard_level(H active, H/A 存在)；無月跑鎖；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'T1', listNm:'期中名單' } | HTTP 201；response 含 cardType/cardLevel/tierLevel/listNm；DB 新增 H/A→T1 |
+| TS-F056-012 | POST 正常新增標準對應 | AC-3 | Integration | ob_tier 無 H/A 對應；ob_levelcard_level(H active, H/A 存在)；無月名單分派鎖；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'T1', listNm:'期中名單' } | HTTP 201；response 含 cardType/cardLevel/tierLevel/listNm；DB 新增 H/A→T1 |
 | TS-F056-013 | POST DB 已存在 PK 回 422（不執行 UPDATE） | AC-3-dup | Integration | ob_tier 已有 H/A→T1；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'T99' } | HTTP 422，TIER_LEVEL_DUPLICATE；DB H/A tier_level 仍為 T1 |
 | TS-F056-014 | POST CARD_LEVEL 不存在於 active 版本（標準路徑） | AC-4 | Integration | ob_levelcard_level 無 H 型的 'Z' 等級；SM Token | POST { cardType:'H', cardLevel:'Z', tierLevel:'T9' } | HTTP 422，CARD_LEVEL_NOT_FOUND |
 | TS-F056-015 | POST card_level 超過 1 字元回 422（BR-9 長度檢查） | BR-9 | Integration | SM Token | POST { cardType:'H', cardLevel:'AB', tierLevel:'T1' }（cardLevel 長度為 2） | HTTP 422，CARD_LEVEL_NOT_FOUND（ob_levelcard_level.card_level 最多 VARCHAR(1)，'AB' 不存在） |
-| TS-F056-016 | POST fallback 對應（card_level=null，M5，v1.5 tierLevel 用 T5） | AC-4a | Integration | ob_card_type(M5 active)；ob_tier 無 M5 任何對應（保持互斥規則）；M5 無 ob_levelcard_level 紀錄；無月跑鎖；SM Token | POST { cardType:'M5', cardLevel:null, tierLevel:'T5', listNm:'機車中結滿期名單' }（v1.5：T5M 已不允許，改用列舉值 T5） | HTTP 201；DB 新增 M5/null→T5；不觸發 CARD_LEVEL_NOT_FOUND；不觸發 CARD_TYPE_FALLBACK_STANDARD_MUTEX |
+| TS-F056-016 | POST fallback 對應（card_level=null，M5，v1.5 tierLevel 用 T5） | AC-4a | Integration | ob_card_type(M5 active)；ob_tier 無 M5 任何對應（保持互斥規則）；M5 無 ob_levelcard_level 紀錄；無月名單分派鎖；SM Token | POST { cardType:'M5', cardLevel:null, tierLevel:'T5', listNm:'機車中結滿期名單' }（v1.5：T5M 已不允許，改用列舉值 T5） | HTTP 201；DB 新增 M5/null→T5；不觸發 CARD_LEVEL_NOT_FOUND；不觸發 CARD_TYPE_FALLBACK_STANDARD_MUTEX |
 | TS-F056-017 | ~~POST fallback 對應（card_level=null，M3 過渡期）~~ [已調整] | AC-4a | Integration | **v1.5 注意**：M3 過渡 CARD_TYPE 不在 ob_card_type seed 範圍（BR-6）；若業務後續透過 F070 新增 M3 CARD_TYPE，此案例可恢復；目前此 TC 暫標為 [SKIP] 等 M3 被 F070 新增後啟用。若在非正式測試環境需要驗，需先手動 seed ob_card_type(M3 active) | — | — |
-| TS-F056-018 | POST 月跑執行中回 409 | AC-5 | Integration | assignment_run(run_id='r-run2', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；ob_card_type(H active)；SM Token | POST /tier-mapping | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
+| TS-F056-018 | POST 月名單分派執行中回 409 | AC-5 | Integration | assignment_run(run_id='r-run2', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；ob_card_type(H active)；SM Token | POST /tier-mapping | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
 
 ### D. 跨層整合測試 — fn_calc_tier_level NULL fallback 驗證（BR-10）
 
@@ -166,7 +166,7 @@ spec_version: "1.5"
 | TS-F056-022 | 標準對應列不顯示 Fallback 標籤 | AC-4a | Frontend Unit | stub API 回傳 H/A 對應（cardLevel='A'，非 null） | 渲染 TIER_LEVEL 對應 Tab | H/A 那列無紫色底色；無「Fallback」標籤 |
 | TS-F056-023 | CARD_LEVEL 下拉選項依 CARD_TYPE 動態載入 | spec 7 節 | Frontend Unit | stub ob_levelcard_level API：CARD_TYPE='H' 有 A/B/C/D；CARD_TYPE='S5' 有 A/B | 新增 Modal 中切換 CARD_TYPE 選擇 | 選 H 時 CARD_LEVEL 下拉有 A/B/C/D；切換至 S5 時下拉只有 A/B |
 | TS-F056-024 | list_nm 為 null 時 UI 顯示「—」 | AC-1 | Frontend Unit | stub API 回傳含 listNm=null 的對應 | 渲染對應表格 | listNm 欄位顯示「—」；不顯示 'null' 或空白 |
-| TS-F056-025 | 月跑執行中按鈕 disabled | AC-5 | Frontend Unit | isLocked=true | 渲染 TIER_LEVEL 對應 Tab | 「新增對應」按鈕 disabled=true；編輯按鈕 disabled=true |
+| TS-F056-025 | 月名單分派執行中按鈕 disabled | AC-5 | Frontend Unit | isLocked=true | 渲染 TIER_LEVEL 對應 Tab | 「新增對應」按鈕 disabled=true；編輯按鈕 disabled=true |
 | TS-F056-026 | 新增成功後列表即時更新 | AC-3 | Frontend Unit | stub POST 回傳 HTTP 201 | POST 成功後 | 列表新增一列；顯示成功提示（toast） |
 | TS-F056-027 | POST 422 TIER_LEVEL_DUPLICATE 顯示錯誤 | AC-3-dup | Frontend Unit | stub POST 回傳 HTTP 422 TIER_LEVEL_DUPLICATE | 點擊「確認新增」 | Modal 顯示錯誤訊息「CARD_TYPE H × CARD_LEVEL A 的對應已存在」；Modal 不關閉 |
 | TS-F056-028 | M3/HC/C3 過渡期 fallback 對應顯示 Fallback 標籤 | AC-4a, BR-6 | Frontend Unit | stub API 回傳含 M3/null、HC/null、C3/null 三筆過渡期 fallback 對應 | 渲染 TIER_LEVEL 對應 Tab | 三筆均顯示紫色底色與「Fallback」標籤，視覺上與 M5 fallback 一致 |
@@ -215,7 +215,7 @@ VALUES
   ('H',  'B',  'T2', '期中名單'),
   ('M5', NULL, 'T5', '機車中結滿期名單');  -- fallback（v1.5：T5M → T5）
 
--- 月跑鎖 fixture（v1.5：AssignmentRun 必須 4 欄 NOT NULL 全填）
+-- 月名單分派鎖 fixture（v1.5：AssignmentRun 必須 4 欄 NOT NULL 全填）
 INSERT INTO assignment_run (run_id, project_workym, triggered_by, created_at, status)
 VALUES ('run-f056-pend', '202604', 'test-user-id', NOW(), 'pending');
 INSERT INTO assignment_run (run_id, project_workym, triggered_by, created_at, status)
@@ -250,11 +250,11 @@ VALUES ('run-f056-run',  '202604', 'test-user-id', NOW(), 'running');
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TS-F056-029 | PUT 送出舊後綴值 T5M 回 422 | AC-8、BR-2 | Integration | ob_card_type(H active)；無月跑鎖；SM Token | PUT /tier-mapping?cardType=H，mappings=[{cardType:'H',cardLevel:'A',tierLevel:'T5M'}] | HTTP 422；errorCode='TIER_LEVEL_INVALID_ENUM'；訊息含「T5M」；DB 無寫入 |
-| TS-F056-030 | POST 送出舊後綴值 THC 回 422 | AC-8、BR-2 | Integration | ob_card_type(H active)；無月跑鎖；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'THC' } | HTTP 422；errorCode='TIER_LEVEL_INVALID_ENUM'；DB 無寫入 |
-| TS-F056-031 | POST 送出超出範圍值 T11 回 422 | AC-8、BR-2 | Integration | ob_card_type(H active)；無月跑鎖；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'T11' } | HTTP 422；errorCode='TIER_LEVEL_INVALID_ENUM'；DB 無寫入 |
-| TS-F056-032 | POST 送出 T1（列舉最小值）成功 | AC-8（邊界） | Integration | ob_card_type(H active)；ob_levelcard_level(H/A 存在)；ob_tier 無 H/A；無月跑鎖；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'T1' } | HTTP 201；DB 新增 H/A→T1；不回 TIER_LEVEL_INVALID_ENUM |
-| TS-F056-033 | POST 送出 T10（列舉最大值）成功 | AC-8（邊界） | Integration | ob_card_type(H active)；ob_levelcard_level(H/B 存在)；ob_tier 無 H/B；無月跑鎖；SM Token | POST { cardType:'H', cardLevel:'B', tierLevel:'T10' } | HTTP 201；DB 新增 H/B→T10；不回 TIER_LEVEL_INVALID_ENUM |
+| TS-F056-029 | PUT 送出舊後綴值 T5M 回 422 | AC-8、BR-2 | Integration | ob_card_type(H active)；無月名單分派鎖；SM Token | PUT /tier-mapping?cardType=H，mappings=[{cardType:'H',cardLevel:'A',tierLevel:'T5M'}] | HTTP 422；errorCode='TIER_LEVEL_INVALID_ENUM'；訊息含「T5M」；DB 無寫入 |
+| TS-F056-030 | POST 送出舊後綴值 THC 回 422 | AC-8、BR-2 | Integration | ob_card_type(H active)；無月名單分派鎖；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'THC' } | HTTP 422；errorCode='TIER_LEVEL_INVALID_ENUM'；DB 無寫入 |
+| TS-F056-031 | POST 送出超出範圍值 T11 回 422 | AC-8、BR-2 | Integration | ob_card_type(H active)；無月名單分派鎖；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'T11' } | HTTP 422；errorCode='TIER_LEVEL_INVALID_ENUM'；DB 無寫入 |
+| TS-F056-032 | POST 送出 T1（列舉最小值）成功 | AC-8（邊界） | Integration | ob_card_type(H active)；ob_levelcard_level(H/A 存在)；ob_tier 無 H/A；無月名單分派鎖；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'T1' } | HTTP 201；DB 新增 H/A→T1；不回 TIER_LEVEL_INVALID_ENUM |
+| TS-F056-033 | POST 送出 T10（列舉最大值）成功 | AC-8（邊界） | Integration | ob_card_type(H active)；ob_levelcard_level(H/B 存在)；ob_tier 無 H/B；無月名單分派鎖；SM Token | POST { cardType:'H', cardLevel:'B', tierLevel:'T10' } | HTTP 201；DB 新增 H/B→T10；不回 TIER_LEVEL_INVALID_ENUM |
 
 ### G. API Integration Tests — cardType 範圍鎖（AC-9）
 
@@ -268,18 +268,18 @@ VALUES ('run-f056-run',  '202604', 'test-user-id', NOW(), 'running');
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TS-F056-036 | 已有 Standard 列，新增 Fallback（card_level=null）→ 422 互斥 | AC-3、BR-13 | Integration | ob_card_type(H active)；ob_tier H/A→T1（Standard 列存在）；無月跑鎖；SM Token | POST { cardType:'H', cardLevel:null, tierLevel:'T1' } | HTTP 422；errorCode='CARD_TYPE_FALLBACK_STANDARD_MUTEX'；訊息含 'H' 與 Standard 規則數量；DB 無新增 |
-| TS-F056-037 | 已有 Fallback 列（card_level=null），新增 Standard（card_level='A'）→ 422 互斥 | AC-4a、BR-13 | Integration | ob_card_type(H active)；ob_tier H/null→T1（Fallback 列存在）；ob_levelcard_level(H/A 存在)；無月跑鎖；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'T1' } | HTTP 422；errorCode='CARD_TYPE_FALLBACK_STANDARD_MUTEX'；訊息含「已有 Fallback 規則」；DB 無新增 |
-| TS-F056-038 | PUT batch：body 同時包含 null 與非 null cardLevel → 422 互斥 | AC-3、BR-13 | Integration | ob_card_type(H active)；ob_tier 無任何 H 紀錄；無月跑鎖；SM Token | PUT /tier-mapping?cardType=H，mappings=[{cardType:'H',cardLevel:null,tierLevel:'T1'},{cardType:'H',cardLevel:'A',tierLevel:'T2'}] | HTTP 422；errorCode='CARD_TYPE_FALLBACK_STANDARD_MUTEX'；DB 無任何寫入（全部 rollback） |
+| TS-F056-036 | 已有 Standard 列，新增 Fallback（card_level=null）→ 422 互斥 | AC-3、BR-13 | Integration | ob_card_type(H active)；ob_tier H/A→T1（Standard 列存在）；無月名單分派鎖；SM Token | POST { cardType:'H', cardLevel:null, tierLevel:'T1' } | HTTP 422；errorCode='CARD_TYPE_FALLBACK_STANDARD_MUTEX'；訊息含 'H' 與 Standard 規則數量；DB 無新增 |
+| TS-F056-037 | 已有 Fallback 列（card_level=null），新增 Standard（card_level='A'）→ 422 互斥 | AC-4a、BR-13 | Integration | ob_card_type(H active)；ob_tier H/null→T1（Fallback 列存在）；ob_levelcard_level(H/A 存在)；無月名單分派鎖；SM Token | POST { cardType:'H', cardLevel:'A', tierLevel:'T1' } | HTTP 422；errorCode='CARD_TYPE_FALLBACK_STANDARD_MUTEX'；訊息含「已有 Fallback 規則」；DB 無新增 |
+| TS-F056-038 | PUT batch：body 同時包含 null 與非 null cardLevel → 422 互斥 | AC-3、BR-13 | Integration | ob_card_type(H active)；ob_tier 無任何 H 紀錄；無月名單分派鎖；SM Token | PUT /tier-mapping?cardType=H，mappings=[{cardType:'H',cardLevel:null,tierLevel:'T1'},{cardType:'H',cardLevel:'A',tierLevel:'T2'}] | HTTP 422；errorCode='CARD_TYPE_FALLBACK_STANDARD_MUTEX'；DB 無任何寫入（全部 rollback） |
 
 ### I. API Integration Tests — DELETE 端點（AC-6 / AC-7）
 
 | ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
 |----|------|---------|---------|---------|------|---------|
-| TS-F056-039 | DELETE Standard 對應（cardLevel='A'）正常刪除 | AC-6、BR-11 | Integration | ob_card_type(H active)；ob_tier H/A→T1；無月跑鎖；SM Token | DELETE /tier-mapping?cardType=H&cardLevel=A | HTTP 200；response.cardType='H'、cardLevel='A'；DB 中 H/A 紀錄已不存在 |
-| TS-F056-040 | DELETE Fallback 對應（省略 cardLevel，card_level=NULL） | AC-7、BR-11 | Integration | ob_card_type(M5 active)；ob_tier M5/null→T5；無月跑鎖；SM Token | DELETE /tier-mapping?cardType=M5（不帶 cardLevel） | HTTP 200；response.cardType='M5'、cardLevel=null；DB 中 M5/null 紀錄已不存在 |
-| TS-F056-041 | NULL PK delete regression guard（ob_tier fallback 紀錄必須透過 repo.remove 刪除） | AC-7、BR-11 | Integration | ob_card_type(M5 active)；ob_tier M5/null→T5（1 筆 Fallback 紀錄）；無月跑鎖；SM Token | DELETE /tier-mapping?cardType=M5（省略 cardLevel）；後驗 ob_tier COUNT | HTTP 200；DB COUNT=0（Fallback 紀錄被成功刪除）；若 service 使用 repo.delete({card_level:null}) 路徑，COUNT=1（靜默 bug，案例失敗，regression 被抓住）。詳見 `docs/test-specs/regression/M02-regression-guards.md` TC-GUARD-NULL-PK-001 |
-| TS-F056-042 | DELETE 月跑執行中回 409 | AC-6、BR-5 | Integration | assignment_run(run_id='r-del', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；ob_card_type(H active)；SM Token | DELETE /tier-mapping?cardType=H&cardLevel=A | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
+| TS-F056-039 | DELETE Standard 對應（cardLevel='A'）正常刪除 | AC-6、BR-11 | Integration | ob_card_type(H active)；ob_tier H/A→T1；無月名單分派鎖；SM Token | DELETE /tier-mapping?cardType=H&cardLevel=A | HTTP 200；response.cardType='H'、cardLevel='A'；DB 中 H/A 紀錄已不存在 |
+| TS-F056-040 | DELETE Fallback 對應（省略 cardLevel，card_level=NULL） | AC-7、BR-11 | Integration | ob_card_type(M5 active)；ob_tier M5/null→T5；無月名單分派鎖；SM Token | DELETE /tier-mapping?cardType=M5（不帶 cardLevel） | HTTP 200；response.cardType='M5'、cardLevel=null；DB 中 M5/null 紀錄已不存在 |
+| TS-F056-041 | NULL PK delete regression guard（ob_tier fallback 紀錄必須透過 repo.remove 刪除） | AC-7、BR-11 | Integration | ob_card_type(M5 active)；ob_tier M5/null→T5（1 筆 Fallback 紀錄）；無月名單分派鎖；SM Token | DELETE /tier-mapping?cardType=M5（省略 cardLevel）；後驗 ob_tier COUNT | HTTP 200；DB COUNT=0（Fallback 紀錄被成功刪除）；若 service 使用 repo.delete({card_level:null}) 路徑，COUNT=1（靜默 bug，案例失敗，regression 被抓住）。詳見 `docs/test-specs/regression/M02-regression-guards.md` TC-GUARD-NULL-PK-001 |
+| TS-F056-042 | DELETE 月名單分派執行中回 409 | AC-6、BR-5 | Integration | assignment_run(run_id='r-del', project_workym='202604', triggered_by='u1', created_at=NOW(), status='running')；ob_card_type(H active)；SM Token | DELETE /tier-mapping?cardType=H&cardLevel=A | HTTP 409；errorCode='SCORING_VERSION_LOCKED' |
 | TS-F056-043 | DELETE 不存在的 (cardType, cardLevel) 回 404 | AC-6 | Integration | ob_card_type(H active)；ob_tier 無 H/Z；SM Token | DELETE /tier-mapping?cardType=H&cardLevel=Z | HTTP 404；errorCode='TIER_MAPPING_NOT_FOUND' |
 
 ### J. API Integration Tests — DELETE audit_log 驗證

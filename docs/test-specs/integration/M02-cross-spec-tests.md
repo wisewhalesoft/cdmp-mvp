@@ -20,7 +20,7 @@ last_updated: 2026-05-14
 
 1. **IT-CASCADE** — CARD_TYPE 級聯刪除完整驗證（F072）
 2. **IT-TAB-LINKAGE** — 5 Tab 聯動測試（F069 → F053/054/055/056）
-3. **IT-LOCK** — 月跑鎖跨 Endpoint 一致性（F069~F072 + F053~F056）
+3. **IT-LOCK** — 月名單分派鎖跨 Endpoint 一致性（F069~F072 + F053~F056）
 4. **IT-MIGRATION** — Migration 冪等性與 TIER 後綴值遷移驗證
 
 ---
@@ -184,9 +184,9 @@ VALUES ('X', '測試版本', 1, '20260514', '20991231', 'active');
 
 ---
 
-## IT-LOCK：月跑鎖跨 Endpoint 一致性
+## IT-LOCK：月名單分派鎖跨 Endpoint 一致性
 
-### IT-LOCK-001：月跑 running 時所有寫入端點一致回 409
+### IT-LOCK-001：月名單分派 running 時所有寫入端點一致回 409
 
 | 項目 | 內容 |
 |------|------|

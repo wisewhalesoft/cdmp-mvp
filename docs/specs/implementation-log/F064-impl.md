@@ -14,7 +14,7 @@ related: [US-155, AD-E07-31, F101, F102]
 
 **問題**：v2.0 `buildExportQuery` 以 `INNER JOIN ob_pool_data_list p ON p.list_no=r.list_no AND p.orgno=r.orgno AND p.appl_no=r.appl_no` 取 pool 屬性 → 202606 匯出**掉 6,438 列（11.5%；55,863 → 49,425）**。
 
-**根因**：月跑 Stage 1 為 `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o`（共享池，PK=orgno+appl_no，無 list_no）衍生 result 母體；`ob_pool_data_list`（per-list 去重表）只在 Stage 1 被 LEFT JOIN 取 CR 欄，**非** result 母體。以 list_no+orgno+appl_no 連 per-list 表會掉「不在該名單去重表」之 result 列。
+**根因**：月名單分派 Stage 1 為 `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o`（共享池，PK=orgno+appl_no，無 list_no）衍生 result 母體；`ob_pool_data_list`（per-list 去重表）只在 Stage 1 被 LEFT JOIN 取 CR 欄，**非** result 母體。以 list_no+orgno+appl_no 連 per-list 表會掉「不在該名單去重表」之 result 列。
 
 **修法**（`buildExportQuery`）：
 - pool join 改 `INNER JOIN ob_pool_data o ON o.orgno=r.orgno AND o.appl_no=r.appl_no`（維持 INNER，血緣保證每筆 result 必有對應 ob_pool_data 列）。
@@ -127,7 +127,7 @@ related: [US-155, AD-E07-31, F101, F102]
 
 ## 「202606 重跑/匯出」執行驗證指引
 
-> 前提：F102 已 commit（cr_id/cr_nm/is_cr/emplid/assignday 有值）；202606 月跑已 completed。
+> 前提：F102 已 commit（cr_id/cr_nm/is_cr/emplid/assignday 有值）；202606 月名單分派已 completed。
 
 1. **取得 202606 completed run_id**：
    `GET /api/v1/assignment/runs?ym=202606` → 取 `status='completed'` 之 `runId`。

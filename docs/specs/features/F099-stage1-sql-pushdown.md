@@ -4,7 +4,7 @@ title: Stage 1 SQL 下推（set-based INSERT…SELECT + estimate≡run 共用 bu
 feature-id: F099
 source-story: AD 驅動（AD-E07-28 P2）
 epic: E07
-module: M04 分派執行（月跑執行模型重構 P2）
+module: M04 分派執行（月名單分派執行模型重構 P2）
 priority: P0-MVP
 version: "1.0"
 date: 2026-06-02
@@ -43,17 +43,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 
 > **[ASSUMPTION] A-0**：上述 `INSERT` 欄位清單為 P2 範圍（Stage 1 寫入案件識別 + custo_no/settle_src）；Stage 2~4 之計分 / CR / 分派欄位（score / card_level / tier_level / is_cr / dept_id / emplid 等）於 P2 維持 JS 寫入（讀回 heap 計分後 `UPDATE`）或 NULL，P3 才下推。實際 `INSERT` 欄位由 tdd-implementation 對齊 [F094 entity](F094-monthly-run-result-table.md) 與既有 pipeline 寫入。
 >
-> **[RESOLVED] OQ-F099-03（assignday 不下推，保持 NULL）**：下推 SELECT **不取 `assignday`**——`ob_pool_data` **無 `assignday` 欄**（該欄在 `ob_pool_data_list`），且現行 JS pipeline（`assignment-run-pipeline.service.ts`）**從不寫 assignday**（月跑結果該欄一直為 NULL）。`ob_monthly_run_result.assignday` entity 註解標明為「Forward-compat 業務派案日期（DP-AD25-6）」，**由業務系統日後回填**。故 P2 下推 INSERT 欄位清單**不含 assignday**（該欄寫 NULL），與現行 JS 等價。**不可**寫 `o.assignday`（會因 `ob_pool_data` 無此欄而 SQL error）。
+> **[RESOLVED] OQ-F099-03（assignday 不下推，保持 NULL）**：下推 SELECT **不取 `assignday`**——`ob_pool_data` **無 `assignday` 欄**（該欄在 `ob_pool_data_list`），且現行 JS pipeline（`assignment-run-pipeline.service.ts`）**從不寫 assignday**（月名單分派結果該欄一直為 NULL）。`ob_monthly_run_result.assignday` entity 註解標明為「Forward-compat 業務派案日期（DP-AD25-6）」，**由業務系統日後回填**。故 P2 下推 INSERT 欄位清單**不含 assignday**（該欄寫 NULL），與現行 JS 等價。**不可**寫 `o.assignday`（會因 `ob_pool_data` 無此欄而 SQL error）。
 
 ## 2. 使用者故事
 
 **As a** 分派維運人員 / 系統架構維運人員
-**I want** Stage 1 案件挑選在 Postgres 內以單一 SQL 完成、不把整個 `ob_pool_data` 載入 worker heap，且試算（estimate）與月跑（run）保證跑同一份篩選邏輯
-**So that** prod 量級不再因全載而 OOM，且試算數字與月跑實際分派數一致（消除 F049 estimate≡run drift）
+**I want** Stage 1 案件挑選在 Postgres 內以單一 SQL 完成、不把整個 `ob_pool_data` 載入 worker heap，且試算（estimate）與月名單分派（run）保證跑同一份篩選邏輯
+**So that** prod 量級不再因全載而 OOM，且試算數字與月名單分派實際分派數一致（消除 F049 estimate≡run drift）
 
 ## 3. 前置條件
 
-- [F098](F098-monthly-run-worker-extraction.md)（P1）已交付：月跑於 cdmp-worker 容器執行（下推 SQL 期間若有 bug 不影響 API）。
+- [F098](F098-monthly-run-worker-extraction.md)（P1）已交付：月名單分派於 cdmp-worker 容器執行（下推 SQL 期間若有 bug 不影響 API）。
 - [F094](F094-monthly-run-result-table.md)：`ob_monthly_run_result` 表存在（下推目標）。
 - [F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md)：Stage 1 完整步驟（欄位篩選 / month_cnt / 詐騙白牌 / 近 3 月去重 / 特例 DELETE）之 SP-ground-truth 語意為等價基準。
 - 既有 SQL fragment：`buildStage1WhereConditions`（欄位篩選，已是 SQL）、`buildMonthCntFragment`（month_cnt，已是 SQL）。
@@ -64,7 +64,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 ### AC-1：`buildStage1Sql` 單一 core，run 與 estimate 共用（I-RUN-EST-01）
 
 - **Given** 一份名單 `list` 與 `workdt = parseWorkdt(project_workym)`
-- **When** 月跑（run）與 Stage 0 試算（estimate）分別執行
+- **When** 月名單分派（run）與 Stage 0 試算（estimate）分別執行
 - **Then** 兩者之 `WHERE / JOIN / FROM` 子句**必須來自同一函式 `buildStage1Sql(list, workdt)` 之輸出**，分叉點僅限最外層 `INSERT…SELECT`（run）vs `SELECT COUNT(*)`（estimate）
 - **And** 不得為 run / estimate 各寫一份 WHERE（這正是 [F049](F049-stage0-daily-estimate.md) 原 bug 根因）
 
@@ -176,7 +176,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 | **I-RUN-EST-01**：run / estimate SQL core 同源（AC-1） | test-designer | SQL core 字串相等 OR run 列數 === estimate COUNT（同一 list） |
 | **JS↔SQL 逐 list 等價矩陣**（AC-7，P2 DoD） | test-designer | PG 真庫；每特例規則 ≥1 觸發樣本 + 去重上下界 + NULL custo_no；列集合精確相等 |
 | **I-PORT-01**：year-above 數值化 PG integration test（AC-8 / OQ-F099-02） | test-designer | PG 真庫（不靠 SQLite）；oracle = 現行 JS `parseInt`；三類邊界各 ≥1 樣本：**NULL→1900 被刪 / 非數字（''、'N/A'）→NaN 保留 / 前導數字 '1980abc'→1980 被刪**；驗證 `^[0-9]+$` strict 寫法會 fail（對 '1980abc' 不等價）|
-| **assignday 不下推、保持 NULL（AC §4 / OQ-F099-03）** | test-designer | 斷言月跑結果 `assignday IS NULL`（與現行 JS 等價）；下推 SQL 無 `o.assignday` 引用 |
+| **assignday 不下推、保持 NULL（AC §4 / OQ-F099-03）** | test-designer | 斷言月名單分派結果 `assignday IS NULL`（與現行 JS 等價）；下推 SQL 無 `o.assignday` 引用 |
 | **I-IDEM-01**：重觸發前清理（AC-9） | test-designer | 同 run_id 重跑產出一致 |
 | **I-NOLOAD-01**：不全載 heap（AC-3） | test-designer | 斷言下推路徑無 `getMany()` / `find()` 全載（含 year-above，無例外）|
 | 四特例規則（詐騙白牌 / 機車期中 / 期中小資 / year-above）全 SQL `WHERE NOT` 等價（AC-4/AC-6/AC-8） | test-designer | 各規則觸發 / 不觸發兩態；全 set-based |

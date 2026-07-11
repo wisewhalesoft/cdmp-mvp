@@ -45,7 +45,7 @@ invariants:
 
 ## 0. 背景與前置狀態
 
-P1（driver/entity/schema）、P2（自建 T-SQL 佇列）、P4（ETL 引擎，含 customer_core 真實資料）、P3（Stage 1-4 raw SQL 引擎，3a 篩選/3b 計分/3c 比例/3d CR/3e `fn_calc_tier_level` 收尾）全數完成並已 push。**MSSQL 月跑全鏈（Stage 1 篩選→Stage 2~3 計分→Stage 3/4 比例→CR）現已全部有值**——這是本專案 MSSQL 遷移計畫的技術主體完工里程碑。
+P1（driver/entity/schema）、P2（自建 T-SQL 佇列）、P4（ETL 引擎，含 customer_core 真實資料）、P3（Stage 1-4 raw SQL 引擎，3a 篩選/3b 計分/3c 比例/3d CR/3e `fn_calc_tier_level` 收尾）全數完成並已 push。**MSSQL 月名單分派全鏈（Stage 1 篩選→Stage 2~3 計分→Stage 3/4 比例→CR）現已全部有值**——這是本專案 MSSQL 遷移計畫的技術主體完工里程碑。
 
 P5 是 cutover（Phase 6）前的最後一道關卡：**不是新業務邏輯開發，而是「證明 MSSQL 版本忠實重現 PG 版本」的全量驗證 + 業務簽核**。定位比照本專案既有之 F067（`docs/specs/implementation-log/F067-202606-cdmp-vs-legacy-diff.md`）模式，但**基準改為「MSSQL 重現 PG 結果」而非「重驗 legacy SP」**——legacy 對齊已在 PG 版本完成（F067 既有工作），P5 只需證明 MSSQL 與已驗證正確的 PG 版本逐列一致。
 
@@ -69,7 +69,7 @@ graph LR
 |---|---|---|
 | **P5a** | CI mssql-specs 缺 dbo baseline bootstrap，導致 P3a 等 52 個案例靜默 skip 而非真跑 | ✅ 已完成（見 P5a-impl.md） |
 | **P5b** | customer_core 以外之其餘 5 條生產 pipeline，端到端 MSSQL 驗證 | ✅ 已完成，發現 ATOMIC 風險（見 P5b-impl.md） |
-| **P5c** | 真實觸發一次完整月跑，PG vs MSSQL 逐列比對 score/tier/card/dept_id/emplid/assignday/cr | ✅ 已完成，發現 assignday −1 日（見 P5c-impl.md） |
+| **P5c** | 真實觸發一次完整月名單分派，PG vs MSSQL 逐列比對 score/tier/card/dept_id/emplid/assignday/cr | ✅ 已完成，發現 assignday −1 日（見 P5c-impl.md） |
 | **P5d** | datetime2 本機時區儲存查證 | ✅ 隨 P5h 結案（根因已定位於連線層，非時區組態決策） |
 | **P5e** | F067 式業務簽核報告產出 + 簽核 | ✅ 正式報告已產出（[`AD-E07-43-P5e-f067-signoff.md`](AD-E07-43-P5e-f067-signoff.md)），**待使用者簽核** |
 | **P5f**（可選、優先度較低） | MSSQL 版一鍵部署 bootstrap | 未啟動（不阻擋） |
@@ -113,7 +113,7 @@ graph LR
 
 **背景確認**：P4 的完整端對端驗證（P4d）範圍**僅限「ETL for Customer Core」一條 pipeline**（P4d impl log 明載「不含...其他 5 條 pipeline」）。P4a~P4c 交付的是**通用的 9 個 handler MSSQL 化**（`extract`/`lookup`/`merge`/`dedup`/`derived_field`/`type_cast`/`field_mapping`/`conditional`/`target_load` 全部 handler 皆已 MSSQL 化，非 customer_core 專屬邏輯），故其餘 5 條生產 pipeline（`E07-OBPOOLDATA-Load`／`E07-OBPOOLDATA_LIST-Load`／`E07-OBEMPHIRE-Load`／`E07-OBCALENDAR-Load`／`E07-OBARRETURNDF_MIN_CAP-Load`）**理論上**可直接沿用同一批已 MSSQL 化的 handler 執行，但**尚未被端對端證明過**。
 
-**這是 P5c（MONTHRUN-DIFF）的前置依賴**：P3 的 Stage 1-4 raw SQL 引擎讀取的 `ob_pool_data`／`ob_pool_data_list`／`ob_emphire`／`ob_calendar`／`ob_arreturndf_min_cap` 五張表，若無真實資料，月跑比對就無從進行。
+**這是 P5c（MONTHRUN-DIFF）的前置依賴**：P3 的 Stage 1-4 raw SQL 引擎讀取的 `ob_pool_data`／`ob_pool_data_list`／`ob_emphire`／`ob_calendar`／`ob_arreturndf_min_cap` 五張表，若無真實資料，月名單分派比對就無從進行。
 
 **工作方式**：比照 P4d 之 `DISPATCHE2E-001`（直接呼叫真實生產碼 `createDispatcher()` 取得 dispatcher、以真實 `PipelineRunner.run()` 跑真實 DAG）手法，逐一觸發此 5 條 pipeline 於 `DB_TYPE=mssql`，驗收：① 全部節點 `status==='completed'`（無 `failed`）；② 目標表列數與來源列數合理對應（比照 P4d 之「交叉查實表列數，非僅信 `nodeLogs.outputRowCount`」原則，防 `isTestRun` 假路徑陷阱）；③ 抽樣核對代表性列之內容正確性。**非新增完整測試套件**（9 個 handler 本身已於 P4a~c 個別驗證過），此處僅是**端對端接線驗證**，工作量遠小於 P4 原本的量級。
 
@@ -127,10 +127,10 @@ graph LR
 
 ### 3.1 MONTHRUN-DIFF（P5c）：技術底稿，Manual/Script 執行
 
-**不是新的自動化 CI 測試套件**，而是比照本專案既有的 F101/F102/F104 驗收前例（觸發真實月跑、SQL 直接查表比對、輸出人工可讀的差異記錄）：
+**不是新的自動化 CI 測試套件**，而是比照本專案既有的 F101/F102/F104 驗收前例（觸發真實月名單分派、SQL 直接查表比對、輸出人工可讀的差異記錄）：
 
 1. 前置：P5a（CI/dbo baseline）+ P5b（其餘 5 條 pipeline 資料就緒）完成，MSSQL 端 `ob_pool_data`/`ob_pool_data_list`/`ob_emphire`/`ob_calendar`/`ob_arreturndf_min_cap`/`customer_core` 六張核心來源表皆有真實資料。
-2. 於**同一批來源資料**（理想上是同一個 `project_workym`，如既有基準月 202606）分別觸發 PG 版與 MSSQL 版完整月跑 pipeline（Stage 1 篩選 → Stage 2~3 計分 → Stage 3/4 比例分派 → CR 優先分派）。
+2. 於**同一批來源資料**（理想上是同一個 `project_workym`，如既有基準月 202606）分別觸發 PG 版與 MSSQL 版完整月名單分派 pipeline（Stage 1 篩選 → Stage 2~3 計分 → Stage 3/4 比例分派 → CR 優先分派）。
 3. 逐列比對兩次 run 之 `ob_monthly_run_result`：`score`／`tier_level`／`card_level`／`dept_id`／`emplid`／`emplid_deptid`／`assignday`／`cr_id`／`cr_nm`／`is_cr`。
 4. 輸出比對結果為一份 impl-log 風格文件（比照 P4d／F067 之表格化呈現：逐欄一致率、任何差異列之具體案件與差異值、已知邊界案例〔如 P3d 的 tie-breaker／datetime2 案例〕之個別核對結果）。
 
@@ -138,7 +138,7 @@ graph LR
 
 ### 3.2 F067 式業務簽核（P5e）
 
-**基準修正（承 §0）**：F067 原本的基準是「CDMP vs legacy SP」；**P5e 的基準是「MSSQL vs PG」**——因為 legacy 對齊已在 PG 版本的既有 F067 完成且業務已簽核過，P3/P4 的全部設計目標就是「MSSQL 忠實重現 PG」，故此處不需要（也不應該）重新去比對 legacy，只需要證明「MSSQL 版本的月跑結果與已核可的 PG 版本結果一致」。
+**基準修正（承 §0）**：F067 原本的基準是「CDMP vs legacy SP」；**P5e 的基準是「MSSQL vs PG」**——因為 legacy 對齊已在 PG 版本的既有 F067 完成且業務已簽核過，P3/P4 的全部設計目標就是「MSSQL 忠實重現 PG」，故此處不需要（也不應該）重新去比對 legacy，只需要證明「MSSQL 版本的月名單分派結果與已核可的 PG 版本結果一致」。
 
 **報告內容建議結構**（比照既有 F067 格式延伸）：
 1. 執行摘要：MSSQL 全鏈技術驗收已完成（P1-P4）、本報告為 cutover 前最終業務對齊確認。
@@ -178,7 +178,7 @@ graph LR
 3. 抽樣列內容正確性核對（比照 P4d LOOKUPHIT/CHARSET 精神，非窮舉）。
 
 ### P5c DoD
-1. PG 與 MSSQL 於同一來源資料完整月跑各執行一次。
+1. PG 與 MSSQL 於同一來源資料完整月名單分派各執行一次。
 2. `ob_monthly_run_result` 全部案件之 9 個關鍵欄位（score/tier/card/dept_id/emplid/emplid_deptid/assignday/cr_id/is_cr）逐列比對完成。
 3. 產出比對結果文件（impl-log 風格），任何差異皆有具體案件級記錄與可解釋性判斷。
 
@@ -226,9 +226,9 @@ graph LR
 | **I-MSSQL-CASE-01** | AD-E07-38 | 使用者物件一律小寫 |
 | **I-MSSQL-COLLATE-01** | AD-E07-38 | Collation 於資料庫層級設定 |
 | **I-MSSQL-BASELINE-PARITY-01** | AD-E07-38 | Dev/prod 建表路徑結構等價；P5a 修法後之 CI bootstrap 亦須維持與此不變式一致（CI 用之 `migration:run` 即該不變式驗收工具鏈的 CI 化落地） |
-| **I-MSSQL-ENGINE-EQ-01** | AD-E07-42 | 每個 raw SQL 下推函式須有對應等價測試；P5c MONTHRUN-DIFF 是此不變式在**完整月跑層級**（而非單一函式層級）的最終驗收 |
+| **I-MSSQL-ENGINE-EQ-01** | AD-E07-42 | 每個 raw SQL 下推函式須有對應等價測試；P5c MONTHRUN-DIFF 是此不變式在**完整月名單分派層級**（而非單一函式層級）的最終驗收 |
 | **I-MSSQL-CI-BOOTSTRAP-01**（新增） | 本 AD | CI `mssql-specs` lane 執行任何 `*.mssql.spec.ts` 前，必須先完成完整 MSSQL baseline（`migration:run`）；任何會清空/重建共用 `dbo` schema 之測試，必須確保不使同一 CI 執行序中其他 spec 所依賴之 baseline 表消失（自身還原、隔離範圍、或明確排序控制三擇一），不得以「反正 CI 會重跑」為由放任此類副作用 |
-| **I-MSSQL-SIGNOFF-GATE-01**（新增） | 本 AD | Phase 6（cutover）不得在以下兩條件皆滿足前啟動：(a) MONTHRUN-DIFF（P5c）對至少一個完整生產規模月跑顯示 PG/MSSQL 結果一致（差異皆為已記錄、可解釋之邊界案例，非未解釋之不一致）；(b) F067 式業務簽核（P5e）已由使用者/業務利害關係人明確完成，非僅由 architect 或工程團隊自行認定「已足夠好」 |
+| **I-MSSQL-SIGNOFF-GATE-01**（新增） | 本 AD | Phase 6（cutover）不得在以下兩條件皆滿足前啟動：(a) MONTHRUN-DIFF（P5c）對至少一個完整生產規模月名單分派顯示 PG/MSSQL 結果一致（差異皆為已記錄、可解釋之邊界案例，非未解釋之不一致）；(b) F067 式業務簽核（P5e）已由使用者/業務利害關係人明確完成，非僅由 architect 或工程團隊自行認定「已足夠好」 |
 | **I-ETL-ATOMIC-LOAD-01**（新增，v1.1；**擴大範圍，v1.3**） | 本 AD §7 | `target_load` 節點之 **(1) fullMode**（TRUNCATE+INSERT）、**(2) partition_replace**（DELETE+INSERT）、**(3) customer_core UPSERT 兩段式**（`UPDATE...FROM` + `INSERT...WHERE NOT EXISTS`，v1.3 新納入）三條寫入路徑，破壞性/多段陳述式與其後續陳述式必須同屬一個交易；任一陳述式失敗時必須完整回滾至交易開始前之狀態（既存資料不得遺失、不得停留於部分套用之不一致中間態）。此為 PG／MSSQL 兩引擎共通適用之原則，修法須兩引擎對稱落地，不得僅修其一。**✅ 已於 P5g 落地並真庫重驗（`AD-E07-43-P5g-impl.md`）** |
 | **I-MSSQL-DATE-TZ-01**（新增，v1.2；**✅ 已驗證滿足，v1.3**） | 本 AD §8 | 任何建構 MSSQL TypeORM `DataSource`/`TypeOrmModuleOptions` 之站點，`options` 區塊必須顯式設定 `useUTC: true`，使 `date`/`datetime`/`datetime2`/`smalldatetime`/`time` 型別之讀寫（tedious `readDate`/`readDateTime`/`readDateTime2`/`readSmallDateTime`/`readTime` 與對應寫入路徑）一致採 UTC 分量建構/解析，與 PG（node-postgres `date` 型別預設回傳 UTC 午夜 Date 之既有慣例）語意對齊。新增任何 MSSQL 連線建構點（TypeORM 或直接使用 `mssql`/tedious 套件）時須比照套用；凡「讀取 DB Date 欄位後以 `getUTCFullYear/getUTCMonth/getUTCDate` 正規化為 'YYYY-MM-DD' 字串」之程式碼（即本專案既有主流慣例，見 §8.4），其正確性前提即為本不變式成立。**✅ 已於 P5h 落地並真庫重驗 0-diff（`AD-E07-43-P5h-impl.md`）** |
 | **I-MSSQL-NVARCHAR-DISPLAY-01**（新增，v1.3） | 本 AD §9 | 任何來源 legacy MSSQL schema（`reference/TableSchema/OB/*.sql`）宣告為 `nvarchar(N)` 之欄位，CDMP entity／schema 產生器（`parse-ob-schema.mjs`）與 baseline migration 必須採用 dialect-aware 之 nvarchar helper（mssql=`nvarchar`／pg=`varchar`／sqlite=`text`），不得收斂為與來源 `varchar` 相同之泛用 TypeORM `'varchar'` 型別，以避免 MSSQL BIN collation 下之 byte-length 語意造成 Unicode 顯示內容截斷。新增任何 `ob_*` schema 產生器輸出或手寫 MSSQL entity 時須比照檢查來源宣告 |
@@ -246,7 +246,7 @@ P5b 端對端驗證（真實 MSSQL、`p5b-e2e.mssql.spec.ts` ATOMIC 群組，5 �
 
 TRUNCATE/DELETE 為獨立陳述式、**先提交**；後續 INSERT 若因 NOT NULL 違反、隱式轉換數值溢位、或撞 PK 而整句失敗，**不會回滾已提交之 TRUNCATE/DELETE**。目標表（或目標分區）因而被留在「已清空、未重新填入」狀態。真庫實測 4 種目標表形狀（單欄 PK／composite PK／數值型別溢位／partition_replace）**結論一致：資料遺失**（詳見 `AD-E07-43-P5b-impl.md` ATOMIC-001~004）。這 5 條生產 pipeline 目前皆無 `type_cast` 節點作為壞值防線。
 
-**生產影響**：月度 ETL 若遇單筆髒來源資料（本專案已多次記錄之髒值前例：`cus_sex` 含 `'C'/'D'/'8'/'9'`、`MONTH_INCOME` 型別問題等），可能使**整張 `ob_pool_data`（7.8M 列）或整個分區被清空**，下游 Stage 1-4 月跑讀到空表。
+**生產影響**：月度 ETL 若遇單筆髒來源資料（本專案已多次記錄之髒值前例：`cus_sex` 含 `'C'/'D'/'8'/'9'`、`MONTH_INCOME` 型別問題等），可能使**整張 `ob_pool_data`（7.8M 列）或整個分區被清空**，下游 Stage 1-4 月名單分派讀到空表。
 
 ### 7.2 修法評估（三候選 a/b/c）
 
@@ -302,7 +302,7 @@ TRUNCATE/DELETE 為獨立陳述式、**先提交**；後續 INSERT 若因 NOT NU
 
 ### 8.1 現象（真庫實測佐證，3 樣本一致）
 
-P5c 真實 PG vs MSSQL 逐列比對（`AD-E07-43-P5c-impl.md`，115,197 案生產月跑之案件集釘選、共 3 樣本 198／9,376／27,796 案）：其餘 9 個關鍵欄位（`score`/`card_level`/`tier_level`/`is_cr`/`cr_id`/`cr_nm`/`dept_id`/`emplid`/`emplid_deptid`）逐列 **0-diff**（含 CR 全鏈 1,996 案、比例分派全鏈），唯 `assignday` **全部 100% 一致地早一天**（PG `2026-07-01` → MSSQL `2026-06-30`）。`dept_id`/`emplid` 分派本身正確（0-diff），僅日期標籤系統性 −1，證明是**單純的日期正規化缺陷**、非分派演算法錯誤。
+P5c 真實 PG vs MSSQL 逐列比對（`AD-E07-43-P5c-impl.md`，115,197 案生產月名單分派之案件集釘選、共 3 樣本 198／9,376／27,796 案）：其餘 9 個關鍵欄位（`score`/`card_level`/`tier_level`/`is_cr`/`cr_id`/`cr_nm`/`dept_id`/`emplid`/`emplid_deptid`）逐列 **0-diff**（含 CR 全鏈 1,996 案、比例分派全鏈），唯 `assignday` **全部 100% 一致地早一天**（PG `2026-07-01` → MSSQL `2026-06-30`）。`dept_id`/`emplid` 分派本身正確（0-diff），僅日期標籤系統性 −1，證明是**單純的日期正規化缺陷**、非分派演算法錯誤。
 
 ### 8.2 根因鏈（逐行原始碼證據，非經驗推論）
 
@@ -386,11 +386,11 @@ P5c §6 觀察：MSSQL `Chinese_Taiwan_Stroke_BIN`（non-Unicode BIN collation�
 
 ### 8.8 精簡摘要（可直接帶回使用者）
 
-> **現象**：MSSQL 版月跑的「分派日（ASSIGNDAY）」全部比 PG 版早一天（如 PG 7/1 → MSSQL 6/30），Stage 0 每日試算的日期標籤也同樣錯位。其餘計分/分派/CR 相關 9 個關鍵欄位在真實資料逐列比對下完全一致（0 差異，含 27,796 筆大名單、1,996 筆 CR 案），僅日期標籤本身有此系統性 −1 日缺陷。
+> **現象**：MSSQL 版月名單分派的「分派日（ASSIGNDAY）」全部比 PG 版早一天（如 PG 7/1 → MSSQL 6/30），Stage 0 每日試算的日期標籤也同樣錯位。其餘計分/分派/CR 相關 9 個關鍵欄位在真實資料逐列比對下完全一致（0 差異，含 27,796 筆大名單、1,996 筆 CR 案），僅日期標籤本身有此系統性 −1 日缺陷。
 >
 > **根因**：已定位到程式碼層級的精確根因——資料庫連線程式庫（TypeORM）在建立 MSSQL 連線時，若設定檔未明確指定「日期以世界標準時間（UTC）表示」，會自動改用「以台灣本地時間表示」；本系統目前所有 MSSQL 連線設定皆未明確指定，因而落入此狀態，導致日期換算回文字時系統性少算一天。PostgreSQL 版因驅動預設行為不同，不受影響。
 >
-> **推薦修法**：在 4 個資料庫連線設定進入點，各新增 1 行明確設定（指定「日期一律以 UTC 表示」），**不需更動任何月跑核心運算程式碼**。此為連線層級的低風險修正，且與先前 P4e 階段在批次匯入功能上已採用、驗證過的手法屬同一家族（但涵蓋範圍更完整，一併解決先前遺留的「datetime2 時區」查證懸案）。
+> **推薦修法**：在 4 個資料庫連線設定進入點，各新增 1 行明確設定（指定「日期一律以 UTC 表示」），**不需更動任何月名單分派核心運算程式碼**。此為連線層級的低風險修正，且與先前 P4e 階段在批次匯入功能上已採用、驗證過的手法屬同一家族（但涵蓋範圍更完整，一併解決先前遺留的「datetime2 時區」查證懸案）。
 >
 > **成本估計**：技術修改本身極小（4 處各 1 行設定），主要成本在**驗證**——需重跑全量 MSSQL 自動化測試（預期無回歸）+ 重跑一次真實資料跨引擎逐列比對以確認分派日欄位變成零差異。預估 **1.5–2.5 人天**。
 >

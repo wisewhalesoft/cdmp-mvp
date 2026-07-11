@@ -13,19 +13,19 @@
 
 **As a** 部長（Director）或 Admin
 **I want** 在草稿階段為每份名單獨立設定「CR 回分開關」（啟用 / 停用），預設為啟用
-**So that** 可精確控制月跑 Stage 3 中哪些名單需執行 CR 回分邏輯，不同名單可有不同設定
+**So that** 可精確控制月名單分派 Stage 3 中哪些名單需執行 CR 回分邏輯，不同名單可有不同設定
 
 ---
 
 ## 背景說明
 
-CR（Car Recycle，或稱 CR 回分）是月跑 Stage 3 的一項分派邏輯：將符合條件的案件回分給原持有的業務員（CR 業務員），而非依一般比例分派。
+CR（Car Recycle，或稱 CR 回分）是月名單分派 Stage 3 的一項分派邏輯：將符合條件的案件回分給原持有的業務員（CR 業務員），而非依一般比例分派。
 
 **與 F059 移除的原子性同步要求（用戶 Q7.1 = B 的決策）**：
 本 Story（US-107）與 US-120（CR 儲存位置 spec 落差修正）**必須與「廢棄 F059 程式碼」同一次上線**，三者構成原子性同步：
 - F059 廢棄前，US-107 的新 CR 開關功能不得上線
-- US-107 / US-120 上線前，必須已通過整合測試覆蓋月跑 Stage 3 的 CR 回分路徑
-- 上線後若新 CR 開關功能尚未實作完成，月跑 Stage 3 不得執行（避免空窗期）
+- US-107 / US-120 上線前，必須已通過整合測試覆蓋月名單分派 Stage 3 的 CR 回分路徑
+- 上線後若新 CR 開關功能尚未實作完成，月名單分派 Stage 3 不得執行（避免空窗期）
 
 **儲存位置**：CR 開關的值儲存於名單定義實體（`ob_list_definition`）的欄位中，**不再使用 OBASSIGNSET 路徑**（詳見 US-120）。
 
@@ -54,10 +54,10 @@ CR（Car Recycle，或稱 CR 回分）是月跑 Stage 3 的一項分派邏輯：
 - **Then** CR 回分開關顯示為唯讀（顯示目前值，但無法切換）
 - **And** 若處長直接呼叫更新 CR 開關的 API，後端回 403 Forbidden
 
-### AC-4：月跑 Stage 3 讀取 CR 開關值
+### AC-4：月名單分派 Stage 3 讀取 CR 開關值
 
 - **Given** 名單定義 LIST_NO `OB202506001` 的 CR 開關值為「停用」
-- **When** 月跑進入 Stage 3（CR 回分邏輯）
+- **When** 月名單分派進入 Stage 3（CR 回分邏輯）
 - **Then** Stage 3 讀取 `ob_list_definition` 的 CR 開關欄位，若為「停用」則跳過 CR 回分邏輯，直接以一般比例分派
 
 ### AC-5：CR 開關值隨名單推進各階段保持不變（鎖定後唯讀）
@@ -73,7 +73,7 @@ CR（Car Recycle，或稱 CR 回分）是月跑 Stage 3 的一項分派邏輯：
 - **When** 準備上線前
 - **Then** 上線計劃必須包含「同步廢棄 F059 程式碼」
 - **And** 若 F059 尚未廢棄，US-107 不得部署至 Production
-- **And** 上線前必須已通過整合測試，覆蓋月跑 Stage 3 的 CR 回分路徑（含「開關啟用」與「開關停用」兩種情境）
+- **And** 上線前必須已通過整合測試，覆蓋月名單分派 Stage 3 的 CR 回分路徑（含「開關啟用」與「開關停用」兩種情境）
 
 ---
 
@@ -81,7 +81,7 @@ CR（Car Recycle，或稱 CR 回分）是月跑 Stage 3 的一項分派邏輯：
 
 - CR 開關欄位：建議在 `ob_list_definition` 新增 `cr_enabled BOOLEAN NOT NULL DEFAULT TRUE`；schema 由 system-architect 決定
 - 儲存位置：**`ob_list_definition.cr_enabled`**，不使用 OBASSIGNSET 路徑（US-120 正式宣告此規格）
-- 月跑 Stage 3 讀取邏輯：`IF list.cr_enabled = false THEN SKIP CR REASSIGNMENT`
+- 月名單分派 Stage 3 讀取邏輯：`IF list.cr_enabled = false THEN SKIP CR REASSIGNMENT`
 - **[重要]** F059 廢棄與本 Story 為原子性同步，禁止分批上線；上線審核需確認 F059 廢棄 PR 與本 Story PR 同批合併
 - 整合測試需覆蓋：CR 開關啟用時 Stage 3 執行 CR 邏輯；CR 開關停用時 Stage 3 跳過 CR 邏輯
 - 操作寫入 AssignmentAuditLog（entity_type = 'list_definition'，after_payload 含 `cr_enabled` 欄位值）
@@ -108,10 +108,10 @@ CR（Car Recycle，或稱 CR 回分）是月跑 Stage 3 的一項分派邏輯：
 - **When**：處長嘗試呼叫修改 CR 開關的 API
 - **Then**：後端回 403 Forbidden
 
-### TC-107-04：月跑 Stage 3 跳過停用 CR 開關的名單
+### TC-107-04：月名單分派 Stage 3 跳過停用 CR 開關的名單
 
-- **Given**：LIST_NO = 'OB202506001'，cr_enabled = false；月跑觸發
-- **When**：月跑 Stage 3 處理 OB202506001
+- **Given**：LIST_NO = 'OB202506001'，cr_enabled = false；月名單分派觸發
+- **When**：月名單分派 Stage 3 處理 OB202506001
 - **Then**：Stage 3 跳過 OB202506001 的 CR 回分邏輯，直接以一般比例分派；執行日誌記錄「OB202506001：CR 回分已停用，跳過」
 
 ### TC-107-05：名單推進後 CR 開關鎖定
@@ -136,9 +136,9 @@ CR（Car Recycle，或稱 CR 回分）是月跑 Stage 3 的一項分派邏輯：
 - [ ] 草稿名單 CR 開關預設啟用測試（TC-107-01）
 - [ ] 部長修改 CR 開關測試（TC-107-02）
 - [ ] 處長修改被拒測試（TC-107-03）
-- [ ] 月跑 Stage 3 讀取 CR 開關並跳過測試（TC-107-04）
+- [ ] 月名單分派 Stage 3 讀取 CR 開關並跳過測試（TC-107-04）
 - [ ] 名單推進後 CR 開關鎖定測試（TC-107-05）
-- [ ] 整合測試覆蓋月跑 Stage 3 CR 啟用 / 停用兩種情境
+- [ ] 整合測試覆蓋月名單分派 Stage 3 CR 啟用 / 停用兩種情境
 - [ ] **F059 廢棄 PR 與本 Story PR 確認為同批上線**
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
@@ -149,4 +149,4 @@ CR（Car Recycle，或稱 CR 回分）是月跑 Stage 3 的一項分派邏輯：
 ## 相關文件
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
-- **相關 Stories**：US-106（草稿建立名單）、US-120（CR 儲存位置 spec 落差修正）、US-108（推進至部門比例）、US-081（月跑觸發，Stage 3 執行 CR 回分）、US-100（部長角色定義）
+- **相關 Stories**：US-106（草稿建立名單）、US-120（CR 儲存位置 spec 落差修正）、US-108（推進至部門比例）、US-081（月名單分派觸發，Stage 3 執行 CR 回分）、US-100（部長角色定義）

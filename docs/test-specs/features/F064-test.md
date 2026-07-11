@@ -64,7 +64,7 @@ pool_table_correction: ob_pool_data_list → ob_pool_data (v2.1)
 | OVERDUE（逾期天數恆空保留欄，BR-F064-07）| 2 | Unit | 否 | 高 | overdue_day NULL→空字串；表頭仍保留「逾期天數」 |
 | STREAM（streaming / NoOffset，AC-6 / BR-F064-09 / I-EXP-STREAM-01 / I-EXP-NOOFFSET-01）| 5 | Integration + NFR | 否（Unit）/ 是（PG NFR）| 中 | CSV PassThrough 無全量拼接；xlsx/CSV 共用 row-producer；不用 OFFSET；記憶體峰值斷言 |
 | SCOPE（處長 scope WHERE 注入，AC-8 / BR-F064-13 / I-EXP-SCOPE-01）| 5 | PG Integration | **是** | 高 | section_chief → SQL 含 scope WHERE；director → 不含；無資料列→僅表頭 |
-| STATUS（月跑未完成阻擋，AC-7 / BR-F064-12）| 4 | Integration | 否 | 高 | pending/running/failed → 422；completed → 允許；前端按鈕 disabled |
+| STATUS（月名單分派未完成阻擋，AC-7 / BR-F064-12）| 4 | Integration | 否 | 高 | pending/running/failed → 422；completed → 允許；前端按鈕 disabled |
 | AUDIT（稽核 log，AC-9 / BR-F064-15）| 3 | Integration | 否 | 高 | action='EXPORT'；after_value 含 format/actorBusinessRole/scopedByCreator/exportedRowCount |
 | DET（確定性排序，I-EXP-DET-01）| 2 | PG Integration | **是** | 高 | ORDER BY list_no, orgno, appl_no；同 run_id 兩次結果相同 |
 | APLDATE（進件日 source，I-EXP-APLDATE-01）| 2 | PG Integration | **是** | 高 | 取 **ob_pool_data**.appl_date（timestamp→日期），非 run_result.appl_date（GAP-3 + v2.1 裁定）|
@@ -184,7 +184,7 @@ pool_table_correction: ob_pool_data_list → ob_pool_data (v2.1)
 
 > **設計依據**：F064 v2.1 §4 BR-F064-16 / AC-2b；v2.1 pool 源血緣修正。
 >
-> **驗收紅線（DoD）**：匯出列數必須等於該 run_id 之 `ob_monthly_run_result` 總列數（扣除處長 scope filter 後）。live 驗證基準：202606 月跑 55,863/55,863 全數匯出，無任何掉列。
+> **驗收紅線（DoD）**：匯出列數必須等於該 run_id 之 `ob_monthly_run_result` 總列數（扣除處長 scope filter 後）。live 驗證基準：202606 月名單分派 55,863/55,863 全數匯出，無任何掉列。
 >
 > **血緣保證機制**：Stage 1 `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data`（PK = orgno+appl_no），因此 `ob_pool_data` ⊇ `ob_monthly_run_result`，INNER JOIN 必然 100% 命中。
 >
@@ -625,12 +625,12 @@ pool_table_correction: ob_pool_data_list → ob_pool_data (v2.1)
 
 ---
 
-### TS-F064-CR-004：202606 月跑 2,073 筆 CR 案件 CR_ID 均非空（TC-155-04 legacy 規模）
+### TS-F064-CR-004：202606 月名單分派 2,073 筆 CR 案件 CR_ID 均非空（TC-155-04 legacy 規模）
 
 - **相關 AC / BR**：AC-4 / F102 legacy 驗證
 - **測試類型**：正向（規模驗證）
 - **測試層**：PG Integration（或人工驗收）
-- **前置條件**：202606 月跑 completed（run_id 含 F102 已執行結果）
+- **前置條件**：202606 月名單分派 completed（run_id 含 F102 已執行結果）
 - **步驟**：
   1. 匯出 CSV；篩選 is_cr='Y' 列
   2. 統計 CR_ID 空值筆數
@@ -916,7 +916,7 @@ pool_table_correction: ob_pool_data_list → ob_pool_data (v2.1)
 
 ---
 
-## 十、STATUS — 月跑未完成阻擋（AC-7 / BR-F064-12）
+## 十、STATUS — 月名單分派未完成阻擋（AC-7 / BR-F064-12）
 
 > **設計依據**：F064 v2.0 §4 AC-7 / BR-F064-12；維持 v1.1 AC-3 行為。
 
@@ -1214,8 +1214,8 @@ pool_table_correction: ob_pool_data_list → ob_pool_data (v2.1)
 | 項目 | 原因 |
 |---|---|
 | TC-155-06 OOM 大規模（> 200k 筆）| 需 prod 環境規模 seed，CI 環境難以模擬 |
-| TC-155-04 202606 legacy 2,073 筆 CR 規模驗收 | 需真實月跑資料（PG Integration 可半自動化）|
-| LINEAGE-001 202606 live 55,863/55,863 驗收 | 需真實 202606 月跑資料（LINEAGE-001 CI 版用 50 筆受控 seed）|
+| TC-155-04 202606 legacy 2,073 筆 CR 規模驗收 | 需真實月名單分派資料（PG Integration 可半自動化）|
+| LINEAGE-001 202606 live 55,863/55,863 驗收 | 需真實 202606 月名單分派資料（LINEAGE-001 CI 版用 50 筆受控 seed）|
 
 ---
 

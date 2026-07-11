@@ -1,13 +1,13 @@
 ---
 type: signoff-report-draft
 feature_id: AD-E07-43-P5c
-feature_name: MSSQL 全面遷移 — PG vs MSSQL 月跑逐列比對簽核報告（底稿，供 P5e 業務簽核）
+feature_name: MSSQL 全面遷移 — PG vs MSSQL 月名單分派逐列比對簽核報告（底稿，供 P5e 業務簽核）
 status: draft-for-signoff
 last_updated: 2026-07-08
 audience: system-architect（起草潤飾）→ 使用者/業務利害關係人（簽核）
 ---
 
-# MSSQL 全面遷移 — PG vs MSSQL 月跑逐列比對簽核報告（底稿）
+# MSSQL 全面遷移 — PG vs MSSQL 月名單分派逐列比對簽核報告（底稿）
 
 > **本檔為技術底稿，供 P5e 由 system-architect 整合 P5d datetime2 裁示後定稿、交業務簽核。**
 > 直接證據與方法細節見技術附件 `AD-E07-43-P5c-impl.md`。
@@ -16,9 +16,9 @@ audience: system-architect（起草潤飾）→ 使用者/業務利害關係人�
 
 ## ★ 範圍與方法聲明（最顯著位置，務必先讀）
 
-- **基準＝真實 PostgreSQL 生產月跑 run 之逐列比對**（run `07944a82`，`project_workym=202607`，115,197 案），
+- **基準＝真實 PostgreSQL 生產月名單分派 run 之逐列比對**（run `07944a82`，`project_workym=202607`，115,197 案），
   **非 JS oracle 代理、非重驗 legacy SP**。PG 全程唯讀。
-- **因此 I-MSSQL-SIGNOFF-GATE-01 條件 (a)「MONTHRUN-DIFF 對至少一個完整生產規模月跑顯示 PG/MSSQL 結果一致」
+- **因此 I-MSSQL-SIGNOFF-GATE-01 條件 (a)「MONTHRUN-DIFF 對至少一個完整生產規模月名單分派顯示 PG/MSSQL 結果一致」
   可被字面滿足**（現行 dev PG 唯讀可達，得以執行真實 PG↔MSSQL 比對，而非 test-spec 撰寫時因 5433 不可達而
   預設之 JS 代理）。
 - 兩側讀取**同一份來源資料**（現行 PG `ob_pool_data` 100% 覆蓋該 run 案件集），案件集完全相同（onlyPG=0/
@@ -30,7 +30,7 @@ audience: system-architect（起草潤飾）→ 使用者/業務利害關係人�
 ## 1. 執行摘要
 
 MSSQL 全鏈技術驗收（P1-P4 driver/schema/佇列/ETL/Stage 1-4 raw SQL 引擎）已完成。本報告為 cutover 前最終
-業務對齊確認：**證明 MSSQL 版月跑結果與已核可之 PG 版逐列一致**。
+業務對齊確認：**證明 MSSQL 版月名單分派結果與已核可之 PG 版逐列一致**。
 
 結論：**Stage 2~4 計分/CR/比例分派全鏈，PG≡MSSQL 逐列等價**（10 關鍵欄位中 8 欄完全 0-diff；score 之微量
 差異為「AGE 今日參考日」之預期效應非邏輯不符；assignday 有一項**已定位、待修**之日期正規化缺陷，不影響計分/
@@ -75,7 +75,7 @@ MSSQL 重現日 2026-07-08」之間，年齡 +1 跨越計分 AGE 級距所致。
   早一天。
 - **根因**：MSSQL 驅動（tedious）回傳 `date` 欄為「本地時區午夜」JS 日期，工作日計算 `computeWorkingDayRatios`
   以 UTC 分量取值 → 於 UTC+8（台灣）取到前一日；PostgreSQL 驅動回 UTC 午夜故無此偏移。
-- **影響**：UTC+ 時區之 MSSQL 部署，月跑派案日與 Stage 0 每日試算之日期標籤早一天。
+- **影響**：UTC+ 時區之 MSSQL 部署，月名單分派派案日與 Stage 0 每日試算之日期標籤早一天。
 - **處置**：屬**日期正規化**，修法明確、成本低、兩引擎對稱（見技術附件 §4.4）。**cutover 前必修**，由
   system-architect 排入。**不影響本報告對「計分/CR/比例分派邏輯 PG≡MSSQL 等價」之結論。**
 

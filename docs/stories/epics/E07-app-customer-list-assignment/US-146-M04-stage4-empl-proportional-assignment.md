@@ -1,10 +1,10 @@
 ---
 last-updated: 2026-06-04
 version: v1.0
-change-summary: "新增 story：月跑 Stage 4 依電銷課內員工比例（ob_empl_set.ration）分配案件，寫入 emplid/emplid_deptid；明確宣告 is_cr 簡化模型不執行 CR 優先分配，修復 OB202606001 全員 emplid=NULL 根本原因。"
+change-summary: "新增 story：月名單分派 Stage 4 依電銷課內員工比例（ob_empl_set.ration）分配案件，寫入 emplid/emplid_deptid；明確宣告 is_cr 簡化模型不執行 CR 優先分配，修復 OB202606001 全員 emplid=NULL 根本原因。"
 ---
 
-# US-146：月跑 Stage 4 — 依員工比例分配案件（人員分配）
+# US-146：月名單分派 Stage 4 — 依員工比例分配案件（人員分配）
 
 > **Story ID**：US-146
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
@@ -12,7 +12,7 @@ change-summary: "新增 story：月跑 Stage 4 依電銷課內員工比例（ob_
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：8
-> **Feature**：F101 月跑 Stage 3/4 真實比例分派
+> **Feature**：F101 月名單分派 Stage 3/4 真實比例分派
 
 ---
 
@@ -93,13 +93,13 @@ change-summary: "新增 story：月跑 Stage 4 依電銷課內員工比例（ob_
   ```
 - **And** 此斷言專門防止 OB202606001 型態的 `defaultEmpl=null` 缺陷再度發生
 
-### AC-6：電銷課有 dept_id 但 ob_empl_set 無員工設定時，不中斷月跑，寫入 audit warning
+### AC-6：電銷課有 dept_id 但 ob_empl_set 無員工設定時，不中斷月名單分派，寫入 audit warning
 
 - **Given** Stage 3 將 50 件案件分配至電銷課 AI000，但 `ob_empl_set WHERE deptid_m='AI000' AND ration>0` 無任何記錄
 - **When** Stage 4 試圖分配 AI000 的案件
-- **Then** 月跑**不因此中斷**，這 50 件案件的 `emplid` 保持 NULL
+- **Then** 月名單分派**不因此中斷**，這 50 件案件的 `emplid` 保持 NULL
 - **And** 寫入 `assignment_audit_log`（`event='STAGE4_NO_EMPL_WARN'`, `dept_id='AI000'`, `list_no`, `tier_level`, `case_count=50`）
-- **And** 月跑完成摘要頁（US-083）顯示「人員分配警告」區塊，列出哪些電銷課有案件未能分配員工
+- **And** 月名單分派完成摘要頁（US-083）顯示「人員分配警告」區塊，列出哪些電銷課有案件未能分配員工
 
 ---
 

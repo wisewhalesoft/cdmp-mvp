@@ -19,7 +19,7 @@ change-summary: "新增 Story：計分引擎 HPOST/CPOST/CO_NUM_NM 改讀縣市�
 ## User Story
 
 **As a** 業務主管（Sales Director）
-**I want** 月跑 Stage 2 計分引擎對 `HPOST_NUM_NM`、`CPOST_NUM_NM`、`CO_NUM_NM` 三欄讀取正確的縣市名（而非郵遞號），並依 card_type 套用正確的缺值 default
+**I want** 月名單分派 Stage 2 計分引擎對 `HPOST_NUM_NM`、`CPOST_NUM_NM`、`CO_NUM_NM` 三欄讀取正確的縣市名（而非郵遞號），並依 card_type 套用正確的缺值 default
 **So that** 縣市維度的計分能正確命中 legacy score rows（score rows 使用縣市中文名如「臺北市」比對），而非因使用郵遞號而全部不命中導致 +0
 
 ---

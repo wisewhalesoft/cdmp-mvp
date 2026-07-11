@@ -27,7 +27,7 @@
 
 ### AC-1：觸發匯出
 
-- **Given** 月跑已完成（status = 'completed'）
+- **Given** 月名單分派已完成（status = 'completed'）
 - **When** 業務主管點擊「匯出結果」並選擇格式（Excel / CSV）
 - **Then** 系統產生對應格式的檔案，瀏覽器觸發下載
 - **And** 匯出檔案名稱格式為：`assignment_result_{YYYYMM}_{run_id 前 8 碼}.xlsx`（或 .csv）
@@ -62,7 +62,7 @@
 
 ### TC-084-01：正常匯出 CSV
 
-- **Given**：月跑 completed，結果 5,000 筆
+- **Given**：月名單分派 completed，結果 5,000 筆
 - **When**：業務主管選擇 CSV 格式並點擊匯出
 - **Then**：瀏覽器下載名稱為 `assignment_result_202505_{run_id前8碼}.csv` 的檔案，含 5,000 列資料
 
@@ -72,7 +72,7 @@
 - **When**：開啟檔案
 - **Then**：第一列為表頭，包含客戶編號、客戶姓名、CARD_LEVEL 等級、TIER_LEVEL 代碼、分配部門代碼、分配人員工號、分配人員姓名、分配日期
 
-### TC-084-03：月跑未完成時禁止匯出
+### TC-084-03：月名單分派未完成時禁止匯出
 
 - **Given**：AssignmentRun status = 'running'
 - **When**：業務主管嘗試匯出
@@ -82,7 +82,7 @@
 
 ## 依賴關係
 
-- **Blocked By**：US-081（月跑已完成，快照已寫入）
+- **Blocked By**：US-081（月名單分派已完成，快照已寫入）
 - **Blocks**：（無）
 
 ---
@@ -92,7 +92,7 @@
 - [ ] 驗收標準全部通過
 - [ ] 匯出欄位完整性測試
 - [ ] 大量資料串流測試
-- [ ] 月跑執行中禁止匯出測試
+- [ ] 月名單分派執行中禁止匯出測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新
@@ -102,5 +102,5 @@
 ## 相關文件
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
-- **相關 Stories**：US-081（觸發月跑）、US-083（結果摘要）
+- **相關 Stories**：US-081（觸發月名單分派）、US-083（結果摘要）
 - **Reference**：`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st4_exchange.sql`

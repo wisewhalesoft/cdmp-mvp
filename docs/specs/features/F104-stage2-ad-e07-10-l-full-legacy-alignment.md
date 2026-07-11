@@ -39,7 +39,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-24
 
 ## 1. 功能摘要
 
-Stage 2 計分引擎有兩條平行路徑（[F103](F103-stage2-score-column-source-fix.md) §1）：PG 下推 SQL（`resolveColumnSource` / `buildStage2ScoreExpr`，正式月跑 `DB_TYPE='postgres'`）與 JS oracle（`resolveColumnValue` / `computeScore`，單元測試 / 非 PG）。F103 已把兩路徑對齊 AD-E07-10-L，但 AD-E07-10-L 本身與 legacy SP 真語意有偏差。本 feature 修正兩路徑使其對齊 **legacy SP**，涵蓋下列七類修正：
+Stage 2 計分引擎有兩條平行路徑（[F103](F103-stage2-score-column-source-fix.md) §1）：PG 下推 SQL（`resolveColumnSource` / `buildStage2ScoreExpr`，正式月名單分派 `DB_TYPE='postgres'`）與 JS oracle（`resolveColumnValue` / `computeScore`，單元測試 / 非 PG）。F103 已把兩路徑對齊 AD-E07-10-L，但 AD-E07-10-L 本身與 legacy SP 真語意有偏差。本 feature 修正兩路徑使其對齊 **legacy SP**，涵蓋下列七類修正：
 
 1. **PROJECT_TP 關鍵字修正（US-159 AC-1）**：`spec_name LIKE '%專案%'` → `'%借新還舊%'`（legacy `SP_OBLEVELCARD_H.sql` L101）。
 2. **SALES_STS 關鍵字修正（US-159 OQ-159-01，本 spec 稽核後確認須修）**：legacy CASE 之 UCD 對應 key 為 `'中古車商'`（`SP_OBLEVELCARD_H.sql` L41），現行兩路徑誤用 `'經銷商'`。
@@ -50,12 +50,12 @@ Stage 2 計分引擎有兩條平行路徑（[F103](F103-stage2-score-column-sour
 7. **三縣市欄改讀縣市名 + LEFT 3 碼 + per-card default（US-162）**：`HPOST_NUM_NM`/`CPOST_NUM_NM`/`CO_NUM_NM` 由郵遞號改讀 `cc.hpost_city`/`cpost_city`/`co_city`，且須 `LEFT(value, 3)` 取縣市（cc 欄為「縣市+區」，legacy 與 score row 皆縣市-only），per-card default 見 §5。
    並含 **LIST_MONTH / LOAN_RATE per-card default**（US-159 AC-7/AC-8）。
 
-**純後端**：本 feature 為月跑 pipeline 內計分邏輯修正，**無新前端頁、無新錯誤碼**。
+**純後端**：本 feature 為月名單分派 pipeline 內計分邏輯修正，**無新前端頁、無新錯誤碼**。
 
 ## 2. 使用者故事
 
 **As a** 業務主管（Sales Director）
-**I want** 月跑 Stage 2 計分引擎之欄位映射規則完整對齊 legacy SP 真語意（借新還舊關鍵字、SALES_STS 關鍵字、CUS_SEX range 與分流、縣市名 LEFT 3 碼、per-card default）
+**I want** 月名單分派 Stage 2 計分引擎之欄位映射規則完整對齊 legacy SP 真語意（借新還舊關鍵字、SALES_STS 關鍵字、CUS_SEX range 與分流、縣市名 LEFT 3 碼、per-card default）
 **So that** 計分結果不因 AD 本身的欄位語意錯誤而系統性偏差，重跑 202606 後 H/S 名單之 tier spread 更貼近 legacy
 
 ## 3. 前置條件
@@ -151,8 +151,8 @@ Stage 2 計分引擎有兩條平行路徑（[F103](F103-stage2-score-column-sour
 
 #### AC-13（dev 重跑無錯誤 + card_level ≥ 3 種值）
 - **Given** US-159/160/162 引擎修正已 commit 到 dev、US-161 cc 新欄已載入
-- **When** 觸發 dev 202606 月跑並查 `ob_monthly_run_result GROUP BY card_level`（card_type H/S）
-- **Then** 月跑無錯誤；card_level 出現 ≥ 3 種值（不全為 D）；若 ≤ 2 種啟動 AC-15 根因分析
+- **When** 觸發 dev 202606 月名單分派並查 `ob_monthly_run_result GROUP BY card_level`（card_type H/S）
+- **Then** 月名單分派無錯誤；card_level 出現 ≥ 3 種值（不全為 D）；若 ≤ 2 種啟動 AC-15 根因分析
 
 #### AC-14（tier spread 含 T1/T2，定性）
 - **Given** F104 修正後 H/S 名單計分
@@ -166,7 +166,7 @@ Stage 2 計分引擎有兩條平行路徑（[F103](F103-stage2-score-column-sour
 
 #### AC-16（個人客戶分流欄抽樣驗證）
 - **Given** dev cc 已含 cus_sex/carea_no1/carea_no2/cellular
-- **When** 抽 10 筆個人客戶（cus_sex IN 1,2）在 H 名單之月跑結果，手算 CAREA_NO1/NO2/CELLULAR 計分
+- **When** 抽 10 筆個人客戶（cus_sex IN 1,2）在 H 名單之月名單分派結果，手算 CAREA_NO1/NO2/CELLULAR 計分
 - **Then** 手算值與 `ob_monthly_run_result.score` 一致（±0）；確認 cus_sex=1/2 不再使三欄取 0
 
 #### AC-17（F103 EQ DoD 不退化 + tsc）
@@ -232,7 +232,7 @@ Stage 2 計分引擎有兩條平行路徑（[F103](F103-stage2-score-column-sour
 
 - **BR-F104-12（LIST_MONTH / LOAN_RATE per-card default）**：`LIST_MONTH` 缺值 default：H/S→25、E/E5→12；`LOAN_RATE` 缺值 default：S5→77、E/E5→12、其他→0。出處 legacy H L102 / E L110–111 / S5 L83。
 
-- **BR-F104-13（cus_sex NULL-safe cast，防月跑中斷）**：`cc.cus_sex` 為 `varchar`，dev 實測含非數值髒值（`'C'`/`'D'`/`'8'`/`'9'`/空字串）。PG **禁用裸 `cc.cus_sex::int`**（對 `'C'` 拋 invalid input syntax → 整支月跑 SQL 失敗）。`<safe_int>(x)` 定義 = PG `CASE WHEN x ~ '^[0-9]+$' THEN x::int ELSE NULL END`（或等效）；JS `Number.isInteger(Number(x)) ? Number(x) : null`。**所有用到 cus_sex 之處（CUS_SEX 計分 + 五欄分流 gating）皆須走 `<safe_int>`，非數值/空 → NULL → 再各自 COALESCE 至對應 default**。
+- **BR-F104-13（cus_sex NULL-safe cast，防月名單分派中斷）**：`cc.cus_sex` 為 `varchar`，dev 實測含非數值髒值（`'C'`/`'D'`/`'8'`/`'9'`/空字串）。PG **禁用裸 `cc.cus_sex::int`**（對 `'C'` 拋 invalid input syntax → 整支月名單分派 SQL 失敗）。`<safe_int>(x)` 定義 = PG `CASE WHEN x ~ '^[0-9]+$' THEN x::int ELSE NULL END`（或等效）；JS `Number.isInteger(Number(x)) ? Number(x) : null`。**所有用到 cus_sex 之處（CUS_SEX 計分 + 五欄分流 gating）皆須走 `<safe_int>`，非數值/空 → NULL → 再各自 COALESCE 至對應 default**。
 
 - **BR-F104-13a（CUS_SEX 兩處 default 分離，務必區分）**：cus_sex 同一 raw 欄在引擎有**兩個彼此獨立的 default**，下游 impl 不可混用：
   - **(i) CUS_SEX 計分欄（range 計分用）default = `3`**：`COALESCE(<safe_int>(cc.cus_sex), 3) BETWEEN level2_s/level2_e`。出處 legacy `ISNULL(CUS_SEX,3)`（H L97）。空/NULL/非數值 → 3。
@@ -243,7 +243,7 @@ Stage 2 計分引擎有兩條平行路徑（[F103](F103-stage2-score-column-sour
 
 - **BR-F104-15（JS↔SQL EQ 等價，DoD 門檻）**：兩路徑修正後計分結果須等價。EQ 群組測試（含 §8 場景矩陣）為硬性 DoD，未通過不得上線。
 
-- **BR-F104-16（未知 card_type fallback，OQ-159-02）**：若月跑遇 legacy dump 未列之 card_type，per-card default 套 H/S 基準（LIST_MONTH=25、LOAN_RATE=0、縣市欄不計分故無 default），並 `logger.warn`（含 card_type），不阻擋月跑。
+- **BR-F104-16（未知 card_type fallback，OQ-159-02）**：若月名單分派遇 legacy dump 未列之 card_type，per-card default 套 H/S 基準（LIST_MONTH=25、LOAN_RATE=0、縣市欄不計分故無 default），並 `logger.warn`（含 card_type），不阻擋月名單分派。
 
 ## 7. 計分流程（F104 修正後，與 F103 §7 差異標註）
 

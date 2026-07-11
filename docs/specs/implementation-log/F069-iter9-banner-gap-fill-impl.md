@@ -95,11 +95,11 @@ last_updated: 2026-05-15
   → 再 userRepo.find(in createdByIds)，三次 round-trip 但 batched，total < 10ms。
 - 若未來資料量擴大（不太可能），可改為 leftJoin builder pattern 一次 query。
 
-### 3. Stats endpoint 不需月跑鎖檢查
+### 3. Stats endpoint 不需月名單分派鎖檢查
 
-純 read 操作，月跑進行中也應該可以看 stats（用於故障排查）。
+純 read 操作，月名單分派進行中也應該可以看 stats（用於故障排查）。
 但 `listDefsAffected` 仍只計 `status='active'` 行（與 F072 delete preview 一致），
-不會因為月跑暫停的列表定義而誤計。
+不會因為月名單分派暫停的列表定義而誤計。
 
 ### 4. KPI listdef 跳轉策略
 

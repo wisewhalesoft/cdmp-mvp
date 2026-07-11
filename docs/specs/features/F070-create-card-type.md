@@ -28,7 +28,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 
 ## 1. 功能摘要
 
-提供業務部長新增一筆 CARD_TYPE 計分卡類型，包含代碼、名稱、PROD_KIND 綁定。新增操作在**同一 DB transaction** 內完成兩件事：① 寫入 `ob_card_type` 新紀錄；② 自動建立對應的 v1 空白 `ob_levelcard_version`，讓後續維度 / 分數 / 等級 / TIER 對應可即時於 Tab 2~5 設定。任一步驟失敗整體 rollback。月跑執行中禁止新增。
+提供業務部長新增一筆 CARD_TYPE 計分卡類型，包含代碼、名稱、PROD_KIND 綁定。新增操作在**同一 DB transaction** 內完成兩件事：① 寫入 `ob_card_type` 新紀錄；② 自動建立對應的 v1 空白 `ob_levelcard_version`，讓後續維度 / 分數 / 等級 / TIER 對應可即時於 Tab 2~5 設定。任一步驟失敗整體 rollback。月名單分派執行中禁止新增。
 
 ## 2. 使用者故事
 
@@ -82,7 +82,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 - **When** 後端驗證
 - **Then** 回 422 `VALIDATION_ERROR`，`details` 註明 `prodKind` 欄位不合法
 
-### AC-6：月跑執行中禁止新增
+### AC-6：月名單分派執行中禁止新增
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 紀錄
 - **When** 業務部長嘗試送出新增請求
@@ -131,7 +131,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 |---|---|---|
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中禁止新增 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派執行中禁止新增 |
 | 422 | CARD_TYPE_DUPLICATE | `cardType` 與 active 紀錄重複 |
 | 422 | VALIDATION_ERROR | 必填欄位缺失 / 欄位格式不合 / `prodKind` 不在啟用期間內 |
 
@@ -143,7 +143,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | BR-2 | `cardType` 唯一性檢查範圍為 `ob_card_type.status = 'active'`（停用紀錄不參與唯一性比對） |
 | BR-3 | v1 自動建立 version 之初值（OQ-E07-34 ✅ Resolved 2026-05-14）：`sdate` = 今日（`YYYYMMDD`）、`edate` = `'20991231'`、`card_name` = 同新建之 cardName、`status` = `'active'` |
 | BR-4 | `prod_kind` 必填，業務層保持 1:1 綁定（同一 CARD_TYPE 僅一個 PROD_KIND）；DB 層 FK 約束由 system-architect 決定 |
-| BR-5 | 月跑執行中禁止新增（資料鎖：`assignment_run.status IN ('pending', 'running')` 時 API 直接回 409） |
+| BR-5 | 月名單分派執行中禁止新增（資料鎖：`assignment_run.status IN ('pending', 'running')` 時 API 直接回 409） |
 | BR-6 | 新增成功後 audit log `action = 'CREATE'`，含完整新增紀錄；同 transaction 寫入 |
 | BR-7 | 自動建立之 v1 `ob_levelcard_version` 不附帶任何 `ob_levelcard_column` / `score` / `level` 紀錄；業務部長須於 Tab 2~5 自行新增 |
 
@@ -152,12 +152,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 - 開啟 Modal 表單，欄位：CARD_TYPE 代碼（input，VARCHAR(5)）/ CARD_TYPE 名稱（input）/ PROD_KIND（下拉，顯示代碼 + 名稱）
 - 「確認新增」按鈕：送出 API；成功後 Modal 關閉、Tab 1 清單刷新、新紀錄自動選中
 - 失敗顯示行內錯誤（必填欄位 / 代碼重複 / PROD_KIND 不合法）
-- 月跑鎖定時「新增計分卡類型」按鈕 disabled，視覺與 hover tooltip 由 UI/UX Designer 設計
+- 月名單分派鎖定時「新增計分卡類型」按鈕 disabled，視覺與 hover tooltip 由 UI/UX Designer 設計
 
 ## 8. 相依性
 
 - **Blocked By**：F069（清單入口）、F068（PROD_KIND 代碼維護就緒）
-- **Blocks**：F054（新建後可建立計分維度）、F055 / F056（新建後可設定 CARD_LEVEL / TIER 對應）、F061（月跑前置條件）
+- **Blocks**：F054（新建後可建立計分維度）、F055 / F056（新建後可設定 CARD_LEVEL / TIER 對應）、F061（月名單分派前置條件）
 
 ## 9. 交叉參考
 

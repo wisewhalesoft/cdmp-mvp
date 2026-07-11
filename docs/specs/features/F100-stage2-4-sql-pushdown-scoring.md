@@ -4,7 +4,7 @@ title: Stage 2~4 SQL 下推 + v2 真實計分引擎（ob_levelcard_* 權重 / cu
 feature-id: F100
 source-story: AD 驅動（AD-E07-28 P3）
 epic: E07
-module: M04 分派執行（月跑執行模型重構 P3）
+module: M04 分派執行（月名單分派執行模型重構 P3）
 priority: P0-MVP
 version: "1.0"
 date: 2026-06-02
@@ -47,7 +47,7 @@ P3 完成後 Stage 1~4 全程 set-based，heap 僅承載 SQL 參數與少量編�
 
 **As a** 分派維運人員 / 系統架構維運人員
 **I want** 計分、CR、st4_exchange 分派全在 DB 內以 SQL 完成、不把案件讀回 worker heap，且 v2 計分引擎以真實 `customer_core` 屬性補完
-**So that** prod 量級月跑全程不再 OOM，計分結果反映完整計分卡定義（含客戶屬性），且 st4_exchange 之「哪 10% 被交換」有明確可重現的排序語意
+**So that** prod 量級月名單分派全程不再 OOM，計分結果反映完整計分卡定義（含客戶屬性），且 st4_exchange 之「哪 10% 被交換」有明確可重現的排序語意
 
 ## 3. 前置條件
 
@@ -82,7 +82,7 @@ P3 完成後 Stage 1~4 全程 set-based，heap 僅承載 SQL 參數與少量編�
 - **Given** 某 card_type 無 active version，或 score 計算不出（無 active column）
 - **When** 下推
 - **Then** score / card_level / tier_level 之 NULL 行為與 JS 版（L427~445）等價（無 version → score NULL；score NULL → 不查 level）
-- **And** 邊緣 CARD_TYPE（HB/SEB/SEC 等）之 skip 行為沿用 [F061 v1.2](F061-trigger-assignment-run.md)（`report_payload.skippedCases`，月跑仍 completed），P3 不改此語意
+- **And** 邊緣 CARD_TYPE（HB/SEB/SEC 等）之 skip 行為沿用 [F061 v1.2](F061-trigger-assignment-run.md)（`report_payload.skippedCases`，月名單分派仍 completed），P3 不改此語意
 
 ### AC-4：Stage 3 CR 以 EXISTS 下推
 
@@ -183,7 +183,7 @@ P3 完成後 Stage 1~4 全程 set-based，heap 僅承載 SQL 參數與少量編�
 |------|---------|
 | JS↔SQL 計分等價測試未通過 | **阻擋上線**（P3 DoD 未達成） |
 | customer_core join 缺對應客戶（LEFT JOIN 無 match） | 客戶屬性欄位以 NULL 參與計分（與 JS default 分支之缺值行為對齊，AC-1） |
-| 邊緣 CARD_TYPE（HB/SEB/SEC） | 沿用 [F061 v1.2](F061-trigger-assignment-run.md) skip + `report_payload.skippedCases`，月跑仍 completed |
+| 邊緣 CARD_TYPE（HB/SEB/SEC） | 沿用 [F061 v1.2](F061-trigger-assignment-run.md) skip + `report_payload.skippedCases`，月名單分派仍 completed |
 
 > 本 feature **不新增 HTTP 錯誤碼**。
 

@@ -4,7 +4,7 @@ version: v1.0
 change-summary: "新增 story：Stage 4 ASSIGNDAY 指派日分配，複用 ob_calendar（E07-OBCALENDAR-Load ETL）與 Stage 0 calculateDailyEstimate 邏輯計算千分比日曆，確保 estimate≡run 日曆基準一致（I-RUN-EST-01）。"
 ---
 
-# US-149：月跑 Stage 4 — ASSIGNDAY 指派日分配
+# US-149：月名單分派 Stage 4 — ASSIGNDAY 指派日分配
 
 > **Story ID**：US-149
 > **Epic**：[E07 — 客戶名單分派](epic-brief.md)
@@ -12,7 +12,7 @@ change-summary: "新增 story：Stage 4 ASSIGNDAY 指派日分配，複用 ob_ca
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：5
-> **Feature**：F101 月跑 Stage 3/4 真實比例分派
+> **Feature**：F101 月名單分派 Stage 3/4 真實比例分派
 
 ---
 
@@ -40,7 +40,7 @@ change-summary: "新增 story：Stage 4 ASSIGNDAY 指派日分配，複用 ob_ca
 
 ### estimate≡run 一致性原則（I-RUN-EST-01）
 
-Stage 0 試算與月跑 ASSIGNDAY 使用同一個 `calculateDailyEstimate(ym)` 邏輯與同一份 `ob_calendar` 資料，確保業務主管看到的「每日試算件數」與實際執行後的「每日指派件數」在日曆基礎上保持一致。
+Stage 0 試算與月名單分派 ASSIGNDAY 使用同一個 `calculateDailyEstimate(ym)` 邏輯與同一份 `ob_calendar` 資料，確保業務主管看到的「每日試算件數」與實際執行後的「每日指派件數」在日曆基礎上保持一致。
 
 ---
 
@@ -73,20 +73,20 @@ Stage 0 試算與月跑 ASSIGNDAY 使用同一個 `calculateDailyEstimate(ym)` �
 - **Then** 每位員工的剩餘案件依 `(ASSIGN_ORDER−1) % workingDays + 1` 對應到第 N 個 casedt（round-robin），排序鍵使用確定性鍵（tier_level 升冪 + 案件排序鍵）
 - **And** 補足後所有有 emplid 的案件均取得 `assignday`
 
-### AC-5：ob_calendar 當月無工作日資料時，ASSIGNDAY 保持 NULL，月跑不中斷
+### AC-5：ob_calendar 當月無工作日資料時，ASSIGNDAY 保持 NULL，月名單分派不中斷
 
 - **Given** `ob_calendar` 中目標月份無任何 rest_flg='0' 的工作日記錄
 - **When** Stage 4 試圖計算 ASSIGNDAY
-- **Then** 月跑**不中斷**，所有案件 `assignday` 保持 NULL（或空字串）
+- **Then** 月名單分派**不中斷**，所有案件 `assignday` 保持 NULL（或空字串）
 - **And** 寫入 `assignment_audit_log`（`event='ASSIGNDAY_NO_CALENDAR_WARN'`, `list_no`, `work_ym`）
-- **And** 月跑完成摘要頁（US-083）顯示「指派日警告：{work_ym} 月份尚無工作日曆資料，所有案件指派日為空」
+- **And** 月名單分派完成摘要頁（US-083）顯示「指派日警告：{work_ym} 月份尚無工作日曆資料，所有案件指派日為空」
 
 ### AC-6：estimate≡run 一致性（I-RUN-EST-01）
 
 - **Given** Stage 0 試算使用 `calculateDailyEstimate(ym='202607')` 計算的 casedt 清單
-- **When** 月跑 Stage 4 計算同月份的 ASSIGNDAY
-- **Then** 月跑 ASSIGNDAY 使用的工作日清單與 Stage 0 試算使用的工作日清單來自同一次 `calculateDailyEstimate(ym='202607')` 呼叫（或等效的共享計算路徑）
-- **And** 若 `ob_calendar` 資料未在兩次計算之間發生變更，Stage 0 試算中各日期的案件件數比例與月跑 ASSIGNDAY 的分配比例保持一致
+- **When** 月名單分派 Stage 4 計算同月份的 ASSIGNDAY
+- **Then** 月名單分派 ASSIGNDAY 使用的工作日清單與 Stage 0 試算使用的工作日清單來自同一次 `calculateDailyEstimate(ym='202607')` 呼叫（或等效的共享計算路徑）
+- **And** 若 `ob_calendar` 資料未在兩次計算之間發生變更，Stage 0 試算中各日期的案件件數比例與月名單分派 ASSIGNDAY 的分配比例保持一致
 
 ---
 
@@ -119,20 +119,20 @@ Stage 0 試算與月跑 ASSIGNDAY 使用同一個 `calculateDailyEstimate(ym)` �
 
 - **Given**：ob_calendar 無目標月份 rest_flg='0' 的記錄
 - **When**：Stage 4 執行
-- **Then**：月跑正常完成；`ob_monthly_run_result.assignday` = NULL；audit_log 含 `ASSIGNDAY_NO_CALENDAR_WARN`
+- **Then**：月名單分派正常完成；`ob_monthly_run_result.assignday` = NULL；audit_log 含 `ASSIGNDAY_NO_CALENDAR_WARN`
 
 ### TC-149-04：estimate≡run 一致性驗證
 
-- **Given**：ob_calendar 含 202607 月份 22 個工作日；Stage 0 試算與月跑使用同一 calculateDailyEstimate(ym='202607')
-- **When**：Stage 0 試算後執行月跑（ob_calendar 未變更）
-- **Then**：Stage 0 試算中第 N 個工作日的 ratio_rate 與月跑 ASSIGNDAY 分配中第 N 個 casedt 的 ratio_rate 相同
+- **Given**：ob_calendar 含 202607 月份 22 個工作日；Stage 0 試算與月名單分派使用同一 calculateDailyEstimate(ym='202607')
+- **When**：Stage 0 試算後執行月名單分派（ob_calendar 未變更）
+- **Then**：Stage 0 試算中第 N 個工作日的 ratio_rate 與月名單分派 ASSIGNDAY 分配中第 N 個 casedt 的 ratio_rate 相同
 
 ---
 
 ## 依賴關係
 
 - **Blocked By**：US-146（emplid 必須已寫入）、US-151（ob_calendar 有當月工作日資料；無資料時以 AC-5 fallback 降級）
-- **Blocks**：無（月跑流程最後一步）
+- **Blocks**：無（月名單分派流程最後一步）
 
 ---
 
@@ -142,7 +142,7 @@ Stage 0 試算與月跑 ASSIGNDAY 使用同一個 `calculateDailyEstimate(ym)` �
 - [ ] TC-149-01 ~ TC-149-04 全部通過
 - [ ] ASSIGNDAY 計算複用 `calculateDailyEstimate(ym)` 而非另建邏輯（code review 確認）
 - [ ] `ob_assign_set` 未被 F101 引用（vestigial 狀態，不新增任何對它的查詢）
-- [ ] ob_calendar 無資料 fallback：月跑不中斷，ASSIGNDAY=NULL，audit_log 有記錄
+- [ ] ob_calendar 無資料 fallback：月名單分派不中斷，ASSIGNDAY=NULL，audit_log 有記錄
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新

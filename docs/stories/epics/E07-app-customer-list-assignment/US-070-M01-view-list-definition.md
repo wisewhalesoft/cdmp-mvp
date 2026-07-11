@@ -19,7 +19,7 @@ change-summary: "v2.1 修改：AC-1 篩選條件摘要欄位改讀 condition_pay
 
 **As a** 業務主管
 **I want** 查看本月各 Stage 的名單定義條件清單
-**So that** 在觸發月跑之前，確認每個 Stage 的篩選條件與預期涵蓋範圍符合本月業務策略
+**So that** 在觸發月名單分派之前，確認每個 Stage 的篩選條件與預期涵蓋範圍符合本月業務策略
 
 ---
 
@@ -59,9 +59,9 @@ change-summary: "v2.1 修改：AC-1 篩選條件摘要欄位改讀 condition_pay
 - **When** 頁面載入完成
 - **Then** 顯示空白狀態提示：「本月（YYYYMM）尚無名單定義，請點擊『新增名單定義』建立本月分派條件」
 
-### AC-4：月跑執行中所有操作按鈕停用
+### AC-4：月名單分派執行中所有操作按鈕停用
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 業務主管在名單定義清單頁面
 - **Then** 「新增名單定義」按鈕、每列的「編輯」按鈕、「停用」按鈕均為停用（disabled）狀態
 - **And** 頁面頂部顯示橘色通知列：「分派執行中，名單定義暫時鎖定，無法進行新增、編輯或停用操作」
@@ -94,7 +94,7 @@ change-summary: "v2.1 修改：AC-1 篩選條件摘要欄位改讀 condition_pay
   - 每列「編輯」按鈕 → **US-106**（v2.1，取代舊 US-089）
   - 每列「停用」按鈕 → US-090
 - 「使用中」頁籤顯示 STATUS = 'active' 記錄；「已停用」頁籤顯示 STATUS = 'inactive' 記錄
-- 月跑中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
+- 月名單分派中資料鎖判斷：查詢 AssignmentRun 是否有 status = 'running' 記錄
 - 預估客戶數量可由 US-071 的每日估算邏輯衍生（Stage 0 計算案件數量按鈕整合）
 - **（v2.1 新增）** 篩選條件摘要欄位：後端 API 需依 condition_payload 是否為 NULL 回傳不同格式；condition_payload 的摘要產生邏輯（如何將 JSON 條件轉為人類可讀文字）由 Phase 2 spec-writer 定義；舊名單 fallback 邏輯見 US-123
 
@@ -120,7 +120,7 @@ change-summary: "v2.1 修改：AC-1 篩選條件摘要欄位改讀 condition_pay
 - **When**：頁面載入
 - **Then**：顯示空白引導提示文字，含「新增名單定義」按鈕引導，不顯示錯誤訊息
 
-### TC-070-04：月跑執行中按鈕全部停用
+### TC-070-04：月名單分派執行中按鈕全部停用
 
 - **Given**：AssignmentRun status = 'running'
 - **When**：業務主管進入名單定義清單頁
@@ -137,7 +137,7 @@ change-summary: "v2.1 修改：AC-1 篩選條件摘要欄位改讀 condition_pay
 ## 依賴關係
 
 - **Blocked By**：US-001（登入驗證）
-- **Blocks**：US-071（Stage 0 估算需要名單定義已就緒）、US-106（建立/編輯名單定義，v2.1 取代 US-088/089）、US-090（停用名單定義）、US-081（觸發月跑前需確認名單定義）、US-123（舊名單 fallback 顯示依賴本頁面架構）
+- **Blocks**：US-071（Stage 0 估算需要名單定義已就緒）、US-106（建立/編輯名單定義，v2.1 取代 US-088/089）、US-090（停用名單定義）、US-081（觸發月名單分派前需確認名單定義）、US-123（舊名單 fallback 顯示依賴本頁面架構）
 
 ---
 
@@ -154,7 +154,7 @@ change-summary: "v2.1 修改：AC-1 篩選條件摘要欄位改讀 condition_pay
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
 - **NFR**：[NFR-003](../../non-functional/NFR-003-assignment-execution-perf.md)
-- **相關 Stories**：US-071（Stage 0 估算）、US-106（建立/編輯名單，v2.1）、US-090（停用名單）、US-081（觸發月跑）、US-123（舊名單 fallback 顯示）
+- **相關 Stories**：US-071（Stage 0 估算）、US-106（建立/編輯名單，v2.1）、US-090（停用名單）、US-081（觸發月名單分派）、US-123（舊名單 fallback 顯示）
 - **Reference**：`reference/TableSchema/OB/OBMLISTDF.sql`、`reference/SP/SP_INFOT_ASSIGNEXPORTNAMELIST_st1_list.sql`
 - **GAP-LIST**：`docs/specs/implementation-log/F050-v2.1-refactor-gap-list.md`（F6、G6）
 
@@ -173,14 +173,14 @@ change-summary: "v2.1 修改：AC-1 篩選條件摘要欄位改讀 condition_pay
 - **Then** Toolbar 區域（工具列）**僅**包含以下元素：
   1. 搜尋框（全角色可見）：搜尋名單名稱或 LIST_NO
   2. 「新增名單」按鈕（僅 `director` / `admin` 可見）：點擊進入 US-106 建立名單流程
-- **And** Toolbar 上**不存在**「執行月跑」按鈕（移除重複入口，月跑唯一入口為 Ready 欄頂 CTA banner，見 US-132）
+- **And** Toolbar 上**不存在**「執行月名單分派」按鈕（移除重複入口，月名單分派唯一入口為 Ready 欄頂 CTA banner，見 US-132）
 - **And** Toolbar 上**不存在**「Stage 0 試算」按鈕（移除重複入口，試算入口改至 Ready CTA banner 的 secondary 按鈕）
 
-### AC-4 補充（v2.3）：月跑執行中 Toolbar 鎖定行為
+### AC-4 補充（v2.3）：月名單分派執行中 Toolbar 鎖定行為
 
-> 補充 AC-4 月跑鎖定時 Toolbar 的行為，與 US-132 AC-4 對齊。
+> 補充 AC-4 月名單分派鎖定時 Toolbar 的行為，與 US-132 AC-4 對齊。
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 部長或 Admin 在 M01 名單定義主頁
 - **Then** 「新增名單」按鈕為停用（disabled）狀態
 - **And** Ready 欄頂 CTA banner 進入禁用樣式（琥珀色，見 US-132 AC-4）

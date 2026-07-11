@@ -1,12 +1,12 @@
 ---
 type: implementation-log
 feature_id: F103
-feature_name: 月跑計分引擎欄位來源修正（ADD_UN_CAPITAL 補 JOIN + 通用 fallback + PROJECT_TP 衍生 + 移除 COMMISSION 死碼 + JS oracle 補齊 customer_core）
+feature_name: 月名單分派計分引擎欄位來源修正（ADD_UN_CAPITAL 補 JOIN + 通用 fallback + PROJECT_TP 衍生 + 移除 COMMISSION 死碼 + JS oracle 補齊 customer_core）
 status: complete
 last_updated: 2026-06-24
 ---
 
-# F103：月跑計分引擎欄位來源修正 — Implementation Log
+# F103：月名單分派計分引擎欄位來源修正 — Implementation Log
 
 > 對齊 [F103 spec](../features/F103-stage2-score-column-source-fix.md) + [AD-E07-v3.5](AD-E07-v3.5-f103-stage2-score-column-source-fix.md) + [F103-test.md](../../test-specs/features/F103-test.md)。
 > 兩條計分路徑（PG 下推 `buildStage2ScoreExpr` + JS oracle `computeScore`）完全對齊 AD-E07-10-L；EQ DoD 逐列等價（誤差=0）全綠。
@@ -77,11 +77,11 @@ last_updated: 2026-06-24
 
 ## 「202606 重跑驗收」執行指引（UPGRADE 群組，交 QA / 業務 live 驗收）
 
-UPGR-001~003 為 dev live 重跑定性驗收（AC-11/12，非自動化單元測試），需在 dev 觸發 202606 月跑後執行。前置：`ob_arreturndf_min_cap` + `customer_core` ETL ~100% 覆蓋（§10 已查證）。
+UPGR-001~003 為 dev live 重跑定性驗收（AC-11/12，非自動化單元測試），需在 dev 觸發 202606 月名單分派後執行。前置：`ob_arreturndf_min_cap` + `customer_core` ETL ~100% 覆蓋（§10 已查證）。
 
-**步驟 1 — 觸發 202606 月跑**（dev，PG 一律走下推 + v2 計分）：
+**步驟 1 — 觸發 202606 月名單分派**（dev，PG 一律走下推 + v2 計分）：
 ```
-# 經 UI（月跑看板）觸發 202606，或既有 worker 重跑既有 run。
+# 經 UI（月名單分派看板）觸發 202606，或既有 worker 重跑既有 run。
 # 改 code 後須 docker restart cdmp-api cdmp-worker（Windows→Docker watch HMR 不可靠）。
 docker restart cdmp-api cdmp-worker
 ```

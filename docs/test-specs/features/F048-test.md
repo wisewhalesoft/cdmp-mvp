@@ -19,7 +19,7 @@ last_updated: 2026-05-21
 # F048：查看本月名單定義清單（Kanban 主頁 v2.0）— 測試設計
 
 > **v2.0 測試設計範圍（2026-05-21）**：F048 v2.0 將 v1.0 表格列格式重構為 5 欄 Kanban 看板（GAP-G4）。
-> 本文件覆蓋 Kanban 渲染（AC-K1~K8）、搜尋過濾、Detail Drawer 觸發、歷史月份 / 月跑鎖 Banner、
+> 本文件覆蓋 Kanban 渲染（AC-K1~K8）、搜尋過濾、Detail Drawer 觸發、歷史月份 / 月名單分派鎖 Banner、
 > sessionStorage signal consumer（§7 BR-13），以及 user 整頁封鎖（BR-10）。
 > v1.0 既有表格列格式（AC-1）與頁籤切換（AC-5）test 標記為 deprecated。
 
@@ -213,13 +213,13 @@ last_updated: 2026-05-21
 
 - **關聯需求**：F048 v2.0 AC-K5 / US-130 AC-5
 - **測試類型**：Positive / Component（RTL）
-- **前置條件**：MSW stub 回 3 筆名單（LIST_NM 分別為「車貸催收名單」/ 「信貸月跑」/ 「車貸逾期」）
+- **前置條件**：MSW stub 回 3 筆名單（LIST_NM 分別為「車貸催收名單」/ 「信貸月名單分派」/ 「車貸逾期」）
 - **步驟**：
   1. render `<ListKanbanPage />`，等待渲染
   2. 在搜尋框輸入「車貸」（或「Veh」若有英文模式）
   3. 驗證 Kanban 內容
 - **預期結果**：
-  - 僅顯示 LIST_NM 含「車貸」的卡片（2 張）；「信貸月跑」卡片隱藏
+  - 僅顯示 LIST_NM 含「車貸」的卡片（2 張）；「信貸月名單分派」卡片隱藏
   - 各欄 badge 數字更新為過濾後可見數量
 
 ---
@@ -274,16 +274,16 @@ last_updated: 2026-05-21
 
 ---
 
-### TS-F048-D-003：月跑執行中「查看」按鈕仍正常觸發 Drawer（不受 lock 影響）
+### TS-F048-D-003：月名單分派執行中「查看」按鈕仍正常觸發 Drawer（不受 lock 影響）
 
-- **關聯需求**：F048 v2.0 AC-4（「查看」不受月跑鎖影響）/ F077 v1.3 BR-7 C-5
+- **關聯需求**：F048 v2.0 AC-4（「查看」不受月名單分派鎖影響）/ F077 v1.3 BR-7 C-5
 - **測試類型**：Positive / Component（RTL）
 - **前置條件**：
-  - MSW stub GET lists 回 `isLocked: true`（月跑執行中）
+  - MSW stub GET lists 回 `isLocked: true`（月名單分派執行中）
   - 所有寫入按鈕 disabled
   - MSW stub full-snapshot 回 200
 - **步驟**：
-  1. render `<ListKanbanPage />`（月跑鎖狀態）
+  1. render `<ListKanbanPage />`（月名單分派鎖狀態）
   2. 點擊「查看」按鈕
 - **預期結果**：
   - 「查看」按鈕**非** disabled（`not.toBeDisabled()`）
@@ -292,7 +292,7 @@ last_updated: 2026-05-21
 
 ---
 
-## 五、歷史月份 / 月跑鎖 Banner 測試
+## 五、歷史月份 / 月名單分派鎖 Banner 測試
 
 ### TS-F048-B-001：歷史月份 → 紅色「歷史月份資料為唯讀」橫幅；寫入按鈕 DOM 不存在
 
@@ -311,15 +311,15 @@ last_updated: 2026-05-21
 
 ---
 
-### TS-F048-B-002：月跑執行中 → 橘色通知列；寫入按鈕 disabled；「查看」按鈕 enabled
+### TS-F048-B-002：月名單分派執行中 → 橘色通知列；寫入按鈕 disabled；「查看」按鈕 enabled
 
 - **關聯需求**：F048 v2.0 AC-4 / F077 v1.3 BR-7 C-2
 - **測試類型**：Positive / Component（RTL）
 - **前置條件**：
   - MSW stub GET lists 回正常資料，但同時 GET assignment_run 狀態含 `status: 'running'`
-  - 或前端頁面有月跑狀態 polling；stub 回 `{ isLocked: true }`
+  - 或前端頁面有月名單分派狀態 polling；stub 回 `{ isLocked: true }`
 - **步驟**：
-  1. render `<ListKanbanPage />` 呈現月跑執行中狀態
+  1. render `<ListKanbanPage />` 呈現月名單分派執行中狀態
   2. 驗證
 - **預期結果**：
   - 頁面頂部橘色通知列含「分派執行中，名單定義暫時鎖定」文字

@@ -12,7 +12,7 @@ change-summary: "新增 story：ASSIGNDAY 指派日曆來源確認，複用既�
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：2
-> **Feature**：F101 月跑 Stage 3/4 真實比例分派
+> **Feature**：F101 月名單分派 Stage 3/4 真實比例分派
 
 ---
 
@@ -44,15 +44,15 @@ F101 ASSIGNDAY 日曆資料來源為**既有** `ob_calendar` 表：
 
 ### 前置條件關係
 
-US-149（ASSIGNDAY 分配）依賴本 story 確認的資料來源。若 `ob_calendar` 當月無工作日資料，US-149 AC-5 的 fallback 機制啟動（ASSIGNDAY=NULL + audit warning，月跑不中斷）。
+US-149（ASSIGNDAY 分配）依賴本 story 確認的資料來源。若 `ob_calendar` 當月無工作日資料，US-149 AC-5 的 fallback 機制啟動（ASSIGNDAY=NULL + audit warning，月名單分派不中斷）。
 
 ---
 
 ## 驗收標準
 
-### AC-1：月跑目標月份可從 ob_calendar 取得工作日資料
+### AC-1：月名單分派目標月份可從 ob_calendar 取得工作日資料
 
-- **Given** 月跑目標作業月 = `work_ym`（如 '202607'）；ETL E07-OBCALENDAR-Load 已執行
+- **Given** 月名單分派目標作業月 = `work_ym`（如 '202607'）；ETL E07-OBCALENDAR-Load 已執行
 - **When** `calculateDailyEstimate(ym='202607')` 查詢 `ob_calendar`
 - **Then** 返回至少 1 個工作日（`rest_flg='0'` 且 `calendar_date` 在 202607 月份範圍內）
 - **And** `calculateDailyEstimate(ym)` 計算出的所有 ratio_rate 之和 = 1000（容許 ±1 以處理 FLOOR 捨去）
@@ -76,7 +76,7 @@ US-149（ASSIGNDAY 分配）依賴本 story 確認的資料來源。若 `ob_cale
 - **Given** `ob_calendar` 中目標月份無任何 rest_flg='0' 的記錄（模擬 ETL 尚未執行或月份超出範圍）
 - **When** Stage 4 ASSIGNDAY 計算執行
 - **Then** `calculateDailyEstimate(ym)` 返回空清單
-- **And** US-149 AC-5 fallback 啟動：ASSIGNDAY=NULL、月跑不中斷、audit_log 寫入 `ASSIGNDAY_NO_CALENDAR_WARN`
+- **And** US-149 AC-5 fallback 啟動：ASSIGNDAY=NULL、月名單分派不中斷、audit_log 寫入 `ASSIGNDAY_NO_CALENDAR_WARN`
 
 ---
 
@@ -85,7 +85,7 @@ US-149（ASSIGNDAY 分配）依賴本 story 確認的資料來源。若 `ob_cale
 - `ob_calendar.rest_flg` 值：'0' = 工作日，'1' = 假日（含週末與國定假日，依 OBCALENDAR 來源資料）
 - `calculateDailyEstimate(ym)` 現有 `calendarSource` 參數預設為 `'weekday'`，使用 `resolveCalendarDay` 判斷工作日；F101 沿用此預設值，不引入新參數
 - E07-OBCALENDAR-Load ETL 為已存在任務，F101 不修改其排程或邏輯
-- 若 `ob_calendar` 資料覆蓋範圍不含未來月份，業務主管應確保 ETL 在月跑前已執行完畢；這是運維層面的前置條件，不屬於 F101 code 範疇
+- 若 `ob_calendar` 資料覆蓋範圍不含未來月份，業務主管應確保 ETL 在月名單分派前已執行完畢；這是運維層面的前置條件，不屬於 F101 code 範疇
 - `ob_assign_set` vestigial 狀態：保留 entity 定義但無任何資料寫入；後續是否廢棄（drop table 或 soft-delete entity）由架構師在 AD 中決策
 
 ---
@@ -107,8 +107,8 @@ US-149（ASSIGNDAY 分配）依賴本 story 確認的資料來源。若 `ob_cale
 ### TC-151-03：ob_calendar 無資料 fallback 鏈路驗證
 
 - **Given**：ob_calendar 中 202607 月份無工作日記錄
-- **When**：月跑執行
-- **Then**：calculateDailyEstimate(ym='202607') 返回空清單；Stage 4 ASSIGNDAY=NULL；audit_log `ASSIGNDAY_NO_CALENDAR_WARN` 存在；月跑狀態為 'completed'（非 'failed'）
+- **When**：月名單分派執行
+- **Then**：calculateDailyEstimate(ym='202607') 返回空清單；Stage 4 ASSIGNDAY=NULL；audit_log `ASSIGNDAY_NO_CALENDAR_WARN` 存在；月名單分派狀態為 'completed'（非 'failed'）
 
 ---
 

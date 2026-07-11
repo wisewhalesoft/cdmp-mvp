@@ -68,9 +68,9 @@
 - **When** 部長或處長嘗試進入個別業務比例設定頁（此時 stage = 'dept_ratio'，非 personnel_ratio）
 - **Then** 系統不允許進入（stage 不符），頁面顯示「此名單目前處於部門比例設定階段，尚未進入個別業務比例設定」
 
-### AC-6：月跑執行中禁止 Rollback
+### AC-6：月名單分派執行中禁止 Rollback
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 部長或 Admin 嘗試點擊「退回部門比例設定」按鈕
 - **Then** 按鈕為停用狀態，hover 顯示提示「分派執行中，無法退回階段」
 
@@ -105,7 +105,7 @@
 - **When**：嘗試呼叫 Rollback API
 - **Then**：後端回 403 Forbidden；清單頁無「退回」按鈕
 
-### TC-115-04：月跑中禁止 Rollback
+### TC-115-04：月名單分派中禁止 Rollback
 
 - **Given**：AssignmentRun status = 'running'
 - **When**：部長嘗試點擊「退回部門比例設定」
@@ -126,7 +126,7 @@
 - [ ] 正常 Rollback 測試（TC-115-01）
 - [ ] Rollback 後部門比例保留且可修改測試（TC-115-02）
 - [ ] 處長被拒測試（TC-115-03）
-- [ ] 月跑中禁止 Rollback 測試（TC-115-04）
+- [ ] 月名單分派中禁止 Rollback 測試（TC-115-04）
 - [ ] AssignmentAuditLog 寫入（before/after stage）測試
 - [ ] 個別業務比例清空驗證測試
 - [ ] 部門比例保留驗證測試

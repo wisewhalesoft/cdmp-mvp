@@ -23,7 +23,7 @@ last_updated: 2026-07-08
 
 > 本文件覆蓋 AD-E07-43「MSSQL 全面遷移 P5（全量 CI + F067 式業務簽核）」之 **P5b 切片**（AD §2.2 + §5 P5b DoD）。AD §2.2 明文定位：「非新增完整測試套件（9 個 handler 本身已於 P4a~c 個別驗證過），此處僅是端對端接線驗證，工作量遠小於 P4 原本的量級」。**本文件不重新推導 target-load 三種 loadMode 之機制本身**（P4c 已以合成 fixture 完整驗證：🔴🔴FULLMODE 11 案例含 composite PK 旗艦案例、🔴PARTITION 6 案例、🔴🔴TLDEDUP 11 案例），聚焦於「這 5 條真實、未簡化的生產 pipeline 定義，透過真實 `NodeDispatcher`＋`PipelineRunner.run()`，在 MSSQL 上首次被端對端跑通」是否成立，以及 P4c 已驗證之機制被真實 field_mapping 節點餵入真實欄位名稱後是否依然成立（接線正確性，非機制正確性）。
 >
-> **明確排除**：target-load 三種 loadMode 之 SQL 方言轉換細節（P4a/b/c 已覆蓋）；bulk-load raw staging 寫入端（P4e，本文件以 fixture 直接建表取代，比照 P4d 手法）；月跑 Stage 1-4 邏輯本身（P3 系列已覆蓋，且與本文件 5 條 pipeline 無直接呼叫關係，僅資料上游依賴）；PG vs MSSQL 完整月跑逐列比對（P5c MONTHRUN-DIFF，需本文件 P5b 完成後才能進行，因月跑讀取的 `ob_pool_data`/`ob_pool_data_list`/`ob_emphire`/`ob_calendar`/`ob_arreturndf_min_cap` 五表需先有真實資料）；datetime2 時區精確性（P5d，業務/維運裁示範疇）。
+> **明確排除**：target-load 三種 loadMode 之 SQL 方言轉換細節（P4a/b/c 已覆蓋）；bulk-load raw staging 寫入端（P4e，本文件以 fixture 直接建表取代，比照 P4d 手法）；月名單分派 Stage 1-4 邏輯本身（P3 系列已覆蓋，且與本文件 5 條 pipeline 無直接呼叫關係，僅資料上游依賴）；PG vs MSSQL 完整月名單分派逐列比對（P5c MONTHRUN-DIFF，需本文件 P5b 完成後才能進行，因月名單分派讀取的 `ob_pool_data`/`ob_pool_data_list`/`ob_emphire`/`ob_calendar`/`ob_arreturndf_min_cap` 五表需先有真實資料）；datetime2 時區精確性（P5d，業務/維運裁示範疇）。
 >
 > **★ test-designer 逐檔查證 + 對照真實 `etl-pipelines.json`／`target-load-handler-mssql.ts`／`pipeline-runner.ts`／5 張目標表 entity 發現之關鍵事實（本文件測試設計之唯一真實資料來源）**：
 >
@@ -38,7 +38,7 @@ last_updated: 2026-07-08
 >    | `E07-OBCALENDAR-Load` | `ob_calendar` | `fullMode:true` | `calendar_date`（**原生 `date` 型別，非 varchar**，單欄） | `rest_flg varchar(1) NOT NULL`（**無 nullable，且無 default**）；`calendar_date` 為日期隱式轉換首當其衝欄位（PK 本身） |
 >    | `E07-OBEMPHIRE-Load` | `ob_emphire` | `fullMode:true` | `emp_id`（varchar(10)，單欄） | `hire_date`/`resign_date` 皆原生 `date` 型別（非 `dateColumnType`/`datetime2`，對稱 P3d 已驗證之「同表不同日期欄型別可不同」教訓） |
 >    | `E07-OBPOOLDATA-Load` | `ob_pool_data` | `fullMode:true` | `(orgno, appl_no)` **composite**（各 varchar(2)/varchar(10)） | 114 欄映射中約 20 個 `numeric(p,s)` + 13 個 `dateColumnType`（datetime2）欄；NOT NULL 業務欄：`custo_no`/`sta_code`/`dept_id`/`list_type`/`settle_src`（longtext NOT NULL） |
->    | `E07-OBPOOLDATA_LIST-Load` | `ob_pool_data_list` | `loadMode:'partition_replace'`，`partitionColumn:'data_source'`，`partitionValue:'etl_load'` | `(list_no, orgno, appl_no)` **composite 3 欄** | 122 欄映射，型別分佈同 `ob_pool_data`；**全部業務欄皆 nullable**（與 `ob_pool_data` 不同，無 NOT NULL 業務欄防呆需求）；`score`/`tier_level`/`card_level`/`cr_id`/`cr_nm`/`is_cr`/`assignday` 等 7 欄**不在**本 pipeline 之 122 個 field_mapping 內（由月跑 Stage 2-4 另行寫入 `ob_monthly_run_result`，非本表——F094 之後本表僅為 ETL 單一來源，見 `etl-pipelines.json:989` description） |
+>    | `E07-OBPOOLDATA_LIST-Load` | `ob_pool_data_list` | `loadMode:'partition_replace'`，`partitionColumn:'data_source'`，`partitionValue:'etl_load'` | `(list_no, orgno, appl_no)` **composite 3 欄** | 122 欄映射，型別分佈同 `ob_pool_data`；**全部業務欄皆 nullable**（與 `ob_pool_data` 不同，無 NOT NULL 業務欄防呆需求）；`score`/`tier_level`/`card_level`/`cr_id`/`cr_nm`/`is_cr`/`assignday` 等 7 欄**不在**本 pipeline 之 122 個 field_mapping 內（由月名單分派 Stage 2-4 另行寫入 `ob_monthly_run_result`，非本表——F094 之後本表僅為 ETL 單一來源，見 `etl-pipelines.json:989` description） |
 > 6. **`target-load-handler-mssql.ts` 為 6 條 pipeline（含 customer_core）共用同一份程式碼**（`fullMode`/`loadMode` 兩個 `node.data` 欄位分流三條路徑），本文件之 5 條 pipeline 皆走同一支未曾在真實 DAG 中被此程式碼路徑端對端驅動過的程式碼（P4c 僅以合成單一節點 fixture 呼叫 `TargetLoadHandlerMssql.execute()`，未經過真實 `field_mapping` 節點產出的欄位/型別）。
 > 7. **`partition_replace` 路徑明確無內部 PK 去重**（`target-load-handler-mssql.ts:129` 註解「無 DISTINCT ON / tie-breaker」）：若來源 raw 資料存在重複 `(list_no, orgno, appl_no)` 組合，`INSERT` 會直接撞 PK unique constraint 拋錯（不像 `fullMode` 路徑會先以 `_seq` tie-breaker 去重）。此為 P5b 唯一 partition_replace pipeline 之既有設計（P4c PARTITION 群組已驗證此語意本身），本文件僅需確認真實 `OBPOOLDATA_LIST` 欄位對映後此行為依然成立。
 > 8. **PG 版 `target-load-handler.ts` 逐行核對（lines 103-216）與 MSSQL 版結構完全對稱**（同樣的 TRUNCATE+INSERT 兩段式、同樣的 partition_replace 無 dedup、同樣零交易保護）：故發現 3 之風險為**兩引擎共通的既有架構特性**，§十一 EQ-PG 群組據此僅做 best-effort 一致性確認，不預期發現 MSSQL 特有分歧。
@@ -246,7 +246,7 @@ last_updated: 2026-07-08
 ---
 
 ### TS-MSSQL-P5B-PARTITION-004：`score`/`tier_level`/`card_level`/`cr_id`/`cr_nm`/`is_cr`/`assignday` 7 欄不在 field_mapping 對映範圍內，`INSERT` 語句之 `insertColumns` 正確排除此 7 欄（非誤帶入 NULL 覆寫，因這些欄位本輪根本未被選取，防止未來 field_mapping 誤改動時才發現遺漏）
-- **Related Requirement**：★發現 5 最後一列；月跑 Stage 2-4／`ob_monthly_run_result`（F094）契約邊界
+- **Related Requirement**：★發現 5 最後一列；月名單分派 Stage 2-4／`ob_monthly_run_result`（F094）契約邊界
 - **Test Type**：Regression / Unit — 靜態讀取 `etl-pipelines.json` `fm1.mappings` 確認 7 欄不存在其中
 
 ---
@@ -533,7 +533,7 @@ last_updated: 2026-07-08
 
 ---
 
-### TS-MSSQL-P5B-STATIC-006：`ob_pool_data_list` 之 7 個月跑專屬欄位（`score`/`tier_level`/`card_level`/`cr_id`/`cr_nm`/`is_cr`/`assignday`）不在本 pipeline field_mapping 對映範圍內之事實鎖定（呼應 §五 PARTITION-004）
+### TS-MSSQL-P5B-STATIC-006：`ob_pool_data_list` 之 7 個月名單分派專屬欄位（`score`/`tier_level`/`card_level`/`cr_id`/`cr_nm`/`is_cr`/`assignday`）不在本 pipeline field_mapping 對映範圍內之事實鎖定（呼應 §五 PARTITION-004）
 - **Related Requirement**：★發現 5 最後一列
 
 ---

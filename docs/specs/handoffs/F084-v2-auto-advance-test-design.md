@@ -33,7 +33,7 @@ breakdown:
    - 3.2 完成度偵測場景
    - 3.3 Auto-Advance 成功觸發場景
    - 3.4 稽核欄位完整性 + operator_role 推導
-   - 3.5 月跑 Guard 場景
+   - 3.5 月名單分派 Guard 場景
    - 3.6 Lock 超時降級 + Option B 場景（Unit Mock）
    - 3.7 Idempotent No-Op 場景
    - 3.8 `advanceToInMgr` 過載合約驗證
@@ -328,13 +328,13 @@ buildAutoAdvanceResponse({
 
 ---
 
-### 3.5 月跑 Guard 場景
+### 3.5 月名單分派 Guard 場景
 
 #### TC-F084-012
-- **名稱**：月跑進行中（status = 'running'）→ autoAdvanced: false + autoAdvanceFailReason，PUT 寫入保留
+- **名稱**：月名單分派進行中（status = 'running'）→ autoAdvanced: false + autoAdvanceFailReason，PUT 寫入保留
 - **層級**：unit
 - **對應**：AC-5、BR-15、TC-114-04
-- **前置 seed**：`flag = on`；`validList`；所有部門完成；lock mock 正常取得；tx 內月跑 guard mock（`runGuard.isRunning` 回 `true`）
+- **前置 seed**：`flag = on`；`validList`；所有部門完成；lock mock 正常取得；tx 內月名單分派 guard mock（`runGuard.isRunning` 回 `true`）
 - **操作**：呼叫 `setPersonnelRatios(...)`
 - **預期斷言**：
   - response 含 `autoAdvanced: false`、`autoAdvanceFailReason: 'ASSIGNMENT_RUN_ALREADY_RUNNING'`
@@ -344,14 +344,14 @@ buildAutoAdvanceResponse({
   - `stageTransition.advanceToInMgr` **未被呼叫**
 
 #### TC-F084-013
-- **名稱**：月跑進行中（status = 'pending'）同樣觸發 guard
+- **名稱**：月名單分派進行中（status = 'pending'）同樣觸發 guard
 - **層級**：unit
 - **對應**：AC-5、BR-15
 - **前置 seed**：同 TC-F084-012，但 `runGuard.isRunning` 模擬 `pending` 狀態
 - **操作**：呼叫 `setPersonnelRatios(...)`
 - **預期斷言**：同 TC-F084-012（`autoAdvanceFailReason: 'ASSIGNMENT_RUN_ALREADY_RUNNING'`）
 
-> **mock 對齊真實 contract 注意**：tx 內的月跑 guard（`[4b]` 步驟）是 `runGuard.isRunning()` 而非 `runGuard.assertNoRunningRun()`（後者在 tx 外、會拋例外）。兩者是不同的呼叫點，不可混淆。tx 外的 `assertNoRunningRun()` 拋例外表示 PUT 整體失敗（非 200）；tx 內的 `isRunning()` 回 true 表示跳過 auto-advance 但 PUT 仍 200。
+> **mock 對齊真實 contract 注意**：tx 內的月名單分派 guard（`[4b]` 步驟）是 `runGuard.isRunning()` 而非 `runGuard.assertNoRunningRun()`（後者在 tx 外、會拋例外）。兩者是不同的呼叫點，不可混淆。tx 外的 `assertNoRunningRun()` 拋例外表示 PUT 整體失敗（非 200）；tx 內的 `isRunning()` 回 true 表示跳過 auto-advance 但 PUT 仍 200。
 
 ---
 
@@ -385,13 +385,13 @@ buildAutoAdvanceResponse({
   - 整個 `setPersonnelRatios()` 正常 resolve（不拋例外）
 
 #### TC-F084-016
-- **名稱**：lock 超時 vs 月跑 guard 的回應欄位差異（不含 failReason vs 含 failReason）
+- **名稱**：lock 超時 vs 月名單分派 guard 的回應欄位差異（不含 failReason vs 含 failReason）
 - **層級**：unit
-- **對應**：BR-13（lock 超時）vs BR-15（月跑 guard）—— 兩者皆 autoAdvanced: false，但 failReason 有無不同
+- **對應**：BR-13（lock 超時）vs BR-15（月名單分派 guard）—— 兩者皆 autoAdvanced: false，但 failReason 有無不同
 - **前置 seed**：兩個子場景
 - **操作 + 斷言**：
   - 子場景 A（lock 超時）：`autoAdvanced: false`，response 中 **不包含** `autoAdvanceFailReason` 欄位（或值為 `undefined/null`）
-  - 子場景 B（月跑 guard）：`autoAdvanced: false`，response 中 **包含** `autoAdvanceFailReason: 'ASSIGNMENT_RUN_ALREADY_RUNNING'`
+  - 子場景 B（月名單分派 guard）：`autoAdvanced: false`，response 中 **包含** `autoAdvanceFailReason: 'ASSIGNMENT_RUN_ALREADY_RUNNING'`
 
 ---
 
@@ -511,7 +511,7 @@ buildAutoAdvanceResponse({
 - **名稱**：fallback 手動路徑 — 部長手動推進成功（flag off 路徑）（TC-114-07）
 - **層級**：unit
 - **對應**：AC-12、TC-114-07
-- **前置 seed**：`flag = off`；`validList`（stage = personnel_ratio）；所有部門完成（`assertAllDeptsSumEquals100` mock 不拋）；月跑 guard 通過；`stageTransition.advanceTo` mock resolve
+- **前置 seed**：`flag = off`；`validList`（stage = personnel_ratio）；所有部門完成（`assertAllDeptsSumEquals100` mock 不拋）；月名單分派 guard 通過；`stageTransition.advanceTo` mock resolve
 - **操作**：呼叫手動推進 service method（`POST /api/v1/assignment/lists/{listNo}/stage/advance-to-approval` 對應的 service）
 - **預期斷言**：
   - 回傳 200 OK，含 `currentStage: 'approval'`、`advancedByRole: 'director'`
@@ -530,7 +530,7 @@ buildAutoAdvanceResponse({
   - stage 未更新
 
 #### TC-F084-028
-- **名稱**：fallback 手動路徑 — 月跑進行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
+- **名稱**：fallback 手動路徑 — 月名單分派進行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING
 - **層級**：unit
 - **對應**：AC-12、BR-9
 - **前置 seed**：`runGuard.assertNoRunningRun` mock 拋 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
@@ -732,21 +732,21 @@ mockedSetPersonnelRatios.mockResolvedValue({
 ---
 
 #### TC-F084-FE-003
-- **名稱**：PUT 後 autoAdvanceFailReason = ASSIGNMENT_RUN_ALREADY_RUNNING → 顯示月跑 toast + 退回顯示手動按鈕
+- **名稱**：PUT 後 autoAdvanceFailReason = ASSIGNMENT_RUN_ALREADY_RUNNING → 顯示月名單分派 toast + 退回顯示手動按鈕
 - **層級**：frontend unit
 - **對應**：AC-5、TC-114-04 前端
 - **前置 seed**：`mockedSetPersonnelRatios` 回 `autoAdvanced: false`、`autoAdvanceFailReason: 'ASSIGNMENT_RUN_ALREADY_RUNNING'`、`newStage: null`；所有部門 sumValidated = true（使 fallback 按鈕應出現）
 - **操作**：點擊「儲存」按鈕
 - **預期斷言**：
-  - toast 含 `比例已儲存` + `分派執行中`（或 `月跑完成後手動推進`）
+  - toast 含 `比例已儲存` + `分派執行中`（或 `月名單分派完成後手動推進`）
   - `screen.getByTestId('btn-advance-approval')` **出現**（fallback 手動按鈕）
   - **不 redirect**（留在頁面，供手動推進）
 
 #### TC-F084-FE-004
-- **名稱**：月跑 guard toast 中手動推進按鈕為 disabled（月跑進行中）
+- **名稱**：月名單分派 guard toast 中手動推進按鈕為 disabled（月名單分派進行中）
 - **層級**：frontend unit
 - **對應**：AC-5、AC-7
-- **前置 seed**：同 TC-F084-FE-003；月跑狀態 mock（前端判斷）= running
+- **前置 seed**：同 TC-F084-FE-003；月名單分派狀態 mock（前端判斷）= running
 - **操作**：同上，PUT 後 fallback 按鈕出現
 - **預期斷言**：
   - `btn-advance-approval` 有 `disabled` 屬性
@@ -857,7 +857,7 @@ Phase 1：後端 Unit — 紅燈先行
      → TC-F084-006 / TC-F084-007 / TC-F084-008 紅燈 → 實作 mgr.query（lock）+ advanceToInMgr 呼叫 → 綠燈
   4. 稽核欄位 + operator_role 推導
      → TC-F084-009 / TC-F084-010 / TC-F084-011 紅燈 → 實作 auditMetadata 組裝邏輯 → 綠燈
-  5. 月跑 guard tx 內路徑
+  5. 月名單分派 guard tx 內路徑
      → TC-F084-012 / TC-F084-013 紅燈 → 實作 runGuard.isRunning() 呼叫 → 綠燈
   6. Lock 超時 55P03 catch 路徑（Option B）
      → TC-F084-014 / TC-F084-015 / TC-F084-016 紅燈 → 實作 catch 邏輯 → 綠燈
@@ -887,7 +887,7 @@ tdd-implementation agent 需要實作以下**新增項目**（不修改現有 me
 | `StageTransitionService.advanceToInMgr()` | `stage-transition.service.ts` | 接受外部 EntityManager 過載，不自開 tx |
 | `PersonnelRatioValidationService.assertAllDeptsSumEquals100WithMgr()` | `personnel-ratio-validation.service.ts` | 使用傳入 mgr 查詢，確保讀 tx 內資料 |
 | F082 PUT response 補欄位 | `personnel-ratio.service.ts`（return type）+ API client 型別 | `autoAdvanced`, `newStage`, `autoAdvanceFailReason` |
-| tx 內月跑 guard | `personnel-ratio.service.ts`（tx 內 `[4b]`）| `runGuard.isRunning()` （tx 內輕量版，非 assertNoRunningRun） |
+| tx 內月名單分派 guard | `personnel-ratio.service.ts`（tx 內 `[4b]`）| `runGuard.isRunning()` （tx 內輕量版，非 assertNoRunningRun） |
 
 ### 6.3 mock 對齊真實 contract 警告
 
@@ -899,7 +899,7 @@ tdd-implementation agent 需要實作以下**新增項目**（不修改現有 me
 
 3. **operator_role 推導公式**：`actor.role === 'admin' ? 'admin' : (actor.businessRole ?? 'section_chief')`。測試子場景 C（Admin）中，`businessRole: null` 時 `operator_role` 必須是 `'admin'`（非 `'section_chief'`）——這是 `role === 'admin'` 優先判斷的語意，mock 不可省略此邊界。
 
-4. **tx 外 vs tx 內月跑 guard**：tx 外的 `assertNoRunningRun()` 拋例外（PUT 整體失敗，非 200）；tx 內的 `isRunning()` 回 boolean（PUT 仍 200，只跳過 auto-advance）。兩個 method 是不同的 contract，mock 時不可互換。
+4. **tx 外 vs tx 內月名單分派 guard**：tx 外的 `assertNoRunningRun()` 拋例外（PUT 整體失敗，非 200）；tx 內的 `isRunning()` 回 boolean（PUT 仍 200，只跳過 auto-advance）。兩個 method 是不同的 contract，mock 時不可互換。
 
 5. **前端 response shape**：`setPersonnelRatios` 的 mock 回傳必須包含 `autoAdvanced`、`newStage`、`autoAdvanceFailReason` 三欄位，即使值為 `false`/`null` 也要明示。省略欄位會導致前端邏輯走到 undefined 分支，掩蓋真實 bug。
 

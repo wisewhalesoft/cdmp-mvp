@@ -19,7 +19,7 @@ flowchart TD
     RangeCheck -- 是 --> ClickSave[點擊儲存]
 
     ClickSave --> SaveAPI[PUT /api/v1/assignment/ratios/dept/listNo]
-    SaveAPI --> SaveGuards{Guards：<br/>DirectorGuard +<br/>stage = dept_ratio +<br/>非月跑 + 非歷史月份}
+    SaveAPI --> SaveGuards{Guards：<br/>DirectorGuard +<br/>stage = dept_ratio +<br/>非月名單分派 + 非歷史月份}
     SaveGuards -- 失敗 --> ReturnSaveErr[回對應錯誤碼<br/>E07_FORBIDDEN_DIRECTOR_ONLY /<br/>LIST_STAGE_TRANSITION_FORBIDDEN /<br/>ASSIGNMENT_RUN_ALREADY_RUNNING /<br/>LIST_HISTORICAL_READONLY]
     SaveGuards -- 通過 --> SaveTx[DB transaction:<br/>1. DELETE FROM ob_dept_pct<br/>   WHERE project_workym, list_no<br/>2. INSERT new RATION rows<br/>3. INSERT assignment_audit_log<br/>   action = SET_DEPT_RATIO]
     SaveTx --> SaveSuccess[200 OK<br/>toast：部門比例設定已儲存]
@@ -28,7 +28,7 @@ flowchart TD
     %% ============ F080 推進至個別業務比例 ============
     ButtonGroup -- 推進至個別業務比例 --> F080Click[點擊推進按鈕]
     F080Click --> AdvanceAPI[POST /list-definitions/listNo/advance-to-personnel-ratio]
-    AdvanceAPI --> AdvanceGuards{Guards：DirectorGuard +<br/>stage = dept_ratio +<br/>非月跑 + 非歷史月份}
+    AdvanceAPI --> AdvanceGuards{Guards：DirectorGuard +<br/>stage = dept_ratio +<br/>非月名單分派 + 非歷史月份}
     AdvanceGuards -- 失敗 --> ReturnAdvanceAuthErr[回對應錯誤碼]
 
     AdvanceGuards -- 通過 --> Pre1{ob_dept_pct 至少 1 筆？}
@@ -49,7 +49,7 @@ flowchart TD
     RollbackConfirm -- 取消 --> EndCancelRb([結束：取消])
 
     RollbackConfirm -- 確認退回 --> RollbackAPI[POST /list-definitions/listNo/rollback-to-draft]
-    RollbackAPI --> RollbackGuards{Guards：DirectorGuard +<br/>stage = dept_ratio +<br/>非月跑 + 非歷史月份}
+    RollbackAPI --> RollbackGuards{Guards：DirectorGuard +<br/>stage = dept_ratio +<br/>非月名單分派 + 非歷史月份}
     RollbackGuards -- 失敗 --> ReturnRollbackErr[回對應錯誤碼<br/>含 STAGE_ROLLBACK_BLOCKED<br/>reason: already_at_first_stage /<br/>wrong_source_stage]
     RollbackGuards -- 通過 --> RollbackTx[DB transaction:<br/>1. UPDATE ob_list_definition<br/>   SET stage = draft<br/>2. DELETE FROM ob_dept_pct<br/>   WHERE project_workym, list_no<br/>3. INSERT assignment_audit_log<br/>   action = ROLLBACK_STAGE<br/>   before.deptRatios = 完整快照]
     RollbackTx --> RollbackSuccess[200 OK<br/>toast：已退回草稿階段<br/>部門比例已清空]

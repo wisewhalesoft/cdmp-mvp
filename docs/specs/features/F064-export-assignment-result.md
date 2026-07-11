@@ -18,7 +18,7 @@ related: F061, F063, F067, F094, F101, F102
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-17
 
-> ⚠️ **血緣修正警告（v2.1 必讀）**：v2.0 之 BR-F064-01 將 pool 欄 join `ob_pool_data_list`（per-list 去重表）為**錯誤**——月跑 Stage 1 `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o`（共享池，PK = `orgno + appl_no`，**無 `list_no`**）衍生 result 列，`ob_pool_data_list` 僅於 Stage 1 被 LEFT JOIN 取 CR 三欄。匯出若 INNER JOIN `ob_pool_data_list`，**11.5% 案件不在該去重表 → 掉列**（live 驗證：join `ob_pool_data` 55,863/55,863 全對；join `ob_pool_data_list` 掉 11.5%）。**v2.1 修正：pool 欄 join 源改 `ob_pool_data`（by `orgno + appl_no`）**，並新增血緣不變式 **I-EXP-LINEAGE-01**（匯出列數 = 該 run 之 `ob_monthly_run_result` 列數，不掉列）。
+> ⚠️ **血緣修正警告（v2.1 必讀）**：v2.0 之 BR-F064-01 將 pool 欄 join `ob_pool_data_list`（per-list 去重表）為**錯誤**——月名單分派 Stage 1 `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o`（共享池，PK = `orgno + appl_no`，**無 `list_no`**）衍生 result 列，`ob_pool_data_list` 僅於 Stage 1 被 LEFT JOIN 取 CR 三欄。匯出若 INNER JOIN `ob_pool_data_list`，**11.5% 案件不在該去重表 → 掉列**（live 驗證：join `ob_pool_data` 55,863/55,863 全對；join `ob_pool_data_list` 掉 11.5%）。**v2.1 修正：pool 欄 join 源改 `ob_pool_data`（by `orgno + appl_no`）**，並新增血緣不變式 **I-EXP-LINEAGE-01**（匯出列數 = 該 run 之 `ob_monthly_run_result` 列數，不掉列）。
 >
 > ⚠️ **破壞性修正警告（必讀）**：v2.0 對齊 legacy `reference/202606 分派名單.xlsx` 工作表 1 之 **23 欄明細**，與 v1.1 之 8~9 欄輸出**不相容**。三項 SCHEMA GAP 修正（§11）：(GAP-1) 刪除誤列之 `custo_no` / `cust_name`、改以 `appl_no`（案號）；(GAP-2) 資料來源由 `assignment_run_snapshot.payload`（8 欄瘦投影）改為 `ob_monthly_run_result`（by `run_id`）多表 join；(GAP-3) 進件日 source = `ob_pool_data.appl_date`（v2.1 修正：原 v2.0 寫 `ob_pool_data_list.appl_date`）。下游 TDD agent 必須以本 v2.1 spec 為準，否則匯出欄位錯誤或掉列。
 >
@@ -48,7 +48,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-17
 
 ## 1. 功能摘要
 
-提供業務部長 / 業務處長將已完成月跑的分派結果，匯出為對齊 legacy 分派名單格式的 **Excel（xlsx）或 CSV** 檔案。匯出明細為 legacy `reference/202606 分派名單.xlsx` 工作表 1 之 **23 欄**，資料源為 `ob_monthly_run_result`（by `run_id`）配合 `ob_pool_data`（by `orgno + appl_no`，Stage 1 源表）/ `ob_emphire` / `ob_list_definition` 多表 join。xlsx 與 CSV 皆採 streaming 寫入避免記憶體溢出。匯出內容欄位與舊系統完全相容，可直接交付業務人員或上傳至 CRM / 電話系統，無需人工補欄。
+提供業務部長 / 業務處長將已完成月名單分派的分派結果，匯出為對齊 legacy 分派名單格式的 **Excel（xlsx）或 CSV** 檔案。匯出明細為 legacy `reference/202606 分派名單.xlsx` 工作表 1 之 **23 欄**，資料源為 `ob_monthly_run_result`（by `run_id`）配合 `ob_pool_data`（by `orgno + appl_no`，Stage 1 源表）/ `ob_emphire` / `ob_list_definition` 多表 join。xlsx 與 CSV 皆採 streaming 寫入避免記憶體溢出。匯出內容欄位與舊系統完全相容，可直接交付業務人員或上傳至 CRM / 電話系統，無需人工補欄。
 
 ## 2. 使用者故事
 
@@ -82,7 +82,7 @@ ob_monthly_run_result r  (by run_id)
         ON d.list_no = r.list_no                        [join key = list_no，OQ 裁定]
 ```
 
-**血緣理由（v2.1，I-EXP-LINEAGE-01）**：月跑 Stage 1 之 `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o`（共享池，PK = `orgno + appl_no`，**無 `list_no`**）衍生 result 列；`ob_pool_data_list`（per-list 去重表）僅於 Stage 1 被 LEFT JOIN 取 CR 三欄（`cr_id` / `cr_nm` / `is_cr`），**非** result 列的母體。匯出 pool 欄因此必須 join **`ob_pool_data`**（by `orgno + appl_no`）才能保證 `ob_pool_data` ⊇ `ob_monthly_run_result`、INNER JOIN 不掉列。若誤 join `ob_pool_data_list`，約 11.5% 案件不在該去重表 → INNER JOIN 掉列（live 驗證：`ob_pool_data` 55,863/55,863 全對；`ob_pool_data_list` 掉 11.5%）。`ob_pool_data` 具備全部 10 個匯出 pool 欄屬性（`dept_name` / `appl_date` / `pro_rate` / `sta_code` / `sta_code_na` / `project_tp` / `spec_name` / `brand_name` / `overdue_day` / `month_cnt`），matched 列值與 `ob_pool_data_list` 逐欄相同（無回歸）。
+**血緣理由（v2.1，I-EXP-LINEAGE-01）**：月名單分派 Stage 1 之 `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o`（共享池，PK = `orgno + appl_no`，**無 `list_no`**）衍生 result 列；`ob_pool_data_list`（per-list 去重表）僅於 Stage 1 被 LEFT JOIN 取 CR 三欄（`cr_id` / `cr_nm` / `is_cr`），**非** result 列的母體。匯出 pool 欄因此必須 join **`ob_pool_data`**（by `orgno + appl_no`）才能保證 `ob_pool_data` ⊇ `ob_monthly_run_result`、INNER JOIN 不掉列。若誤 join `ob_pool_data_list`，約 11.5% 案件不在該去重表 → INNER JOIN 掉列（live 驗證：`ob_pool_data` 55,863/55,863 全對；`ob_pool_data_list` 掉 11.5%）。`ob_pool_data` 具備全部 10 個匯出 pool 欄屬性（`dept_name` / `appl_date` / `pro_rate` / `sta_code` / `sta_code_na` / `project_tp` / `spec_name` / `brand_name` / `overdue_day` / `month_cnt`），matched 列值與 `ob_pool_data_list` 逐欄相同（無回歸）。
 
 **不從** `assignment_run_snapshot.payload`（`snapshot_type = 'result'`）JSONB 讀取——該 snapshot 為 8 欄瘦投影（僅 `list_no` / `appl_no` / `card_level` / `tier_level` / `dept_id` / `emplid` / `score` / `is_cr`），無法提供 23 欄所需之 `cr_nm` / `assignday` / `appl_date` / `pro_rate` / `emp_nm` / `title_name` / `dept_name` / `list_nm` 等欄位（GAP-2，§11）。
 
@@ -92,7 +92,7 @@ ob_monthly_run_result r  (by run_id)
 
 #### AC-1：觸發匯出並下載檔案（維持 v1.1 AC-1）
 
-- **Given** 月跑已完成（`assignment_run.status = 'completed'`）
+- **Given** 月名單分派已完成（`assignment_run.status = 'completed'`）
 - **When** 業務部長 / 業務處長點擊「匯出結果」並選擇格式（Excel / CSV）
 - **Then** 系統產生對應格式檔案，瀏覽器觸發下載
 - **And** 檔案名稱格式：`assignment_result_{YYYYMM}_{run_id 前 8 碼}.xlsx`（或 `.csv`）
@@ -166,7 +166,7 @@ ob_monthly_run_result r  (by run_id)
 
 #### AC-4：CR 三欄正確呈現
 
-- **Given** 月跑已執行 [F102](F102-cr-priority-assignment.md) CR 優先分派（commit on main）
+- **Given** 月名單分派已執行 [F102](F102-cr-priority-assignment.md) CR 優先分派（commit on main）
 - **When** 匯出 `is_cr='Y'` 的案件
 - **Then** `CR_ID` 欄 = `ob_monthly_run_result.cr_id`（非 NULL 且非空字串）
 - **And** `CR_NM` 欄 = `ob_monthly_run_result.cr_nm`（非 NULL 且非空字串）
@@ -212,11 +212,11 @@ ob_monthly_run_result r  (by run_id)
 - **And** 前端顯示「正在產生檔案，請稍候…」提示（loading 狀態）
 - **And** 若超過 5 分鐘仍未完成，中斷並回傳 500 `EXPORT_FILE_EXPIRED`（BR-F064-10）
 
-### 月跑未完成阻擋（維持 v1.1 AC-3）
+### 月名單分派未完成阻擋（維持 v1.1 AC-3）
 
-**BR-F064-12（月跑未完成阻擋匯出）**：目標 `run_id` 之 `status` 為 `pending` / `running` / `failed` 時，後端回傳 422 `ASSIGNMENT_RUN_NOT_COMPLETED`，前端匯出按鈕為 disabled 狀態。
+**BR-F064-12（月名單分派未完成阻擋匯出）**：目標 `run_id` 之 `status` 為 `pending` / `running` / `failed` 時，後端回傳 422 `ASSIGNMENT_RUN_NOT_COMPLETED`，前端匯出按鈕為 disabled 狀態。
 
-#### AC-7：月跑未完成阻擋匯出（維持 v1.1 AC-3）
+#### AC-7：月名單分派未完成阻擋匯出（維持 v1.1 AC-3）
 
 - **Given** 目標 `run_id` 的 `status` 為 `pending` / `running` / `failed`
 - **When** 業務部長 / 業務處長嘗試匯出
@@ -274,14 +274,14 @@ ob_monthly_run_result r  (by run_id)
 | 401 | AUTH_TOKEN_MISSING | 未登入 |
 | 403 | E07_ROLE_NOT_ASSIGNED | `businessRole` 非 `'director'` / `'section_chief'`（`DirectorOrSectionChiefGuard` 攔截，依 F002 §4.6.2）|
 | 404 | ASSIGNMENT_RUN_NOT_FOUND | `run_id` 不存在 |
-| 422 | ASSIGNMENT_RUN_NOT_COMPLETED | 月跑尚未完成（BR-F064-12）|
+| 422 | ASSIGNMENT_RUN_NOT_COMPLETED | 月名單分派尚未完成（BR-F064-12）|
 | 500 | EXPORT_FILE_EXPIRED | 匯出超過 5 分鐘 timeout（BR-F064-10）|
 
 > **無新錯誤碼**：v2.0 沿用 v1.1 之錯誤碼集合，未新增。`ob_emphire` join-miss 為 fallback（空值 + WARNING log，BR-F064-06），**不**回錯誤碼。
 
 ## 6. Worked Example（23 欄逐列走查）
 
-> 供 test-designer 對齊。以 202606 月跑 `run_id='e3c839b7-…'` 之兩筆代表案件示意。
+> 供 test-designer 對齊。以 202606 月名單分派 `run_id='e3c839b7-…'` 之兩筆代表案件示意。
 
 | 欄序/欄名 | CR 案件（c1）| 一般案件（c2，emphire join-miss）|
 |---|---|---|
@@ -326,11 +326,11 @@ c2 之 emphire join-miss：欄 12/14/15 空、欄 13 仍輸出 `'X999'`、後端
 - 「匯出結果」按鈕：顯示格式選擇下拉（Excel / CSV）。
 - 匯出進行中：顯示 loading spinner + 「正在產生檔案，請稍候…」訊息（streaming 期間，AC-6）。
 - 匯出失敗（500 `EXPORT_FILE_EXPIRED`）：顯示錯誤 toast + 「重試」按鈕。
-- 月跑未完成：匯出按鈕 disabled，hover 顯示提示「分派執行中，完成後才能匯出」（AC-7）。
+- 月名單分派未完成：匯出按鈕 disabled，hover 顯示提示「分派執行中，完成後才能匯出」（AC-7）。
 
 ## 9. 相依性
 
-- **Blocked By**：[F102](F102-cr-priority-assignment.md)（CR 三欄 / `emplid` / `assignday` 已填值，commit on main）、[F061](F061-trigger-assignment-run.md)（月跑完成、`assignment_run.status` 管理）、[F101](F101-stage3-4-proportional-assignment.md)（`emplid` / `tier_level` / `dept_id` 由 Stage 3/4 寫入）。
+- **Blocked By**：[F102](F102-cr-priority-assignment.md)（CR 三欄 / `emplid` / `assignday` 已填值，commit on main）、[F061](F061-trigger-assignment-run.md)（月名單分派完成、`assignment_run.status` 管理）、[F101](F101-stage3-4-proportional-assignment.md)（`emplid` / `tier_level` / `dept_id` 由 Stage 3/4 寫入）。
 - **Blocks**：無。
 
 ## 10. 假設
@@ -339,7 +339,7 @@ c2 之 emphire join-miss：欄 12/14/15 空、欄 13 仍輸出 `'X999'`、後端
 |---|---|---|
 | A-1 | `ob_emphire` 之 `emp_nm` / `title_name` / `dept_name` 由 E04 + E05 雙層 ETL 從舊 OB DB `OBEMPHIRE` 同步至 AppDB（E04 抓 raw → E05 Pipeline TargetLoad full replace）；join 鍵 `ob_monthly_run_result.emplid = ob_emphire.emp_id`。詳見 [data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)。 | Resolved（2026-05-05）|
 | A-2 | 匯出格式支援 xlsx 與 csv；xlsx 使用 streaming 庫（如 `exceljs` stream mode），CSV 採 streaming 字串逐批輸出。 | [ASSUMPTION] |
-| A-3 | `ob_pool_data`（PK `orgno + appl_no`）為月跑 Stage 1 之源表（`INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data`），故 `ob_pool_data` ⊇ `ob_monthly_run_result`（同 run 之每筆 result 列必在 pool 中）；匯出 pool 欄 join 鍵 = `orgno + appl_no`（不含 `list_no`）。`ob_pool_data_list`（per-list 去重表）**非** result 列母體，匯出不得以其為 pool 源（v2.1 修正）。 | Resolved（2026-06-17，live 驗證）|
+| A-3 | `ob_pool_data`（PK `orgno + appl_no`）為月名單分派 Stage 1 之源表（`INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data`），故 `ob_pool_data` ⊇ `ob_monthly_run_result`（同 run 之每筆 result 列必在 pool 中）；匯出 pool 欄 join 鍵 = `orgno + appl_no`（不含 `list_no`）。`ob_pool_data_list`（per-list 去重表）**非** result 列母體，匯出不得以其為 pool 源（v2.1 修正）。 | Resolved（2026-06-17，live 驗證）|
 | A-4 | 欄 12「部門名稱」取自 `ob_emphire.dept_name`（員工所屬電銷單位名稱，by emplid）；與欄 1「分處」（`ob_pool_data.dept_name`，案件所屬營業分處）為**不同**來源、不可混用。 | [ASSUMPTION] |
 
 ## 11. Schema Gap handoff（spec-writer 主動標示，US-155 已裁定，交架構師確認落地）
@@ -359,7 +359,7 @@ c2 之 emphire join-miss：欄 12/14/15 空、欄 13 仍輸出 `'X999'`、後端
 |----|------|------|---------|
 | **OQ-1** | 多表 join 下推 SQL 設計：`ob_monthly_run_result` join **`ob_pool_data`（PK orgno+appl_no，v2.1）** + LEFT JOIN `ob_emphire`（emplid→emp_id）+ LEFT JOIN `ob_list_definition`（list_no）之 streaming query 如何下推？是否需索引支援（大資料量 join 效能）？ | 匯出 SQL 正確性（不掉列，I-EXP-LINEAGE-01）與效能；大資料量 join 不逾時 | 單一 SQL 多表 join，cursor / server-side stream 逐批 fetch；`ob_pool_data` PK(orgno,appl_no) 即 join 鍵（覆蓋率 100%、不掉列），`ob_emphire(emp_id)` PK 可支援 LEFT JOIN；若 join 後逾時，評估補索引（比照 m297/m298 模式）。AD 已同步改 pool 源為 `ob_pool_data` |
 | **OQ-2** | CSV streaming 實作機制：v1.1 CSV 為 in-memory 全量拼接字串（OOM 風險）；改 streaming 後採何種庫 / 機制（Node stream / csv-stringify stream / 手動逐批 write）？xlsx 與 CSV 是否共用同一 row-producer（單一 query 餵兩種 writer）？ | CSV 記憶體峰值；xlsx/CSV 程式碼複用 | 單一 row-producer（streaming query cursor）餵 format-specific writer（exceljs stream / csv stream）；CSV 用 Node Transform stream 逐列 escape + write，不全量拼接 |
-| **OQ-3** | 200k+ 筆背景 job 方案：5 分鐘 streaming timeout 對 200k+ 筆是否足夠？若不夠，是否改非同步背景 job（先回 202 Accepted，背景產檔 + 通知下載 URL）？需額外 API 設計（job 狀態查詢 / 下載端點）。 | 大資料量匯出可行性；API 介面 | **目前維持 streaming 同步下載（5 min timeout，BR-F064-10）**；背景 job 為另案（不阻擋本 feature）；若 deploy 後實測 200k+ 逾時，另開 story 走 pg-boss worker + 202 Accepted 模式（比照月跑 worker 抽離）|
+| **OQ-3** | 200k+ 筆背景 job 方案：5 分鐘 streaming timeout 對 200k+ 筆是否足夠？若不夠，是否改非同步背景 job（先回 202 Accepted，背景產檔 + 通知下載 URL）？需額外 API 設計（job 狀態查詢 / 下載端點）。 | 大資料量匯出可行性；API 介面 | **目前維持 streaming 同步下載（5 min timeout，BR-F064-10）**；背景 job 為另案（不阻擋本 feature）；若 deploy 後實測 200k+ 逾時，另開 story 走 pg-boss worker + 202 Accepted 模式（比照月名單分派 worker 抽離）|
 | **OQ-4** | `data-model.md` 是否需補述 `ob_monthly_run_result` ↔ **`ob_pool_data`（orgno+appl_no）** / `ob_emphire` / `ob_list_definition` 之匯出 join 路徑（含 pool 血緣 + LEFT JOIN 語意）？此檔由 system-architect 維護，spec-writer 不改。 | data-model 文件完整性 | 補一段「F064 匯出 join 路徑」於 `ob_monthly_run_result` entity 章節，引用 BR-F064-01 / I-EXP-LINEAGE-01；標 pool 源 = `ob_pool_data`（非 `ob_pool_data_list`）、join 鍵與 LEFT JOIN fallback 語意 |
 
 > **附帶（spec-writer 裁定，非交架構師）**：
@@ -371,7 +371,7 @@ c2 之 emphire join-miss：欄 12/14/15 空、欄 13 仍輸出 `'X999'`、後端
 ## 13. 相關
 
 - 來源 story：[US-155](../../stories/epics/E07-app-customer-list-assignment/US-155-M04-export-assignment-result-23col.md)（supersedes US-084）
-- 前置 / 交互：[F102](F102-cr-priority-assignment.md)（CR 三欄 / emplid / assignday 來源）、[F101](F101-stage3-4-proportional-assignment.md)（emplid / tier_level / dept_id 來源）、[F094](F094-monthly-run-result-table.md)（`ob_monthly_run_result` 表）、[F061](F061-trigger-assignment-run.md)（月跑完成）
+- 前置 / 交互：[F102](F102-cr-priority-assignment.md)（CR 三欄 / emplid / assignday 來源）、[F101](F101-stage3-4-proportional-assignment.md)（emplid / tier_level / dept_id 來源）、[F094](F094-monthly-run-result-table.md)（`ob_monthly_run_result` 表）、[F061](F061-trigger-assignment-run.md)（月名單分派完成）
 - 結果驗收 / 差異：[F063](F063-view-run-result-summary.md)（結果摘要）、[F067](F067-compare-run-results.md)（差異報告）
 - 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_monthly_run_result` / `ob_pool_data`，v2.1 pool 源）、[data-model.md#ob-emphire-entity](../data-model.md#ob-emphire-entity)（姓名 / 職級 / 部門名稱 join）
 - 錯誤處理：[error-handling.md#assignment-errors](../error-handling.md#assignment-errors)

@@ -79,11 +79,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 - **Then** Tab 1 顯示空狀態提示：「目前尚未設定任何計分卡類型，請點擊『新增計分卡類型』開始設定」
 - **And** Tab 2~5 同樣顯示空狀態提示：「請先在 Tab 1 新增並選擇計分卡類型」
 
-### AC-6：月跑執行中清單仍可查看（寫入按鈕 disabled）
+### AC-6：月名單分派執行中清單仍可查看（寫入按鈕 disabled）
 
 - **Given** `assignment_run` 有 `status IN ('pending', 'running')` 的紀錄
 - **When** 業務部長 / 業務處長進入 M02 Tab 1
-- **Then** 清單正常顯示（GET 不受月跑鎖影響）
+- **Then** 清單正常顯示（GET 不受月名單分派鎖影響）
 - **And** 頁面顯示「分派執行中，無法修改計分設定」提示，新增 / 編輯 / 停用按鈕 disabled
 
 ## 5. API 規格
@@ -147,14 +147,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 | BR-1 | 預設僅顯示 `ob_card_type.status = 'active'` 紀錄；停用紀錄不參與 Tab 2~5 篩選下拉 |
 | BR-2 | 每筆 `ob_card_type` 必須綁定一個 PROD_KIND（業務層保證非 NULL；DB 層 FK 與唯一性約束由 system-architect 設計，本 spec 不規定）｜ [ASSUMPTION] 交 system-architect |
 | BR-3 | 排序：預設依 `card_type` 升冪 |
-| BR-4 | 月跑執行中（`assignment_run.status IN ('pending', 'running')`）GET 端點不受鎖影響；UI 層需自行讀取月跑狀態以決定按鈕 disabled 狀態 |
+| BR-4 | 月名單分派執行中（`assignment_run.status IN ('pending', 'running')`）GET 端點不受鎖影響；UI 層需自行讀取月名單分派狀態以決定按鈕 disabled 狀態 |
 
 ## 7. UI/UX 需求
 
 - Tab 1 採表格佈局，欄位：`card_type` / `card_name` / PROD_KIND badge / status / 操作（編輯 / 停用按鈕）
 - Row-click selection：點擊整列觸發選中狀態，前端 State / Context 傳遞給 Tab 2~5
 - 頁面頂部 PROD_KIND info banner（具備跳轉 M06 之連結）
-- 月跑鎖定時操作按鈕 disabled，視覺呈現由 UI/UX Designer 決定
+- 月名單分派鎖定時操作按鈕 disabled，視覺呈現由 UI/UX Designer 決定
 - 預設 5 Tab 結構：Tab 1（CARD_TYPE）/ Tab 2（計分維度）/ Tab 3（分數設定）/ Tab 4（CARD_LEVEL 門檻）/ Tab 5（TIER_LEVEL 對應）；具體佈局與視覺風格由 UI/UX Designer 設計
 
 ## 8. 相依性
@@ -175,4 +175,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-14
 |---|------|------|
 | A-1 | `ob_card_type` 為 AppDB 新建表，無對應舊系統 OB 表；欄位 schema（含 FK / unique index / cascade 行為）由 system-architect 於 data-model.md `#ob-card-type-entity` 與 migration 中設計 | [ASSUMPTION] 交 system-architect |
 | A-2 | `ob_card_type.prod_kind` 是否須建立 FK constraint 指向 `ob_code_df` 為 DB 層級設計決策，spec 僅規定業務層 1:1 綁定 | [ASSUMPTION] 交 system-architect |
-| A-3 | 月跑鎖（`SCORING_VERSION_LOCKED`）僅作用於寫入端點；GET 端點不受影響（與 F053 / F055 一致） | ✅ Decided |
+| A-3 | 月名單分派鎖（`SCORING_VERSION_LOCKED`）僅作用於寫入端點；GET 端點不受影響（與 F053 / F055 一致） | ✅ Decided |

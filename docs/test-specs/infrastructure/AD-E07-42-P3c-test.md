@@ -6,7 +6,7 @@ priority: P0-MVP
 related_spec:
   - /docs/specs/implementation-log/AD-E07-42-mssql-p3-raw-sql-engine.md（§2.3 Stage3/4 比例分派逐站點方言轉換清單、§4 EQ 等價測試策略、§5 P3c 範圍/DoD、§7 不變式 I-MSSQL-ENGINE-EQ-01）
   - /docs/specs/implementation-log/AD-E07-42-P3a-impl.md（Stage 1 已完成落地事實：dbo 共用表 harness 決策「共用既有表+前綴隔離+精準 DELETE」策略，本文件直接沿用）
-  - /docs/specs/implementation-log/AD-E07-42-P3b-impl.md（Stage 2~3 計分已完成落地事實：§Blocking Issues「範圍外後續（P3c/P3d，非本輪）」明文記錄 `executeStage2to3PushdownMssql` 尚未呼叫 `clearStage3Fields`/`runCrPrioritySql`/`runStage3to4RationSql`，mssql 月跑 dept_id/emplid/assignday 暫留 NULL——本文件 §二 DISPATCH 群組即針對此缺口設計）
+  - /docs/specs/implementation-log/AD-E07-42-P3b-impl.md（Stage 2~3 計分已完成落地事實：§Blocking Issues「範圍外後續（P3c/P3d，非本輪）」明文記錄 `executeStage2to3PushdownMssql` 尚未呼叫 `clearStage3Fields`/`runCrPrioritySql`/`runStage3to4RationSql`，mssql 月名單分派 dept_id/emplid/assignday 暫留 NULL——本文件 §二 DISPATCH 群組即針對此缺口設計）
   - apps/api/src/modules/assignment/stage1/stage3to4-ration-sql.ts（`runStage3DeptSql`/`runStage4EmplSql`/`runAssignDaySql`/`clearStage3Fields`/`runStage3to4RationSql`，本文件全部站點逐行核對之 PG 現行實作）
   - apps/api/src/modules/assignment/stage1/stage3to4-ration.ts（`distributeStage3to4`，JS golden oracle，純函式無 DB 依賴，EQ 群組比對基準）
   - apps/api/src/modules/assignment/services/assignment-run-pipeline.service.ts（`executeStage2to4Pushdown:1012-1101`〔PG 完整呼叫鏈範本：`runStage2and3Sql`→`clearStage3Fields`→`runCrPrioritySql`→`runStage3to4RationSql`〕、`executeStage2to3PushdownMssql:1113-1158`〔mssql 現行僅至 Stage 2~3，DISPATCH 群組核心依賴〕、`resolveStage2to4Strategy:184-193`）
@@ -26,7 +26,7 @@ last_updated: 2026-07-08
 >
 > **★ test-designer 逐檔查證發現之關鍵事實（本文件測試設計之核心依據）**：
 >
-> 1. **🔴🔴 `executeStage2to3PushdownMssql` 現行明確不呼叫 Stage 3/4 比例分派，此為 P3b impl log 已白紙黑字記錄之已知缺口（非本文件新發現，但本文件為其正式閉環）**：test-designer 直接查證 `assignment-run-pipeline.service.ts:1103-1158` 之 `executeStage2to3PushdownMssql`（P3b 落地產物）函式本體，確認其僅呼叫 `runStage2and3SqlMssql` 補 score/card_level/tier_level 三欄，函式結尾直接 `return this.readResultRowsForSnapshot(runId)`，**完全未呼叫** `clearStage3Fields`／`runCrPrioritySql`／`runStage3to4RationSql`（PG 版之三步）。對照 PG 完整鏈路 `executeStage2to4Pushdown:1012-1101`（`runStage2and3Sql`→`clearStage3Fields`→`runCrPrioritySql`→`runStage3to4RationSql`，四步），mssql 路徑目前僅完成第一步。這正是 P3b impl log「Blocking Issues」段落自陳之範圍外後續：「mssql 月跑之 dept_id/emplid/assignday 暫留 NULL」。已獨立立 §二 DISPATCH-001 為刻意對現行未修改程式碼設計之紅燈 MUST-FIX 守門。
+> 1. **🔴🔴 `executeStage2to3PushdownMssql` 現行明確不呼叫 Stage 3/4 比例分派，此為 P3b impl log 已白紙黑字記錄之已知缺口（非本文件新發現，但本文件為其正式閉環）**：test-designer 直接查證 `assignment-run-pipeline.service.ts:1103-1158` 之 `executeStage2to3PushdownMssql`（P3b 落地產物）函式本體，確認其僅呼叫 `runStage2and3SqlMssql` 補 score/card_level/tier_level 三欄，函式結尾直接 `return this.readResultRowsForSnapshot(runId)`，**完全未呼叫** `clearStage3Fields`／`runCrPrioritySql`／`runStage3to4RationSql`（PG 版之三步）。對照 PG 完整鏈路 `executeStage2to4Pushdown:1012-1101`（`runStage2and3Sql`→`clearStage3Fields`→`runCrPrioritySql`→`runStage3to4RationSql`，四步），mssql 路徑目前僅完成第一步。這正是 P3b impl log「Blocking Issues」段落自陳之範圍外後續：「mssql 月名單分派之 dept_id/emplid/assignday 暫留 NULL」。已獨立立 §二 DISPATCH-001 為刻意對現行未修改程式碼設計之紅燈 MUST-FIX 守門。
 > 2. **🔴🔴 DECIMAL 精度旗艦缺陷（AD §2.3 表格未點名此具體站點，同型於 P3b DECIMAL-LOANRATE-001 之 FINDING-P4D-01 家族）**：`stage3to4-ration-sql.ts` 內 `CAST(:or${i} AS numeric)`（`runStage3DeptSql:113`，dept ration）與 `CAST(:er${idx} AS numeric)`（`runStage4EmplSql:251`，empl ration）**皆為裸 `numeric`、無精度宣告**。test-designer 查證來源型別：`ob_dept_pct.ration` 為 `numeric(9,2)`、`ob_empl_set.ration` 為 `numeric(10,2)`（皆保留 2 位小數，如 `33.67`）。PG `CAST(x AS numeric)`（無精度）對已有精度之數值原樣保留；但 T-SQL 未指定精度之裸 `NUMERIC`/`DECIMAL` 型別預設為 `NUMERIC(18,0)`，若逐字翻譯，會在 `VALUES` CTE 建構階段（早於任何 `FLOOR` 計算）就將 `33.67` 四捨五入為 `34`，使部門/員工實際分得比例產生系統性偏移（且不拋錯，屬靜默數值錯誤）。已設計 §五 DECIMAL 群組 2 案例（`DECIMAL-RATION-001` 為 MUST-FIX 旗艦，已知具體數值斷言）。
 > 3. **🔴 ASSIGNDAY 無日期型別轉換需求（修正任務指示之預設假設）**：任務指示原預期「`::date`/日期運算→mssql(DATEADD/DATEDIFF/CAST AS DATE)」為本切片轉換站點之一，但 test-designer 逐行掃描 `stage3to4-ration-sql.ts` 全檔（含 `runAssignDaySql`）**零命中**任何 `::date` cast 或日期運算函式；`casedt` 全程以字串參數傳遞、比對、寫入，且查證 `ob_monthly_run_result.assignday` 欄位型別為 `varchar(100)`（非 `date`/`datetime2`），與 `ob_dept_pct`/`ob_empl_set` 之 `ration` 精度風險同屬「查證後推翻預設假設」之發現，記入 §一 GATE-004 澄清、避免下游誤設計不存在的轉換案例（該類轉換實際發生於 §2.1/§2.4 之 `:ccWorkdt::date`/`:twoYearsAgo::date` 等其他檔案，非本檔範圍）。
 > 4. **Harness 範圍顯著小於 P3b（僅 2 張新查詢表，皆為 P3a 已確認共用表，非新增依賴）**：`stage3to4-ration-sql.ts` 直接以 raw SQL 觸及的物理表僅 `ob_monthly_run_result`（UPDATE 目標）與 `ob_pool_data`（dept SQL 之 JOIN，取分處 `dept_id`）兩張；`dept_pct`/`empl_set`/`cal` 三個 CTE 名稱皆為 `VALUES` 建構之記憶體內臨時集合（非真實資料表），`ob_dept_pct`/`ob_empl_set`/`ob_calendar` 三張真實表由呼叫端（`assignment-run-pipeline.service.ts`）以 TypeORM `.find()`/`QueryBuilder` 查詢後轉為陣列參數傳入（**已是 dialect-agnostic 路徑，非本文件方言轉換範圍**）。此兩張表（+ FK 依賴之 `assignment_run`）皆已屬 P3a `AD-E07-42-P3a-impl.md`「dbo 共用表」策略確認之既有六表子集，§0 Harness 沿用 P3a「共用既有表 + 前綴隔離寫入列 + 精準 DELETE（禁 DROP/TRUNCATE）」策略，**不需要**如 P3b 般自建 6 張計分專屬表。
@@ -96,13 +96,13 @@ last_updated: 2026-07-08
 
 ---
 
-## 二、DISPATCH — Stage 3/4 比例分派尚未接線至 mssql 月跑鏈路（🔴🔴 本文件核心缺口，P3b impl log 已預告）
+## 二、DISPATCH — Stage 3/4 比例分派尚未接線至 mssql 月名單分派鏈路（🔴🔴 本文件核心缺口，P3b impl log 已預告）
 
 ### TS-MSSQL-P3C-DISPATCH-001（🔴🔴 MUST-FIX，對現行未修改程式碼刻意設計為紅燈）：`executeStage2to3PushdownMssql` 現行不呼叫 Stage 3/4 比例分派
 - **Related Requirement**：§頂部查證發現 1；`assignment-run-pipeline.service.ts:1113-1158`；I-NOLOAD-01
 - **Test Type**：Regression / MUST-FIX Gate
 - **Preconditions**：`env.DB_TYPE='mssql'`；Stage 1 已 INSERT 案件、Stage 2 已寫 `tier_level`（P3a/P3b 黑盒依賴）
-- **Steps**：以 `vi.spyOn` 掛在 `runStage3to4RationSqlMssql`（或等效 tdd-implementation 命名之 mssql 版本函式）上，執行完整 mssql 月跑管線（`triggerExecute`/`runPipeline` 或等效入口）
+- **Steps**：以 `vi.spyOn` 掛在 `runStage3to4RationSqlMssql`（或等效 tdd-implementation 命名之 mssql 版本函式）上，執行完整 mssql 月名單分派管線（`triggerExecute`/`runPipeline` 或等效入口）
 - **Expected Result**：`runStage3to4RationSqlMssql` **應被呼叫**（現行未修改程式碼下必為紅燈——`executeStage2to3PushdownMssql` 函式本體結尾直接 `return this.readResultRowsForSnapshot(runId)`，無任何 Stage 3/4 呼叫），逼實作方將呼叫鏈擴充為對稱 PG `executeStage2to4Pushdown`（`runStage2and3SqlMssql`→`clearStage3Fields`〔或 mssql 版〕→`runStage3to4RationSqlMssql`）之三步（**不含** `runCrPrioritySql`，見 DISPATCH-003）
 
 ---
@@ -117,22 +117,22 @@ last_updated: 2026-07-08
 ### TS-MSSQL-P3C-DISPATCH-003：mssql P3c 路徑刻意不呼叫 `runCrPrioritySql`（P3d 範圍外，非遺漏）
 - **Related Requirement**：AD §2.4（P3d 範圍）；I-CR-ORDER-01（PG 版排序：清除→CR前置→比例分派）
 - **Test Type**：Static Guard / Documentation
-- **Expected Result**：靜態掃描確認 mssql 呼叫鏈（DISPATCH-001 擴充後）**不含** `runCrPrioritySql`（PG-only raw SQL，尚未移植至 mssql，逐字對 MSSQL 執行會語法錯）之呼叫；此為 P3c 刻意排除項（is_cr 完整業務流程待 P3d），非實作疏漏——若 tdd-implementation 誤植呼叫會導致 mssql 月跑直接崩潰（保證語法錯誤），本案例作為負向守門
+- **Expected Result**：靜態掃描確認 mssql 呼叫鏈（DISPATCH-001 擴充後）**不含** `runCrPrioritySql`（PG-only raw SQL，尚未移植至 mssql，逐字對 MSSQL 執行會語法錯）之呼叫；此為 P3c 刻意排除項（is_cr 完整業務流程待 P3d），非實作疏漏——若 tdd-implementation 誤植呼叫會導致 mssql 月名單分派直接崩潰（保證語法錯誤），本案例作為負向守門
 
 ---
 
 ### TS-MSSQL-P3C-DISPATCH-004（🔴 spy 驗證，MUST-FIX）：三分支互斥（postgres/mssql/其餘）不誤觸 in-memory fallback
 - **Related Requirement**：同 P3a/P3b 已反覆出現之 DISPATCH 陷阱同型延伸
 - **Test Type**：Regression / MUST-FIX Gate
-- **Steps**：以 `{postgres, mssql, undefined}` 三種 `DB_TYPE` 組合執行含 Stage 3/4 之完整月跑鏈路，spy `runStage3to4RationSql`（PG 版）／`runStage3to4RationSqlMssql`（mssql 版）
+- **Steps**：以 `{postgres, mssql, undefined}` 三種 `DB_TYPE` 組合執行含 Stage 3/4 之完整月名單分派鏈路，spy `runStage3to4RationSql`（PG 版）／`runStage3to4RationSqlMssql`（mssql 版）
 - **Expected Result**：`postgres` 呼叫 PG 版且僅呼叫 PG 版；`mssql` 呼叫 mssql 版且僅呼叫 mssql 版；兩者互斥，不重疊、不誤呼叫對方版本
 
 ---
 
-### TS-MSSQL-P3C-DISPATCH-005（DoD 核心觀察）：完整 mssql 月跑後 dept_id/emplid/assignday 不再恆 NULL
+### TS-MSSQL-P3C-DISPATCH-005（DoD 核心觀察）：完整 mssql 月名單分派後 dept_id/emplid/assignday 不再恆 NULL
 - **Related Requirement**：§頂部查證發現 1；P3b impl log「範圍外後續」段落之已知缺口解除驗證
 - **Test Type**：Regression（DoD 核心）
-- **Steps**：以 §八/九/十 DEPT/EMPL/ASGD 群組任一案例之 seed 資料，經完整 mssql 月跑管線（含本輪新接線之 Stage 3/4）執行
+- **Steps**：以 §八/九/十 DEPT/EMPL/ASGD 群組任一案例之 seed 資料，經完整 mssql 月名單分派管線（含本輪新接線之 Stage 3/4）執行
 - **Expected Result**：`ob_monthly_run_result` 讀回列之 `dept_id`/`emplid`/`emplid_deptid`/`assignday` 四欄**不再全數為 NULL**（P3b 當下之已知狀態），至少存在非 NULL 值且與 §十二 EQ 群組之 JS oracle 逐列相符
 
 ---
@@ -270,7 +270,7 @@ last_updated: 2026-07-08
 |---|---|---|
 | ASGD-001 | 21 件 / 20 工作日（各 ratioPerMille=50） | 19 日各 1 件 + 末日 2 件（`FLOOR(21×50/1000)=1` ×19，末日吸收餘 2） |
 | ASGD-002 | 18 件 / 20 工作日，`FLOOR(18×50/1000)=0` | 全 18 件落末日（前 19 日皆 FLOOR=0，末日吸收全部） |
-| ASGD-003 | 無工作日（`workingDays=[]`） | `assignday` 全 NULL + `ASSIGNDAY_NO_CALENDAR_WARN`（`{list_no, work_ym}`），月跑不中斷 |
+| ASGD-003 | 無工作日（`workingDays=[]`） | `assignday` 全 NULL + `ASSIGNDAY_NO_CALENDAR_WARN`（`{list_no, work_ym}`），月名單分派不中斷 |
 
 **共通 Steps**：先完成 dept/empl 分派（`emplid` 已定）→ 執行 ASSIGNDAY 分配 → 讀回 `assignday` 分佈與 PG spec 手算 oracle 逐值比對。
 

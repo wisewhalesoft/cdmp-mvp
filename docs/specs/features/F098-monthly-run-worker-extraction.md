@@ -1,23 +1,23 @@
 ---
 spec-id: F098
-title: 月跑 Worker 抽離（pg-boss 入列 + cdmp-worker 容器 + cancellation / orphan 回收）
+title: 月名單分派 Worker 抽離（pg-boss 入列 + cdmp-worker 容器 + cancellation / orphan 回收）
 feature-id: F098
 source-story: AD 驅動（AD-E07-28 P1）
 epic: E07
-module: M04 分派執行（月跑執行模型重構 P1）
+module: M04 分派執行（月名單分派執行模型重構 P1）
 priority: P0-MVP
 version: "1.0"
 date: 2026-06-02
 status: Draft
 ---
 
-# F098: 月跑 Worker 抽離（AD-E07-28 P1）
+# F098: 月名單分派 Worker 抽離（AD-E07-28 P1）
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 
-> ⚠️ **執行模型變更警告（必讀）**：本 feature 將月跑 pipeline 之執行容器由「cdmp-api 同程序 `setImmediate` 背景跑」改為「入列 pg-boss job → 獨立 `cdmp-worker` 容器消費」。**P1 不改 pipeline 內部演算法**（Stage 1~4 仍為現行 JS 版），僅更換執行容器並補齊 cancellation / orphan 回收。此變更解決 [AD-E07-28 §1](../implementation-log/AD-E07-v3.1-monthly-run-execution-model.md) 之 **F1（event loop 阻塞 → 月跑期間整站 API 逾時）**；F2（OOM）於 P1 尚未解，但 OOM 改炸 worker 程序、不再炸 API（整站不再 500），此即 P1 之「先止血」價值。
+> ⚠️ **執行模型變更警告（必讀）**：本 feature 將月名單分派 pipeline 之執行容器由「cdmp-api 同程序 `setImmediate` 背景跑」改為「入列 pg-boss job → 獨立 `cdmp-worker` 容器消費」。**P1 不改 pipeline 內部演算法**（Stage 1~4 仍為現行 JS 版），僅更換執行容器並補齊 cancellation / orphan 回收。此變更解決 [AD-E07-28 §1](../implementation-log/AD-E07-v3.1-monthly-run-execution-model.md) 之 **F1（event loop 阻塞 → 月名單分派期間整站 API 逾時）**；F2（OOM）於 P1 尚未解，但 OOM 改炸 worker 程序、不再炸 API（整站不再 500），此即 P1 之「先止血」價值。
 >
-> **v1.0（2026-06-02 / AD-E07-28 P1）**：依 [AD-E07-28](../implementation-log/AD-E07-v3.1-monthly-run-execution-model.md) §5「P1 — Worker 抽離」與 [architecture-spec.md §5.13](../architecture-spec.md) 落地。已拍板決策（不需再問）：佇列 = **pg-boss**（靠現有 Postgres，免 Redis）；新增獨立 `cdmp-worker` 容器；月跑 job `retryLimit=0`（OQ-AD28-04）；單 worker 序列化（OQ-AD28-05，沿用 `assertNoRunningRun` 同月保護）；orphan 偵測靠 pg-boss job expiration、不新增 schema 欄位（OQ-AD28-02）。
+> **v1.0（2026-06-02 / AD-E07-28 P1）**：依 [AD-E07-28](../implementation-log/AD-E07-v3.1-monthly-run-execution-model.md) §5「P1 — Worker 抽離」與 [architecture-spec.md §5.13](../architecture-spec.md) 落地。已拍板決策（不需再問）：佇列 = **pg-boss**（靠現有 Postgres，免 Redis）；新增獨立 `cdmp-worker` 容器；月名單分派 job `retryLimit=0`（OQ-AD28-04）；單 worker 序列化（OQ-AD28-05，沿用 `assertNoRunningRun` 同月保護）；orphan 偵測靠 pg-boss job expiration、不新增 schema 欄位（OQ-AD28-02）。
 >
 > **刻意未動（邊界）**：不變更 `architecture-spec.md` / AD 文件（system-architect 維護，AD-E07-28 為權威）；不撰寫 production / test 程式碼（tdd-implementation / test-designer 承接）；不跑 migration、不做 docker 操作；Stage 1~4 演算法不變（P2/P3 才下推 SQL，見 [F099](F099-stage1-sql-pushdown.md) / [F100](F100-stage2-4-sql-pushdown-scoring.md)）。
 
@@ -35,18 +35,18 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 
 ## 1. 功能摘要
 
-將月跑觸發由「`AssignmentRunService.kickoffPipeline()` 之 `setImmediate(() => pipeline.runPipeline(...))`」改為「`triggerRun` 入列 pg-boss job → 立即回 202」，由新增的獨立 `cdmp-worker` 容器以 pg-boss work handler 消費並執行**現行** `runPipeline(runId, ym)`。同時補齊兩個現況缺陷：(a) **cancellation**——worker 內 `CancellationPoller` 於可中斷邊界輪詢 `assignment_run.status`，被使用者取消（標 `failed`）則提早結束 pipeline（修復 `cancelRun` 註解自承「背景不會真停」）；(b) **orphan 回收**——`OrphanReaper` 掃描 `status='running'` 但對應 pg-boss job 已消失 / 逾時（worker 崩潰遺留）之 run，標為 `failed`。
+將月名單分派觸發由「`AssignmentRunService.kickoffPipeline()` 之 `setImmediate(() => pipeline.runPipeline(...))`」改為「`triggerRun` 入列 pg-boss job → 立即回 202」，由新增的獨立 `cdmp-worker` 容器以 pg-boss work handler 消費並執行**現行** `runPipeline(runId, ym)`。同時補齊兩個現況缺陷：(a) **cancellation**——worker 內 `CancellationPoller` 於可中斷邊界輪詢 `assignment_run.status`，被使用者取消（標 `failed`）則提早結束 pipeline（修復 `cancelRun` 註解自承「背景不會真停」）；(b) **orphan 回收**——`OrphanReaper` 掃描 `status='running'` 但對應 pg-boss job 已消失 / 逾時（worker 崩潰遺留）之 run，標為 `failed`。
 
 ## 2. 使用者故事
 
 **As a** 分派維運人員 / 系統使用者
-**I want** 月跑執行時不再卡死整站 API（含登入、查詢、其他 E07 寫入），且使用者取消月跑能真正停止背景運算、worker 崩潰遺留的 running run 能被自動回收
-**So that** 月跑期間網頁維持可用、取消行為符合預期、不會留下永久卡在 running 的殭屍 run
+**I want** 月名單分派執行時不再卡死整站 API（含登入、查詢、其他 E07 寫入），且使用者取消月名單分派能真正停止背景運算、worker 崩潰遺留的 running run 能被自動回收
+**So that** 月名單分派期間網頁維持可用、取消行為符合預期、不會留下永久卡在 running 的殭屍 run
 
 ## 3. 前置條件
 
 - `assignment_run` 表已存在（`run_id` UUID PK、`status` 欄位、`error_message` 欄位）。
-- 現行月跑 pipeline（`AssignmentRunPipelineService.runPipeline()`）可用且可被 worker entrypoint 注入。
+- 現行月名單分派 pipeline（`AssignmentRunPipelineService.runPipeline()`）可用且可被 worker entrypoint 注入。
 - 現有 `triggerRun` 前置驗證鏈（`assertNoRunningRun` 同月保護、readiness 前置條件）保留不變。
 - PostgreSQL 16 為唯一資料庫（pg-boss `pgboss` schema 與 `cdmp_dev` 同庫）。
 - 現有 `ASSIGNMENT_PIPELINE_V2` 等 feature flag 環境變數。
@@ -55,7 +55,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 
 ### AC-1：`triggerRun` 改為入列 pg-boss job，立即回 202
 
-- **Given** 使用者觸發月跑且通過現有前置驗證（`assertNoRunningRun` + readiness）
+- **Given** 使用者觸發月名單分派且通過現有前置驗證（`assertNoRunningRun` + readiness）
 - **When** `triggerRun` 執行
 - **Then** `INSERT assignment_run(status='pending')`（不變），接著呼叫 `pgboss.send('assignment-run', { runId, ym })` 入列 job，**立即**回應 `202 { runId, status: 'pending' }`
 - **And** `triggerRun` **不再**呼叫 `kickoffPipeline()` / `setImmediate(() => pipeline.runPipeline(...))`（同程序背景啟動路徑移除）
@@ -71,11 +71,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 - **And** pipeline 成功完成 → 原子寫入三份快照 + `UPDATE status='completed'`（沿用現有 pipeline 結尾邏輯）
 - **And** pipeline 拋錯 → `UPDATE status='failed', error_message=<錯誤摘要>`（沿用現有 try/catch）
 
-### AC-3：月跑 job 不自動重試（retryLimit=0）
+### AC-3：月名單分派 job 不自動重試（retryLimit=0）
 
 - **Given** pg-boss `assignment-run` queue / job 設定
 - **When** 設定 retry 參數
-- **Then** `retryLimit=0`（OQ-AD28-04 拍板：未冪等前防雙寫）；月跑 job 失敗一律標 `failed`，由人工重新觸發，不由 pg-boss 自動重跑
+- **Then** `retryLimit=0`（OQ-AD28-04 拍板：未冪等前防雙寫）；月名單分派 job 失敗一律標 `failed`，由人工重新觸發，不由 pg-boss 自動重跑
 
 > **[ASSUMPTION] A-1**：`retryLimit=0` 為已拍板（OQ-AD28-04）。冪等清理（I-IDEM-01）於 P2/P3 SQL 下推時實作完整（見 [F099 §4](F099-stage1-sql-pushdown.md)）；P1 因 retry=0 且單 worker 序列化，重複寫入風險已由「不重試 + `assertNoRunningRun`」阻斷，P1 不要求 pipeline 內部冪等清理。
 
@@ -83,12 +83,12 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 
 - **Given** cdmp-worker 啟動 pg-boss work handler
 - **When** 設定併發參數
-- **Then** worker 併發 = 1（`teamSize` / `teamConcurrency` 等效設定為 1），月跑序列化執行（OQ-AD28-05 拍板）
+- **Then** worker 併發 = 1（`teamSize` / `teamConcurrency` 等效設定為 1），月名單分派序列化執行（OQ-AD28-05 拍板）
 - **And** 同月併發仍由現有 `assertNoRunningRun`（API 側）阻擋；跨月併發於 P1 不開放（單 worker 自然序列化）
 
 ### AC-5：cancellation —— worker 可中斷邊界輪詢並提早結束
 
-- **Given** 月跑於 worker 執行中（`status='running'`），使用者呼叫 `cancelRun`
+- **Given** 月名單分派於 worker 執行中（`status='running'`），使用者呼叫 `cancelRun`
 - **When** `cancelRun` 標記 `assignment_run.status='failed'` + audit `CANCEL`（API 側，**不變**）
 - **And** worker 內 `CancellationPoller` 於**可中斷邊界**（每處理完一份 list、每個 Stage 之間）查詢 `assignment_run.status`
 - **Then** 若偵測到已被標 `failed`，拋 `RunCancelledException` 使 pipeline 提早結束，**不再**寫快照 / result
@@ -103,11 +103,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 - **Then** 將該 run 標為 `status='failed', error_message='worker 中斷，請重新觸發'`
 - **And** orphan 偵測靠 pg-boss job expiration + 逾時 threshold（OQ-AD28-02 拍板：**不新增 `worker_id` / `heartbeat_at` schema 欄位**）
 
-> **[ASSUMPTION] A-3**：orphan 偵測閾值（pg-boss job expiration 時間 / 掃描週期）由 tdd-implementation 對齊月跑預期最長執行時間設定（P1 為 JS 版，最壞案例可達數十分鐘，閾值須大於此以免誤殺執行中 run）。錯誤訊息文案 `'worker 中斷，請重新觸發'` 為本 spec 指定（前端 `F062` polling 顯示此 `error_message`）。
+> **[ASSUMPTION] A-3**：orphan 偵測閾值（pg-boss job expiration 時間 / 掃描週期）由 tdd-implementation 對齊月名單分派預期最長執行時間設定（P1 為 JS 版，最壞案例可達數十分鐘，閾值須大於此以免誤殺執行中 run）。錯誤訊息文案 `'worker 中斷，請重新觸發'` 為本 spec 指定（前端 `F062` polling 顯示此 `error_message`）。
 
 ### AC-7：run 狀態機（業務層，語意不變，新增轉移來源）
 
-- **Given** 月跑生命週期
+- **Given** 月名單分派生命週期
 - **When** 各事件發生
 - **Then** 狀態轉移符合：`pending`（triggerRun 入列）→ `running`（worker work() 開始）→ `completed`（pipeline 成功 + 快照原子寫入）/ `failed`（pipeline 錯誤 / OOM 被 reaper 標記 / 使用者 cancelRun）
 - **And** 前端 / 使用者僅讀 `assignment_run.status`（業務領域狀態）；pg-boss job 狀態（created/active/completed/failed/cancelled）為佇列傳輸層狀態，不直接暴露給前端
@@ -145,7 +145,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 > **AD OQ 採納狀態（2026-06-02 ratified，非待裁）**：以下四項 AD-E07-28 之 OQ 已由使用者於 2026-06-02 採納其預設決議，本 feature 以**既定約束**形式落地（**不**列為 open question）：
 > - **OQ-AD28-01 = pg-boss schema 用 migration 包 DDL**（§6 / AC 對齊；prod 版本化、防多 worker 首啟 race）
 > - **OQ-AD28-02 = orphan 靠 pg-boss job expiration、不新增 schema 欄位**（AC-6；無 `worker_id` / `heartbeat_at`）
-> - **OQ-AD28-04 = 月跑 job retry=0**（AC-3 / A-1；未冪等前防雙寫）
+> - **OQ-AD28-04 = 月名單分派 job retry=0**（AC-3 / A-1；未冪等前防雙寫）
 > - **OQ-AD28-05 = 單 worker 序列化**（AC-4；沿用 `assertNoRunningRun` 同月保護）
 >
 > （OQ-AD28-03 portability 選項 A 屬 [F099](F099-stage1-sql-pushdown.md) 範疇、已採納；OQ-AD28-06 / OQ-F100-01 st4_exchange 配對交換 fidelity 屬 [F100](F100-stage2-4-sql-pushdown-scoring.md) 範疇、亦已採納 = 對齊現行 JS 簡化版。AD-E07-28 之 6 個 OQ-AD28-* 全數已採納，無待裁業務 open question。）
@@ -168,7 +168,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 |------|---------|
 | pg-boss 入列失敗（DB 不可用） | `triggerRun` 應回錯誤、不留下孤兒 `pending` run（或事後由 OrphanReaper 處理）。**[OQ-F098-01]**：`pending` 但入列失敗之 run 是否由 OrphanReaper 涵蓋（掃 `pending` 且無對應 job）？建議涵蓋。 |
 | worker 崩潰（OOM 等） | OrphanReaper 標 `failed`（AC-6）；整站 API 不受影響（不再 500） |
-| 使用者取消執行中月跑 | `CancellationPoller` 於下個可中斷邊界拋 `RunCancelledException`，run 維持 `failed`（AC-5） |
+| 使用者取消執行中月名單分派 | `CancellationPoller` 於下個可中斷邊界拋 `RunCancelledException`，run 維持 `failed`（AC-5） |
 
 > 既有錯誤碼沿用，本 feature **不新增錯誤碼**（cancellation / orphan 走 `status='failed'` + `error_message` 文案，非 HTTP 錯誤碼）。
 
@@ -189,7 +189,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-02
 | ID | 問題 | 影響 | 建議 |
 |----|------|------|------|
 | **OQ-F098-01** | pg-boss 入列失敗導致 `pending` 但無對應 job 之 run，是否由 OrphanReaper 一併掃描回收（擴及 `pending`）？ | 孤兒 run 清理完整性 | 建議涵蓋：OrphanReaper 同時掃 `pending` 且超過閾值無對應 job 者，標 `failed` |
-| **OQ-F098-02** | OrphanReaper 掃描週期與 pg-boss job expiration 閾值之具體數值（須大於 P1 JS 版月跑最長執行時間以免誤殺）？ | orphan 偵測準確度 | 由 tdd-implementation 依 dev/prod 觀測之最長月跑時間設定（含安全邊際） |
+| **OQ-F098-02** | OrphanReaper 掃描週期與 pg-boss job expiration 閾值之具體數值（須大於 P1 JS 版月名單分派最長執行時間以免誤殺）？ | orphan 偵測準確度 | 由 tdd-implementation 依 dev/prod 觀測之最長月名單分派時間設定（含安全邊際） |
 
 ## 12. 相關
 

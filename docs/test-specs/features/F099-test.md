@@ -233,7 +233,7 @@ last_updated: 2026-06-02
 ### TS-F099-GMT-002：作廢整套 `SDv2-*`（pin JS 特例 DELETE 實作）
 - **Related Requirement**: F099 AC-7；AD-E07-28 §6.2「SDv2-*：改寫為 PG integration」
 - **Test Type**: Regression（測試移轉）| **Level**: Unit/Integration | **需 Postgres**: 否（移轉動作本身）
-- **動作**: F091-test 之 `TS-F091-SDv2-001~009`（pin JS `applyListNmSpecialDeletes` array filter 行為）之保護目標，改由 §一 EQ-006~011（PG 真庫 SQL 結果等價）承接。`applyListNmSpecialDeletes` 純函式若仍保留為 JS oracle，其既有單元測試可續存（作為 oracle 自我驗證），但**不再是月跑下推路徑的驗收依據**
+- **動作**: F091-test 之 `TS-F091-SDv2-001~009`（pin JS `applyListNmSpecialDeletes` array filter 行為）之保護目標，改由 §一 EQ-006~011（PG 真庫 SQL 結果等價）承接。`applyListNmSpecialDeletes` 純函式若仍保留為 JS oracle，其既有單元測試可續存（作為 oracle 自我驗證），但**不再是月名單分派下推路徑的驗收依據**
 - **映射表**（SDv2 → EQ）：
 
 | 原 SDv2 案例（F091）| 保護目標 | F099 替代 |
@@ -318,7 +318,7 @@ last_updated: 2026-06-02
 ## tdd-implementation 注意事項（交接）
 
 1. **EQ 群組是 P2 驗收紅線**：14 案例（PG 真庫、逐列 PK `toEqual`）全綠才可上線。**以現行 JS `executeStage1Chain` 為唯一 oracle**，禁止用「SQL 自我斷言預期值」取代與 JS 的逐 list 比對（SQL 與 JS 同錯則假綠）。
-2. **JS 版必須保留為 oracle**：P2 改下推路徑呼叫 `buildStage1Sql`，但 `executeStage1Chain` JS 版**不可刪除**——EQ 群組需要它當 golden。可標註「僅供等價測試 / 不再是月跑路徑」。
+2. **JS 版必須保留為 oracle**：P2 改下推路徑呼叫 `buildStage1Sql`，但 `executeStage1Chain` JS 版**不可刪除**——EQ 群組需要它當 golden。可標註「僅供等價測試 / 不再是月名單分派路徑」。
 3. **year-above 對齊現行 JS（OQ-F099-02 ✅ RESOLVED，oracle=JS）**：`null`→排除（退化 1900）、`''`/`'N/A'`→**保留**（NaN）、**`'1980abc'`→1980→排除（前導數字解析）**。三個陷阱：(1) 勿用 `NULLIF(REGEXP_REPLACE(…,'[^0-9]','','g'),'')::int` — 把 `''`/`'N/A'` 誤排為排除；(2) 勿用 `'^[0-9]+$'` strict 正則 — `'1980abc'` 不 match 走 ELSE NULL，若退化 1900 則排除巧合對，但 cutoff 不同時可現出破綻（PORT-007 即是此陷阱的偵測案）；(3) 正解：`NULLIF(SUBSTRING(year_produ FROM '^[0-9]+'), '')::int`（前導數字解析）+ NULL 特判退化 1900（`CASE WHEN year_produ IS NULL THEN 1900 ELSE NULLIF(SUBSTRING(year_produ FROM '^[0-9]+'), '')::int END < :cutoff`）。**PORT-004/005/007 三案是具體驗證此三個陷阱的測試，全綠才算實作正確**。
 4. **去重用 `NOT EXISTS`/anti-join，不要 `NOT IN`**（含 NULL 子查詢陷阱，A-1）；去重視窗上界 `MIN(MAX(assignday), workdt−1)` 語意不變（C-2），只是計算移入 SQL；custo_no=NULL 不被去重誤排（EQ-012）。
 5. **I-RUN-EST-01：單一 `buildStage1Sql`，run / estimate 只差最外層包裝**；勿為 run / estimate 各寫一份 WHERE（F049 老坑）。

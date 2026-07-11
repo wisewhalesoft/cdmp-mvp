@@ -19,7 +19,7 @@ change-summary: "新增 Story：計分引擎 CUS_SEX 分流邏輯——個人/�
 ## User Story
 
 **As a** 業務主管（Sales Director）
-**I want** 月跑 Stage 2 計分引擎對 `CAREA_NO1`/`CAREA_NO2`/`CELLULAR`/`AGE`/`EDUCAT_BACK` 五欄正確依 `CUS_SEX`（個人/法人）分流取值
+**I want** 月名單分派 Stage 2 計分引擎對 `CAREA_NO1`/`CAREA_NO2`/`CELLULAR`/`AGE`/`EDUCAT_BACK` 五欄正確依 `CUS_SEX`（個人/法人）分流取值
 **So that** 個人客戶使用自身屬性計分、法人客戶因保證人已停用而取 0/default，符合 legacy SP 實際行為，避免個人客戶五欄全部取到 0
 
 ---

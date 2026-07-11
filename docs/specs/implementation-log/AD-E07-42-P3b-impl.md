@@ -136,6 +136,6 @@ SQLite/pipeline 服務層/P3a 純函式無回歸。
 
 **範圍外後續（P3c/P3d，非本輪）**：`executeStage2to3PushdownMssql` 僅補 score/card_level/tier_level；
 Stage 3c 比例分派（`stage3to4-ration-sql`）/ 3d CR（`cr-priority-sql`）/ 3e tier 收尾之 MSSQL 化未移植，
-mssql 月跑之 dept_id/emplid/assignday 暫留 NULL。§二十一 MONTHRUN-DIFF（真實月重跑跨引擎逐列比對）比照
+mssql 月名單分派之 dept_id/emplid/assignday 暫留 NULL。§二十一 MONTHRUN-DIFF（真實月重跑跨引擎逐列比對）比照
 F101/F102 前例以 manual/script 執行、待 P3c/P3d 完成 mssql 全鏈後方能完整比對（現階段 customer_core 無殘留資料，
 需先觸發真實 ETL）。

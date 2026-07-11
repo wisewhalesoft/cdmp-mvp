@@ -16,7 +16,7 @@ total_effort: 12.5 人日
 | FE-1 | E02 帳號管理 4 角色 | 1.5 | 共用元件 |
 | FE-2 | M01 名單定義五階段 | 2.0 | FE-1 |
 | FE-3 | M02 評分對齊 | 0.5 | FE-1 |
-| FE-4 | M03 月跑 + Stage 流程 | 2.5 | FE-2 |
+| FE-4 | M03 月名單分派 + Stage 流程 | 2.5 | FE-2 |
 | FE-5 | M04 白名單管理 | 1.0 | FE-1 |
 | FE-6 | M05 快照歷史與比對 | 2.0 | FE-4 |
 | 共用 | StageBadge/RoleBadge/Modal 等 | 3.0 | — |
@@ -65,7 +65,7 @@ total_effort: 12.5 人日
 - 既有 `pages/assignment/scoring-config-page.tsx` 換成 4 角色 RBAC
 - M02 對 section_chief/user 整頁封鎖（顯示 ForbiddenPage）
 
-### FE-4 M03 月跑 + Stage（2.5 人日）
+### FE-4 M03 月名單分派 + Stage（2.5 人日）
 
 **Prototype**：`30-stage0-estimate.html` + `31-trigger-run.html` + `32-run-progress.html`
 **Endpoint**：`GET /lists/:listNo/stage-0-estimate`、`POST /assignment/runs`、`GET /runs/:id`（polling）、`PUT /:listNo/dept-ratios`、`PUT /:listNo/personnel-ratios`、`POST /approve|reject|rollback-*`

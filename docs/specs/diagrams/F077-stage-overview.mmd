@@ -20,7 +20,7 @@ stateDiagram-v2
     approval --> personnel_ratio : 部長拒絕<br/>（US-117，**以拒絕代替 rollback**）
 
     ready --> approval : Rollback 至簽核<br/>（US-119）<br/>**清空本階段資料**
-    ready --> [*] : F061 月跑觸發<br/>（stage = 'ready' 為前置條件，BR-8）<br/>名單參與當月分派
+    ready --> [*] : F061 月名單分派觸發<br/>（stage = 'ready' 為前置條件，BR-8）<br/>名單參與當月分派
 
     note left of draft
         草稿不可 Rollback
@@ -35,7 +35,7 @@ stateDiagram-v2
     end note
 
     note right of ready
-        Rollback 與月跑互斥：
+        Rollback 與月名單分派互斥：
         執行中（assignment_run.status
         IN ('pending','running')）
         禁止 Rollback

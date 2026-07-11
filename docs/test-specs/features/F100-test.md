@@ -297,7 +297,7 @@ last_updated: 2026-06-02
 | `computeScore` / `resolveColumnValue`（JS）| customer_core default 分支回 `''` 之 v1 行為 | 保留供 (b) 比對；P3 下推路徑不依賴（NOLOAD-001）|
 | F099 `buildStage1Sql` / Stage 1 等價測試 | P3 在 P2 結果上補計分 | Stage 1 行為不變；P3 不改 Stage 1 WHERE/JOIN core（I-RUN-EST-01 延續，RUNEST-001）|
 | F094 `ob_monthly_run_result` 寫入 / PK / FK CASCADE | 下推目標表 | Stage 2~4 改以 `UPDATE…FROM` 或重構 `INSERT…SELECT` 填 score/level/tier/is_cr/emplid；PK 不變；冪等由 IDEM 守 |
-| F061 邊緣 CARD_TYPE skip（HB/SEB/SEC）| AC-3「skip 語意 P3 不改」| 沿用 `report_payload.skippedCases`，月跑仍 completed；P3 不改此語意 |
+| F061 邊緣 CARD_TYPE skip（HB/SEB/SEC）| AC-3「skip 語意 P3 不改」| 沿用 `report_payload.skippedCases`，月名單分派仍 completed；P3 不改此語意 |
 
 ### 風險與待決（彙整至 risks-and-gaps.md）
 
@@ -315,7 +315,7 @@ last_updated: 2026-06-02
 | RISK-F100-010 | `ob_empl_set.prod_type='TIER:T*'` slice(5) 解析；seed 若用其他格式（如 `'T3'` 無前綴）→ tier 全空、st4_exchange 不交換假綠 | 中 | seed 須用真實 contract `'TIER:T3'`（feedback_mock_real_system_contract）；EXCH-002（無 T3）與有 T3 對照守住 |
 | **OQ-F100-T1** | **P3 是否把 Stage 1~4 收進單一 transaction**（失敗即全回滾 vs 各 stage 獨立提交）spec/AD 未明確定義 | — | **待 spec/AD 確認**。現階段 IDEM-003「全 run rollback」斷言 blocked；以 IDEM-001（冪等清理）+ IDEM-002（list 邊界）為基準。呼應 P2 follow-up F-1 |
 | **OQ-F100-T2** | **score=NULL（無 active version）時 tier_level 是否走 `card_level IS NULL` fallback（T3）或為 NULL** spec 未逐字明列 | — | 本文件 LEVTIER-004 以**現行 JS 推導**為基準（score NULL → lvl=null → cardLevel=null → 走 `cardLevel===null` fallback → tier=T3）；建議 tdd 與 spec 確認後鎖定。**注意**：JS L469 `score !== null` 才查 level，但 L481~483 之 fallback 對「cardLevel===null」一律命中（不分 score 來源），故 JS 現況 score=NULL 之 tier **會**走 fallback 得 T3——若 spec 期望 NULL，須改 SQL 邏輯。此分歧須在實作前釐清 |
-| **OQ-F100-T3** | `customer_core` entity 在 `apps/api/src/database/entities/` **尚未存在**（僅 data-model.md / F036 定義目標表）；P3 LEFT JOIN 需要它 | — | **待 tdd 確認**：P3 LEFT JOIN customer_core 前須先有對應 entity / 表。若 F036 ETL 尚未產出 customer_core 表於月跑庫，CJOIN 群組無從 join。tdd 須先確認 customer_core 表在月跑 PG 庫存在且可 join；缺則為 P3 前置 blocker |
+| **OQ-F100-T3** | `customer_core` entity 在 `apps/api/src/database/entities/` **尚未存在**（僅 data-model.md / F036 定義目標表）；P3 LEFT JOIN 需要它 | — | **待 tdd 確認**：P3 LEFT JOIN customer_core 前須先有對應 entity / 表。若 F036 ETL 尚未產出 customer_core 表於月名單分派庫，CJOIN 群組無從 join。tdd 須先確認 customer_core 表在月名單分派 PG 庫存在且可 join；缺則為 P3 前置 blocker |
 | **OQ-F100-T4** | CUS_SEX / AGE 等 customer_core 計分欄位之**精確欄位映射**（architecture-spec.md §3.10 對照表）test-designer 無法獨立確定（A-1 載「由 tdd 對齊」）| — | §一矩陣之 customer_core 欄位名/分數為**測試確定性 seed**（非生產真值）；tdd 對齊 §3.10 表後同步調整 seed 欄位名，預期數字邏輯不變。**列為 tdd 交接項，非 blocker** |
 
 ---
@@ -359,7 +359,7 @@ last_updated: 2026-06-02
 8. **I-NOLOAD-01：Stage 2~4 下推路徑禁 `pool.map(computeScore)` 全物化 heap**（NOLOAD-001）；現行 `executeV2` L465 `scoredPool = pool.map(...)` 須移出下推路徑。
 9. **I-RUN-EST-01 延續（A-4）**：estimate 只跑 Stage 1 COUNT，**不**含 Stage 2~4 計分 join；P3 合併 SQL 不可把計分 join 帶進 estimate 路徑。
 10. **transaction 範圍（OQ-F100-T1）**：實作前與 spec/AD 確認 P3 是否單一 transaction（失敗全回滾）。未定義前 IDEM-003 blocked；以 IDEM-001（冪等清理）+ IDEM-002（list 邊界）為基準。
-11. **customer_core 表前置（OQ-F100-T3）**：P3 LEFT JOIN 前須確認 `customer_core` entity / 表在月跑 PG 庫存在且可 join（目前 entities 目錄無此 entity）。缺則為 P3 前置 blocker，須先補。
+11. **customer_core 表前置（OQ-F100-T3）**：P3 LEFT JOIN 前須確認 `customer_core` entity / 表在月名單分派 PG 庫存在且可 join（目前 entities 目錄無此 entity）。缺則為 P3 前置 blocker，須先補。
 12. **計分欄位映射（OQ-F100-T4）**：CUS_SEX/AGE 等 customer_core 欄位對齊 architecture-spec.md §3.10 對照表（A-1）；§一矩陣欄位名為測試 seed，tdd 對齊後同步調整。
 13. **F067 升級差異報告 + 業務驗收（UPGR）為上線硬性前置**：EQ 全綠（技術正確）+ UPGR-004 業務簽核（業務接受升級結果變化）並列 P3 上線門檻（§9 / NFR-005）。
 14. **全等價/計分/視窗群組強制 PG，禁 better-sqlite3**（RISK-F100-007）：視窗函式 / `SUM(CASE…)` / `LEFT JOIN` / `EXISTS` 在 SQLite 不具代表性。沿用 postgres-test 容器（F099 既有 harness `stage1-sql-pushdown.pg.spec.ts` 之連線/skip-with-reason 模式可複用）。

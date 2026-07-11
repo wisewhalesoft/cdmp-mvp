@@ -15,9 +15,9 @@ status: Draft
 
 Priority: P1 | Status: Draft | Last Updated: 2026-05-27
 
-> **v1.0（2026-05-27 / AD-E07-26 §26.5 前端唯讀 API 契約）**：依 [architecture-spec.md AD-E07-26 v1.1 §26.5](../architecture-spec.md)（DP-AD26-3 Resolved）落地。名單詳情 / 篩選頁以**唯讀資訊區塊**呈現「此名單本次月跑套用之系統特例規則」（詐騙白牌 / 機車期中 / 期中小資 / 年以上）。後端依名單 `list_nm` **讀時推導**（read-time derivation）回傳 `appliedSpecialRules[]`，**不新建任何 DB 欄位**。推導 trigger 判斷與 [F091 v2.0 `applyListNmSpecialDeletes`](F091-stage1-complete-month-cnt-dedup-special-delete.md) **共用同一 pure utility**，確保 UI 顯示與實際月跑套用之規則一致。
+> **v1.0（2026-05-27 / AD-E07-26 §26.5 前端唯讀 API 契約）**：依 [architecture-spec.md AD-E07-26 v1.1 §26.5](../architecture-spec.md)（DP-AD26-3 Resolved）落地。名單詳情 / 篩選頁以**唯讀資訊區塊**呈現「此名單本次月名單分派套用之系統特例規則」（詐騙白牌 / 機車期中 / 期中小資 / 年以上）。後端依名單 `list_nm` **讀時推導**（read-time derivation）回傳 `appliedSpecialRules[]`，**不新建任何 DB 欄位**。推導 trigger 判斷與 [F091 v2.0 `applyListNmSpecialDeletes`](F091-stage1-complete-month-cnt-dedup-special-delete.md) **共用同一 pure utility**，確保 UI 顯示與實際月名單分派套用之規則一致。
 >
-> **Phase 對應**：屬單源化 / 特例修正工程之 **Phase A**（與 [F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md) 之 trigger 修正同批 deploy；UI 顯示之規則須反映修正後之正確 trigger）。本 feature 為唯讀呈現，**不改變任何月跑行為 / 案件數**。
+> **Phase 對應**：屬單源化 / 特例修正工程之 **Phase A**（與 [F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md) 之 trigger 修正同批 deploy；UI 顯示之規則須反映修正後之正確 trigger）。本 feature 為唯讀呈現，**不改變任何月名單分派行為 / 案件數**。
 >
 > **刻意未動（邊界）**：不變更 `architecture-spec.md`（AD-E07-26 §26.5 為權威）、不新建 DB 欄位 / migration（DP-AD26-3 明確「本輪不新建 DB 欄位」）；不撰寫 code / test（由 tdd-implementation 落地）。**本 feature 涉及前端新增唯讀資訊區塊，但既有 prototype（`prototypes/27-list-definition.html` / `prototypes/27b-list-edit-draft.html`）尚無此區塊** → 見 §7 之 prototype 落差標注（須 UI/UX 補 prototype 或由 tdd 依本 spec §7 版面規範實作）。
 
@@ -33,7 +33,7 @@ Priority: P1 | Status: Draft | Last Updated: 2026-05-27
 
 ## 1. 功能摘要
 
-名單詳情 / 篩選頁新增一個**唯讀資訊區塊**「此名單套用之系統特例規則」，列出本名單本次月跑實際套用的特例排除規則（每筆含規則代號 + 人類可讀排除說明 + 是否全名單強制）。資料來源為後端 list 詳情 API 回傳之 `appliedSpecialRules[]`，由 Service 層依 `list_nm` **讀時推導**（無新 DB 欄位）。推導使用之 trigger 判斷與 [F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md) 月跑實際套用之 trigger 為**同一份 pure utility**，故 UI 顯示與實際行為保證一致。
+名單詳情 / 篩選頁新增一個**唯讀資訊區塊**「此名單套用之系統特例規則」，列出本名單本次月名單分派實際套用的特例排除規則（每筆含規則代號 + 人類可讀排除說明 + 是否全名單強制）。資料來源為後端 list 詳情 API 回傳之 `appliedSpecialRules[]`，由 Service 層依 `list_nm` **讀時推導**（無新 DB 欄位）。推導使用之 trigger 判斷與 [F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md) 月名單分派實際套用之 trigger 為**同一份 pure utility**，故 UI 顯示與實際行為保證一致。
 
 此功能提升透明度：業務人員可在名單頁直接看到「為何此名單會排除某些案件」，無需查 SP 或程式碼。
 
@@ -69,10 +69,10 @@ Priority: P1 | Status: Draft | Last Updated: 2026-05-27
 - **Then** 每筆含 `ruleId`（代號，§5.1 enum）、`ruleName`（中文名稱，供前端直接顯示）、`isSystemMandatory`（true = 全名單強制套用 / 前端顯示為不可關閉之系統規則）
 - **And**（建議補充）每筆含 `exclusionDescription`（人類可讀排除說明，描述「排除什麼樣的案件」，見 §5.1 / §5.3）
 
-### AC-3：與月跑實際套用一致（共用 trigger pure utility）
+### AC-3：與月名單分派實際套用一致（共用 trigger pure utility）
 
-- **Given** 同一名單同時被 [F091 v2.0 月跑 `applyListNmSpecialDeletes`](F091-stage1-complete-month-cnt-dedup-special-delete.md) 與本 feature `deriveAppliedSpecialRules` 處理
-- **When** 比對「月跑實際套用之規則 ID 集合」與「API 回傳之 `appliedSpecialRules[].ruleId` 集合」
+- **Given** 同一名單同時被 [F091 v2.0 月名單分派 `applyListNmSpecialDeletes`](F091-stage1-complete-month-cnt-dedup-special-delete.md) 與本 feature `deriveAppliedSpecialRules` 處理
+- **When** 比對「月名單分派實際套用之規則 ID 集合」與「API 回傳之 `appliedSpecialRules[].ruleId` 集合」
 - **Then** 兩者**完全一致**（trigger 判斷為同一 pure utility，[F091 AC-7](F091-stage1-complete-month-cnt-dedup-special-delete.md) / AD-E07-26 §26.5 注意段）
 - **And** trigger 判斷修正後（[F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md)：期中機車 / 期中 / 年以上），API 顯示亦自動正確（含「中結」「年資」之名單**不再**顯示誤判規則，僅顯示無條件之詐騙白牌）
 
@@ -182,7 +182,7 @@ function deriveAppliedSpecialRules(listNm: string): AppliedSpecialRule[] {
 | 規則編號 | 說明 |
 |---|---|
 | BR-1 | **讀時推導，無新 DB 欄位**（DP-AD26-3）：`appliedSpecialRules[]` 由 Service 層依 `list_nm` 即時推導，不持久化、不新建 DB 欄位 |
-| BR-2 | **共用 trigger pure utility**（AD-E07-26 §26.5 / F091 AC-7）：推導與月跑 `applyListNmSpecialDeletes` 共用同一 trigger 判斷，UI 顯示與實際行為保證一致 |
+| BR-2 | **共用 trigger pure utility**（AD-E07-26 §26.5 / F091 AC-7）：推導與月名單分派 `applyListNmSpecialDeletes` 共用同一 trigger 判斷，UI 顯示與實際行為保證一致 |
 | BR-3 | **純唯讀**：本區塊無任何規則開關 / 編輯操作（本輪不提供結構化旗標控制，DP-AD26-3 延後）|
 | BR-4 | **詐騙白牌恆存**：`R-FRAUD-WHITEBOARD` 為無條件規則，所有名單之 `appliedSpecialRules[]` 必含此筆（`isSystemMandatory: true`）|
 | BR-5 | **顯示反映修正後 trigger**：UI 顯示須基於 [F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md) 修正後之正確 trigger（期中機車 / 期中 / 年以上），含「中結」「年資」名單不顯示誤判規則 |
@@ -200,7 +200,7 @@ function deriveAppliedSpecialRules(listNm: string): AppliedSpecialRule[] {
   - `isSystemMandatory: false`：一般唯讀標籤樣式（仍無操作）
 - **空態**：至少顯示詐騙白牌一筆（AC-5），不會完全空白
 - **唯讀**：無任何按鈕 / 開關 / 編輯入口（本輪僅呈現）
-- **建議文案**：可於區塊頂部補一行說明「以下為系統依名單名稱自動套用之特例排除規則，影響本名單的月跑分派案件數」
+- **建議文案**：可於區塊頂部補一行說明「以下為系統依名單名稱自動套用之特例排除規則，影響本名單的月名單分派案件數」
 
 ## 8. 錯誤場景
 
@@ -234,7 +234,7 @@ function deriveAppliedSpecialRules(listNm: string): AppliedSpecialRule[] {
   - `deriveAppliedSpecialRules('一般名單')` → 僅 R-FRAUD-WHITEBOARD（AC-5）
   - **bug fix 防回退**：`deriveAppliedSpecialRules('中結強案')` / `'年資5年'` → **僅** R-FRAUD-WHITEBOARD（不誤判 MOTORCYCLE / YEAR-ABOVE）
   - `list_nm` 為 NULL / '' → 僅 R-FRAUD-WHITEBOARD
-  - **一致性測試**：對同一 `list_nm` 集合，`deriveAppliedSpecialRules` 推導之 ruleId 集合 === [F091 月跑 `applyListNmSpecialDeletes`](F091-stage1-complete-month-cnt-dedup-special-delete.md) 實際套用之 ruleId 集合（共用 pure utility，AC-3）
+  - **一致性測試**：對同一 `list_nm` 集合，`deriveAppliedSpecialRules` 推導之 ruleId 集合 === [F091 月名單分派 `applyListNmSpecialDeletes`](F091-stage1-complete-month-cnt-dedup-special-delete.md) 實際套用之 ruleId 集合（共用 pure utility，AC-3）
   - 每筆含 ruleId + ruleName + isSystemMandatory + exclusionDescription（AC-2）
   - API response 含 `appliedSpecialRules[]`（§5.0 端點）
 - mock 契約注意（[記憶 feedback_mock_real_system_contract]）：`list_nm` mock 須含**真實中文**（期中 / 機車 / 小資 / 年以上），bug fix 防回退案例須含「中結」「年資」確認不誤判
@@ -249,7 +249,7 @@ function deriveAppliedSpecialRules(listNm: string): AppliedSpecialRule[] {
 
 ## 13. Production 影響標注
 
-- **本 feature 為唯讀呈現，不改變任何月跑行為 / 案件數**：`appliedSpecialRules[]` 為讀時推導，不影響 Stage 1 篩選邏輯。
-- 屬 **Phase A**（與 [F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md) 同批 deploy）：UI 顯示之規則須反映 F091 v2.0 修正後之正確 trigger（期中機車 / 期中 / 年以上），故與 F091 同批上線可避免「UI 顯示舊規則 / 月跑套用新規則」之短暫不一致。
+- **本 feature 為唯讀呈現，不改變任何月名單分派行為 / 案件數**：`appliedSpecialRules[]` 為讀時推導，不影響 Stage 1 篩選邏輯。
+- 屬 **Phase A**（與 [F091 v2.0](F091-stage1-complete-month-cnt-dedup-special-delete.md) 同批 deploy）：UI 顯示之規則須反映 F091 v2.0 修正後之正確 trigger（期中機車 / 期中 / 年以上），故與 F091 同批上線可避免「UI 顯示舊規則 / 月名單分派套用新規則」之短暫不一致。
 - 唯一可見變化：名單詳情 / 篩選頁新增「系統特例規則」唯讀資訊區塊（透明度提升）。
 </content>

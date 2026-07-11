@@ -1,4 +1,4 @@
-%% F098 月跑 Worker 抽離（AD-E07-28 P1）：triggerRun 入列 pg-boss → cdmp-worker 消費 + cancellation / orphan 回收
+%% F098 月名單分派 Worker 抽離（AD-E07-28 P1）：triggerRun 入列 pg-boss → cdmp-worker 消費 + cancellation / orphan 回收
 %% run 業務狀態機（pending → running → completed / failed）含取消與 orphan 轉移來源
 stateDiagram-v2
     [*] --> pending: triggerRun（INSERT assignment_run + pgboss.send，立即回 202）
@@ -20,5 +20,5 @@ stateDiagram-v2
         orphan error_message='worker 中斷，請重新觸發'
         OQ-AD28-02：靠 pg-boss job expiration
         不新增 worker_id / heartbeat_at 欄位
-        OQ-AD28-04：月跑 job retryLimit=0
+        OQ-AD28-04：月名單分派 job retryLimit=0
     end note

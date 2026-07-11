@@ -14,7 +14,7 @@ last_updated: 2026-05-27
 `1711360000293-DeactivatePooldataWhitelistListType`，將
 `pooldata_field_whitelist` 之 `list_type` 條目 `is_active` 設為 `false`（冪等、可逆、
 SQLite 0/1 字面分支）。`case_status` 保持 active 不動。純資料/設定變更，不新增表/欄位，
-**不改 production 月跑案件數**。
+**不改 production 月名單分派案件數**。
 
 ## 端點語意澄清（重要落地依據）
 

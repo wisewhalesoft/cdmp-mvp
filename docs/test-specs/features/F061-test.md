@@ -1,7 +1,7 @@
 ---
 type: test-design-feature
 feature_id: F061
-feature_name: 月跑計分執行（AssignmentRunPipeline）
+feature_name: 月名單分派計分執行（AssignmentRunPipeline）
 priority: P0-MVP
 related_spec: /docs/specs/features/F061-assignment-run-pipeline.md
 last_updated: 2026-05-21
@@ -13,7 +13,7 @@ covers_new_in_v1_4:
   - AC-Banner-2
 ---
 
-# F061: 月跑計分執行 — 測試設計
+# F061: 月名單分派計分執行 — 測試設計
 
 ---
 
@@ -42,15 +42,15 @@ covers_new_in_v1_4:
 
 ## Acceptance Test Design
 
-### AC-1：月跑觸發稽核前置檢查通過後執行計分
+### AC-1：月名單分派觸發稽核前置檢查通過後執行計分
 
 | 項目 | 內容 |
 |------|------|
-| Given | 所有維度均有 match_type；score rows > 0；無月跑鎖；DirectorToken |
+| Given | 所有維度均有 match_type；score rows > 0；無月名單分派鎖；DirectorToken |
 | When | POST /api/v1/assignment/runs/run { projectWorkym: '202607', cardType: 'H' } |
 | Then | HTTP 202 Accepted；polling run status → 'completed'；reportPayload.warningSummary.issueCount=0 |
 
-### AC-2：稽核失敗阻斷月跑
+### AC-2：稽核失敗阻斷月名單分派
 
 | 項目 | 內容 |
 |------|------|
@@ -68,7 +68,7 @@ covers_new_in_v1_4:
 |----|------|---------|--------|
 | TS-F061-PRE-001 | 稽核通過 → pipeline 繼續執行，checkIntegrity 被呼叫一次 | Unit | `assignment-run-precheck-v13.service.spec.ts` |
 | TS-F061-PRE-002 | 稽核失敗 → run status=failed，pipeline 中止 | Unit | 同上 |
-| TS-F061-PRE-003 | 月跑鎖存在 → 不觸發稽核，409 ConflictException | Unit | 同上 |
+| TS-F061-PRE-003 | 月名單分派鎖存在 → 不觸發稽核，409 ConflictException | Unit | 同上 |
 | TS-F061-PRE-004 | checkIntegrity spy：呼叫次數=1，傳入正確 cardType/cardVersion | Unit | 同上 |
 | TS-F061-PRE-005 | 稽核失敗 → audit_log action=RUN，after_value.status=failed | Unit | 同上 |
 | TS-F061-PRE-006 | precheck 通過 → run status pending→running（非 failed） | Unit | 同上 |
@@ -105,9 +105,9 @@ covers_new_in_v1_4:
 |----|------|---------|--------|
 | TS-F061-E2E-001 | 稽核通過 → POST /runs/run 202，polling completed | E2E | `f054-f061-composite.e2e.spec.ts` |
 | TS-F061-E2E-002 | 稽核失敗 → run status=failed，errorDetail 含 MISSING_MATCH_TYPE | E2E | 同上 |
-| TS-F061-E2E-003 | 月跑鎖 → 409 SCORING_VERSION_LOCKED | E2E | 同上 |
-| TS-F061-E2E-004 | 月跑完成 → reportPayload.warningSummary.issueCount=0 | E2E | 同上 |
-| TS-F061-E2E-005 | 月跑完成有警告 → warningSummary.issueCount>0，status=completed | E2E | 同上 |
+| TS-F061-E2E-003 | 月名單分派鎖 → 409 SCORING_VERSION_LOCKED | E2E | 同上 |
+| TS-F061-E2E-004 | 月名單分派完成 → reportPayload.warningSummary.issueCount=0 | E2E | 同上 |
+| TS-F061-E2E-005 | 月名單分派完成有警告 → warningSummary.issueCount>0，status=completed | E2E | 同上 |
 | TS-F061-E2E-006 | audit_log action=RUN 含 run_id 與 card_type | E2E | 同上 |
 | TS-F061-E2E-007 | 有規則違反 → audit_log 含 rule_violated 與 violated_row_count | E2E | 同上 |
 
@@ -136,24 +136,24 @@ covers_new_in_v1_4:
 ## v1.4 補強：Ready 欄頂 CTA Banner（US-132 / GAP-G3）
 
 > **spec 版本**：F061 v1.4（2026-05-21）
-> **新增背景**：v1.4 將月跑執行入口從 F048 Toolbar 移至 Kanban 主頁 Ready 欄頂 CTA Banner（US-132 GAP-G3）。本節新增 3 個前端 Component 場景，覆蓋 CTA Banner 渲染條件與月跑鎖中 disabled 行為。
-> **cross-reference**：CTA Banner secondary「試算」按鈕場景見 F049-test.md TS-F049-CTA-001~005；本節僅覆蓋主按鈕（月跑觸發）行為。
+> **新增背景**：v1.4 將月名單分派執行入口從 F048 Toolbar 移至 Kanban 主頁 Ready 欄頂 CTA Banner（US-132 GAP-G3）。本節新增 3 個前端 Component 場景，覆蓋 CTA Banner 渲染條件與月名單分派鎖中 disabled 行為。
+> **cross-reference**：CTA Banner secondary「試算」按鈕場景見 F049-test.md TS-F049-CTA-001~005；本節僅覆蓋主按鈕（月名單分派觸發）行為。
 
-### TS-F061-CTA-001：stageCounts.ready ≥1 且非歷史月份、非月跑鎖 → CTA Banner 渲染，主按鈕可點擊
+### TS-F061-CTA-001：stageCounts.ready ≥1 且非歷史月份、非月名單分派鎖 → CTA Banner 渲染，主按鈕可點擊
 
 - **關聯需求**：F061 v1.4 §9 AC-Banner-Entry / US-132 AC-1
 - **測試類型**：Positive / Component（RTL）
 - **前置條件**：
   - MSW stub `GET /api/v1/assignment/lists?ym=202605` → `stageCounts: { ..., ready: 3 }`
-  - 非歷史月份（`isHistorical: false`）；無月跑鎖（`assignment_run.status='idle'` 或無 running 紀錄）
+  - 非歷史月份（`isHistorical: false`）；無月名單分派鎖（`assignment_run.status='idle'` 或無 running 紀錄）
 - **步驟**：
   1. render `<ListKanbanPage />`（含 Ready 欄頂 CTA Banner 元件）
   2. 等待渲染完成
   3. 驗證 CTA Banner 主按鈕
 - **預期結果**：
   - Ready 欄頂 CTA Banner 存在（`data-testid="ready-cta-banner"` 或對應 selector）
-  - 主按鈕（觸發月跑，如「執行月跑」）存在且 enabled（`not.toBeDisabled()`）
-  - 主按鈕點擊後觸發月跑 API 請求（MSW 確認收到 `POST /api/v1/assignment/runs/run`）
+  - 主按鈕（觸發月名單分派，如「執行月名單分派」）存在且 enabled（`not.toBeDisabled()`）
+  - 主按鈕點擊後觸發月名單分派 API 請求（MSW 確認收到 `POST /api/v1/assignment/runs/run`）
 
 ---
 
@@ -171,18 +171,18 @@ covers_new_in_v1_4:
 
 ---
 
-### TS-F061-CTA-003：月跑執行中 → CTA Banner 改 disabled 樣式；主按鈕 disabled
+### TS-F061-CTA-003：月名單分派執行中 → CTA Banner 改 disabled 樣式；主按鈕 disabled
 
-- **關聯需求**：F061 v1.4 §9（月跑鎖中 CTA Banner disabled）/ F048 v2.0 AC-4 / F077 v1.3 BR-7 C-2
+- **關聯需求**：F061 v1.4 §9（月名單分派鎖中 CTA Banner disabled）/ F048 v2.0 AC-4 / F077 v1.3 BR-7 C-2
 - **測試類型**：Positive / Component（RTL）
 - **前置條件**：
   - MSW stub `stageCounts.ready = 2`（Banner 應渲染）
-  - MSW stub assignment_run → `{ status: 'running' }`（月跑執行中）
+  - MSW stub assignment_run → `{ status: 'running' }`（月名單分派執行中）
 - **步驟**：
-  1. render `<ListKanbanPage />` 呈現月跑執行中狀態
+  1. render `<ListKanbanPage />` 呈現月名單分派執行中狀態
   2. 驗證 CTA Banner 狀態
 - **預期結果**：
-  - CTA Banner DOM **存在**（月跑鎖不移除 Banner，改 disabled 樣式）
+  - CTA Banner DOM **存在**（月名單分派鎖不移除 Banner，改 disabled 樣式）
   - 主按鈕 disabled（`toBeDisabled()`）
   - Banner 有琥珀色 / disabled 視覺指示（有對應 CSS class 或 aria-disabled）
 

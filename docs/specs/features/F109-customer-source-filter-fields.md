@@ -15,7 +15,7 @@ status: Draft
 
 Priority: P1（Must Have / Phase 2 Advanced） | Status: Draft | Last Updated: 2026-07-02
 
-> **v1.0（2026-07-02 / US-172 初版）**：於 F075 篩選欄位白名單引入第二個資料來源「客戶資料」（`customer_core`），新增 8 個篩選欄位（性別 / 年齡 / 職業別 / 教育程度 / 婚姻狀況 / 身分別 / 收入區間 / 居住城市），全部 `data_source = 'customer_core'`。核心設計：(1) 白名單新增 `data_source` 概念欄位（`'ob_pool_data'` | `'customer_core'`，既有 7 筆預設 `'ob_pool_data'`）+ API 回應暴露 `dataSource` + 白名單頁顯示「資料來源」欄 + 名單定義「新增條件」選單依來源分組；(2) 月跑 Stage 1 於名單引用任一 customer_core 欄位時，**條件式** LEFT JOIN `customer_core`（`ob_pool_data.custo_no = customer_core.source_customer_no`），未引用時不注入 JOIN；(3) LEFT JOIN 後客戶欄位 NULL（無對應客戶或客戶欄本身 NULL）→ 案件排除（等同 INNER JOIN 過濾效果）；(4) 2 個衍生欄（年齡以作業月份首日為基準即時計算實足年齡、居住城市取 `LEFT(cpost_city, 3)` 縣市級）；(5) 6 個 `_desc` 欄之 `option_value = customer_core 實際儲存中文值`（value = label），僅「性別」為 code→label。**邊界**：本 spec 為功能規格層；schema 型別 / migration / composer 簽名變更 / 衍生運算式 SQL 落點 / data_source 解析機制等架構決策交 system-architect（AD-E07-37），已於 §12 列為 Open Questions。
+> **v1.0（2026-07-02 / US-172 初版）**：於 F075 篩選欄位白名單引入第二個資料來源「客戶資料」（`customer_core`），新增 8 個篩選欄位（性別 / 年齡 / 職業別 / 教育程度 / 婚姻狀況 / 身分別 / 收入區間 / 居住城市），全部 `data_source = 'customer_core'`。核心設計：(1) 白名單新增 `data_source` 概念欄位（`'ob_pool_data'` | `'customer_core'`，既有 7 筆預設 `'ob_pool_data'`）+ API 回應暴露 `dataSource` + 白名單頁顯示「資料來源」欄 + 名單定義「新增條件」選單依來源分組；(2) 月名單分派 Stage 1 於名單引用任一 customer_core 欄位時，**條件式** LEFT JOIN `customer_core`（`ob_pool_data.custo_no = customer_core.source_customer_no`），未引用時不注入 JOIN；(3) LEFT JOIN 後客戶欄位 NULL（無對應客戶或客戶欄本身 NULL）→ 案件排除（等同 INNER JOIN 過濾效果）；(4) 2 個衍生欄（年齡以作業月份首日為基準即時計算實足年齡、居住城市取 `LEFT(cpost_city, 3)` 縣市級）；(5) 6 個 `_desc` 欄之 `option_value = customer_core 實際儲存中文值`（value = label），僅「性別」為 code→label。**邊界**：本 spec 為功能規格層；schema 型別 / migration / composer 簽名變更 / 衍生運算式 SQL 落點 / data_source 解析機制等架構決策交 system-architect（AD-E07-37），已於 §12 列為 Open Questions。
 
 ## Agent Loading Guide
 
@@ -46,11 +46,11 @@ F075 白名單現行全部欄位來自「案件資料」（`ob_pool_data`，ETL 
 2. **新增 8 個 `data_source = 'customer_core'` 篩選欄位**（全部 `is_active = true`、`is_system_fixed = false`）：性別、年齡、職業別、教育程度、婚姻狀況、身分別、收入區間、居住城市。
 3. **F076 可選值 seed 延伸**：7 個 categorical 客戶欄位之可選值於首次部署自動 seed（性別 3 / 職業別 55 / 教育程度 8 / 婚姻狀況 5 / 身分別 4 / 收入區間 9 / 居住城市 22）。
 4. **名單定義「新增條件」選單依來源分組**（案件資料 / 客戶資料兩群組，可跨群組選取並存）。
-5. **月跑 Stage 1 條件式 LEFT JOIN customer_core + NULL 排除語意**（§6 核心 BR）；此語意於三個消費點一致：月跑 Stage 1、Stage 0 試算（F049）、名單試算 / 預覽。
+5. **月名單分派 Stage 1 條件式 LEFT JOIN customer_core + NULL 排除語意**（§6 核心 BR）；此語意於三個消費點一致：月名單分派 Stage 1、Stage 0 試算（F049）、名單試算 / 預覽。
 
 **不在範圍**（交其他 agent / 後續）：
 - 白名單 `data_source` 欄位型別、CHECK constraint、migration ordering、既有列 backfill：system-architect（AD-E07-37）。
-- 月跑 Stage 1 條件式 JOIN 之 SQL 實作、composer 簽名變更、衍生運算式（AGE / LEFT3）落點與 PG↔JS 等價：system-architect + tdd-implementation。
+- 月名單分派 Stage 1 條件式 JOIN 之 SQL 實作、composer 簽名變更、衍生運算式（AGE / LEFT3）落點與 PG↔JS 等價：system-architect + tdd-implementation。
 - `customer_core` ETL job 本身之設計與觸發時序（本 spec 假設 `customer_core` 已具實值資料，見 §12 A-4）。
 - 允許 Admin 自 UI 新增「任意」customer_core 欄位（本 spec 之 8 欄由 seed 建立；`available-columns` dropdown 維持 `ob_pool_data` 來源不變，見 §5.5 / OQ-F109-05）。
 
@@ -105,7 +105,7 @@ F075 白名單現行全部欄位來自「案件資料」（`ob_pool_data`，ETL 
 
 - **Given** 7 個 `field_type = categorical` 客戶欄位（性別 / 職業別 / 教育程度 / 婚姻狀況 / 身分別 / 收入區間 / 居住城市）已建於白名單
 - **When** Admin / 部長於 M06「篩選欄位」> Tab 2「可選值管理」進入該欄位之維護頁
-- **Then** 可新增 / 停用 / 啟用可選值，行為與現有 F076 categorical 欄位完全一致（停用不回溯既有名單、月跑不阻擋）
+- **Then** 可新增 / 停用 / 啟用可選值，行為與現有 F076 categorical 欄位完全一致（停用不回溯既有名單、月名單分派不阻擋）
 - **And** 系統首次部署自動 seed 各欄位可選值（數量與內容見 §5.4），seed 為冪等
 
 ### AC-5：性別欄位 code→label 轉換
@@ -121,13 +121,13 @@ F075 白名單現行全部欄位來自「案件資料」（`ob_pool_data`，ETL 
 - **Given** 白名單「年齡」欄位（`date_of_birth`，numeric）已啟用
 - **When** 部長 / Admin 於名單定義表單選「年齡」為篩選欄位
 - **Then** 表單元件顯示「最小年齡（min）」與「最大年齡（max）」兩個整數輸入框；max ≥ min，違反時前端顯示「最大年齡需大於等於最小年齡」且停用儲存
-- **And** 月跑 Stage 1（與 Stage 0 試算）計算實足年齡時，**基準日 = 作業月份首日（`project_workym` 之月份第一日，即 `buildStage1Sql` 既有之 `workdt` 參數）**（OQ-172-01 已裁示）；實足年齡為基準日與 `date_of_birth` 之整年差（未達當年生日者不計入），再判斷是否落於 min–max（含界，`BETWEEN`）
+- **And** 月名單分派 Stage 1（與 Stage 0 試算）計算實足年齡時，**基準日 = 作業月份首日（`project_workym` 之月份第一日，即 `buildStage1Sql` 既有之 `workdt` 參數）**（OQ-172-01 已裁示）；實足年齡為基準日與 `date_of_birth` 之整年差（未達當年生日者不計入），再判斷是否落於 min–max（含界，`BETWEEN`）
 - **And** 同一作業月重跑，年齡計算結果一致（決定性；不隨執行日漂移）
 
 ### AC-7：居住城市取縣市級（左 3 字），可選值為 22 個縣市
 
 - **Given** 白名單「居住城市」欄位（`cpost_city`，categorical）已啟用
-- **When** 月跑 Stage 1 執行居住城市過濾
+- **When** 月名單分派 Stage 1 執行居住城市過濾
 - **Then** 系統取 `customer_core.cpost_city` 之**前 3 個字元**（`LEFT(cpost_city, 3)`）作為縣市代表，與名單條件所選縣市清單比對（`IN`）
   - 說明：`cpost_city` 實際儲存「縣市 + 區」（例：`臺北市中正區`），左 3 字即縣市（`臺北市`）
 - **And** 名單定義「居住城市」多選元件之可選值為縣市層級 22 個選項（臺字形），由 F076 可選值管理維護（§5.4）
@@ -136,28 +136,28 @@ F075 白名單現行全部欄位來自「案件資料」（`ob_pool_data`，ETL 
 ### AC-8：客戶資料 NULL 排除語意（LEFT JOIN NULL = 排除）
 
 - **Given** 名單定義篩選條件含 ≥ 1 個「客戶資料」來源欄位（如「性別 IN [1]」）
-- **When** 月跑 Stage 1 以 `ob_pool_data.custo_no = customer_core.source_customer_no` LEFT JOIN 串接後過濾
+- **When** 月名單分派 Stage 1 以 `ob_pool_data.custo_no = customer_core.source_customer_no` LEFT JOIN 串接後過濾
 - **Then** 若案件之 `custo_no` 在 `customer_core` 無對應紀錄（LEFT JOIN 後客戶欄位為 NULL），該案件**被排除**
 - **And** 若案件之客戶存在（JOIN 有結果）但目標客戶欄位本身為 NULL（如 `gender IS NULL`），該案件同樣**被排除**（NULL 不符合任何條件值）
 - **And** 若名單定義**未設任何客戶資料篩選條件**（僅案件資料條件），則不觸發 NULL 排除語意，亦不注入 JOIN（AC-11）
 
-### AC-9：客戶資料篩選欄位可停用，不回溯既有名單月跑
+### AC-9：客戶資料篩選欄位可停用，不回溯既有名單月名單分派
 
 - **Given** 名單 `OB202607001` 篩選條件含「性別 IN [1]」；部長事後停用白名單「性別」欄位
-- **When** 觸發月跑，Stage 1 讀取 `OB202607001` 之 `condition_payload`
-- **Then** 月跑仍正確讀取固化之「性別 IN [1]」並過濾，不因欄位停用而失敗（沿用 F075 BR-4 不回溯）
+- **When** 觸發月名單分派，Stage 1 讀取 `OB202607001` 之 `condition_payload`
+- **Then** 月名單分派仍正確讀取固化之「性別 IN [1]」並過濾，不因欄位停用而失敗（沿用 F075 BR-4 不回溯）
 - **And** 停用後之「性別」欄位不再出現於**新建**名單定義之可選欄位清單
 
 ### AC-10：案件資料與客戶資料篩選條件並存（AND 邏輯）
 
 - **Given** 名單篩選條件含「`prod_kind` IN ['01']（案件資料）」**AND**「`gender` IN ['2']（客戶資料，女）」
-- **When** 月跑 Stage 1 執行過濾
+- **When** 月名單分派 Stage 1 執行過濾
 - **Then** 僅 `prod_kind = '01'` **且** `customer_core.gender = '2'` 之案件入選；任一條件不符合（含 NULL）均排除
 
 ### AC-11：條件式 JOIN 觸發規則（衍生明確化）
 
 - **Given** 名單之 `condition_payload.conditions` 內 ≥ 1 個 condition 之 `columnName` 對應白名單 `data_source = 'customer_core'` 之欄位
-- **When** Stage 1（月跑 / Stage 0 試算 / 試算預覽）組裝 SQL
+- **When** Stage 1（月名單分派 / Stage 0 試算 / 試算預覽）組裝 SQL
 - **Then** 查詢**必須**注入 `LEFT JOIN customer_core ON ob_pool_data.custo_no = customer_core.source_customer_no`（單一 JOIN，多個客戶條件共用）
 - **And** 當名單無任何 customer_core 條件時，**不得**注入該 JOIN（既有純案件資料名單之行為與效能不變）
 - **And** 條件之 `data_source` 判定須具決定性、且在白名單欄位事後停用後仍可正確判定（與 F075 BR-4 相容；判定機制由 system-architect 依 OQ-F109-01 決定）
@@ -251,8 +251,8 @@ F075 白名單現行全部欄位來自「案件資料」（`ob_pool_data`，ETL 
 | BR-6 | **居住城市衍生語意（AC-7 / §5.3）**：過濾以 `LEFT(cpost_city, 3) IN (values)`；`cpost_city IS NULL` → 排除；可選值為 22 縣市臺字形（OQ-172-02）。 |
 | BR-7 | **6 個 `_desc` 欄 value=label（AC-4 / §5.4）**：`occupation_desc` / `education_desc` / `marital_status_desc` / `customer_type_desc` / `monthly_income_desc`（+ 衍生之 `cpost_city`）之 `option_value` = `customer_core` 實際儲存中文值 = `option_label`，免對照表；僅 `gender` 為 code→label。 |
 | BR-8 | **AND 跨來源組合（AC-10）**：案件資料條件與客戶資料條件於 `condition_payload` 內以 AND 連接（沿用 F050 v2.1 BR-7 / composer `fragments.join(' AND ')`）；任一不符合（含 NULL）即排除。 |
-| BR-9 | **停用不回溯（AC-9）**：沿用 F075 BR-4 / F076 BR-4。月跑 Stage 1 直接讀 `condition_payload`，不 join 白名單 / 可選值做有效性驗證；客戶欄位 / 可選值停用不中斷既有名單月跑。停用可選值若被既有名單引用，沿用 `WHITELIST_OPTION_INACTIVE` 警告（非阻擋）。 |
-| BR-10 | **三處消費一致（§6.3）**：月跑 Stage 1、Stage 0 試算（F049）、名單試算 / 預覽三個消費點對 customer_core 條件之 JOIN 注入、衍生運算式、NULL 排除語意必須完全一致（沿用 I-RUN-EST-01「estimate ≡ run」精神；PG 下推路徑與 JS oracle 路徑須等價）。 |
+| BR-9 | **停用不回溯（AC-9）**：沿用 F075 BR-4 / F076 BR-4。月名單分派 Stage 1 直接讀 `condition_payload`，不 join 白名單 / 可選值做有效性驗證；客戶欄位 / 可選值停用不中斷既有名單月名單分派。停用可選值若被既有名單引用，沿用 `WHITELIST_OPTION_INACTIVE` 警告（非阻擋）。 |
+| BR-10 | **三處消費一致（§6.3）**：月名單分派 Stage 1、Stage 0 試算（F049）、名單試算 / 預覽三個消費點對 customer_core 條件之 JOIN 注入、衍生運算式、NULL 排除語意必須完全一致（沿用 I-RUN-EST-01「estimate ≡ run」精神；PG 下推路徑與 JS oracle 路徑須等價）。 |
 | BR-11 | **`is_system_fixed` 正交**：8 個客戶欄位 `is_system_fixed = false`；F075 BR-16「系統固定欄位排除可選池」與 F109 之來源分組正交，兩者同時作用於 F050 / F051 dropdown 可選池計算。 |
 | BR-12 | **seed 冪等**：白名單 8 欄與可選值 seed 均為冪等（沿用 F075 BR-9 / F076 BR-8 `ON CONFLICT DO NOTHING`）。 |
 
@@ -280,11 +280,11 @@ Stage 1 篩選核心之三個消費點（皆最終呼叫 `buildStage1WhereCondit
 
 | 消費點 | 進入點（現況） | 一致性要求 |
 |---|---|---|
-| 月跑 Stage 1 | `assignment-run-pipeline.service.ts` → `buildStage1Sql`（`INSERT … SELECT FROM ob_pool_data o`） | 注入 JOIN + 衍生運算式 + NULL 排除 |
+| 月名單分派 Stage 1 | `assignment-run-pipeline.service.ts` → `buildStage1Sql`（`INSERT … SELECT FROM ob_pool_data o`） | 注入 JOIN + 衍生運算式 + NULL 排除 |
 | Stage 0 試算（F049） | `assignment-list/stage0-estimate.service.ts` → `buildStage1Sql`（`SELECT COUNT(*)`） | 同上；estimate ≡ run（I-RUN-EST-01） |
 | 名單試算 / 預覽 | 名單建立 / 編輯之案件數預覽（若走 Stage 0 estimate / count 路徑） | 同上 |
 
-> ⚠️ **AD-E07-37 取代本段 JS-oracle 等價要求**：架構師裁定 `customer_core` 為 **PG-only**（該表無 TypeORM entity、SQLite 測試庫不建立），customer_core 篩選以單一 `buildCustomerCoreClause` 產生 PG SQL fragment（AGE / LEFT3 / NULL 排除），**無獨立 JS-object oracle 實作**。三處消費點（月跑 / Stage0 試算 / preview）皆走 PG 下推，等價由「單一程式碼源」而非「兩份實作對拍」保證。含 customer_core 條件之測試一律 `.pg.spec.ts`；純案件資料名單之 SQLite chain 行為不變（regression guard）。
+> ⚠️ **AD-E07-37 取代本段 JS-oracle 等價要求**：架構師裁定 `customer_core` 為 **PG-only**（該表無 TypeORM entity、SQLite 測試庫不建立），customer_core 篩選以單一 `buildCustomerCoreClause` 產生 PG SQL fragment（AGE / LEFT3 / NULL 排除），**無獨立 JS-object oracle 實作**。三處消費點（月名單分派 / Stage0 試算 / preview）皆走 PG 下推，等價由「單一程式碼源」而非「兩份實作對拍」保證。含 customer_core 條件之測試一律 `.pg.spec.ts`；純案件資料名單之 SQLite chain 行為不變（regression guard）。
 
 ## 7. UI/UX 需求
 
@@ -315,7 +315,7 @@ Stage 1 篩選核心之三個消費點（皆最終呼叫 `buildStage1WhereCondit
   - F076（categorical 可選值管理，8 個客戶欄位之可選值維護入口與 seed）
   - F050 / F051（名單定義草稿篩選條件 UI，需來源分組顯示）
 - **Blocks / 影響**：
-  - 月跑 Stage 1（US-081 相關）：需實作條件式 LEFT JOIN customer_core 與 NULL 排除語意（§6）
+  - 月名單分派 Stage 1（US-081 相關）：需實作條件式 LEFT JOIN customer_core 與 NULL 排除語意（§6）
   - F049 Stage 0 試算：需同步套用 §6 語意（三處消費一致）
 - **架構前置**：AD-E07-37（system-architect，落地 §12 Open Questions）
 
@@ -331,7 +331,7 @@ Stage 1 篩選核心之三個消費點（皆最終呼叫 `buildStage1WhereCondit
 | 情境 | 沿用錯誤碼 / 機制 | 說明 |
 |---|---|---|
 | 名單條件 `columnName` 不在白名單或已停用 | `CONDITION_COLUMN_NOT_IN_WHITELIST`（422） | 8 個客戶欄位加入白名單後即通過驗證；與案件欄位共用同一 service 層 defense-in-depth 校驗（F050 v2.1 BR-6），不因 `data_source` 不同而分流 |
-| 名單條件引用之可選值已停用 | `WHITELIST_OPTION_INACTIVE`（警告，非阻擋） | 客戶 categorical 欄位之可選值停用沿用同一警告；月跑不阻擋（BR-9） |
+| 名單條件引用之可選值已停用 | `WHITELIST_OPTION_INACTIVE`（警告，非阻擋） | 客戶 categorical 欄位之可選值停用沿用同一警告；月名單分派不阻擋（BR-9） |
 | 年齡 min/max 驗證（max ≥ min） | 前端阻擋 + 既有 `VALIDATION_ERROR`（後端 DTO） | 沿用 F050 numeric 欄位表單驗證，無新碼；composer 對不完整 numeric range 以既有 `INCOMPLETE_NUMERIC_RANGE` warning 跳過 |
 | `customer_core` 空表 | 不建前置檢查（OQ-172-04 已裁示） | 含客戶條件之名單結果為 0 筆（全數 NULL 排除），列為已知限制，不新增錯誤碼 |
 | condition `columnName` 為一級保留欄位 | `RESERVED_FIELD_IN_CONDITIONS`（400） | 沿用；customer_core 欄位名不與保留欄位（`list_period_*` / `list_interval`）衝突 |
@@ -356,7 +356,7 @@ Stage 1 篩選核心之三個消費點（皆最終呼叫 `buildStage1WhereCondit
   - LEFT JOIN NULL 排除（無對應客戶，TC-172-06 / AC-8）
   - 客戶欄本身 NULL 排除（TC-172-07 / AC-8）
   - 無客戶條件時 NULL 不影響入選（TC-172-08 / AC-8 第 3 點 / AC-11 反向）
-  - 客戶欄停用不中斷月跑（TC-172-09 / AC-9）
+  - 客戶欄停用不中斷月名單分派（TC-172-09 / AC-9）
   - 案件 + 客戶 AND 邏輯（TC-172-10 / AC-10）
 - **決定性 / 等價守門**（呼應三處消費一致 BR-10）：
   - 年齡以 `workdt`（作業月首日）為基準，同月重跑年齡結果一致
@@ -373,7 +373,7 @@ Stage 1 篩選核心之三個消費點（皆最終呼叫 `buildStage1WhereCondit
 - [ ] Stage 1 composer / SQL builder：條件式 LEFT JOIN customer_core（AC-11 / BR-2）
 - [ ] Stage 1：AGE 衍生運算式（基準 `workdt`）+ `cpost_city` LEFT 3 衍生運算式（§5.3 / BR-5 / BR-6）
 - [ ] Stage 1：NULL 排除語意（客戶條件欄不 COALESCE，BR-3）；PG 下推與 JS oracle 等價
-- [ ] 三處消費點一致（月跑 / Stage 0 試算 / 名單試算，BR-10）
+- [ ] 三處消費點一致（月名單分派 / Stage 0 試算 / 名單試算，BR-10）
 - [ ] 前端 M06 列表「資料來源」欄 + 來源篩選 dropdown（依 `dataSource` 旗標）
 - [ ] 前端 F050 / F051「新增條件」選單依來源分組
 - [ ] 圖表：[diagrams/F109-customer-source-filter-flow.mmd](../diagrams/F109-customer-source-filter-flow.mmd)（本輪已建立）
@@ -387,8 +387,8 @@ Stage 1 篩選核心之三個消費點（皆最終呼叫 `buildStage1WhereCondit
 |---|---|---|
 | A-1 | **`data_source` schema 細節**：型別（VARCHAR）、CHECK constraint（限兩值）、NOT NULL / DEFAULT `'ob_pool_data'`、既有列 backfill、migration ordering 由 system-architect 決定 | [ASSUMPTION] 待 architect |
 | A-2 | **8 欄由 seed / migration 建立**（非經 available-columns dropdown 新增）；`available-columns` 端點維持 `ob_pool_data` 來源不變 | [DECISION] F109 範圍 |
-| A-3 | **6 個 `_desc` 欄 value=label 前提**：`customer_core` 儲存值即為中文描述（dev 已觀察）；seed 值須以 dev `SELECT DISTINCT` 校驗與實際儲存值完全一致，否則名單條件與月跑比對失配 | [ASSUMPTION] tdd 落地校驗 |
-| A-4 | **`customer_core` 空表為已知限制**（OQ-172-04 裁示）：不建前置檢查；空表時含客戶條件之名單月跑結果為 0 筆（全數 NULL 排除）。dev/prod customer_core 皆有約 360 萬筆，空表實務不會發生 | [DECISION] OQ-172-04 |
+| A-3 | **6 個 `_desc` 欄 value=label 前提**：`customer_core` 儲存值即為中文描述（dev 已觀察）；seed 值須以 dev `SELECT DISTINCT` 校驗與實際儲存值完全一致，否則名單條件與月名單分派比對失配 | [ASSUMPTION] tdd 落地校驗 |
+| A-4 | **`customer_core` 空表為已知限制**（OQ-172-04 裁示）：不建前置檢查；空表時含客戶條件之名單月名單分派結果為 0 筆（全數 NULL 排除）。dev/prod customer_core 皆有約 360 萬筆，空表實務不會發生 | [DECISION] OQ-172-04 |
 | A-5 | **JOIN key 已驗證**：`ob_pool_data.custo_no = customer_core.source_customer_no` 於 F100 / F103 計分流程已使用；F109 沿用同一 key | [RESOLVED] |
 
 ### 12.2 Open Questions（交 system-architect / AD-E07-37）
@@ -398,11 +398,11 @@ Stage 1 篩選核心之三個消費點（皆最終呼叫 `buildStage1WhereCondit
 | OQ-F109-01 | **condition 之 `data_source` 判定機制**：Stage 1 需對每個 condition 判定是否 customer_core，且須與 F075 BR-4「Stage 1 不 join whitelist」相容、在白名單欄位事後停用後仍決定性。選項：(a) 寫入時將 `dataSource` 固化進 `condition_payload`（每個 condition 附 `dataSource`）；(b) runtime 查白名單；(c) 靜態 customer_core 欄位集常數。 | 建議 (a) 固化進 condition_payload（決定性最佳、免 runtime join、天然相容 BR-4）；(c) 可作為過渡。需 F050 / F051 寫入時填入 + 舊名單（condition_payload IS NULL / 無 dataSource）之 fallback 規則。 |
 | OQ-F109-02 | **衍生運算式落點與 composer 簽名**：AGE 需 `workdt`（作業月首日）為基準；現行 `buildStage1WhereConditions(list)` 不接受 `workdt`（僅 `buildStage1Sql` 有）。AGE / LEFT3 衍生運算式應落在何處？PG 下推（`buildStage1Sql`）與 JS oracle（`stage1-filter-chain`）兩路徑如何保持等價？ | 建議 AGE / LEFT3 於 `buildStage1Sql` 針對 customer_core condition 特例組裝（PG：日期運算 / `LEFT(...)`），JS oracle 在 filter-chain 以等價 JS 計算；composer 簽名可能需擴充傳入 `workdt` 或改由 SQL builder 承接客戶條件。等價基準 = PG 下推。 |
 | OQ-F109-03 | **「性別」實體欄位確認**：US-172 指定 `customer_core.gender`（VARCHAR(1)）；計分引擎（F104）使用 m301 之 `cus_sex`（VARCHAR(2)，raw `1/2/3` 含髒值）。請確認 `gender` distinct 值確為 `1/2/3` 且可直接 `IN` 比對；若 `gender` 欄空 / 異編碼，是否改綁 `cus_sex`。 | 建議先以 dev `SELECT DISTINCT gender` 驗證；若 `gender` 為 `1/2/3` 乾淨值則遵循 story 用 `gender`；否則升級為改綁 `cus_sex` 並回饋 spec-writer 更新 §5.2。 |
-| OQ-F109-04 | **LEFT JOIN 效能 / 索引**：`customer_core` 約 360 萬筆，月跑 Stage 1 對含客戶條件之名單逐一 LEFT JOIN on `source_customer_no`。是否已有 `customer_core(source_customer_no)` 與 `ob_pool_data(custo_no)` 索引？是否需新增以避免月跑效能退化（呼應 CLAUDE.md ETL 生產規模原則 + 過往 Stage 0 逾時教訓）。 | 建議 architect 確認 / 補 `customer_core(source_customer_no)` 索引；效能目標歸 NFR，不在本 spec 硬性約束。 |
+| OQ-F109-04 | **LEFT JOIN 效能 / 索引**：`customer_core` 約 360 萬筆，月名單分派 Stage 1 對含客戶條件之名單逐一 LEFT JOIN on `source_customer_no`。是否已有 `customer_core(source_customer_no)` 與 `ob_pool_data(custo_no)` 索引？是否需新增以避免月名單分派效能退化（呼應 CLAUDE.md ETL 生產規模原則 + 過往 Stage 0 逾時教訓）。 | 建議 architect 確認 / 補 `customer_core(source_customer_no)` 索引；效能目標歸 NFR，不在本 spec 硬性約束。 |
 | OQ-F109-05 | **是否開放 UI 新增任意 customer_core 欄位**（`available-columns` 延伸至 customer_core + `POST` 帶 `dataSource`）？ | 建議 F109 維持 seed-only，dropdown 不變；未來若需求再開 spec 擴充。 |
 
 ## 13. 變更紀錄
 
 | 版本 | 日期 | 變更內容 |
 |---|---|---|
-| v1.0 | 2026-07-02 | 初版（US-172）：白名單 `data_source` 概念（`ob_pool_data` / `customer_core`）+ API 暴露 `dataSource` + M06 列表來源欄 + 名單定義來源分組；新增 8 個 `data_source='customer_core'` 篩選欄位（性別 code→label / 年齡衍生 AGE 以 `project_workym` 月首日為基準 / 居住城市 `LEFT(cpost_city,3)` 縣市級 / 5 個 `_desc` value=label）；F076 seed 7 個 categorical 欄位可選值（3/55/8/5/4/9/22）；月跑 Stage 1 條件式 LEFT JOIN customer_core + NULL 排除語意（BR-2 / BR-3）+ 三處消費一致（BR-10）。4 個 US-172 OQ（年齡基準 / 城市 seed / 性別機制 / 空表限制）已裁示並落規格。5 個架構 Open Question（OQ-F109-01~05）交 system-architect（AD-E07-37）。 |
+| v1.0 | 2026-07-02 | 初版（US-172）：白名單 `data_source` 概念（`ob_pool_data` / `customer_core`）+ API 暴露 `dataSource` + M06 列表來源欄 + 名單定義來源分組；新增 8 個 `data_source='customer_core'` 篩選欄位（性別 code→label / 年齡衍生 AGE 以 `project_workym` 月首日為基準 / 居住城市 `LEFT(cpost_city,3)` 縣市級 / 5 個 `_desc` value=label）；F076 seed 7 個 categorical 欄位可選值（3/55/8/5/4/9/22）；月名單分派 Stage 1 條件式 LEFT JOIN customer_core + NULL 排除語意（BR-2 / BR-3）+ 三處消費一致（BR-10）。4 個 US-172 OQ（年齡基準 / 城市 seed / 性別機制 / 空表限制）已裁示並落規格。5 個架構 Open Question（OQ-F109-01~05）交 system-architect（AD-E07-37）。 |

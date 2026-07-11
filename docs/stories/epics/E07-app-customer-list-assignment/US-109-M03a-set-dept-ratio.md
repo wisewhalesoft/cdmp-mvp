@@ -14,7 +14,7 @@
 
 **As a** 部長（Director）或 Admin
 **I want** 在名單進入「部門比例設定」階段後，為每份名單設定各部門的分配比例（RATION），使各部門比例加總 = 100%
-**So that** 系統在月跑時能正確依部門比例分配案件，每份名單可有獨立的部門策略
+**So that** 系統在月名單分派時能正確依部門比例分配案件，每份名單可有獨立的部門策略
 
 ---
 
@@ -87,9 +87,9 @@
 - **When** 嘗試存取部門比例設定頁或呼叫寫入 API
 - **Then** 後端回傳 403 Forbidden；前端在 US-105 清單中不顯示「設定部門比例」按鈕
 
-### AC-8：月跑執行中禁止設定
+### AC-8：月名單分派執行中禁止設定
 
-- **Given** 目前有 AssignmentRun status = 'running' 的月跑
+- **Given** 目前有 AssignmentRun status = 'running' 的月名單分派
 - **When** 部長或 Admin 嘗試進入部門比例設定的編輯模式
 - **Then** 編輯按鈕為停用狀態，hover 顯示提示「分派執行中，無法修改比例設定」
 
@@ -100,7 +100,7 @@
 - 部門比例資料表：`ob_dept_pct`（對應 OBMDEPTPCT，按 LIST_NO + DEPT_CODE 作為複合鍵）；schema 由 system-architect 確認
 - 部門清單來源：查詢 `ob_emphire` WHERE `resign_date IS NULL`，取不重複的 `(dept_code, dept_name)` 組合，依 dept_code 排序
 - 本 Story 設定的資料由 US-110（部門比例設定階段推進至個別業務比例）驗證後才能推進
-- 月跑中資料鎖判斷：查詢 `assignment_run` 是否有 status = 'running' 記錄
+- 月名單分派中資料鎖判斷：查詢 `assignment_run` 是否有 status = 'running' 記錄
 - **[通知 spec-writer]**：本 Story 取代 F060（US-091 對應），請將 F060 標記 DEPRECATED 並新增對應本 Story 的 Feature spec
 
 ---
@@ -137,7 +137,7 @@
 - **When**：在 US-105 清單查看 stage = 'dept_ratio' 的名單
 - **Then**：不顯示「設定部門比例」按鈕；直接呼叫 API 回 403
 
-### TC-109-06：月跑中禁止編輯
+### TC-109-06：月名單分派中禁止編輯
 
 - **Given**：AssignmentRun status = 'running'
 - **When**：部長嘗試進入部門比例設定編輯模式
@@ -161,7 +161,7 @@
 - [ ] RATION = 0 儲存測試（TC-109-03）
 - [ ] 負值輸入阻擋測試（TC-109-04）
 - [ ] 處長無操作權限測試（TC-109-05）
-- [ ] 月跑中鎖定測試（TC-109-06）
+- [ ] 月名單分派中鎖定測試（TC-109-06）
 - [ ] AssignmentAuditLog 寫入測試
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過

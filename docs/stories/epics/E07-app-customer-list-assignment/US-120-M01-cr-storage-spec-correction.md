@@ -13,7 +13,7 @@
 
 **As a** 系統架構師（system-architect）與 spec-writer
 **I want** 正式宣告「CR 回分開關」的儲存位置為名單定義實體欄位（`ob_list_definition.cr_enabled`），並明確廢棄透過 OBASSIGNSET 路徑讀取 CR 設定的方式
-**So that** 月跑 Stage 3 實作有唯一、明確的 CR 開關來源，消除舊 F059 路徑與新路徑並存的技術債，並確保 CR 開關可在草稿階段 per-LIST_NO 設定
+**So that** 月名單分派 Stage 3 實作有唯一、明確的 CR 開關來源，消除舊 F059 路徑與新路徑並存的技術債，並確保 CR 開關可在草稿階段 per-LIST_NO 設定
 
 ---
 
@@ -23,7 +23,7 @@
 
 現有 F059 spec 描述的 CR 回分邏輯，其開關設定透過 OBASSIGNSET 表路徑讀取（舊系統遺留路徑）。本次 E07 重構（US-107）引入新的 per-LIST_NO CR 開關，儲存於 `ob_list_definition` 實體欄位中。
 
-若兩種路徑並存，月跑 Stage 3 將面臨歧義：
+若兩種路徑並存，月名單分派 Stage 3 將面臨歧義：
 - 讀 OBASSIGNSET → 舊路徑，無 per-LIST_NO 區分
 - 讀 `ob_list_definition.cr_enabled` → 新路徑，per-LIST_NO 精確控制
 
@@ -48,10 +48,10 @@
 - **And** data-model.md 中 `ob_list_definition` 表描述新增 `cr_enabled BOOLEAN NOT NULL DEFAULT TRUE` 欄位說明
 - **And** 任何 spec 或 story 中對 OBASSIGNSET CR 設定路徑的引用均加入 `[DEPRECATED]` 標記
 
-### AC-2：月跑 Stage 3 實作讀取新路徑
+### AC-2：月名單分派 Stage 3 實作讀取新路徑
 
-- **Given** 月跑 Stage 3 的實作（F059）已依新路徑重構
-- **When** 月跑執行至 Stage 3
+- **Given** 月名單分派 Stage 3 的實作（F059）已依新路徑重構
+- **When** 月名單分派執行至 Stage 3
 - **Then** Stage 3 從 `ob_list_definition.cr_enabled` 讀取每筆名單的 CR 開關值
 - **And** Stage 3 **不再**讀取 OBASSIGNSET 的任何欄位以決定 CR 回分邏輯
 - **And** 整合測試確認：cr_enabled = true → 執行 CR 回分；cr_enabled = false → 跳過 CR 回分
@@ -61,7 +61,7 @@
 - **Given** F059 廢棄 PR 完成 code review
 - **When** PR 合併至主分支
 - **Then** F059 中所有讀取 OBASSIGNSET CR 設定的程式碼已移除（無 dead code 殘留）
-- **And** 移除後不影響其他月跑 Stage 的正常運作（Stage 1 / 2 / 4 不受影響）
+- **And** 移除後不影響其他月名單分派 Stage 的正常運作（Stage 1 / 2 / 4 不受影響）
 
 ### AC-4：US-107 與 F059 廢棄的原子性上線保證
 
@@ -72,14 +72,14 @@
   2. F059 廢棄 PR（OBASSIGNSET 舊路徑移除）
   3. US-120 spec 更新（data-model.md / F059 spec 文件）
   上述三項必須在**同一次部署批次**中完成，不得分批上線
-- **And** 若任一項未就緒，整批上線取消，月跑 Stage 3 暫停執行
+- **And** 若任一項未就緒，整批上線取消，月名單分派 Stage 3 暫停執行
 
 ### AC-5：空窗期保護機制
 
 - **Given** 新 CR 開關功能（US-107）尚未上線
-- **When** 月跑 Stage 3 被觸發
-- **Then** 若系統偵測到 `ob_list_definition.cr_enabled` 欄位不存在（尚未完成 migration），月跑 Stage 3 **不得執行**，回傳明確錯誤：「CR 回分設定尚未遷移完成，Stage 3 已暫停」
-- **And** 月跑整體標記為 failed，錯誤訊息記錄於 AssignmentRun.error_message
+- **When** 月名單分派 Stage 3 被觸發
+- **Then** 若系統偵測到 `ob_list_definition.cr_enabled` 欄位不存在（尚未完成 migration），月名單分派 Stage 3 **不得執行**，回傳明確錯誤：「CR 回分設定尚未遷移完成，Stage 3 已暫停」
+- **And** 月名單分派整體標記為 failed，錯誤訊息記錄於 AssignmentRun.error_message
 
 ---
 
@@ -99,29 +99,29 @@
 
 ## 測試案例
 
-### TC-120-01：月跑 Stage 3 讀取 cr_enabled 欄位
+### TC-120-01：月名單分派 Stage 3 讀取 cr_enabled 欄位
 
-- **Given**：LIST_NO = 'OB202506001'，`ob_list_definition.cr_enabled = true`；月跑執行至 Stage 3
+- **Given**：LIST_NO = 'OB202506001'，`ob_list_definition.cr_enabled = true`；月名單分派執行至 Stage 3
 - **When**：Stage 3 處理 OB202506001
 - **Then**：Stage 3 從 `ob_list_definition` 讀取 cr_enabled = true，執行 CR 回分邏輯；**不讀取** OBASSIGNSET 的任何欄位
 
-### TC-120-02：月跑 Stage 3 跳過 cr_enabled = false 的名單
+### TC-120-02：月名單分派 Stage 3 跳過 cr_enabled = false 的名單
 
-- **Given**：LIST_NO = 'OB202506002'，`ob_list_definition.cr_enabled = false`；月跑執行至 Stage 3
+- **Given**：LIST_NO = 'OB202506002'，`ob_list_definition.cr_enabled = false`；月名單分派執行至 Stage 3
 - **When**：Stage 3 處理 OB202506002
 - **Then**：Stage 3 跳過 OB202506002 的 CR 回分邏輯；執行日誌記錄「CR 回分已停用」
 
 ### TC-120-03：F059 舊路徑移除後不影響其他 Stage
 
-- **Given**：F059 廢棄 PR 合併後，月跑完整執行（Stage 0 ~ 4）
-- **When**：月跑完整執行
-- **Then**：Stage 1 / 2 / 4 正常完成；不受 F059 廢棄影響；月跑整體 status = 'completed'
+- **Given**：F059 廢棄 PR 合併後，月名單分派完整執行（Stage 0 ~ 4）
+- **When**：月名單分派完整執行
+- **Then**：Stage 1 / 2 / 4 正常完成；不受 F059 廢棄影響；月名單分派整體 status = 'completed'
 
 ### TC-120-04：空窗期保護觸發
 
 - **Given**：`ob_list_definition.cr_enabled` 欄位尚未 migration（欄位不存在）
-- **When**：月跑嘗試執行至 Stage 3
-- **Then**：Stage 3 不執行；月跑 status = 'failed'；error_message = 「CR 回分設定尚未遷移完成，Stage 3 已暫停」
+- **When**：月名單分派嘗試執行至 Stage 3
+- **Then**：Stage 3 不執行；月名單分派 status = 'failed'；error_message = 「CR 回分設定尚未遷移完成，Stage 3 已暫停」
 
 ---
 
@@ -136,7 +136,7 @@
 ## Definition of Done
 
 - [ ] AC-1：F059 spec 與 data-model.md 更新，舊路徑加 DEPRECATED 標記（by spec-writer）
-- [ ] AC-2：月跑 Stage 3 整合測試通過（cr_enabled true / false 兩種情境）
+- [ ] AC-2：月名單分派 Stage 3 整合測試通過（cr_enabled true / false 兩種情境）
 - [ ] AC-3：F059 舊路徑程式碼 code review 確認已移除
 - [ ] AC-4：部署計劃文件確認三項 PR 同批上線
 - [ ] AC-5：空窗期保護整合測試通過
@@ -148,5 +148,5 @@
 ## 相關文件
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
-- **相關 Stories**：US-107（per-LIST_NO CR 回分開關，本 Story 的配套實作）、US-081（月跑觸發，Stage 3 執行）
+- **相關 Stories**：US-107（per-LIST_NO CR 回分開關，本 Story 的配套實作）、US-081（月名單分派觸發，Stage 3 執行）
 - **需更新 Spec**：F059 spec（CR 回分舊路徑廢棄宣告）、data-model.md（ob_list_definition.cr_enabled 新增）

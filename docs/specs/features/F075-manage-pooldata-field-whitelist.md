@@ -57,7 +57,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - 新建 `pooldata_field_whitelist` 表，欄位包含 `column_name`（唯一鍵）、`display_name`、`field_type`、`is_active`、**`is_system_fixed`（v1.7 新增，`BOOLEAN NOT NULL DEFAULT false`；標記系統固定篩選條件，由 F050 v2.3 / F051 v2.2 自動注入、不可停用、從名單「新增條件」可選池排除）**、`created_at`、`updated_at`
 - 部長 / Admin 可寫入；處長唯讀（可進入頁面查看，無編輯按鈕）
 - 系統首次部署時自動 seed **7 筆全部啟用**（v1.6 對齊 F050 v2.1.1 補 `best_case`（US-128 / US-129）；v1.5：對齊舊系統 OBZ020 之 5 欄篩選欄位 + v2.1 重構新增 case_status 條目，US-125 AC-5）
-- 停用欄位「不回溯」既有名單條件，月跑讀取直接讀 `ob_list_definition.filter_conditions` JSONB，不 join 白名單做欄位有效性驗證
+- 停用欄位「不回溯」既有名單條件，月名單分派讀取直接讀 `ob_list_definition.filter_conditions` JSONB，不 join 白名單做欄位有效性驗證
 
 **v1.4 新增**：新增欄位流程改為下拉選擇（dropdown） — 後端提供 `GET /api/v1/pooldata-fields/available-columns` 回傳 OBPOOLDATA 既有但尚未列入白名單之欄位清單（含其 PostgreSQL `dataType` 與系統推斷之 `suggestedFieldType`），前端 Modal 以下拉取代自由輸入 `columnName`；available-columns 查詢過濾**所有**已在 `pooldata_field_whitelist` 的紀錄（含 `is_active = false`），確保不會繞過 AC-5 唯一性。系統推斷之 `suggestedFieldType` 作為預選值，使用者仍可覆寫；此舉徹底消除 A-3 孤兒欄位於新增階段產生的風險。
 
@@ -141,8 +141,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 ### AC-8：停用欄位不影響既有名單條件（舊名單相容）
 
 - **Given** 名單定義 `OB202604010` 含篩選條件 `settle_src = Y`；部長停用白名單中 `settle_src`
-- **When** 系統執行月跑讀取 `OB202604010` 之篩選條件
-- **Then** 月跑仍正確讀取 `settle_src = Y` 並過濾 OBPOOLDATA；不因欄位停用而失敗
+- **When** 系統執行月名單分派讀取 `OB202604010` 之篩選條件
+- **Then** 月名單分派仍正確讀取 `settle_src = Y` 並過濾 OBPOOLDATA；不因欄位停用而失敗
 
 ### AC-9：欄位類別影響名單定義表單元件選擇
 
@@ -426,7 +426,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | BR-1 | **`column_name` 唯一性**：DB 加 UNIQUE index；新增時若衝突回 409 `POOLDATA_FIELD_DUPLICATE` |
 | BR-2 | **`field_type` ENUM**：限 `'numeric'` / `'categorical'` / `'date'`；違反回 422 `POOLDATA_FIELD_TYPE_INVALID` |
 | BR-3 | **不支援硬刪除**：MVP 僅支援軟刪除（`is_active = false`）；硬刪除留待 OQ-102-02 決議 |
-| BR-4 | **停用後不回溯**：月跑 Stage 1 讀取 `ob_list_definition.filter_conditions` 時，**不 join** `pooldata_field_whitelist` 做欄位有效性驗證；既有條件即使欄位停用仍可正確過濾 |
+| BR-4 | **停用後不回溯**：月名單分派 Stage 1 讀取 `ob_list_definition.filter_conditions` 時，**不 join** `pooldata_field_whitelist` 做欄位有效性驗證；既有條件即使欄位停用仍可正確過濾 |
 | BR-5 | **角色矩陣**：寫入端點（POST / PATCH / DELETE）限 `admin` 或 `business_role = 'director'`；GET 開放至 `business_role = 'section_chief'`；對應 `DirectorGuard` 與 `DirectorOrSectionChiefGuard` |
 | BR-6 | **字串映射不維護外鍵**：白名單之 `column_name` 為 OBPOOLDATA 欄位名稱字串，不維護 FK 約束（因 OBPOOLDATA 為 ETL 同步資料，欄位可能動態變化） |
 | BR-7 | **categorical → 非 categorical 之 field_type 變更（v1.3 / 2026-05-17 / PO 決議 F076-C 落地）**：F075 PATCH 將某欄位 `field_type` 從 `'categorical'` 改為其他類別時，service 層於同一 transaction 內對 `pooldata_field_option` 執行批次 `SET is_active = false, deactivation_reason = 'field_type_changed' WHERE column_name = :columnName AND is_active = true`（軟停用）；**不 CASCADE 刪除**，歷史保留供追溯（沿用 F076 v1.3 BR-6 + BR-7）；UI 顯示 confirm Modal 提示「將自動停用 N 個可選值」（N 由 GET options API 動態取得）；批次 UPDATE 失敗則整個 PATCH transaction rollback |
@@ -547,8 +547,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
   - 部長 PATCH 更新 displayName → 200 OK + 稽核
   - PATCH categorical → numeric → 200 OK + 稽核（前端負責警告）
   - 部長 DELETE 停用 → 200 OK，`is_active = false`，稽核 `action = 'DISABLE'`
-  - 已停用名單 / 月跑進行中不影響 GET（白名單獨立於月跑流程）
-  - 停用欄位後月跑仍可讀取既有條件（AC-8 場景）
+  - 已停用名單 / 月名單分派進行中不影響 GET（白名單獨立於月名單分派流程）
+  - 停用欄位後月名單分派仍可讀取既有條件（AC-8 場景）
   - 部長 GET available-columns → 200 OK，僅含 OBPOOLDATA 既有但不在白名單之欄位（含 is_active=false 過濾，對應 AC-10 / BR-13）
   - Admin GET available-columns → 200 OK
   - 處長 / 課長 / 業務人員 GET available-columns → 403 `AUTH_FORBIDDEN`（對應 AC-11）
@@ -578,7 +578,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
   - 新增 Modal `displayName` 已有內容（含 trim 後 > 0）→ dropdown 換選不覆寫（AC-17）
   - 新增 Modal 自動填入後使用者可清空 / 改寫 displayName（AC-17）
   - Edit Modal 切換 fieldType / 任何欄位變更**不**觸發 `displayName` 自動填入（AC-17 negative case）
-- E2E：新增 RISK_LEVEL（categorical）→ F076 維護可選值 → F050 新名單表單可選擇 → 停用 → F050 表單消失 → 既有名單月跑不受影響
+- E2E：新增 RISK_LEVEL（categorical）→ F076 維護可選值 → F050 新名單表單可選擇 → 停用 → F050 表單消失 → 既有名單月名單分派不受影響
 
 ## 11. 實作 Checklist
 

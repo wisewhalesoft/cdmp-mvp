@@ -357,17 +357,17 @@ status: Draft
 
 ---
 
-## NFR-003：E07 分派月跑執行效能（Assignment Run Performance）
+## NFR-003：E07 分派月名單分派執行效能（Assignment Run Performance）
 
 優先級：P0（Critical）
 
-**需求陳述**：E07 客戶名單分派月跑（Stage 0 ~ Stage 4 + 快照寫入）在本月 `ob_pool_data` 10 萬筆案件的場景下，完整執行時間必須控制於 30 分鐘內。
+**需求陳述**：E07 客戶名單分派月名單分派（Stage 0 ~ Stage 4 + 快照寫入）在本月 `ob_pool_data` 10 萬筆案件的場景下，完整執行時間必須控制於 30 分鐘內。
 
 **具體閾值**：
 
 | 項目 | 閾值 |
 |------|------|
-| 完整月跑執行時間（10 萬筆案件） | < 30 分鐘 |
+| 完整月名單分派執行時間（10 萬筆案件） | < 30 分鐘 |
 | Stage 1 名單建立（10 萬筆） | < 5 分鐘 |
 | Stage 2 計分（10 萬筆，呼叫 PostgreSQL function） | < 10 分鐘 |
 | Stage 3 部門分配（10 萬筆） | < 5 分鐘 |
@@ -376,7 +376,7 @@ status: Draft
 
 **驗收標準**：
 
-- Given `ob_pool_data` 含 100,000 筆案件、當月 `ob_list_definition` 含 5 筆 active 名單、部門比例與人員比例均已設定正確，When 業務主管觸發分派月跑，Then 月跑完整執行時間（含快照寫入）不超過 30 分鐘，且 `assignment_run.status` 最終為 `completed`
+- Given `ob_pool_data` 含 100,000 筆案件、當月 `ob_list_definition` 含 5 筆 active 名單、部門比例與人員比例均已設定正確，When 業務主管觸發分派月名單分派，Then 月名單分派完整執行時間（含快照寫入）不超過 30 分鐘，且 `assignment_run.status` 最終為 `completed`
 
 **受影響功能**：F061
 
@@ -386,7 +386,7 @@ status: Draft
 
 優先級：P0（Critical）
 
-**需求陳述**：月跑完成後的三份快照（`config` / `input_list` / `result`）必須在同一 DB Transaction 中原子性寫入 `assignment_run_snapshot`。任一快照寫入失敗則整體 Rollback，`assignment_run.status` 更新為 `failed`；不允許部分快照寫入成功、部分失敗的中間狀態（AD-E07-2）。
+**需求陳述**：月名單分派完成後的三份快照（`config` / `input_list` / `result`）必須在同一 DB Transaction 中原子性寫入 `assignment_run_snapshot`。任一快照寫入失敗則整體 Rollback，`assignment_run.status` 更新為 `failed`；不允許部分快照寫入成功、部分失敗的中間狀態（AD-E07-2）。
 
 **具體閾值**：
 
@@ -394,12 +394,12 @@ status: Draft
 |------|------|
 | 三份快照寫入 Transaction | 100% ACID 原子性 |
 | Transaction 失敗時 rollback 行為 | 100%（無部分寫入殘留） |
-| 快照類型完整性 | 每次 completed 月跑必有 config + input_list + result 三份 |
+| 快照類型完整性 | 每次 completed 月名單分派必有 config + input_list + result 三份 |
 
 **驗收標準**：
 
-- Given 月跑 Stage 1~4 全部成功、快照寫入 Transaction 第三份 `result` 時發生 DB 錯誤，When Transaction rollback，Then `assignment_run_snapshot` 表中不存在該 `run_id` 的任何紀錄（三份均未 commit），`assignment_run.status` 為 `failed`，`error_message` 記錄 `snapshot write failed`
-- Given 月跑 completed，When 透過 F066 查詢該 `run_id` 的快照，Then 三份快照（`config` / `input_list` / `result`）均存在且 payload 完整
+- Given 月名單分派 Stage 1~4 全部成功、快照寫入 Transaction 第三份 `result` 時發生 DB 錯誤，When Transaction rollback，Then `assignment_run_snapshot` 表中不存在該 `run_id` 的任何紀錄（三份均未 commit），`assignment_run.status` 為 `failed`，`error_message` 記錄 `snapshot write failed`
+- Given 月名單分派 completed，When 透過 F066 查詢該 `run_id` 的快照，Then 三份快照（`config` / `input_list` / `result`）均存在且 payload 完整
 
 **受影響功能**：F061, F066
 
@@ -422,7 +422,7 @@ status: Draft
 
 **驗收標準**：
 
-- Given 舊系統（SQL Server SP）與新系統 E07 各執行一次同作業年月的分派月跑，兩次使用相同的名單定義、計分設定、部門比例、人員比例、CR 開關狀態，When 透過 F067 比對兩次月跑結果，Then 人員配對不一致率（`appl_no` join 後 `ob_emplid` 不同的比例）必須小於 3%
+- Given 舊系統（SQL Server SP）與新系統 E07 各執行一次同作業年月的分派月名單分派，兩次使用相同的名單定義、計分設定、部門比例、人員比例、CR 開關狀態，When 透過 F067 比對兩次月名單分派結果，Then 人員配對不一致率（`appl_no` join 後 `ob_emplid` 不同的比例）必須小於 3%
 - Given 人員配對不一致率 ≥ 3%，When F067 顯示比對報告，Then 不一致率以紅色警示、連結至本 NFR，並於 UI 顯示「請確認後再執行正式上線」警示文字
 
 **受影響功能**：F061, F067（人員配對 diff 為主要驗收工具）
@@ -484,6 +484,6 @@ status: Draft
 | NFR-002.10 Raw Data 預覽 | 百萬筆資料分頁查詢與排序回應時間 | k6 / JMeter |
 | NFR-002.11 動態建表 | 100 欄位來源表的建表時間量測 | 整合測試套件 |
 | NFR-002.12 孤兒回收效能 | 10 筆孤兒任務下的回收時間量測 | 整合測試套件 |
-| NFR-003 月跑執行效能 | 10 萬筆 ob_pool_data 完整月跑計時（含快照寫入） | 整合測試套件 + 實際資料壓測 |
+| NFR-003 月名單分派執行效能 | 10 萬筆 ob_pool_data 完整月名單分派計時（含快照寫入） | 整合測試套件 + 實際資料壓測 |
 | NFR-004 快照原子性 | 模擬快照第三份寫入失敗，驗證 Transaction rollback 無殘留 | 整合測試套件（DB 交易測試） |
 | NFR-005 結果準確性 | 新舊系統同月執行 × F067 比對報告的人員配對不一致率 | 新舊系統並行驗證 + F067 |

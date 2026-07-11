@@ -73,20 +73,20 @@ status: Draft
 | F044 | US-057 | E05 | Target Load + UPSERT | P0-MVP | 批次寫入目標表、ETL 追蹤欄位填充、UPSERT 衝突處理 |
 | F046 | US-060 | E06 | Customer 360 — 客戶搜尋與清單 | P0-MVP | 統計摘要 + Full-Text Search + 類型篩選 + 分頁；依角色遮罩 |
 | F047 | US-061 | E06 | Customer 360 — 單一客戶 360 詳情 | P0-MVP | 85 欄位 8 個分類展示，ETL 新鮮度顯示 |
-| F048 | US-070 | E07 | 查看本月名單定義清單 | P0-MVP | M01 入口頁；使用中/已停用雙頁籤；月跑鎖 |
+| F048 | US-070 | E07 | 查看本月名單定義清單 | P0-MVP | M01 入口頁；使用中/已停用雙頁籤；月名單分派鎖 |
 | F049 | US-071 | E07 | Stage 0 每日分派數量估算 | P0-MVP | 每日估算 + 單一 LIST_NO 即時案件試算 |
 | F050 | US-088 | E07 | 新增名單定義 | P0-MVP | LIST_NO 自動產生（OB{YYYYMM}{NNN}）；同月 999 筆上限；PROD_KIND+CARD_TYPE 重複檢查；複製名單 |
 | F051 | US-089 | E07 | 編輯名單定義 | P0-MVP | 覆寫式編輯；與 F050 共用表單欄位規範 |
 | F052 | US-090 | E07 | 停用名單定義 | P0-MVP | 軟刪除（status → inactive）；不提供重新啟用 |
 | F053 | US-072 | E07 | 查看計分維度設定 | P0-MVP | 顯示生效版本計分維度與分數區間（唯讀） |
-| F054 | US-073 | E07 | 編輯計分維度與分數 | P0-MVP | 新增/修改/停用維度；覆寫式；月跑鎖 |
+| F054 | US-073 | E07 | 編輯計分維度與分數 | P0-MVP | 新增/修改/停用維度；覆寫式；月名單分派鎖 |
 | F055 | US-074 | E07 | 編輯 CARD_LEVEL 分級門檻 | P0-MVP | 各等級分數下限；門檻不重疊驗證；預覽影響 |
 | F056 | US-075 | E07 | 編輯 TIER_LEVEL 對應表 | P0-MVP | 維護 TIER_LEVEL ↔ CARD_LEVEL 對應 |
 | F057 | US-078 | E07 | 查看人員比例設定 | P0-MVP | 顯示各部門人員 ration（唯讀） |
 | F058 | US-079 | E07 | 編輯人員比例設定 | P0-MVP | 同 LIST_NO + 部門加總 = 100% |
-| F059 | US-080 | E07 | 開關 CR 回分規則 | P0-MVP | 全域開關；月跑鎖 |
+| F059 | US-080 | E07 | 開關 CR 回分規則 | P0-MVP | 全域開關；月名單分派鎖 |
 | F060 | US-091 | E07 | 設定 per-LIST_NO 部門比例 | P0-MVP | ob_dept_pct 即 per-LIST_NO；同 LIST_NO 加總 = 100% |
-| F061 | US-081 | E07 | 觸發分派月跑 | P0-MVP | 前置條件檢查 + 非同步 Stage 1~4 + 三份快照原子性寫入 |
+| F061 | US-081 | E07 | 觸發分派月名單分派 | P0-MVP | 前置條件檢查 + 非同步 Stage 1~4 + 三份快照原子性寫入 |
 | F062 | US-082 | E07 | 查看分派執行進度 | P0-MVP | 3 秒 Polling；Stage 狀態列表 |
 | F063 | US-083 | E07 | 查看分派結果摘要 | P0-MVP | 總量 / 部門偏差 / 等級分佈；偏差 > 3% 橘色警示 |
 | F064 | US-084 | E07 | 匯出分派結果 | P0-MVP | Excel/CSV streaming；5 分鐘 timeout |
@@ -101,7 +101,7 @@ status: Draft
 |--------|------|--------|----------|
 | NFR-001 | 安全性 | P0 | [nfr.md](nfr.md) |
 | NFR-002 | 效能 | P0 | [nfr.md](nfr.md) |
-| NFR-003 | E07 月跑執行效能 | P0 | [nfr.md](nfr.md) |
+| NFR-003 | E07 月名單分派執行效能 | P0 | [nfr.md](nfr.md) |
 | NFR-004 | E07 快照原子性 | P0 | [nfr.md](nfr.md) |
 | NFR-005 | E07 分派結果準確性 | P0 | [nfr.md](nfr.md) |
 
@@ -165,7 +165,7 @@ E05（ETL Pipeline 管理）
 - E06 依賴 E01 與 E05：已驗證使用者且 `customer_core` 已由 ETL 載入
 - E07 依賴 E01、E02、E04、E05：業務主管需驗證並具備 `is_sales_manager = true`；`ob_pool_data` / `ob_emphire` / `ob_calendar` 由 E04 + E05 雙層 ETL 載入
 - **E07 涉及的 OB 系統表（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）透過 E04 通用擷取機制抓取至 raw_xxx 中介表後，再由 E05 Pipeline TargetLoad 載入 `ob_pool_data` / `ob_emphire` / `ob_calendar`（雙層架構，AD-E07-12）**：
-  - E04 端建立通用擷取任務（既有機制 → raw_{task_id_short}）；OBEMPHIRE 採 full 全量重抓策略（每日重抓）、OBCALENDAR 年初執行、OBPOOLDATA 每月跑前執行
+  - E04 端建立通用擷取任務（既有機制 → raw_{task_id_short}）；OBEMPHIRE 採 full 全量重抓策略（每日重抓）、OBCALENDAR 年初執行、OBPOOLDATA 每月名單分派前執行
   - E05 端建立 Pipeline（既有 F044 customer_core TargetLoad 機制延伸）將 raw 資料以 full replace 模式載入目標表
   - 由 Admin 於系統初始化時建立對應 E04 擷取任務 + E05 Pipeline 並設定排程，採既有通用機制不需新增 Feature；E07 不提供 `ob_emphire` / `ob_calendar` / `ob_pool_data` 維護介面（資料維護於舊 OB 端）
   - 詳見 [architecture-spec.md §E07-C ETL 設計](architecture-spec.md#e07-c-etl-設計)

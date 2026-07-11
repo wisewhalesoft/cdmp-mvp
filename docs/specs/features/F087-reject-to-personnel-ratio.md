@@ -113,7 +113,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - **Then** 本部門所有業務員的 RATION 均顯示為空（GET response employees[].ration = null；前端顯示為「未設定」或預設值 100% / N）
 - **And** `ob_dept_pct` 保留原設定（部長 / Admin 進入部門比例頁看到既有比例不變）
 
-### AC-6：月跑執行中禁止拒絕
+### AC-6：月名單分派執行中禁止拒絕
 
 - **Given** `assignment_run` 中存在 `status IN ('pending', 'running')` 紀錄
 - **When** 部長或 Admin 嘗試點擊「拒絕」按鈕
@@ -188,7 +188,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | 403 | AUTH_FORBIDDEN | 非 admin / director（含處長嘗試呼叫） |
 | 403 | LIST_HISTORICAL_READONLY | `project_workym < current_work_ym` |
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派執行中 |
 | 422 | ASSIGNMENT_LIST_INACTIVE | 名單已停用 |
 | 422 | LIST_STAGE_TRANSITION_FORBIDDEN | `stage != 'approval'` |
 | 422 | REJECT_REASON_REQUIRED | **v1.0 新增**：`rejectReason` 為空或僅含空白字元 |
@@ -207,7 +207,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 | BR-6 | **保留 `ob_dept_pct`**：部門比例不受拒絕影響；部長若希望修改部門比例，需先 F085 Rollback 至 `dept_ratio` 階段（非本 spec 範圍） |
 | BR-7 | **DB transaction**：UPDATE stage + DELETE ob_empl_set + INSERT assignment_approval + INSERT assignment_audit_log 須於同一 transaction 內執行 |
 | BR-8 | **稽核失敗不 rollback**：稽核寫入 `assignment_audit_log` 失敗僅 Logger.error，不 rollback 業務 commit（沿用 F050 v2.0 BR-11） |
-| BR-9 | **不可與月跑並發**：service method 入口層呼叫 `AssignmentRunGuardService.assertNoRunningRun()`；`status IN ('pending', 'running')` 時拋 409 |
+| BR-9 | **不可與月名單分派並發**：service method 入口層呼叫 `AssignmentRunGuardService.assertNoRunningRun()`；`status IN ('pending', 'running')` 時拋 409 |
 | BR-10 | **歷史月份阻截**：`project_workym < current_work_ym` 一律 403 `LIST_HISTORICAL_READONLY` |
 | BR-11 | **拒絕原因儲存與 banner 觸發來源（v1.1 新增 / OQ-E07-21 落地）**：(1) `assignment_approval` 寫入時包含 `{ list_no, action: 'reject', reject_reason, approver_id, approved_at }`；(2) F082 GET response `latestRejection` 欄位之資料來源：`SELECT TOP 1 reject_reason, approver_id AS rejector_id, approver_name, approver_role AS rejector_role, approved_at AS rejected_at FROM assignment_approval WHERE list_no = :listNo AND action = 'reject' ORDER BY approved_at DESC`；若最近一筆為 `action = 'approve'` 或無 approval 紀錄，回 `null`；(3) banner UI 規格詳 [F082 §7.x](F082-set-personnel-ratio.md#7x-拒絕-banner-渲染與互動規格)（本 spec 不重複描述 UI）；(4) F086 核准或 F089 Rollback 後，`latestRejection` 變為 `null`（banner 自動消失） |
 | BR-12 | **Feature Flag fallback**：本 spec POST 端點掛 `FeatureFlagGuard`；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 503 + `FEATURE_NOT_ENABLED`（沿用 F082 BR-16） |
@@ -239,7 +239,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 
 | 資料表 | 用途 | enum 風格 | 寫入欄位 |
 |---|---|---|---|
-| `assignment_audit_log` | 通用稽核：所有 stage transition / CRUD / 月跑 / 角色變更（12 種 action） | 大寫 SNAKE_CASE | 共用欄位（`before_value` / `after_value` JSON）|
+| `assignment_audit_log` | 通用稽核：所有 stage transition / CRUD / 月名單分派 / 角色變更（12 種 action） | 大寫 SNAKE_CASE | 共用欄位（`before_value` / `after_value` JSON）|
 | `assignment_approval` | 簽核專屬：僅 approve / reject 兩種行為 | 小寫 | 專屬欄位（`reject_reason` / `approver_*`）|
 
 兩張表並存原因：
@@ -265,7 +265,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
 - **權限與狀態**：
   - 處長：**不渲染**「拒絕」按鈕
   - 部長 / Admin：渲染
-  - 歷史月份 / 已停用名單 / 非 `approval` 階段 / 月跑中**完全不渲染**或 disabled + hover 提示
+  - 歷史月份 / 已停用名單 / 非 `approval` 階段 / 月名單分派中**完全不渲染**或 disabled + hover 提示
 - **拒絕對話框**：
   - 標題：「拒絕名單：{listNm}（{listNo}）」
   - 文字輸入框（多行 textarea，max 500 字，含字數計數器 N / 500）
@@ -324,7 +324,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-26
   - 拒絕 `stage = 'personnel_ratio'` 名單 → 422 `LIST_STAGE_TRANSITION_FORBIDDEN`
   - 拒絕 `stage = 'ready'` 名單 → 422 `LIST_STAGE_TRANSITION_FORBIDDEN`
   - 拒絕歷史月份名單 → 403 `LIST_HISTORICAL_READONLY`
-  - 拒絕月跑執行中名單 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
+  - 拒絕月名單分派執行中名單 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`
   - 拒絕後 `ob_dept_pct` 保留不變（驗證部門比例未清空）
   - 拒絕成功後再次拒絕（stage 已是 `personnel_ratio`）→ 422 `LIST_STAGE_TRANSITION_FORBIDDEN`
   - Transaction 完整性：拒絕過程中若 INSERT `assignment_approval` 失敗 → stage 與 `ob_empl_set` 一併 rollback

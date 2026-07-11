@@ -27,9 +27,9 @@ E07 名單分派流程分為五個明確階段，每份名單定義（LIST_NO）
 | Stage 2 | 部門比例設定（Department Ratio） | 名單已推進；部長 / Admin 設定各部門分派比例 |
 | Stage 3 | 個別業務比例設定（Personnel Ratio） | 部門比例設定完成；處長設定轄區各業務員比例 |
 | Stage 4 | 簽核（Approval） | 個別比例設定完成；等待部長 / Admin 核准 |
-| Stage 5 | 準備完成（Ready） | 簽核完成；名單準備好進入月跑 |
+| Stage 5 | 準備完成（Ready） | 簽核完成；名單準備好進入月名單分派 |
 
-此外，名單可被「停用（Disabled）」，退出五階段流程，不再參與月跑。
+此外，名單可被「停用（Disabled）」，退出五階段流程，不再參與月名單分派。
 
 ---
 
@@ -89,7 +89,7 @@ E07 名單分派流程分為五個明確階段，每份名單定義（LIST_NO）
 
 - 「階段」欄位建議在 `ob_list_definition` 表新增 `stage` 欄位（ENUM 或 VARCHAR），由各流程操作（推進 / 退回 / 停用）更新；具體 schema 由 system-architect 決策
 - 預設狀態：名單建立時 `stage = 'draft'`
-- 「準備完成」（stage = 'ready'）表示已可進入月跑；月跑 Stage 0/1 只讀取 stage = 'ready' 的名單
+- 「準備完成」（stage = 'ready'）表示已可進入月名單分派；月名單分派 Stage 0/1 只讀取 stage = 'ready' 的名單
 - 篩選器實作建議：前端依 stage 欄位過濾，支援 multi-select；後端 API 加 `?stage=draft,approval` query param
 
 ---
@@ -152,7 +152,7 @@ E07 名單分派流程分為五個明確階段，每份名單定義（LIST_NO）
 ## 相關文件
 
 - **Epic Brief**：[E07 Epic Brief](epic-brief.md)
-- **相關 Stories**：US-070（M01 清單頁基礎）、US-104（月份切換）、US-106（草稿建立）、US-108（推進至部門比例）、US-090（停用名單，草稿階段專屬）、US-081（月跑，只讀 stage = 'ready' 的名單）
+- **相關 Stories**：US-070（M01 清單頁基礎）、US-104（月份切換）、US-106（草稿建立）、US-108（推進至部門比例）、US-090（停用名單，草稿階段專屬）、US-081（月名單分派，只讀 stage = 'ready' 的名單）
 
 ---
 
@@ -196,8 +196,8 @@ E07 名單分派流程分為五個明確階段，每份名單定義（LIST_NO）
 | `dept_ratio` | 設定（連 29a）、**退回**、查看 | 查看 |
 | `personnel_ratio` | 檢視（連 29b）、**退回**、查看 | **設定本部門**（連 29b）、查看 |
 | `approval` | 核准、拒絕、查看 | 查看 |
-| `ready` | **退回**、查看（**無** per-card 月跑觸發按鈕） | 查看 |
+| `ready` | **退回**、查看（**無** per-card 月名單分派觸發按鈕） | 查看 |
 
 - **And** 歷史月份下所有寫入操作按鈕隱藏，僅保留「查看」
-- **And** 月跑執行中（AssignmentRun status = 'running'）時，所有寫入操作按鈕禁用
+- **And** 月名單分派執行中（AssignmentRun status = 'running'）時，所有寫入操作按鈕禁用
 - **And** 「查看」按鈕觸發 Detail Drawer（US-131），而非跳頁至詳情頁

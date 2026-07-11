@@ -19,7 +19,7 @@ flowchart TD
     SectionChiefCheck -->|是| EndpointType{請求 endpoint 類別}
 
     EndpointType -->|"M02 全部端點 (含 GET)"| E403DirectorOnly1[/403 E07_FORBIDDEN_DIRECTOR_ONLY/]
-    EndpointType -->|"部長專屬功能 (M06 白名單 / 月跑 / 名單 CRUD …)"| E403DirectorOnly2[/403 E07_FORBIDDEN_DIRECTOR_ONLY/]
+    EndpointType -->|"部長專屬功能 (M06 白名單 / 月名單分派 / 名單 CRUD …)"| E403DirectorOnly2[/403 E07_FORBIDDEN_DIRECTOR_ONLY/]
     EndpointType -->|"M03b 個別業務比例設定 (寫入)"| ScopeCheck{資料 created_by = 當前 userId?}
     EndpointType -->|"M03d 準備完成階段 (唯讀)"| ScopeCheck
     EndpointType -->|"GET 一般 E07 列表 (非 M02)"| ScopedRead[Scoped 讀取<br/>service 層套 created_by 過濾]

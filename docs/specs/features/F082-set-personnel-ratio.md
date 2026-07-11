@@ -15,12 +15,12 @@ status: Draft
 
 Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
-> **v1.7 修訂（2026-05-25 / F084 v2.0 auto-advance 改造同步）**：本 PUT `setPersonnelRatios` 成為 F084 v2.0「自動推進至簽核」之**觸發宿主**。(1) §5.2 PUT response 補 `autoAdvanced: boolean` / `newStage: string | null` / `autoAdvanceFailReason?: string | null` 三欄位 + 欄位語意說明；(2) 新增 §6 BR-19「Auto-Advance 觸發宿主」（觸發行為 / advisory lock / 月跑 guard 降級 / 稽核細節全由 F084 規範，本 BR 僅說明觸發掛載點）；(3) §8 Blocks 之 F084 條目補註「auto-advance 觸發宿主」。**本 PUT 既有寫入 / 校驗 / 容差 ±0.01% / 轄區 Guard / 稽核語意完全不變**；auto-advance 由 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag（prod 預設 off）控制，flag off 時完全不執行。
+> **v1.7 修訂（2026-05-25 / F084 v2.0 auto-advance 改造同步）**：本 PUT `setPersonnelRatios` 成為 F084 v2.0「自動推進至簽核」之**觸發宿主**。(1) §5.2 PUT response 補 `autoAdvanced: boolean` / `newStage: string | null` / `autoAdvanceFailReason?: string | null` 三欄位 + 欄位語意說明；(2) 新增 §6 BR-19「Auto-Advance 觸發宿主」（觸發行為 / advisory lock / 月名單分派 guard 降級 / 稽核細節全由 F084 規範，本 BR 僅說明觸發掛載點）；(3) §8 Blocks 之 F084 條目補註「auto-advance 觸發宿主」。**本 PUT 既有寫入 / 校驗 / 容差 ±0.01% / 轄區 Guard / 稽核語意完全不變**；auto-advance 由 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag（prod 預設 off）控制，flag off 時完全不執行。
 >
 > **v1.6 修訂（2026-05-25 / commits 6402cd3 / 150acbe / 38eb0dc 落地）**：(1) 新 BR-17 FE per-row ±N% 模板採「baseline + per-employee templates」模型保證對稱性（baseline 設定時機三種：首次進入 / 均等分配 / 手動編輯）；(2) 新 BR-18 service GET 只回 `deptRatio > 0` 之部門（null / 0 隱藏；> 0 顯示）；(3) §5.1 GET response 補 `directorName: string | null` 欄位，定義對齊 F079 §5.1。
 > **v1.5 修訂（2026-05-22 / commit 977ed09 落地；補入 changelog）**：處長轄區判定改用 `resolveSectionChiefScope(userId)` 由 `users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職` 反查 `dept_code`，廢除原 `scopeByCreator(ob_empl_set.created_by)` 邏輯以解「首次 GET 時 ob_empl_set 為空 → 處長永遠回空清單」之 chicken-and-egg；BR-3 / BR-14 / §5.x 已於 977ed09 commit body 更新但漏記 changelog，本次補入。
 > **v1.4 救援重寫（2026-05-16）**：前一輪 PowerShell 編碼事故損毀本檔內容，本版本依 US-112 + AD-E07 v3.0 一致性決議完整重建；Guard 名稱統一為 `DirectorOrSectionChiefGuard` + `SectionChiefScopeGuard`（廢除 `SalesManagerGuard`）；業務角色欄位 `business_role`；JWT claim 為 `businessRole`；保留 v1.0~v1.3 所有設計決議與 6 風險決議落地。
-> **v1.3 修訂（2026-05-16 / system-architect Phase 1 風險決議落地）**：(1) **全員離職部門**（決議 #1，選項 D）：per-DEPT sum = 0% 容許；GET response 補 `activeCount` / `sumValidated` / `allResigned` 欄位；新增 AC-14。(2) **Feature Flag fallback**（決議 #2，選項 A）：F082 上 `FeatureFlagGuard`，flag=false 時回 503 + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13 統一行為）；新增 AC-15。(3) **SectionChiefScopeGuard method 分支**（決議 #4）：GET 不攔截、service 走 `scopeByCreator()` 統一 filter；PUT / POST 攔截，越權回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`。(4) **月跑並發守衛**（決議 #6）：所有寫入 service method 入口層呼叫 `AssignmentRunGuardService.assertNoRunningRun()` 集中實現。(5) **test fixture 策略**（決議 #5）：integration test 使用 `apps/api/test/fixtures/ob-emphire.fixture.ts` 之 `buildObEmphire()` factory + `allResignedDeptSeed` 等場景 helper。(6) §12 A-1 / A-6 升 ✅ Resolved。
+> **v1.3 修訂（2026-05-16 / system-architect Phase 1 風險決議落地）**：(1) **全員離職部門**（決議 #1，選項 D）：per-DEPT sum = 0% 容許；GET response 補 `activeCount` / `sumValidated` / `allResigned` 欄位；新增 AC-14。(2) **Feature Flag fallback**（決議 #2，選項 A）：F082 上 `FeatureFlagGuard`，flag=false 時回 503 + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13 統一行為）；新增 AC-15。(3) **SectionChiefScopeGuard method 分支**（決議 #4）：GET 不攔截、service 走 `scopeByCreator()` 統一 filter；PUT / POST 攔截，越權回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`。(4) **月名單分派並發守衛**（決議 #6）：所有寫入 service method 入口層呼叫 `AssignmentRunGuardService.assertNoRunningRun()` 集中實現。(5) **test fixture 策略**（決議 #5）：integration test 使用 `apps/api/test/fixtures/ob-emphire.fixture.ts` 之 `buildObEmphire()` factory + `allResignedDeptSeed` 等場景 helper。(6) §12 A-1 / A-6 升 ✅ Resolved。
 > **v1.2 修訂（2026-05-16 / E07 衍生補修）**：PO 決議 F082-A 落地：業務員清單來源改為**全部含已離職員工**（`isResigned = true` flag），UI 顯示「離職」badge；per-DEPT 比例驗證**僅排除離職員工**；既有 `ob_empl_set` ration 紀錄保留供歷史追溯；GET response 補 `isResigned` 欄位；`appdb.ob_emphire` 由 ETL E07-OBEMPHIRE-Load pipeline 載入至 AppDB 表。
 > **v1.1 修訂（2026-05-15 / E07 補修批次 6）**：新增 §7.x「拒絕 banner 渲染與互動」UI 規格（OQ-E07-21 用戶決議落地：F087 拒絕後於 F082 頁面右上方顯示 banner，可關閉 / 收合）；GET response 補 `latestRejection` 欄位（資料來源由 F087 BR-11 寫入）；新 BR-2a「相對 % UI 顯示語意」（OQ-E07-40 落地）。
 
@@ -62,7 +62,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 
 **As a** 處長（Section Chief）/ 部長（Director）/ Admin
 **I want** 在名單推進至「個別業務比例設定」階段後，為本部門（處長轄區）或任意部門（部長 / Admin 跨轄區）之業務員設定 RATION，使部門內加總 = 100%
-**So that** 月跑時 Stage 4 可依 per-LIST_NO + per-DEPT 業務員比例正確分配案件至個別業務員
+**So that** 月名單分派時 Stage 4 可依 per-LIST_NO + per-DEPT 業務員比例正確分配案件至個別業務員
 
 ## 3. 前置條件
 
@@ -158,7 +158,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 - **Then** 後端回 422 `PERSONNEL_RATIO_DEPT_NOT_FOUND`（v1.0 新增），訊息：「部門 {deptCode} 尚未於部門比例設定階段配置，無法設定個別業務比例」
 - **And** 此情境理論上不應觸發（F080 推進已驗證 `ob_dept_pct` 加總 = 100%），作為防禦 + Rollback 後資料一致性保護
 
-### AC-11：月跑執行中禁止寫入
+### AC-11：月名單分派執行中禁止寫入
 
 - **Given** `assignment_run` 中存在 `status IN ('pending', 'running')` 紀錄
 - **When** 使用者嘗試進入編輯模式或呼叫 PUT
@@ -301,9 +301,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 ```
 
 > **`autoAdvanced` / `newStage` / `autoAdvanceFailReason`（v1.7 新增 / F084 v2.0 auto-advance 改造）**：本 PUT 為 F084 v2.0「自動推進至簽核」之**觸發宿主**。PUT 寫入成功後，若 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag = on，後端於**同一 transaction 內**偵測該名單所有有在職員工的部門 RATION 加總是否均 = 100%（容忍 ±0.01%，沿用 BR-2 / I-8；全員離職部門短路通過，沿用 BR-13 / F084 BR-12），完成則自動將 `stage` 由 `'personnel_ratio'` 推進至 `'approval'`。三欄位語意：
-> - **`autoAdvanced: boolean`**：本次 PUT 是否觸發了自動推進成功。`true` = stage 已自動推進至 `approval`；`false` = 未推進（部分部門未完成 / flag off / 競爭條件 no-op / 月跑 guard 阻擋）。
+> - **`autoAdvanced: boolean`**：本次 PUT 是否觸發了自動推進成功。`true` = stage 已自動推進至 `approval`；`false` = 未推進（部分部門未完成 / flag off / 競爭條件 no-op / 月名單分派 guard 阻擋）。
 > - **`newStage: string | null`**：`autoAdvanced = true` 時為 `"approval"`；否則為 `null`。
-> - **`autoAdvanceFailReason?: string | null`**：僅於「auto-advance 因月跑 guard 阻擋而跳過」時為 `"ASSIGNMENT_RUN_ALREADY_RUNNING"`（PUT 本身仍回 200、不 rollback）；其餘 `autoAdvanced = false` 情境（部分完成 / flag off / lock 等待逾時降級 / stage 已推進之 idempotent no-op）一律為 `null`（不帶 failReason）。
+> - **`autoAdvanceFailReason?: string | null`**：僅於「auto-advance 因月名單分派 guard 阻擋而跳過」時為 `"ASSIGNMENT_RUN_ALREADY_RUNNING"`（PUT 本身仍回 200、不 rollback）；其餘 `autoAdvanced = false` 情境（部分完成 / flag off / lock 等待逾時降級 / stage 已推進之 idempotent no-op）一律為 `null`（不帶 failReason）。
 >
 > 觸發流程、advisory lock、idempotent 與降級行為彙總詳 [F084 §5.2](F084-advance-to-approval.md#52-auto-advance-觸發流程主路徑無獨立-endpoint) 與 [F084 §6 BR-11~BR-16](F084-advance-to-approval.md#6-業務規則)。**本 PUT 既有寫入語意（覆寫式、轄區 Guard、容差 ±0.01%、稽核）完全不變**；auto-advance 為附加於成功寫入後之同一 tx 行為。
 
@@ -316,7 +316,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 | 403 | LIST_HISTORICAL_READONLY | `project_workym < current_work_ym` |
 | 403 | PERSONNEL_RATIO_OUT_OF_SCOPE | **v1.0 新增**：處長嘗試寫入不屬於自己轄區之 deptCode 或業務員 |
 | 404 | ASSIGNMENT_LIST_NOT_FOUND | `list_no` 不存在 |
-| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月跑執行中 |
+| 409 | ASSIGNMENT_RUN_ALREADY_RUNNING | 月名單分派執行中 |
 | 422 | ASSIGNMENT_LIST_INACTIVE | 名單已停用 |
 | 422 | LIST_STAGE_TRANSITION_FORBIDDEN | `stage != 'personnel_ratio'` |
 | 422 | PERSONNEL_RATIO_DEPT_NOT_FOUND | **v1.0 新增**：`ob_dept_pct` 中該 `(project_workym, list_no, deptCode)` 不存在 |
@@ -338,16 +338,16 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 | BR-7 | **覆寫式寫入**：PUT 為「該部門整段覆寫式」：先 `(list_no, deptid_m)` 之既有紀錄 DELETE，再 INSERT request payload 之業務員；於同一 transaction 內執行 |
 | BR-8 | **DB transaction**：DELETE + INSERT + 稽核寫入需於同一 DB transaction 內執行（[ASSUMPTION] 待 system-architect 決議） |
 | BR-9 | **稽核失敗不 rollback**：稽核寫入 `assignment_audit_log` 失敗僅 Logger.error，不 rollback 業務 commit（沿用 F050 v2.0 BR-11） |
-| BR-10 | **不可與月跑並發**：`assignment_run.status IN ('pending', 'running')` 時禁止寫入；GET 不受影響 |
+| BR-10 | **不可與月名單分派並發**：`assignment_run.status IN ('pending', 'running')` 時禁止寫入；GET 不受影響 |
 | BR-11 | **歷史月份阻截（沿用 F077 BR-3）**：`project_workym < current_work_ym` 一律 403 `LIST_HISTORICAL_READONLY` |
 | BR-12 | **前置條件 `ob_dept_pct` 必先建立**：寫入前 service 層查詢 `ob_dept_pct WHERE (project_workym, list_no, obdeptid = :deptCode)` 至少 1 筆；不存在則 422 `PERSONNEL_RATIO_DEPT_NOT_FOUND`（防範前置斷裂；F080 推進已驗證） |
 | BR-13 | **離職員工顯示與比例計算規則（v1.2 修訂 / PO 決議 F082-A）**：(1) UI 顯示：`isResigned = true` 員工於業務員清單顯示「離職」badge（灰底 / 警示色），ration 輸入框 disabled 不可編輯；(2) 比例驗證（per-DEPT 加總 100%）：**僅含 `isResigned = false` 之在職員工**；離職員工 ration 不參與加總，亦不影響「儲存」按鈕啟用條件；(3) 既有 `ob_empl_set` 紀錄保留：員工為設定當下在職且已寫入 ration，後續離職時 `ob_empl_set.ration` 紀錄不主動清除（保歷史追溯）；(4) 寫入時防護：PUT request body 的 `employees[]` **不可包含** `isResigned = true` 之員工；若 service 層偵測到 body 含離職 `empId`，回 422 `RATIO_OUT_OF_RANGE`（暫沿用此錯誤碼，提示「員工不存在 / 已離職」之語意，details 含 `invalidEmpIds` + `resignedEmpIds`）；後續批次再評估獨立錯誤碼 `PERSONNEL_RATIO_INVALID_EMPLOYEE` |
 | BR-14 | **`SectionChiefScopeGuard` 設計（v1.5 修訂 / 2026-05-21）**：(1) admin / director 直接放行；(2) section_chief 依 HTTP method 分支：GET **不攔截**，由 service 呼叫 `resolveSectionChiefScope(userId)` 取得 dept_code 後過濾 `visibleDeptCodes`（scope=null 或越權帶 `deptCode` 回 200 + `departments=[]`）；PUT / POST **攔截**：比對 `dto.deptCode === scope`，不符或 scope=null 回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`；(3) **廢除 v1.3 之「`ob_empl_set.created_by` 比對」**（chicken-and-egg）；(4) 後續 M03d / 簽核流程沿用此設計。對照表詳 §5.x |
-| BR-15 | **月跑並發守衛（v1.3 / 決議 #6）**：所有 F082 寫入 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()`；該 service 由 `AssignmentRunGuardService` 集中實現（架構位置：assignment 模組底層，與 `StageTransitionService` 同層）；查詢 `assignment_run.status IN ('pending', 'running')`，若有則拋 `ConflictException` (409) + `ASSIGNMENT_RUN_ALREADY_RUNNING`（月跑必須 `status = 'completed'` / `'failed'`）方能繼續寫入 |
+| BR-15 | **月名單分派並發守衛（v1.3 / 決議 #6）**：所有 F082 寫入 service method 入口層呼叫 `await this.assignmentRunGuardService.assertNoRunningRun()`；該 service 由 `AssignmentRunGuardService` 集中實現（架構位置：assignment 模組底層，與 `StageTransitionService` 同層）；查詢 `assignment_run.status IN ('pending', 'running')`，若有則拋 `ConflictException` (409) + `ASSIGNMENT_RUN_ALREADY_RUNNING`（月名單分派必須 `status = 'completed'` / `'failed'`）方能繼續寫入 |
 | BR-16 | **Feature Flag fallback（v1.3 / 決議 #2）**：F082 PUT / GET 端點均掛 `FeatureFlagGuard` 保護；`ENABLE_E07_REFACTOR_PHASE3 = false` 時回 **503 Service Unavailable** + `FEATURE_NOT_ENABLED`（沿用 F050 v2.0 §13.2 統一行為）；flag = true 時正常運作 |
 | BR-17 | **FE per-row ±N% 模板採 baseline + per-employee templates 模型（v1.6 / commit 6402cd3）**：FE 套用 F083 之 ±N% 模板時，以「baseline + per-employee templates」資料模型計算各業務員之最終 ration，保證**對稱性**（同一 baseline 下，不同員工套用同一 template 必得相同 ration；同一員工反覆套用同一 template 必得相同結果）。**baseline 設定時機（三種）**：(1) **首次進入頁面**：baseline = 後端 GET 回傳之該員工 ration；若全員 ration 皆為 0 或 null（無 `ob_empl_set` 紀錄）則 fallback 為 `100 / activeCount` 均分；(2) **點擊「均等分配」按鈕**：所有員工 baseline 重置為 `100 / activeCount` + 清除所有 per-employee template；(3) **手動編輯 RatioInput**：該員工 baseline = 輸入值 + 清除該員工之 template（不影響其他員工 baseline）。模板計算後仍由 F082 PUT 之主流程 `assertDeptSumEquals100` 校驗（容忍 ±0.01%）；F083 後端 `appliedTemplate` 校驗已弱化為「audit hint + invariant 最小校驗」（詳 [F083 v1.4 §5.2 / BR-9](F083-quick-ratio-template.md#52-後端儲存路徑沿用-f082)） |
 | BR-18 | **GET 過濾 deptRatio > 0 部門（v1.6 / commit 150acbe）**：service `getPersonnelRatios()` 只回 `deptRatio > 0` 之部門；`deptRatio = null`（`ob_dept_pct` 無紀錄）或 `deptRatio = 0`（部長刻意排除本月）均**隱藏**。此規則對處長 / 部長 / Admin 一致。理由：個別業務比例設定階段不應呈現本月不參與分派之部門（避免處長對 0% 部門徒勞設定個別比例）。詳 §5.1 GET response 說明 |
-| BR-19 | **Auto-Advance 觸發宿主（v1.7 / F084 v2.0 auto-advance 改造）**：本 PUT 為 F084 v2.0「自動推進至簽核」之觸發點。PUT 寫入成功後，若 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag = on，後端於**同一 transaction 內**呼叫 F084 auto-advance 完成度偵測；所有有在職員工的部門 RATION 加總均 = 100%（±0.01%，沿用 BR-2；全員離職部門短路沿用 BR-13）則自動推進 `stage` → `'approval'`。觸發行為、advisory lock + idempotent、月跑 guard 降級、稽核（`STAGE_ADVANCE` + `metadata.auto_advanced_by_completion = true`）等細節**全部由 F084 規範**（[F084 §5.2 / §6 BR-11~BR-16](F084-advance-to-approval.md#52-auto-advance-觸發流程主路徑無獨立-endpoint)）；本 BR 僅說明「F082 PUT 為觸發宿主」。結果經本 PUT response `autoAdvanced` / `newStage` / `autoAdvanceFailReason` 三欄位回傳（見 §5.2）。**本 PUT 既有寫入 / 校驗 / 容差 / 轄區 Guard 語意完全不變**；flag = off 時 auto-advance 完全不執行（response `autoAdvanced: false`）。advisory lock 具體 API 與 transaction 邊界待 system-architect（F084 §12 A-5~A-7） |
+| BR-19 | **Auto-Advance 觸發宿主（v1.7 / F084 v2.0 auto-advance 改造）**：本 PUT 為 F084 v2.0「自動推進至簽核」之觸發點。PUT 寫入成功後，若 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag = on，後端於**同一 transaction 內**呼叫 F084 auto-advance 完成度偵測；所有有在職員工的部門 RATION 加總均 = 100%（±0.01%，沿用 BR-2；全員離職部門短路沿用 BR-13）則自動推進 `stage` → `'approval'`。觸發行為、advisory lock + idempotent、月名單分派 guard 降級、稽核（`STAGE_ADVANCE` + `metadata.auto_advanced_by_completion = true`）等細節**全部由 F084 規範**（[F084 §5.2 / §6 BR-11~BR-16](F084-advance-to-approval.md#52-auto-advance-觸發流程主路徑無獨立-endpoint)）；本 BR 僅說明「F082 PUT 為觸發宿主」。結果經本 PUT response `autoAdvanced` / `newStage` / `autoAdvanceFailReason` 三欄位回傳（見 §5.2）。**本 PUT 既有寫入 / 校驗 / 容差 / 轄區 Guard 語意完全不變**；flag = off 時 auto-advance 完全不執行（response `autoAdvanced: false`）。advisory lock 具體 API 與 transaction 邊界待 system-architect（F084 §12 A-5~A-7） |
 
 ## 7. UI/UX 需求
 
@@ -355,7 +355,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
   - 位於 F048 / F077 清單頁「個別業務比例設定」階段名單之操作欄
   - 處長 / 部長 / Admin 才顯示（沿用 F077 角色 × 階段操作矩陣）
   - 已停用名單 / 非 `personnel_ratio` 階段 / 歷史月份**完全不渲染**
-  - 月跑執行中 disabled + hover 提示
+  - 月名單分派執行中 disabled + hover 提示
 - **設定頁面布局**：
   - 標題：「名單：{listNm}（{listNo}）— 個別業務比例設定」
   - 部長 / Admin：頁首多顯示「部門切換器」（下拉選擇器，列出該名單 `ob_dept_pct` 之部門）
@@ -415,7 +415,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 - **Blocks**：
   - F083（獎懲快速比例模板；本 Feature 之 UI 子模組）
   - F084 v2.0（個別業務比例設定階段「自動推進」至簽核；**本 PUT 為 auto-advance 觸發宿主**，前置條件含本 Feature 之部門加總 = 100%；詳 BR-19 / §5.2）
-  - F061（月跑 Stage 4 之人員比例讀取 `ob_empl_set`）
+  - F061（月名單分派 Stage 4 之人員比例讀取 `ob_empl_set`）
 - **Rollback 反向**：F085（M03b Rollback 至 M03a，清空本 Feature 寫入之 `ob_empl_set`）
 - **取代**：[F058 v1.x DEPRECATED](F058-edit-personnel-ratio.md)
 
@@ -443,7 +443,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
   - [F084](F084-advance-to-approval.md)（推進至簽核，本 Feature 之後續）
   - [F085](F085-rollback-to-dept-ratio.md)（Rollback 至部門比例，本 Feature 之逆操作）
   - [F058 v1.x DEPRECATED](F058-edit-personnel-ratio.md)
-  - [F061](F061-trigger-assignment-run.md)（月跑 Stage 4 讀取）
+  - [F061](F061-trigger-assignment-run.md)（月名單分派 Stage 4 讀取）
 - **圖表**：
   - [diagrams/F082-personnel-ratio-flow.mmd](../diagrams/F082-personnel-ratio-flow.mmd)（個別業務比例設定流程，含轄區 Guard + 模板套用 + advance / rollback 子流程）
   - [diagrams/F077-stage-overview.mmd](../diagrams/F077-stage-overview.mmd)（五階段總覽流程）
@@ -469,7 +469,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
   - PUT `ob_dept_pct` 不存在之部門 → 422 `PERSONNEL_RATIO_DEPT_NOT_FOUND`
   - PUT body 含已離職 empId → 422 `RATIO_OUT_OF_RANGE`（details 含 `invalidEmpIds`）
   - PUT 歷史月份 → 403 `LIST_HISTORICAL_READONLY`
-  - PUT 月跑執行中 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`（**v1.3**：由 `AssignmentRunGuardService.assertNoRunningRun()` 拋出）
+  - PUT 月名單分派執行中 → 409 `ASSIGNMENT_RUN_ALREADY_RUNNING`（**v1.3**：由 `AssignmentRunGuardService.assertNoRunningRun()` 拋出）
   - **v1.3 新增**：PUT 全部員工離職（`activeCount = 0`）→ 200 OK 容許儲存 + `sumValidated = false` + `allResigned = true`
   - **v1.3 新增**：GET 全部員工離職 → response `activeCount = 0` + `sumValidated = false` + `allResigned = true`
   - **v1.3 新增**：GET / PUT feature flag = false → 503 `FEATURE_NOT_ENABLED`
@@ -491,7 +491,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-25
 - [ ] 後端實作 `GET /api/v1/assignment/ratios/personnel/{listNo}` 端點 + Service
 - [ ] 後端實作 `PUT /api/v1/assignment/ratios/personnel/{listNo}` 端點 + Service
 - [ ] 後端套 `DirectorOrSectionChiefGuard`（admin / director / section_chief）+ `SectionChiefScopeGuard`（service 層 `scopeByCreator()` helper）
-- [ ] 後端套 `StageTransitionService.assertStageEquals(listNo, 'personnel_ratio')` + `LIST_HISTORICAL_READONLY` Guard + 月跑檢查
+- [ ] 後端套 `StageTransitionService.assertStageEquals(listNo, 'personnel_ratio')` + `LIST_HISTORICAL_READONLY` Guard + 月名單分派檢查
 - [ ] 後端套用「per-DEPT 比例驗證」helper（建議新建 `PersonnelRatioValidationService.assertDeptSumEquals100(deptRatios)`，與 F079 之 `RatioValidationService.assertSumEquals100` 並列；詳 §12 A-2）
 - [ ] error-handling.md 新增 `PERSONNEL_RATIO_SUM_NOT_100` / `PERSONNEL_RATIO_DEPT_NOT_FOUND` / `PERSONNEL_RATIO_OUT_OF_SCOPE` 3 個錯誤碼
 - [ ] 前端「設定個別比例」按鈕渲染條件
@@ -544,8 +544,8 @@ resign_date DATE NULL    (NULL = 在職; 非 NULL = 離職)
 | v1.0 | 2026-05-15 | 初版（對應 US-112，E07 補修批次 5）：取代 F058 v1.x；限 `stage = 'personnel_ratio'` 寫入；新增處長 + 部長 + Admin 三角色 Actor；新增 `SectionChiefScopeGuard`（新 Guard，建議 system-architect 提出）；per-DEPT 加總驗證（與 F079 之 per-LIST_NO 加總語意不同）；新增 `PERSONNEL_RATIO_SUM_NOT_100` / `PERSONNEL_RATIO_DEPT_NOT_FOUND` / `PERSONNEL_RATIO_OUT_OF_SCOPE` 3 個錯誤碼；feature flag gating 評估納入 §12 A-6 待 system-architect 決議；模板按鈕設計交由 F083 規範 |
 | v1.1 | 2026-05-15 | **E07 補修批次 6 修訂（OQ-E07-21 + OQ-E07-40 落地）**：(1) 新增 §7.x「拒絕 banner 渲染與互動」UI 規格（可關閉 / 收合 / LocalStorage 記憶 / 跨頁面範圍 / Accessibility）；(2) GET response 補 `latestRejection` 欄位（資料來源由 F087 BR-11 寫入）；(3) 新 BR-2a「相對 %」UI 顯示語意（OQ-E07-40 用戶決議）；(4) 新增 §12 A-7 DB 落地語意（相對 % vs 絕對 %）待 system-architect 決議 |
 | v1.2 | 2026-05-16 | **E07 衍生補修（PO 決議 F082-A 落地）**：(1) §1 業務員清單來源改為「全部含已離職員工」（取消 `resign_date IS NULL` 過濾），明確 `appdb.ob_emphire` 由 ETL E07-OBEMPHIRE-Load pipeline 載入至 AppDB 表；(2) §4 AC-2 補「離職員工 GET 仍回傳 + `deptSum` 僅計算在職員工」；(3) §5.1 GET response 補 `isResigned: boolean` 欄位於 employees[] + 範例補離職員工樣本；(4) §6 BR-6 SQL 改為全部 + 加上離職欄位；(5) §6 BR-13 重寫為「離職員工顯示 + 比例驗證規則 + UI badge / 驗證排除 / 歷史紀錄保留 / PUT 防護」4 子規則；(6) §9 補 ETL 來源 cross-ref；(7) §12 A-5 標 ✅ Resolved（PO 決議） |
-| v1.3 | 2026-05-16 | **E07 衍生補修（system-architect Phase 1 / 6 個風險決議落地）**：(1) **決議 #1 全員離職部門（選項 D）**：BR-13 補「per-DEPT sum = 0% 容許 + 短路 return」；§5.1 GET response 補 `activeCount` / `sumValidated` / `allResigned` 欄位 + 範例；新增 AC-14「全員離職部門容許儲存」；(2) **決議 #2 Feature Flag fallback**：新增 §6 BR-16 + §5.2 錯誤碼表補 503 `FEATURE_NOT_ENABLED`；新增 AC-15；§12 A-6 標 ✅ Resolved；(3) **決議 #4 SectionChiefScopeGuard method 分支**：補 BR-14 重寫 + 新增 §5.x Guard 行為對照表；§12 A-1 標 ✅ Resolved；(4) **決議 #6 月跑並發守衛**：新增 §6 BR-15 引用 `AssignmentRunGuardService.assertNoRunningRun()`；AC-11 補述 service 集中實現；(5) **決議 #5 測試 fixture 策略**：§11 補測試 Fixture 策略章節（`apps/api/test/fixtures/ob-emphire.fixture.ts` + ob_emphire 必填欄位清單）；(6) §10 測試覆蓋率補 5 個新測試 case；(7) §11 實作 Checklist 補 5 個新工項 |
+| v1.3 | 2026-05-16 | **E07 衍生補修（system-architect Phase 1 / 6 個風險決議落地）**：(1) **決議 #1 全員離職部門（選項 D）**：BR-13 補「per-DEPT sum = 0% 容許 + 短路 return」；§5.1 GET response 補 `activeCount` / `sumValidated` / `allResigned` 欄位 + 範例；新增 AC-14「全員離職部門容許儲存」；(2) **決議 #2 Feature Flag fallback**：新增 §6 BR-16 + §5.2 錯誤碼表補 503 `FEATURE_NOT_ENABLED`；新增 AC-15；§12 A-6 標 ✅ Resolved；(3) **決議 #4 SectionChiefScopeGuard method 分支**：補 BR-14 重寫 + 新增 §5.x Guard 行為對照表；§12 A-1 標 ✅ Resolved；(4) **決議 #6 月名單分派並發守衛**：新增 §6 BR-15 引用 `AssignmentRunGuardService.assertNoRunningRun()`；AC-11 補述 service 集中實現；(5) **決議 #5 測試 fixture 策略**：§11 補測試 Fixture 策略章節（`apps/api/test/fixtures/ob-emphire.fixture.ts` + ob_emphire 必填欄位清單）；(6) §10 測試覆蓋率補 5 個新測試 case；(7) §11 實作 Checklist 補 5 個新工項 |
 | **v1.4** | **2026-05-16** | **【救援重寫 / 編碼事故修復】**：依 US-112 + AD-E07 v3.0 一致性決議完整重建本檔；Guard 名稱統一為 `DirectorOrSectionChiefGuard` + `SectionChiefScopeGuard`（廢除 `SalesManagerGuard`）；business_role 欄位語意對齊 F074 v2.0；JWT claim 為 `businessRole`；保留 v1.0~v1.3 所有設計決議與 6 風險決議落地 |
 | **v1.5** | **2026-05-22** | **【處長轄區改用 ob_emphire 反查解 chicken-and-egg / commit 977ed09；補入 changelog】**：BR-3 / BR-14 / §5.x 已於 977ed09 commit 落地但漏記 changelog，本次補入。修改要點：(1) BR-3 改寫：處長轄區由 `resolveSectionChiefScope(userId)` 反查（`users.email ↔ ob_emphire.email + jfun_nm='處長' + 在職` → `dept_code`），廢除原 `scopeByCreator(ob_empl_set.created_by)` 邏輯（chicken-and-egg：首次 GET 時 ob_empl_set 為空 → 處長永遠回空清單）；scope=null 時 GET 回 `departments=[]`、PUT 回 403 `PERSONNEL_RATIO_OUT_OF_SCOPE`；(2) BR-14 改寫：`SectionChiefScopeGuard` GET 由 service 走 `resolveSectionChiefScope()`、PUT/POST 攔截 `dto.deptCode === scope`；(3) §5.x Guard 對照表同步更新。沿用 F074 v2.1 BR-1「`jfun_nm='處長'` 為 source of truth」設計，與處長姓名顯示同一資料來源 |
 | **v1.6** | **2026-05-25** | **【FE baseline 模板模型 + GET deptRatio>0 過濾 + directorName 欄位 / commits 6402cd3 / 150acbe / 38eb0dc】**：(1) **§6 BR-17 新增**：FE per-row ±N% 模板採「baseline + per-employee templates」模型保證對稱性；列出 baseline 三種設定時機（首次進入 / 均等分配 / 手動編輯）；模板計算後仍由 PUT 主流程 `assertDeptSumEquals100` 校驗；交叉引用 F083 v1.4 弱化校驗（commit 6402cd3）；(2) **§6 BR-18 新增**：service GET 只回 `deptRatio > 0` 部門；`null`（無紀錄）/ `0`（刻意排除）均隱藏；對所有角色一致（commit 150acbe）；(3) **§5.1 GET response 補 `directorName: string | null` 欄位** + 範例 + 定義對齊 [F079 §5.1 / BR-14](F079-set-dept-ratio.md#5-api-規格)（commit 38eb0dc） |
-| **v1.7** | **2026-05-25** | **【F084 v2.0 auto-advance 改造同步 / 對應 US-114 v2.0】**：本 PUT 成為 F084 v2.0「自動推進至簽核」之觸發宿主。(1) **§5.2 PUT response 補 `autoAdvanced` / `newStage` / `autoAdvanceFailReason` 三欄位** + 欄位語意說明（`autoAdvanced=true` 時 `newStage="approval"`；僅月跑 guard 阻擋時帶 `autoAdvanceFailReason="ASSIGNMENT_RUN_ALREADY_RUNNING"`，其餘 no-op 情境不帶 failReason）；(2) **§6 BR-19 新增**：「Auto-Advance 觸發宿主」——PUT 成功後同一 tx 內若 flag = on 則呼叫 F084 完成度偵測 + 自動推進；觸發行為 / advisory lock / 月跑 guard 降級 / 稽核（`STAGE_ADVANCE` + `auto_advanced_by_completion`）細節全由 F084 §5.2 / BR-11~BR-16 規範，本 BR 僅說明掛載點；(3) **§8 Blocks** 之 F084 條目補註「auto-advance 觸發宿主」。**既有寫入 / 校驗 / 容差 ±0.01% / 轄區 Guard / 稽核語意完全不變**；由 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag（prod 預設 off）控制，flag off 時完全不執行 |
+| **v1.7** | **2026-05-25** | **【F084 v2.0 auto-advance 改造同步 / 對應 US-114 v2.0】**：本 PUT 成為 F084 v2.0「自動推進至簽核」之觸發宿主。(1) **§5.2 PUT response 補 `autoAdvanced` / `newStage` / `autoAdvanceFailReason` 三欄位** + 欄位語意說明（`autoAdvanced=true` 時 `newStage="approval"`；僅月名單分派 guard 阻擋時帶 `autoAdvanceFailReason="ASSIGNMENT_RUN_ALREADY_RUNNING"`，其餘 no-op 情境不帶 failReason）；(2) **§6 BR-19 新增**：「Auto-Advance 觸發宿主」——PUT 成功後同一 tx 內若 flag = on 則呼叫 F084 完成度偵測 + 自動推進；觸發行為 / advisory lock / 月名單分派 guard 降級 / 稽核（`STAGE_ADVANCE` + `auto_advanced_by_completion`）細節全由 F084 §5.2 / BR-11~BR-16 規範，本 BR 僅說明掛載點；(3) **§8 Blocks** 之 F084 條目補註「auto-advance 觸發宿主」。**既有寫入 / 校驗 / 容差 ±0.01% / 轄區 Guard / 稽核語意完全不變**；由 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` flag（prod 預設 off）控制，flag off 時完全不執行 |

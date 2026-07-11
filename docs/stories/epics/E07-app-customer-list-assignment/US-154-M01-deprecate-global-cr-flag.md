@@ -12,7 +12,7 @@ change-summary: "新增 story：廢除全域 CR 旗標 cr_reassignment_enabled�
 > **優先級**：Must Have
 > **階段**：Phase 1（MVP）
 > **預估點數**：3
-> **Feature**：F102 月跑 CR 優先分派
+> **Feature**：F102 月名單分派 CR 優先分派
 
 ---
 

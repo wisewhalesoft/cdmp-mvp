@@ -30,8 +30,8 @@ related_test_design: /docs/specs/handoffs/F084-v2-auto-advance-test-design.md
 |-------------|------|--------|
 | TC-F084-FE-001 | autoAdvanced=true → 自動推進 toast + redirect 名單列表 | PASS |
 | TC-F084-FE-002 | autoAdvanced=true → redirect 至名單列表頁 | PASS |
-| TC-F084-FE-003 | failReason=ASSIGNMENT_RUN_ALREADY_RUNNING → 月跑 toast + fallback 按鈕 + 不 redirect | PASS |
-| TC-F084-FE-004 | 月跑 guard 跳過 → fallback 按鈕 disabled + tooltip「分派執行中，無法推進」 | PASS |
+| TC-F084-FE-003 | failReason=ASSIGNMENT_RUN_ALREADY_RUNNING → 月名單分派 toast + fallback 按鈕 + 不 redirect | PASS |
+| TC-F084-FE-004 | 月名單分派 guard 跳過 → fallback 按鈕 disabled + tooltip「分派執行中，無法推進」 | PASS |
 | TC-F084-FE-005 | 部分完成（autoAdvanced:false 無 failReason）→ 僅既有儲存 toast、不 redirect | PASS |
 | TC-F084-FE-006 | 所有部門完成 → 顯示可點擊手動推進按鈕（flag off / fallback） | PASS |
 | TC-F084-FE-007 | stage=approval（isReadOnly:true）→ 推進按鈕完全不渲染 | PASS |
@@ -49,9 +49,9 @@ related_test_design: /docs/specs/handoffs/F084-v2-auto-advance-test-design.md
   → allDone 時自然顯示 fallback 手動按鈕（= 既有手動行為）。
 - **FLAG-1（批准）**：`PersonnelRatioFormHandle.save()` 回傳 `Promise<SetPersonnelRatiosResponse | null>`；
   `onSaved` 回呼攜帶 response。「儲存全部」Promise.all 收集所有 response，任一 autoAdvanced=true → redirect、
-  任一 failReason → 月跑 toast + fallback。
+  任一 failReason → 月名單分派 toast + fallback。
 - **fallback 按鈕渲染**：`showFallbackAdvance = (stage=personnel_ratio 且非 isReadOnly) 且 (allDone 或
-  月跑 guard 跳過)`；disabled：月跑進行中 / 處長本部門未完成 / 尚有部門未完成（對齊 prototype renderActionBar）。
+  月名單分派 guard 跳過)`；disabled：月名單分派進行中 / 處長本部門未完成 / 尚有部門未完成（對齊 prototype renderActionBar）。
 
 ### Phase 2 更新的既有測試斷言（保留原驗收意圖）
 
@@ -80,11 +80,11 @@ related_test_design: /docs/specs/handoffs/F084-v2-auto-advance-test-design.md
 | TC-F084-009 | 稽核 metadata 完整性（boolean true + 無多餘 key） | PASS |
 | TC-F084-010 | 手動 fallback 路徑稽核不含 auto_advanced_by_completion | PASS |
 | TC-F084-011 | operator_role 推導三角色 × 公式 | PASS |
-| TC-F084-012 | 月跑 running → autoAdvanced:false + failReason、寫入保留 | PASS |
-| TC-F084-013 | 月跑 pending（isRunning true）同樣觸發 guard | PASS |
+| TC-F084-012 | 月名單分派 running → autoAdvanced:false + failReason、寫入保留 | PASS |
+| TC-F084-013 | 月名單分派 pending（isRunning true）同樣觸發 guard | PASS |
 | TC-F084-014 | lock 逾時 55P03 → autoAdvanced:false、不帶 failReason、寫入保留（Option B） | PASS |
 | TC-F084-015 | lock 超時 catch 後 tx 照常 commit（不 rethrow） | PASS |
-| TC-F084-016 | lock 超時 vs 月跑 guard 回應欄位差異 | PASS |
+| TC-F084-016 | lock 超時 vs 月名單分派 guard 回應欄位差異 | PASS |
 | TC-F084-017 | 取得 lock 後 stage 已 approval → idempotent no-op | PASS |
 | TC-F084-018 | idempotent no-op 時稽核不重複 | PASS |
 | TC-F084-019 | advanceToInMgr 接受外部 EntityManager、不自開 tx | PASS |
@@ -96,7 +96,7 @@ related_test_design: /docs/specs/handoffs/F084-v2-auto-advance-test-design.md
 | TC-F084-025 | 歷史月份 → 403，auto-advance 不執行 | PASS |
 | TC-F084-026 | fallback 部長手動推進成功（走 advanceTo，不含 metadata flag） | PASS |
 | TC-F084-027 | fallback 部門未完成 → 422 STAGE_ADVANCE_PRECONDITION_FAILED | PASS |
-| TC-F084-028 | fallback 月跑進行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING | PASS |
+| TC-F084-028 | fallback 月名單分派進行中 → 409 ASSIGNMENT_RUN_ALREADY_RUNNING | PASS |
 | TC-F084-029 | fallback 歷史月份 → 403 LIST_HISTORICAL_READONLY | PASS |
 | TC-F084-030 | fallback stage 非 personnel_ratio → 422 LIST_STAGE_TRANSITION_FORBIDDEN | PASS |
 
@@ -118,7 +118,7 @@ related_test_design: /docs/specs/handoffs/F084-v2-auto-advance-test-design.md
 |-----------|------------|-------------|
 | apps/api/src/modules/assignment/services/stage-transition.service.ts | modified | 新增 `advanceToInMgr()` 過載（接受外部 EntityManager、不自開 tx、auditMetadata 合併進 after_value.metadata） |
 | apps/api/src/modules/assignment/services/personnel-ratio-validation.service.ts | modified | 新增 `assertAllDeptsSumEquals100WithMgr()`（EntityManager 版本，讀同 tx 未 commit；新增私有 `countActiveEmployeesWithMgr()`）；import 補 `EntityManager` |
-| apps/api/src/modules/assignment/services/assignment-run-guard.service.ts | modified | 新增 `isRunning()`（tx 內輕量月跑 guard，回 boolean） |
+| apps/api/src/modules/assignment/services/assignment-run-guard.service.ts | modified | 新增 `isRunning()`（tx 內輕量月名單分派 guard，回 boolean） |
 | apps/api/src/modules/assignment-stage/personnel-ratio.service.ts | modified | `setPersonnelRatios()` tx scope 擴大（Option B）+ 新增私有 `tryAutoAdvance()` / `resolveOperatorRole()` / `isAutoAdvanceEnabled()` / `isPostgres()` / `isPgLockNotAvailable()`；response 補 autoAdvanced / newStage / autoAdvanceFailReason；import 補 `EntityManager` |
 | apps/api/src/modules/assignment-stage/__tests__/personnel-ratio-auto-advance.service.spec.ts | new | TC-F084-001~030 共 30 個後端 unit |
 | docs/specs/handoffs/F084-v2-auto-advance-test-design.md | modified | §4 四個 INT 案例標 DEFERRED + 決策 B 說明 |
@@ -135,7 +135,7 @@ related_test_design: /docs/specs/handoffs/F084-v2-auto-advance-test-design.md
   SQLite 測試 infra 下跳過 advisory lock，直接做完成度偵測 + 推進，使 30 unit 在現有 SQLite infra 全綠。
   lock 超時 catch 路徑（55P03）以 mock 在 `DB_TYPE='postgres'` 子情境下驗證（TC-014~016）。
 - **Option B 順序**：tx 內 [1]DELETE [2]INSERT ob_empl_set [3]INSERT 稽核（寫入）皆在 [4a] advisory lock **之前**；
-  lock 超時 / 月跑 guard / 未完成 / idempotent no-op 任一降級皆不 rollback 寫入，tx 照常 commit。
+  lock 超時 / 月名單分派 guard / 未完成 / idempotent no-op 任一降級皆不 rollback 寫入，tx 照常 commit。
 
 ## 待辦（Phase 2 接續時）
 
@@ -143,7 +143,7 @@ related_test_design: /docs/specs/handoffs/F084-v2-auto-advance-test-design.md
   - `apps/web/src/api/assignment-stage.ts`：`SetPersonnelRatiosResponse` 補 autoAdvanced/newStage/autoAdvanceFailReason
   - `personnel-ratio-form.tsx`：`save()` 回傳改 `Promise<SetPersonnelRatiosResponse | null>`（FLAG-1 批准）
   - `personnel-ratio-config-page.tsx`：依 response 分支（任一 autoAdvanced=true → toast+redirect；
-    任一 autoAdvanceFailReason → 月跑 toast + 保留 fallback 按鈕；無 → 既有 toast）
+    任一 autoAdvanceFailReason → 月名單分派 toast + 保留 fallback 按鈕；無 → 既有 toast）
   - TC-F084-FE-001~011 共 11 個前端 unit
 - F084 spec §10 末補測試設計文件連結（§6.4 要求）：因 `/docs/specs/features/` 為唯讀，**未在本輪改動**，
   提醒由 spec-writer 或經使用者確認後補上。

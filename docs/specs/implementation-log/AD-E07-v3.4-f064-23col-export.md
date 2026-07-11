@@ -7,7 +7,7 @@ last_updated: 2026-06-17
 bug_fixes:
   - id: BUG-F064-POOL-JOIN-01
     date: 2026-06-17
-    description: "初版 AD 誤用 ob_pool_data_list（PK=list_no+orgno+appl_no）作為 pool 屬性來源，導致 INNER JOIN 遺漏 11.5% 案件（6,438/55,863 筆）。根因：月跑 Stage 1 血緣源為 ob_pool_data（PK=orgno+appl_no），不是 ob_pool_data_list。修正：改 INNER JOIN ob_pool_data by (orgno,appl_no)；ob_pool_data 有全部所需 pool 屬性欄位，血緣保證 100% 匹配。實測 run e3c839b7：55,863/55,863 全對，零掉列。"
+    description: "初版 AD 誤用 ob_pool_data_list（PK=list_no+orgno+appl_no）作為 pool 屬性來源，導致 INNER JOIN 遺漏 11.5% 案件（6,438/55,863 筆）。根因：月名單分派 Stage 1 血緣源為 ob_pool_data（PK=orgno+appl_no），不是 ob_pool_data_list。修正：改 INNER JOIN ob_pool_data by (orgno,appl_no)；ob_pool_data 有全部所需 pool 屬性欄位，血緣保證 100% 匹配。實測 run e3c839b7：55,863/55,863 全對，零掉列。"
 oq_resolved: [OQ-F064-1, OQ-F064-2, OQ-F064-3, OQ-F064-4, GAP-3]
 oq_open: []
 covers: [F064, US-155]
@@ -53,7 +53,7 @@ F102（AD-E07-30）已於 main 上 commit，`ob_monthly_run_result.cr_id` / `cr_
 **裁定：單一 SQL 多表 join + server-side cursor 逐批 fetch**
 
 > **⚠️ BUG-F064-POOL-JOIN-01 修正（2026-06-17）**：Pool 屬性來源表從初版誤用的 `ob_pool_data_list` 改為
-> `ob_pool_data`（Stage 1 血緣源，PK=orgno+appl_no）。理由：月跑 Stage 1 是
+> `ob_pool_data`（Stage 1 血緣源，PK=orgno+appl_no）。理由：月名單分派 Stage 1 是
 > `INSERT INTO ob_monthly_run_result SELECT … FROM ob_pool_data o JOIN ob_list_definition ld …`，
 > `ob_monthly_run_result` 的每一列血緣都對應 `ob_pool_data` 的一筆（orgno, appl_no），
 > INNER JOIN `ob_pool_data` by (orgno, appl_no) 保證 100% 匹配，不掉列。
@@ -242,7 +242,7 @@ await queryRunner.query(`CLOSE export_cursor`);
 - 本 feature 維持 `EXPORT_TIMEOUT_MS_DEFAULT = 5 * 60 * 1000`（BR-F064-10）。
 - 200k+ 筆是否足夠 5 分鐘：**不在本 feature 實測**，deploy 後觀察 prod 實際執行時間。
 - 若 prod 實測逾時頻繁，另開 story 走 pg-boss worker + 202 Accepted 下載 URL 模式
-  （參照 AD-E07-28 月跑 worker 抽離設計，非本 feature 範疇）。
+  （參照 AD-E07-28 月名單分派 worker 抽離設計，非本 feature 範疇）。
 
 **不變式 I-EXP-SYNC-01**：F064 v2.0 匯出為同步 streaming（HTTP response streaming）；
 不採 202 Accepted 背景 job 模式。超過 5 min → 500 `EXPORT_FILE_EXPIRED`（BR-F064-10）。
@@ -429,7 +429,7 @@ ob_monthly_run_result r  (WHERE run_id = :runId)
 
 關鍵設計決策（AD-E07-31）：
 - **進件日（欄 6）取 `ob_pool_data.appl_date`**（GAP-3 裁定 + BUG-F064-POOL-JOIN-01 修正，不取 `ob_monthly_run_result.appl_date`）；`ob_pool_data.appl_date` 為 timestamp 型別，須 `toISOString().slice(0,10)` 取日期部分。
-- **INNER JOIN ob_pool_data**（非 LEFT JOIN、非 ob_pool_data_list）：月跑 Stage 1 INSERT 來源即為 ob_pool_data，血緣保證 100% 匹配（I-EXP-LINEAGE-01）；改用 ob_pool_data_list 會遺漏 11.5%（BUG-F064-POOL-JOIN-01 實測 6,438/55,863 筆）。
+- **INNER JOIN ob_pool_data**（非 LEFT JOIN、非 ob_pool_data_list）：月名單分派 Stage 1 INSERT 來源即為 ob_pool_data，血緣保證 100% 匹配（I-EXP-LINEAGE-01）；改用 ob_pool_data_list 會遺漏 11.5%（BUG-F064-POOL-JOIN-01 實測 6,438/55,863 筆）。
 - **LEFT JOIN emphire / list_def**：ETL 延遲或員工不存在時不中斷匯出。
 - `ob_emphire` join-miss 後端記 WARNING log（彙總方式，非 per-row，BR-F064-06）。
 - 23 欄欄序以 `reference/202606 分派名單.xlsx` 工作表 1 為 authority（BR-F064-03）。
@@ -478,7 +478,7 @@ F-6 追蹤表新增：
 ### 6.1 不新增獨立 module 檔案
 
 F064 v2.0 重構範圍侷限於 `assignment-run-report.service.ts` 內部，
-不新增 `stage1/` 系列等獨立 module（CR 邏輯有獨立 module 是因其為月跑 pipeline 步驟；
+不新增 `stage1/` 系列等獨立 module（CR 邏輯有獨立 module 是因其為月名單分派 pipeline 步驟；
 匯出為 read-only GET 路徑，複雜度不需拆分）。
 
 ### 6.2 修改既有檔案
@@ -493,7 +493,7 @@ F064 v2.0 重構範圍侷限於 `assignment-run-report.service.ts` 內部，
 
 **不修改**：
 - `F064-export-assignment-result.md`（已是 v2.0 定稿，system-architect 不改 spec）
-- `stage1/` 任何檔案（月跑 pipeline，與匯出無關）
+- `stage1/` 任何檔案（月名單分派 pipeline，與匯出無關）
 - `compareRuns()` / `compareRunsExport()` / `getSummary()`（繼續讀 snapshot）
 
 ---
@@ -548,7 +548,7 @@ F064 v2.0 重構範圍侷限於 `assignment-run-report.service.ts` 內部，
 - **延伸 AD-E07-11（F064 exceljs streaming 技術選型）**：本 AD 確認 xlsx 繼續使用 exceljs WorkbookWriter；補充 CSV streaming 設計（AD-E07-11 未涵蓋 CSV）。
 - **依賴 AD-E07-30（F102）**：`ob_monthly_run_result.cr_id` / `cr_nm` / `is_cr` / `emplid` / `assignday` / `appl_date` 均由 F102 填值；本 AD 假設 F102 已 commit（confirmed on main `1ac93da`）。
 - **不影響 AD-E07-29（F101）**：Stage 3/4 pipeline 邏輯無變動。
-- **不影響 AD-E07-28（月跑 worker 抽離）**：匯出為獨立 GET 端點，不在 pg-boss job 內執行。
+- **不影響 AD-E07-28（月名單分派 worker 抽離）**：匯出為獨立 GET 端點，不在 pg-boss job 內執行。
 
 ---
 
@@ -562,7 +562,7 @@ F064 v2.0 重構範圍侷限於 `assignment-run-report.service.ts` 內部，
 | **CR 三欄正確輸出（TC-155-04）** | test-designer | `is_cr='Y'` 列 `CR_ID` / `CR_NM` 非空；`is_cr='N'` 列空值 |
 | **ob_emphire join-miss fallback（TC-155-05）** | test-designer | emplid='X999' join-miss → 欄 12/14/15 空；欄 13 仍輸出 'X999'；後端 WARNING log |
 | **streaming 大資料量不 OOM（TC-155-06）** | test-designer | 50k+ 筆 xlsx / CSV 皆不 OOM；記憶體峰值 < 2x（可用 memory monitor 斷言） |
-| **月跑未完成阻擋（TC-155-07）** | test-designer | status='running' → 422 `ASSIGNMENT_RUN_NOT_COMPLETED` |
+| **月名單分派未完成阻擋（TC-155-07）** | test-designer | status='running' → 422 `ASSIGNMENT_RUN_NOT_COMPLETED` |
 | **處長 scope filter（TC-155-08）** | test-designer | `section_chief` 匯出檔只含轄區內資料列；audit `scopedByCreator=true` |
 | **regression：不含舊 custo_no/cust_name（TC-155-09）** | test-designer | CSV / xlsx 表頭均無此四欄 |
 | **join SQL 正確性**（非 TC-155 系列）| test-designer | mock DB 驗證 SQL 含正確 INNER JOIN pool + LEFT JOIN emphire + LEFT JOIN list_def；ORDER BY 確定性 |

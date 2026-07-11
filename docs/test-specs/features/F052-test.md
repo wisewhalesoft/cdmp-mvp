@@ -19,7 +19,7 @@ last_updated: 2026-05-21
 > 1. 按鈕文字「停」→「停用」全寫（US-105 v2.3 修正，v1.0 縮寫廢止）
 > 2. 入口由 F048 v1.0 表格列改為 F048 v2.0 Kanban 主頁 `draft` 階段卡片操作欄
 >
-> 既有業務邏輯（API endpoint / 軟刪除語意 / 月跑鎖 / 重複停用阻擋）不在 v2.1 變更範圍內。
+> 既有業務邏輯（API endpoint / 軟刪除語意 / 月名單分派鎖 / 重複停用阻擋）不在 v2.1 變更範圍內。
 > 本文件覆蓋 3 個前端 Component 場景，聚焦於按鈕文字正確性 / 確認對話框一致性 / 停用後卡片消失。
 > 若既有 E2E 有對應按鈕文字「停」的 test，應標記為 `@deprecated`（詳見第一節）。
 
@@ -38,7 +38,7 @@ last_updated: 2026-05-21
 
 | 項目 | 說明 |
 |---|---|
-| 主要測試層 | 前端 Component（RTL）；停用 API 行為（軟刪除 / 月跑鎖）由既有後端 Integration test 覆蓋 |
+| 主要測試層 | 前端 Component（RTL）；停用 API 行為（軟刪除 / 月名單分派鎖）由既有後端 Integration test 覆蓋 |
 | 測試檔案 | `apps/web/src/pages/assignment/__tests__/list-kanban-page.test.tsx`（追加 F052 群組）|
 | 關鍵 AC 變更 | 按鈕文字必須為「停用」（全寫），不可為「停」（縮寫）|
 | Mock 注意 | `stage` 值用 PG ENUM 小寫 `'draft'`；MSW stub PATCH/DELETE 軟刪除 API |
@@ -64,7 +64,7 @@ last_updated: 2026-05-21
 - **前置條件**：
   - 使用 DirectorToken（`businessRole='director'`）
   - MSW stub `GET /api/v1/assignment/lists` 回 1 筆 `stage='draft'`、`status='active'` 名單
-  - 非歷史月份；無月跑鎖
+  - 非歷史月份；無月名單分派鎖
 - **步驟**：
   1. render `<ListKanbanPage />` with director context
   2. 定位「草稿」欄中的卡片操作區
@@ -116,4 +116,4 @@ last_updated: 2026-05-21
 | 場景群組 | 自動化適合度 | 說明 |
 |---|---|---|
 | TS-F052-TXT-001~003（按鈕文字 / Dialog / 卡片消失） | 高 | RTL + MSW；核心驗證點為 DOM 文字，確定性高 |
-| 既有業務邏輯（軟刪除 / 月跑鎖 / 重複停用） | 高（後端 Integration 既有覆蓋） | v2.1 不新增後端 test |
+| 既有業務邏輯（軟刪除 / 月名單分派鎖 / 重複停用） | 高（後端 Integration 既有覆蓋） | v2.1 不新增後端 test |

@@ -46,7 +46,7 @@
 - **When** 業務主管點擊「確認新增」
 - **Then** 未填欄位顯示「此欄位為必填」提示，不送出 API 請求
 
-### AC-5：月跑執行中禁止新增
+### AC-5：月名單分派執行中禁止新增
 
 - **Given** 目前 `assignment_run` 有 status IN ('pending', 'running') 的紀錄
 - **When** 業務主管在 Tab 1 查看清單
@@ -69,7 +69,7 @@
   - created_at：當前時間
 - **ob_levelcard_column / ob_levelcard_score / ob_levelcard_level / ob_tier**：新增時不自動建立，業務主管於 Tab 2~5 自行新增各項設定
 - **API**：`POST /api/v1/assignment/scoring/card-types`（詳見 F070 §5）
-- **錯誤碼**：`CARD_TYPE_DUPLICATE`（422）— 代碼重複；`SCORING_VERSION_LOCKED`（409）— 月跑執行中
+- **錯誤碼**：`CARD_TYPE_DUPLICATE`（422）— 代碼重複；`SCORING_VERSION_LOCKED`（409）— 月名單分派執行中
 
 > **[ASSUMPTION]** `ob_card_type` 為 AppDB 新建表，prod_kind 欄位以 FK 或 varchar 儲存 ob_code_df 的 code_val，具體欄位設計由 system-architect 於 F069~F072 spec 中確認。本 Story 只定義業務行為，不預設 schema 細節。
 
@@ -101,7 +101,7 @@
 - **When**：點擊「確認新增」
 - **Then**：prod_kind 欄位下方顯示「此欄位為必填」，不送 API
 
-### TC-094-05：月跑執行中按鈕 disabled
+### TC-094-05：月名單分派執行中按鈕 disabled
 
 - **Given**：`assignment_run` 有 status = 'running' 的紀錄
 - **When**：業務主管查看 Tab 1
@@ -112,7 +112,7 @@
 ## 依賴關係
 
 - **Blocked By**：US-093（需先有 Tab 1 清單頁面）、US-092（PROD_KIND 下拉來源）
-- **Blocks**：US-073（新增維度需先有 CARD_TYPE 存在）、US-081（月跑需有 CARD_TYPE 計分設定）
+- **Blocks**：US-073（新增維度需先有 CARD_TYPE 存在）、US-081（月名單分派需有 CARD_TYPE 計分設定）
 
 ---
 
@@ -121,7 +121,7 @@
 - [ ] 驗收標準全部通過
 - [ ] Transaction rollback 測試通過（TC-094-03）
 - [ ] 代碼唯一性驗證測試通過（TC-094-02）
-- [ ] 月跑鎖定保護測試通過（TC-094-05）
+- [ ] 月名單分派鎖定保護測試通過（TC-094-05）
 - [ ] 單元測試覆蓋率 ≥ 80%
 - [ ] Code review 通過
 - [ ] 文件已更新

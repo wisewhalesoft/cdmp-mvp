@@ -1,8 +1,8 @@
-%% F061 — 觸發分派月跑（Stage 0~4 執行引擎）
-%% 說明：月跑採非同步執行（202 Accepted），依序執行 Stage 0 前置、Stage 1 名單建立、ScoringIntegrityCheck（Stage 2 前）、Stage 2 計分與部門分配、Stage 3 部門分配、Stage 4 人員分配與 st4_exchange
+%% F061 — 觸發分派月名單分派（Stage 0~4 執行引擎）
+%% 說明：月名單分派採非同步執行（202 Accepted），依序執行 Stage 0 前置、Stage 1 名單建立、ScoringIntegrityCheck（Stage 2 前）、Stage 2 計分與部門分配、Stage 3 部門分配、Stage 4 人員分配與 st4_exchange
 %% v1.3 / 2026-05-18：Stage 2 前新增 ScoringIntegrityCheck 節點（F061 v1.3 / F054 v1.3）
 flowchart TD
-    Start([業務主管點擊「執行月跑」]) --> Precheck{Stage 0：前置條件檢查}
+    Start([業務主管點擊「執行月名單分派」]) --> Precheck{Stage 0：前置條件檢查}
 
     Precheck -->|名單未就緒| Fail0[阻擋執行<br/>回傳 422 + 失敗原因清單]
     Precheck -->|部門比例 ≠ 100%| Fail0
@@ -49,8 +49,8 @@ flowchart TD
     SnapCheck -->|是| Complete[UPDATE assignment_run<br/>status = 'completed'<br/>finished_at = NOW<br/>total_cases = N]
 
     Rollback[ROLLBACK 快照 Transaction<br/>UPDATE assignment_run<br/>status = 'failed'<br/>error_message = Stage_X failed]
-    Rollback --> EndFail([月跑失敗<br/>前端輪詢顯示失敗提示])
-    Complete --> EndOk([月跑完成<br/>前端輪詢顯示完成提示<br/>若有 SCORING_INTEGRITY_WARN 顯示黃色警示])
+    Rollback --> EndFail([月名單分派失敗<br/>前端輪詢顯示失敗提示])
+    Complete --> EndOk([月名單分派完成<br/>前端輪詢顯示完成提示<br/>若有 SCORING_INTEGRITY_WARN 顯示黃色警示])
 
     classDef stage fill:#dbeafe,stroke:#2563eb
     classDef decision fill:#fef9c3,stroke:#ca8a04

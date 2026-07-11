@@ -67,7 +67,7 @@ oracle_source: "F108 spec §6（Worked Example）+ AD-E07-v3.7 §9（逐格驗�
 | EMPTY（空結果邊界）| 3 | Unit + Integration（SQLite）| 否 | 高 | TC-171-11 |
 | REGRESSION（DoD 紅線，明細頁 + CSV）| 4 | Unit + 靜態 | 否 | 高（DoD 阻擋）| TC-171-12 |
 | STATIC（靜態掃描）| 3 | Unit（靜態 grep）| 否 | 高 | — |
-| PG（端對端，選配）| 2 | PG Integration | **是** | 中（需真實月跑 DB）| — |
+| PG（端對端，選配）| 2 | PG Integration | **是** | 中（需真實月名單分派 DB）| — |
 | **合計** | **40** | — | **2** | — | TC-171-01~12 全覆蓋 |
 
 ---
@@ -767,15 +767,15 @@ oracle_source: "F108 spec §6（Worked Example）+ AD-E07-v3.7 §9（逐格驗�
 
 > **設計依據**：ground-truth brief §6（PG spec 可選）；F108 spec §11（相關）。
 >
-> **適用條件**：僅在 `cdmp_test` Postgres DB 環境下執行；CI 可設為選配慢速套件（slow suite），不阻擋一般 push。對真實月跑 run_id = `84486ddd-1a54-4eaf-a4d0-096ba9bdde58`（202606 月跑）斷言。
+> **適用條件**：僅在 `cdmp_test` Postgres DB 環境下執行；CI 可設為選配慢速套件（slow suite），不阻擋一般 push。對真實月名單分派 run_id = `84486ddd-1a54-4eaf-a4d0-096ba9bdde58`（202606 月名單分派）斷言。
 
-### TS-F108-PG-001：對真實 202606 月跑匯出，xlsx 含 2 個工作表且第 2 頁可正常解析
+### TS-F108-PG-001：對真實 202606 月名單分派匯出，xlsx 含 2 個工作表且第 2 頁可正常解析
 
 - **相關 AC / BR**：AC-1 / BR-F108-07 / I-PIV-SHEET-01
 - **測試類型**：端對端（PG 規模驗收）
 - **測試層**：PG Integration
 - **前置條件**：
-  - `cdmp_test` 含 202606 月跑資料（run_id = `84486ddd-1a54-4eaf-a4d0-096ba9bdde58`，status='completed'）
+  - `cdmp_test` 含 202606 月名單分派資料（run_id = `84486ddd-1a54-4eaf-a4d0-096ba9bdde58`，status='completed'）
   - F101 / F102 已 commit（`ob_monthly_run_result.emplid` 有值）
   - director actor（bypass scope）
 - **步驟**：
@@ -791,13 +791,13 @@ oracle_source: "F108 spec §6（Worked Example）+ AD-E07-v3.7 §9（逐格驗�
 
 ---
 
-### TS-F108-PG-002：真實月跑樞紐部門分佈量級與 F063 摘要一致（32/34/15/18%）
+### TS-F108-PG-002：真實月名單分派樞紐部門分佈量級與 F063 摘要一致（32/34/15/18%）
 
 - **相關 AC / BR**：AC-3 / BR-F108-04 / I-PIV-PARENTROW-01（規模驗證）
 - **測試類型**：端對端（業務語意驗收，選配）
 - **測試層**：PG Integration
 - **前置條件**：
-  - 同 PG-001；202606 月跑（有 F049 Stage 0 已驗算的部門分佈：XVE1-4 ≈ 32.3/34.3/15.4/18.0%）
+  - 同 PG-001；202606 月名單分派（有 F049 Stage 0 已驗算的部門分佈：XVE1-4 ≈ 32.3/34.3/15.4/18.0%）
 - **步驟**：
   1. 讀取 pivotWs 各部門列，取「總計欄」值
   2. 與 F063 摘要 API（`GET /assignment/runs/:runId/summary`）回傳的部門百分比比對
@@ -831,7 +831,7 @@ oracle_source: "F108 spec §6（Worked Example）+ AD-E07-v3.7 §9（逐格驗�
 | 項目 | 原因 |
 |---|---|
 | TS-F108-PG-002 部門分佈 legacy 對照（F067 差異報告）| 需 legacy `reference/202606 分派名單.xlsx` 工作表2 實際數字對照；量級驗收可自動化，逐格精確對照為人工 |
-| 真實月跑 55,863 筆 OOM 防護驗收 | 需 prod 環境規模；CI 以 EMPTY / STREAM（F064 既有）代替 |
+| 真實月名單分派 55,863 筆 OOM 防護驗收 | 需 prod 環境規模；CI 以 EMPTY / STREAM（F064 既有）代替 |
 
 ---
 

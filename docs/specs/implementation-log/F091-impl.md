@@ -8,7 +8,7 @@ last_updated: 2026-05-26
 
 # F091：Stage 1 補完整 — 實作日誌
 
-> ⚠️ **PRODUCTION 行為變更**：本實作改變正式月跑 Stage 1 分派案件數（無 feature flag，deploy 後直接生效 — DP-AD23-2）。月跑案件數將**減少**（過濾不符期別 / 近期已派 / 特殊業務排除之案件）。後端 only。
+> ⚠️ **PRODUCTION 行為變更**：本實作改變正式月名單分派 Stage 1 分派案件數（無 feature flag，deploy 後直接生效 — DP-AD23-2）。月名單分派案件數將**減少**（過濾不符期別 / 近期已派 / 特殊業務排除之案件）。後端 only。
 
 ## 測試結果摘要
 
@@ -35,9 +35,9 @@ last_updated: 2026-05-26
 | TS-F091-SD-008 | deal_num string 含小數需 Number() 轉換（regression guard） | Unit | PASS |
 | TS-F091-CH-001 | 執行順序：詐騙白牌在去重之前；去重 query 被呼叫 | Unit | PASS |
 | TS-F091-CH-002 | EMPTY_CONDITIONS skip 保留（不撈 pool / 不去重） | Unit | PASS |
-| TS-F091-CH-003 | 月跑模式回完整案件列（MONTH_CNT + 去重交互） | Integration | PASS |
-| TS-F091-CH-004 | 月跑 vs dry-run 同 fixture 回相同 count（F092 前置） | Integration | PASS |
-| TS-F091-CH-005 | MONTH_CNT skip（list_period_* null）→ 月跑仍繼續 + warning | Unit | PASS |
+| TS-F091-CH-003 | 月名單分派模式回完整案件列（MONTH_CNT + 去重交互） | Integration | PASS |
+| TS-F091-CH-004 | 月名單分派 vs dry-run 同 fixture 回相同 count（F092 前置） | Integration | PASS |
+| TS-F091-CH-005 | MONTH_CNT skip（list_period_* null）→ 月名單分派仍繼續 + warning | Unit | PASS |
 | TS-F091-RG-001 | 既有 buildStage1WhereConditions 不變更（純函式無副作用） | Regression | PASS（stage1-query-composer 36 tests 不破） |
 | TS-F091-RG-002 | 既有 pipeline Integration test 案件數 baseline 更新 | Regression | DONE（見下「既有測試 baseline 更新」） |
 | TS-F091-RG-003 | Stage0EstimateService 未升級（F092 才升級） | Regression（標注） | N/A 本階段不動 estimate |
@@ -87,7 +87,7 @@ for (let m = start; m <= end; m += interval) months.push(m)
 → { fragment: '"month_cnt" IN (:...monthCntVals)', params: { monthCntVals: months } }
 ```
 以 `AND` 連接至欄位篩選 fragment：`(<欄位篩選>) AND ("month_cnt" IN (:...monthCntVals))`。
-邊界：start/end/interval 缺值 → `MONTH_CNT_PERIOD_INCOMPLETE` warning + skip；interval<=0 → `MONTH_CNT_INTERVAL_INVALID` warning + skip（防 infinite loop）；空集合 → skip。**skip 不阻擋月跑**（BR-4 / CH-005）。
+邊界：start/end/interval 缺值 → `MONTH_CNT_PERIOD_INCOMPLETE` warning + skip；interval<=0 → `MONTH_CNT_INTERVAL_INVALID` warning + skip（防 infinite loop）；空集合 → skip。**skip 不阻擋月名單分派**（BR-4 / CH-005）。
 
 ### (c) 近 3 個月去重（SP L73~L87）
 ```
@@ -120,11 +120,11 @@ pool.filter(c => c.custo_no === null || !recentSet.has(c.custo_no))          ←
 | `assignment-run-pipeline-v2.service.spec.ts` | 同上，且部分案例顯式 `monthCnt:2/10`（落在 [1] 外會被排除） | `list_interval='001'`（涵蓋 1/2/10）、seedPool 預設 `month_cnt=1` | 維持原案件數 + v2 計分案例（month_cnt 2/10 入選不變） |
 | `assignment-run-pipeline-stage1-dynamic.spec.ts` | `list_interval='001'`、seedPool 無 month_cnt | seedPool 新增 `monthCnt` 參數，預設 `month_cnt=1` | 維持原案件數 |
 
-> 註：此屬「測試 fixture 補上 F091 新過濾維度所需欄位」，非業務案件數變化。真實 production 月跑案件數變化（過濾真實不符期別 / 近期已派 / 特殊業務案件）為本 feature 的預期效果（§13 / DP-AD23-2），依 staging dry-run 驗證（F092 完成後）。
+> 註：此屬「測試 fixture 補上 F091 新過濾維度所需欄位」，非業務案件數變化。真實 production 月名單分派案件數變化（過濾真實不符期別 / 近期已派 / 特殊業務案件）為本 feature 的預期效果（§13 / DP-AD23-2），依 staging dry-run 驗證（F092 完成後）。
 
 ## 架構決策
 
-- **模組歸屬**：`Stage1FilterChain` 採「純函式群組 + 接受 repo 參數的 async 主入口」，非 Injectable。理由：契約簽名 `executeStage1Chain(list, workdt, poolRepo, poolDataListRepo, {dryRun})` 本就傳入 repo，呼叫端（月跑 pipeline / 未來 F092 estimate）以自身 repo 注入即可共用，無需新增 module / 處理循環依賴（AD-E07-23 §23.5 目標達成，且比獨立 Injectable 更輕量）。
+- **模組歸屬**：`Stage1FilterChain` 採「純函式群組 + 接受 repo 參數的 async 主入口」，非 Injectable。理由：契約簽名 `executeStage1Chain(list, workdt, poolRepo, poolDataListRepo, {dryRun})` 本就傳入 repo，呼叫端（月名單分派 pipeline / 未來 F092 estimate）以自身 repo 注入即可共用，無需新增 module / 處理循環依賴（AD-E07-23 §23.5 目標達成，且比獨立 Injectable 更輕量）。
 - **詐騙白牌去重前套用 + applySpecialDeletes idempotent**：`executeStage1Chain` 內以 `applyFraudWhiteboardDelete()`（去重前）+ `applyListNmSpecialDeletes()`（去重後）拆開套用，精確對齊 SP L69→L77→L90 順序，無重複；`applySpecialDeletes()` 仍組合兩者作為「完整特殊 DELETE 純函式」供 SD 單元測試獨立驗證。
 
 ## 偏離 SP / 需確認之處（spec gap）

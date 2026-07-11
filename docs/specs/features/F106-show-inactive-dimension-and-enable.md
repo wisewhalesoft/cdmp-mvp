@@ -31,10 +31,10 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-25
 打通「停用計分維度」在 M02 Tab 2（計分維度）的可見性與自助修復管線，與既有 F054「停用維度」對稱補完：
 
 1. **後端讀取**：`getScoring()` 維度查詢由「只回 `status='active'`」改為「一律回傳 active + inactive 全部維度」，且每個 dimension 物件補上 `status` 欄位（`'active'` / `'inactive'`）。
-2. **後端寫入**：新增「啟用」端點 `PUT /assignment/scoring/dimensions/:columnName/enable`，行為**完全對稱**於既有 `PUT .../disable`（同權限、同 feature flag、同月跑鎖、同 audit log、同 404 語意，僅狀態方向相反）。
-3. **前端**：Tab 2 維度清單同時顯示 inactive 列（既有 active/inactive chip 樣式已就緒），操作欄對 inactive 列顯示「啟用」按鈕（對稱既有「停用」），月跑鎖定時一併鎖定。
+2. **後端寫入**：新增「啟用」端點 `PUT /assignment/scoring/dimensions/:columnName/enable`，行為**完全對稱**於既有 `PUT .../disable`（同權限、同 feature flag、同月名單分派鎖、同 audit log、同 404 語意，僅狀態方向相反）。
+3. **前端**：Tab 2 維度清單同時顯示 inactive 列（既有 active/inactive chip 樣式已就緒），操作欄對 inactive 列顯示「啟用」按鈕（對稱既有「停用」），月名單分派鎖定時一併鎖定。
 
-本功能修復的實害：H 卡 `SALES_STS` 維度曾被誤標 `inactive`，因 UI 完全隱形而月跑計分長期少一維、無人察覺，最終靠 migration `m302`（`ActivateHSalesStsScoringColumn`）以資料庫遷移手動修回。本功能消除此盲區——讓停用維度可見、可被部長自助啟用。
+本功能修復的實害：H 卡 `SALES_STS` 維度曾被誤標 `inactive`，因 UI 完全隱形而月名單分派計分長期少一維、無人察覺，最終靠 migration `m302`（`ActivateHSalesStsScoringColumn`）以資料庫遷移手動修回。本功能消除此盲區——讓停用維度可見、可被部長自助啟用。
 
 **本功能不改計分採計範圍**：計分引擎 / `fn_calc_tier_level` 仍只採 `status='active'` 維度，inactive 維度雖在清單顯示但不參與計分（與既有行為一致）。本功能只改「可見性 + 啟用」。
 
@@ -51,7 +51,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-25
 - 寫入（啟用 / 停用）：`businessRole='director'`（沿用寫入 method 級 `DirectorGuard`，M02 計分卡寫入限部長，依 F002 §4.6.2）。
 - F069 Tab 1 已選中某 CARD_TYPE，且該 CARD_TYPE 於 `ob_card_type.status='active'`。
 - 該 CARD_TYPE 於 `ob_levelcard_version` 至少有一筆 `status='active'` 版本紀錄。
-- 啟用操作成立另需：當下 `assignment_run` 無 `status IN ('pending','running')` 紀錄（否則月跑鎖 → 409）。
+- 啟用操作成立另需：當下 `assignment_run` 無 `status IN ('pending','running')` 紀錄（否則月名單分派鎖 → 409）。
 
 ## 4. 驗收標準
 
@@ -70,7 +70,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-25
 - **Then** 回應 `dimensions[]` **同時包含 active 與 inactive 維度**（移除 `getScoring()` 維度查詢的 `status='active'` 過濾，**OQ-164-2 決議：一律回傳全部，不引入 `?includeInactive` 參數**）
 - **And** 每個 dimension 物件**必含 `status` 欄位**，值為 `'active'` 或 `'inactive'`
 - **And** 前端不再依賴 `?? 'active'` 防禦性 fallback（移除該 fallback，改用後端回傳的真實 `status` 渲染）
-- **And** inactive 維度雖在清單顯示，但**不影響月跑計分**（計分引擎 / `fn_calc_tier_level` 仍只採 `status='active'` 維度——本功能不改「計分採計範圍」）
+- **And** inactive 維度雖在清單顯示，但**不影響月名單分派計分**（計分引擎 / `fn_calc_tier_level` 仍只採 `status='active'` 維度——本功能不改「計分採計範圍」）
 
 ### AC-3：對停用維度執行「啟用」
 
@@ -90,13 +90,13 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-25
 - **And** 套用相同 `@RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')`
 - **And** 目標維度若不存在於選中 CARD_TYPE，或其 `status` 已是 `active` → 回 **404 `SCORING_COLUMN_NOT_FOUND`**（**OQ-164-3 決議：對稱於 disable「對已 inactive 維度停用 → 404」之既有慣例**，見 BR-3）
 
-### AC-5：月跑執行中禁止啟用 / 停用（資料鎖）
+### AC-5：月名單分派執行中禁止啟用 / 停用（資料鎖）
 
-- **Given** 目前有月跑正在執行（`assignment_run.status IN ('pending','running')`）
+- **Given** 目前有月名單分派正在執行（`assignment_run.status IN ('pending','running')`）
 - **When** 業務主管嘗試對某維度執行「啟用」（或「停用」）
 - **Then** 寫入被阻擋，後端回 **409 `SCORING_VERSION_LOCKED`**（沿用既有 `assertNotLocked()`，與 disable 完全一致）
 - **And** 前端「啟用」/「停用」按鈕在鎖定期間 `disabled`，並顯示「分派執行中，無法修改計分設定」提示
-- **And** 月跑完成後，啟用 / 停用功能自動恢復可用
+- **And** 月名單分派完成後，啟用 / 停用功能自動恢復可用
 
 ### AC-6：權限——僅具寫入權限者可操作「啟用」
 
@@ -182,7 +182,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-25
 | Class guard | `AuthGuard, FeatureFlagGuard, DirectorOrSectionChiefGuard, DirectorGuard` | 同 | 相同 |
 | Method 權限 | `@RequireDirector()` | `@RequireDirector()` | 相同 |
 | Feature flag | `@RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')` | 同 | 相同 |
-| 月跑鎖 | `assertNotLocked()` → 409 `SCORING_VERSION_LOCKED` | `assertNotLocked()` → 409 `SCORING_VERSION_LOCKED` | 相同 |
+| 月名單分派鎖 | `assertNotLocked()` → 409 `SCORING_VERSION_LOCKED` | `assertNotLocked()` → 409 `SCORING_VERSION_LOCKED` | 相同 |
 | cardType 範圍鎖 | `assertCardTypeActive()` → 404 `CARD_TYPE_NOT_FOUND` | `assertCardTypeActive()` → 404 `CARD_TYPE_NOT_FOUND` | 相同 |
 | findOne 限定狀態 | `status='active'`（找不到 → 404） | `status='inactive'`（找不到 → 404） | **方向相反**（核心對稱點） |
 | 找不到錯誤 | 404 `SCORING_COLUMN_NOT_FOUND` | 404 `SCORING_COLUMN_NOT_FOUND` | 相同錯誤碼 |
@@ -199,7 +199,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-25
 
 - **BR-1（getScoring 移除 active 過濾）**：`getScoring()` 維度查詢移除 `where.status='active'`，改回傳 active + inactive 全部維度；mapper 補輸出 `status` 欄位（值取自 `ob_levelcard_column.status`）。`scores` 查詢與映射邏輯不變（inactive 維度仍照常帶其 scores，前端僅以狀態區隔）。
 - **BR-2（enable 對稱 disable 寫入流程）**：`enableDimension(cardType, columnName, actor)` 依序：
-  1. `assertNotLocked()`（月跑鎖 → 409 `SCORING_VERSION_LOCKED`）
+  1. `assertNotLocked()`（月名單分派鎖 → 409 `SCORING_VERSION_LOCKED`）
   2. `assertCardTypeActive(cardTypeRepo, cardType)`（範圍鎖 → 404 `CARD_TYPE_NOT_FOUND`）
   3. `columnRepo.findOne({ card_type, column_name, status:'inactive' })`；找不到 → 404 `SCORING_COLUMN_NOT_FOUND`
   4. `existing.status='active'` → `columnRepo.save(existing)`
@@ -207,7 +207,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-25
   6. 回傳 `{ cardType, cardVersion, columnName, status:'active', enabledAt: new Date().toISOString() }`
   （`cardVersion` 取自 `existing.card_version ?? 1`，與 disable 一致。）
 - **BR-3（重複啟用 → 404，對稱慣例）**：對已 `active` 維度執行啟用時，步驟 3 的 `findOne(status='inactive')` 找不到 → 404 `SCORING_COLUMN_NOT_FOUND`。此即對稱於 disable「對已 inactive 維度停用 → 404」的既有慣例（disable 用 `findOne(status='active')`）。**不採冪等 200**——維持兩端點對稱性與測試可預期性（OQ-164-3）。
-- **BR-4（計分採計範圍不變）**：本功能不改計分引擎 / `fn_calc_tier_level` 的 `status='active'` 過濾；inactive 維度顯示於清單但永不參與計分。啟用後該維度即重新納入下一次月跑計分（因 `status` 已回 `active`）。
+- **BR-4（計分採計範圍不變）**：本功能不改計分引擎 / `fn_calc_tier_level` 的 `status='active'` 過濾；inactive 維度顯示於清單但永不參與計分。啟用後該維度即重新納入下一次月名單分派計分（因 `status` 已回 `active`）。
 - **BR-5（audit action 'ENABLE' 寫入）**：`writeAudit` 既有 action union 已含 `'DISABLE'`（`assignment_audit_log.action` 為 `varchar(10)`，DB schema 容許）；新增 `'ENABLE'` 沿用同一 cast pattern（寫入時 cast 進 `CREATE|UPDATE|DELETE` 型別占位，DB 實存字串 `'ENABLE'`）。**不新增 error code、不新增 DB 欄位、不需 migration**。
 - **BR-6（Tab badge 只計 active）**：Tab 2 數量 badge 與表格底部「共 N 個維度」計數，皆對前端持有之 dimensions 以 `d.status==='active'` 過濾後取 `length`（OQ-164-4）。
 
@@ -222,8 +222,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-25
 - **UI-3（操作欄「啟用」按鈕，對稱「停用」）**：
   - active 列：維持既有「編輯（pencil）+ 停用（Ban）」兩顆按鈕。
   - inactive 列：顯示「啟用」按鈕（樣式對稱既有「停用」icon 按鈕；圖示與成功色調由 UI/UX 定義，行為對稱）。inactive 列不顯示「停用」（已停用無需再停用）；「編輯」於 inactive 列是否顯示由 UI/UX 決定，預設仍顯示（不阻擋編輯 inactive 維度設定，與 F054 不阻擋一致）。
-- **UI-4（啟用確認 + toast）**：點「啟用」開確認對話框（對稱既有 `DisableConfirmModal`，文案改為啟用語意：「確定啟用維度 {columnName}『{columnLabel}』？」、說明區改述「狀態 inactive→active、寫入 audit log(action=ENABLE)、啟用後該維度重新納入月跑計分」），確認後經既有 `runWriteOp` 呼叫 enable API client，成功 toast「維度已啟用」。
-- **UI-5（月跑鎖定）**：月跑鎖定（`isLocked`）期間，「啟用」按鈕與既有「停用」/「編輯」/「新增維度」按鈕一併 `disabled`，沿用既有鎖定樣式與 banner 提示（`runWriteOp` 偵測 409 `SCORING_VERSION_LOCKED` 顯示「分派執行中，無法修改計分設定」）。
+- **UI-4（啟用確認 + toast）**：點「啟用」開確認對話框（對稱既有 `DisableConfirmModal`，文案改為啟用語意：「確定啟用維度 {columnName}『{columnLabel}』？」、說明區改述「狀態 inactive→active、寫入 audit log(action=ENABLE)、啟用後該維度重新納入月名單分派計分」），確認後經既有 `runWriteOp` 呼叫 enable API client，成功 toast「維度已啟用」。
+- **UI-5（月名單分派鎖定）**：月名單分派鎖定（`isLocked`）期間，「啟用」按鈕與既有「停用」/「編輯」/「新增維度」按鈕一併 `disabled`，沿用既有鎖定樣式與 banner 提示（`runWriteOp` 偵測 409 `SCORING_VERSION_LOCKED` 顯示「分派執行中，無法修改計分設定」）。
 - **UI-6（badge / 共 N 個維度只計 active）**：Tab 數量 badge（`dimCount`）與表格底部「共 N 個維度」改為只計 `status==='active'` 的維度數（BR-6）。
 - **UI-7（API client 新增 enableDimension）**：`apps/web/src/api/assignment-scoring.ts` 新增 `enableDimension(cardType, columnName)`，對稱既有 `disableDimension`，PUT `.../dimensions/{encodeURIComponent(columnName)}/enable?cardType=`；`ScoringDimensionItem` interface 補必填 `status: 'active' | 'inactive'`。
 
@@ -233,7 +233,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-25
 
 | 情境 | HTTP | 錯誤碼 | 觸發 |
 |------|------|--------|------|
-| 月跑執行中啟用 / 停用 | 409 | `SCORING_VERSION_LOCKED` | `assignment_run.status IN ('pending','running')` |
+| 月名單分派執行中啟用 / 停用 | 409 | `SCORING_VERSION_LOCKED` | `assignment_run.status IN ('pending','running')` |
 | 啟用目標維度不存在或已是 active | 404 | `SCORING_COLUMN_NOT_FOUND` | `findOne(status='inactive')` 找不到（含重複啟用） |
 | cardType 不存在 / 已停用 | 404 | `CARD_TYPE_NOT_FOUND` | `assertCardTypeActive` 失敗 |
 | 非部長嘗試啟用 | 403 | （Guard 既有拒絕回應） | `DirectorGuard` 拒絕 |
@@ -268,11 +268,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-25
 ## 12. Definition of Done（下游驗收）
 
 - AC-1 ~ AC-8 全部滿足。
-- 後端 `getScoring` 回傳 active + inactive 維度且每維度含 `status`；新增 `enable` 端點對稱 `disable`（含權限、feature flag、月跑鎖、audit log、404 語意）。
+- 後端 `getScoring` 回傳 active + inactive 維度且每維度含 `status`；新增 `enable` 端點對稱 `disable`（含權限、feature flag、月名單分派鎖、audit log、404 語意）。
 - 前端 Tab 2 顯示 inactive 維度（狀態 chip + 列級弱化）並提供「啟用」入口；移除 `?? 'active'` fallback；鎖定 / 權限行為正確；badge 與「共 N 個維度」只計 active。
 - 計分採計範圍未變更（inactive 仍不參與計分）之回歸驗證。
 - enable ⇄ disable 對稱性測試（往返 + audit 軌跡逐項對照，§5.3）。
-- Unit / 整合測試涵蓋：含 inactive 的查詢、啟用成功、重複啟用 404、cardType 404、月跑鎖 409、非部長 403（>80% 覆蓋）。
+- Unit / 整合測試涵蓋：含 inactive 的查詢、啟用成功、重複啟用 404、cardType 404、月名單分派鎖 409、非部長 403（>80% 覆蓋）。
 - 後端 `tsc --noEmit -p tsconfig.build.json` 乾淨（vitest 不做型別檢查）；前端 build / 型別檢查通過。
 - 設計意圖回寫原型之需求已交付 UI/UX 階段（本功能不改原型）。
 
