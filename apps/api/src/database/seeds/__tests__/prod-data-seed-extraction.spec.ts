@@ -253,3 +253,35 @@ describe('seedExtractionTasks', () => {
     expect(insertCalls(qr)).toHaveLength(0);
   });
 });
+
+// 新增 seed 資料檔結構守門（以 dev CDMP 為 ground truth；防 JSON 損毀 / 筆數漂移）。
+describe('新增 seed 資料檔（帳號 / 篩選欄位 / 202607 名單）', () => {
+  it('users-real.json：5 真實 hfcfinance 帳號，含 id/email/password_hash/role', () => {
+    const users = loadJson<any>('users-real.json');
+    expect(users).toHaveLength(5);
+    for (const u of users) {
+      expect(u.id).toBeTruthy();
+      expect(u.email).toMatch(/@hfcfinance\.com\.tw$/);
+      expect(String(u.password_hash ?? '').length).toBeGreaterThan(0);
+      expect(u.role).toBeTruthy();
+    }
+  });
+
+  it('篩選欄位：whitelist 17 + option 186（option 含 display_order 排序）', () => {
+    expect(loadJson<any>('pooldata-field-whitelist.json')).toHaveLength(17);
+    const opts = loadJson<any>('pooldata-field-option.json');
+    expect(opts).toHaveLength(186);
+    for (const o of opts) {
+      expect(o.column_name).toBeTruthy();
+      expect(typeof o.display_order).toBe('number');
+    }
+  });
+
+  it('2026-07 名單：list 13（皆 202607）+ dept_pct 104 + empl_set 1157', () => {
+    const lists = loadJson<any>('ob-list-definition-202607.json');
+    expect(lists).toHaveLength(13);
+    for (const l of lists) expect(l.project_workym).toBe('202607');
+    expect(loadJson<any>('ob-dept-pct-202607.json')).toHaveLength(104);
+    expect(loadJson<any>('ob-empl-set-202607.json')).toHaveLength(1157);
+  });
+});

@@ -1,0 +1,1862 @@
+[
+  {
+    "column_name": "best_case",
+    "option_value": "Y",
+    "option_label": "優質案件",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-28T05:27:28.560Z",
+    "updated_at": "2026-07-10T10:17:40.421Z"
+  },
+  {
+    "column_name": "best_case",
+    "option_value": "N",
+    "option_label": "非優質案件",
+    "display_order": 1,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-28T05:27:28.560Z",
+    "updated_at": "2026-07-10T10:17:40.421Z"
+  },
+  {
+    "column_name": "brand_no",
+    "option_value": "01",
+    "option_label": "TOYOTA",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T22:53:26.120Z",
+    "updated_at": "2026-05-19T22:53:26.120Z"
+  },
+  {
+    "column_name": "brand_no",
+    "option_value": "02",
+    "option_label": "LEXUS",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T22:53:46.970Z",
+    "updated_at": "2026-05-19T22:53:46.970Z"
+  },
+  {
+    "column_name": "case_status",
+    "option_value": "01",
+    "option_label": "期中(不含當月滿期)",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T22:05:54.450Z",
+    "updated_at": "2026-05-19T22:05:54.450Z"
+  },
+  {
+    "column_name": "case_status",
+    "option_value": "02",
+    "option_label": "中結",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T22:05:54.450Z",
+    "updated_at": "2026-05-19T22:05:54.450Z"
+  },
+  {
+    "column_name": "case_status",
+    "option_value": "03",
+    "option_label": "滿期(含當月滿期)",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T22:05:54.450Z",
+    "updated_at": "2026-05-19T22:05:54.450Z"
+  },
+  {
+    "column_name": "case_status",
+    "option_value": "04",
+    "option_label": "滿期",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T22:05:54.450Z",
+    "updated_at": "2026-05-19T22:05:54.450Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "0",
+    "option_label": "0 年",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "1",
+    "option_label": "1 年",
+    "display_order": 1,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "2",
+    "option_label": "2 年",
+    "display_order": 2,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "3",
+    "option_label": "3 年",
+    "display_order": 3,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "4",
+    "option_label": "4 年",
+    "display_order": 4,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "5",
+    "option_label": "5 年",
+    "display_order": 5,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "6",
+    "option_label": "6 年",
+    "display_order": 6,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "7",
+    "option_label": "7年",
+    "display_order": 7,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-20T23:21:40.206Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "8",
+    "option_label": "8年",
+    "display_order": 8,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-20T23:21:45.636Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "9",
+    "option_label": "9年",
+    "display_order": 9,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-20T23:21:50.580Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "10",
+    "option_label": "10年",
+    "display_order": 10,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-20T23:21:55.740Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "caseyear",
+    "option_value": "99",
+    "option_label": "不限年數",
+    "display_order": 11,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:18:11.760Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "宜蘭縣",
+    "option_label": "宜蘭縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "花蓮縣",
+    "option_label": "花蓮縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "金門縣",
+    "option_label": "金門縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "南投縣",
+    "option_label": "南投縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "屏東縣",
+    "option_label": "屏東縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "苗栗縣",
+    "option_label": "苗栗縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "桃園市",
+    "option_label": "桃園市",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "高雄市",
+    "option_label": "高雄市",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "基隆市",
+    "option_label": "基隆市",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "連江縣",
+    "option_label": "連江縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "雲林縣",
+    "option_label": "雲林縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "新北市",
+    "option_label": "新北市",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "新竹市",
+    "option_label": "新竹市",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "新竹縣",
+    "option_label": "新竹縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "嘉義市",
+    "option_label": "嘉義市",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "嘉義縣",
+    "option_label": "嘉義縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "彰化縣",
+    "option_label": "彰化縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "臺中市",
+    "option_label": "臺中市",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "臺北市",
+    "option_label": "臺北市",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "臺東縣",
+    "option_label": "臺東縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "臺南市",
+    "option_label": "臺南市",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "option_value": "澎湖縣",
+    "option_label": "澎湖縣",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.443Z",
+    "updated_at": "2026-07-01T19:38:11.443Z"
+  },
+  {
+    "column_name": "customer_type_desc",
+    "option_value": "個人",
+    "option_label": "個人",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.436Z",
+    "updated_at": "2026-07-10T10:18:24.480Z"
+  },
+  {
+    "column_name": "customer_type_desc",
+    "option_value": "法人",
+    "option_label": "法人",
+    "display_order": 1,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.436Z",
+    "updated_at": "2026-07-10T10:18:24.480Z"
+  },
+  {
+    "column_name": "customer_type_desc",
+    "option_value": "外籍人士",
+    "option_label": "外籍人士",
+    "display_order": 2,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.436Z",
+    "updated_at": "2026-07-10T10:18:24.480Z"
+  },
+  {
+    "column_name": "customer_type_desc",
+    "option_value": "虛擬車商編號",
+    "option_label": "虛擬車商編號",
+    "display_order": 3,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.436Z",
+    "updated_at": "2026-07-10T10:18:24.480Z"
+  },
+  {
+    "column_name": "education_desc",
+    "option_value": "小學",
+    "option_label": "小學",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.433Z",
+    "updated_at": "2026-07-10T10:18:46.777Z"
+  },
+  {
+    "column_name": "education_desc",
+    "option_value": "國中",
+    "option_label": "國中",
+    "display_order": 1,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.433Z",
+    "updated_at": "2026-07-10T10:18:46.777Z"
+  },
+  {
+    "column_name": "education_desc",
+    "option_value": "高中",
+    "option_label": "高中",
+    "display_order": 2,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.433Z",
+    "updated_at": "2026-07-10T10:18:46.777Z"
+  },
+  {
+    "column_name": "education_desc",
+    "option_value": "專科",
+    "option_label": "專科",
+    "display_order": 3,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.433Z",
+    "updated_at": "2026-07-10T10:18:46.777Z"
+  },
+  {
+    "column_name": "education_desc",
+    "option_value": "大學",
+    "option_label": "大學",
+    "display_order": 4,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.433Z",
+    "updated_at": "2026-07-10T10:18:46.777Z"
+  },
+  {
+    "column_name": "education_desc",
+    "option_value": "碩士",
+    "option_label": "碩士",
+    "display_order": 5,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.433Z",
+    "updated_at": "2026-07-10T10:18:46.777Z"
+  },
+  {
+    "column_name": "education_desc",
+    "option_value": "博士",
+    "option_label": "博士",
+    "display_order": 6,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.433Z",
+    "updated_at": "2026-07-10T10:18:46.777Z"
+  },
+  {
+    "column_name": "education_desc",
+    "option_value": "未定",
+    "option_label": "未定",
+    "display_order": 7,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.433Z",
+    "updated_at": "2026-07-10T10:18:46.777Z"
+  },
+  {
+    "column_name": "gender",
+    "option_value": "1",
+    "option_label": "男",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.420Z",
+    "updated_at": "2026-07-01T19:38:11.420Z"
+  },
+  {
+    "column_name": "gender",
+    "option_value": "2",
+    "option_label": "女",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.420Z",
+    "updated_at": "2026-07-01T19:38:11.420Z"
+  },
+  {
+    "column_name": "gender",
+    "option_value": "3",
+    "option_label": "法人",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.420Z",
+    "updated_at": "2026-07-01T19:38:11.420Z"
+  },
+  {
+    "column_name": "list_type",
+    "option_value": "01",
+    "option_label": "期中",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-05-19T01:28:26.610Z"
+  },
+  {
+    "column_name": "list_type",
+    "option_value": "02",
+    "option_label": "中結",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-05-19T01:28:26.610Z"
+  },
+  {
+    "column_name": "list_type",
+    "option_value": "03",
+    "option_label": "滿期",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-05-19T01:28:26.610Z"
+  },
+  {
+    "column_name": "marital_status_desc",
+    "option_value": "未婚",
+    "option_label": "未婚",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.436Z",
+    "updated_at": "2026-07-10T10:19:01.250Z"
+  },
+  {
+    "column_name": "marital_status_desc",
+    "option_value": "已婚",
+    "option_label": "已婚",
+    "display_order": 1,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.436Z",
+    "updated_at": "2026-07-10T10:19:01.250Z"
+  },
+  {
+    "column_name": "marital_status_desc",
+    "option_value": "同居",
+    "option_label": "同居",
+    "display_order": 2,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.436Z",
+    "updated_at": "2026-07-10T10:19:01.250Z"
+  },
+  {
+    "column_name": "marital_status_desc",
+    "option_value": "離婚",
+    "option_label": "離婚",
+    "display_order": 3,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.436Z",
+    "updated_at": "2026-07-10T10:19:01.250Z"
+  },
+  {
+    "column_name": "marital_status_desc",
+    "option_value": "未定",
+    "option_label": "未定",
+    "display_order": 4,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.436Z",
+    "updated_at": "2026-07-10T10:19:01.250Z"
+  },
+  {
+    "column_name": "monthly_income_desc",
+    "option_value": "20,000以下",
+    "option_label": "20,000以下",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.440Z",
+    "updated_at": "2026-07-01T19:38:11.440Z"
+  },
+  {
+    "column_name": "monthly_income_desc",
+    "option_value": "20,001~30,000",
+    "option_label": "20,001~30,000",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.440Z",
+    "updated_at": "2026-07-01T19:38:11.440Z"
+  },
+  {
+    "column_name": "monthly_income_desc",
+    "option_value": "30,001~40,000",
+    "option_label": "30,001~40,000",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.440Z",
+    "updated_at": "2026-07-01T19:38:11.440Z"
+  },
+  {
+    "column_name": "monthly_income_desc",
+    "option_value": "40,001~50,000",
+    "option_label": "40,001~50,000",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.440Z",
+    "updated_at": "2026-07-01T19:38:11.440Z"
+  },
+  {
+    "column_name": "monthly_income_desc",
+    "option_value": "50,001~60,000",
+    "option_label": "50,001~60,000",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.440Z",
+    "updated_at": "2026-07-01T19:38:11.440Z"
+  },
+  {
+    "column_name": "monthly_income_desc",
+    "option_value": "60,001~70,000",
+    "option_label": "60,001~70,000",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.440Z",
+    "updated_at": "2026-07-01T19:38:11.440Z"
+  },
+  {
+    "column_name": "monthly_income_desc",
+    "option_value": "70,001~80,000",
+    "option_label": "70,001~80,000",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.440Z",
+    "updated_at": "2026-07-01T19:38:11.440Z"
+  },
+  {
+    "column_name": "monthly_income_desc",
+    "option_value": "80,001以上",
+    "option_label": "80,001以上",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.440Z",
+    "updated_at": "2026-07-01T19:38:11.440Z"
+  },
+  {
+    "column_name": "monthly_income_desc",
+    "option_value": "未確定",
+    "option_label": "未確定",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.440Z",
+    "updated_at": "2026-07-01T19:38:11.440Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "304",
+    "option_label": "304",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "KTV/酒吧/夜總會/卡拉OK/三溫暖/俱樂部",
+    "option_label": "KTV/酒吧/夜總會/卡拉OK/三溫暖/俱樂部",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "二手車商",
+    "option_label": "二手車商",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "大眾傳播、藝術工作、體育",
+    "option_label": "大眾傳播、藝術工作、體育",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "不動產業",
+    "option_label": "不動產業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "公教人員",
+    "option_label": "公教人員",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "公營事業",
+    "option_label": "公營事業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "水電媒氣業、加油站",
+    "option_label": "水電媒氣業、加油站",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "地政士、代書",
+    "option_label": "地政士、代書",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "地產管理人或經紀商(含仲介)",
+    "option_label": "地產管理人或經紀商(含仲介)",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "自由業",
+    "option_label": "自由業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "自營商",
+    "option_label": "自營商",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "批發、零售業",
+    "option_label": "批發、零售業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "車商",
+    "option_label": "車商",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "其他",
+    "option_label": "其他",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "其他專業人士(公證人等)",
+    "option_label": "其他專業人士(公證人等)",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "宗教服務",
+    "option_label": "宗教服務",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "服務業",
+    "option_label": "服務業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "金融業",
+    "option_label": "金融業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "非營利事業",
+    "option_label": "非營利事業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "非營利團體",
+    "option_label": "非營利團體",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "保險業",
+    "option_label": "保險業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "建築師",
+    "option_label": "建築師",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "政府機關",
+    "option_label": "政府機關",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "軍火商",
+    "option_label": "軍火商",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "軍警消防業",
+    "option_label": "軍警消防業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "倉儲業",
+    "option_label": "倉儲業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "家管",
+    "option_label": "家管",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "旅行社",
+    "option_label": "旅行社",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "珠寶商(含銀樓)",
+    "option_label": "珠寶商(含銀樓)",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "記帳士",
+    "option_label": "記帳士",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "退休",
+    "option_label": "退休",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "商業",
+    "option_label": "商業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "專業人士(律師、會計師)",
+    "option_label": "專業人士(律師、會計師)",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "教職人員",
+    "option_label": "教職人員",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "通信業",
+    "option_label": "通信業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "博弈業(賭場、線上博弈)",
+    "option_label": "博弈業(賭場、線上博弈)",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "無",
+    "option_label": "無",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "虛擬貨幣業",
+    "option_label": "虛擬貨幣業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "貴金屬商、寶石商(如買賣未切割之原石)",
+    "option_label": "貴金屬商、寶石商(如買賣未切割之原石)",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "進出口貿易業",
+    "option_label": "進出口貿易業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "當鋪",
+    "option_label": "當鋪",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "資訊業",
+    "option_label": "資訊業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "農、林、魚、牧、狩獵、礦、土石採取業",
+    "option_label": "農、林、魚、牧、狩獵、礦、土石採取業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "運輸業",
+    "option_label": "運輸業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "製造業",
+    "option_label": "製造業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "學生",
+    "option_label": "學生",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "餐飲業",
+    "option_label": "餐飲業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "營造、土木、建築業",
+    "option_label": "營造、土木、建築業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "醫生",
+    "option_label": "醫生",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "醫務人員",
+    "option_label": "醫務人員",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "醫療院所",
+    "option_label": "醫療院所",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "藝品店",
+    "option_label": "藝品店",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "證券及期貨業",
+    "option_label": "證券及期貨業",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "option_value": "攤販",
+    "option_label": "攤販",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-01T19:38:11.426Z",
+    "updated_at": "2026-07-01T19:38:11.426Z"
+  },
+  {
+    "column_name": "prod_kind",
+    "option_value": "01",
+    "option_label": "汽車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-05-27T00:08:56.730Z"
+  },
+  {
+    "column_name": "prod_kind",
+    "option_value": "02",
+    "option_label": "機車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-05-19T01:28:26.610Z"
+  },
+  {
+    "column_name": "prod_kind",
+    "option_value": "03",
+    "option_label": "一般商品",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-05-27T00:08:56.730Z"
+  },
+  {
+    "column_name": "settle_src",
+    "option_value": "Y",
+    "option_label": "含他行代償",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:19:10.721Z"
+  },
+  {
+    "column_name": "settle_src",
+    "option_value": "N",
+    "option_label": "不含他行代償",
+    "display_order": 1,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:19:10.721Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "01",
+    "option_label": "本牌/新車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "02",
+    "option_label": "本牌/中古",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "03",
+    "option_label": "本牌/營業車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "04",
+    "option_label": "本牌/原融",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "05",
+    "option_label": "本牌/中古營業車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "06",
+    "option_label": "本牌/原融代償",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "07",
+    "option_label": "保單",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "08",
+    "option_label": "信貸",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "09",
+    "option_label": "機器設備",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "10",
+    "option_label": "遠信機車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "11",
+    "option_label": "他牌/新車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "12",
+    "option_label": "他牌/中古",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "13",
+    "option_label": "他牌/營業車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "14",
+    "option_label": "他牌/原融",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "15",
+    "option_label": "他牌/中古營業車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "16",
+    "option_label": "他牌/原融代償",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "17",
+    "option_label": "重型機車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "18",
+    "option_label": "遠信圖書",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "19",
+    "option_label": "遠信綜合",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "20",
+    "option_label": "本牌/原融營業車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "21",
+    "option_label": "他牌/原融營業車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "22",
+    "option_label": "本牌/原融代償營業車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "23",
+    "option_label": "他牌/原融代償營業車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "24",
+    "option_label": "一般分期/床的世界",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "25",
+    "option_label": "一般分期/諾蒂亞",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "26",
+    "option_label": "亞太專案A",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "27",
+    "option_label": "亞太專案B",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "28",
+    "option_label": "第一專案A",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "29",
+    "option_label": "第一專案B",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "30",
+    "option_label": "二十一專案A",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "31",
+    "option_label": "二十一專案B",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "32",
+    "option_label": "台灣才將專案A",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "33",
+    "option_label": "台灣才將專案B",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "34",
+    "option_label": "遠信AR專案A",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "35",
+    "option_label": "遠信AR專案B",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "36",
+    "option_label": "遠信AR專案C",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "37",
+    "option_label": "和灣專案A",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "38",
+    "option_label": "和灣專案B",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "39",
+    "option_label": "他牌/機車原融",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "40",
+    "option_label": "他牌/機車自承",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "41",
+    "option_label": "商品分期",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "42",
+    "option_label": "重車_新車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "43",
+    "option_label": "他牌/機車原融代償",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "44",
+    "option_label": "重車_中古車",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "45",
+    "option_label": "重車_原融",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "46",
+    "option_label": "B專案(附擔保)",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "48",
+    "option_label": "3C通訊家電",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "49",
+    "option_label": "汽機車改裝保修",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "50",
+    "option_label": "設備器材",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "51",
+    "option_label": "生活居家",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "52",
+    "option_label": "娛樂收藏",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "option_value": "99",
+    "option_label": "其他",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-05-21T00:27:59.653Z",
+    "updated_at": "2026-05-21T00:27:59.653Z"
+  }
+]

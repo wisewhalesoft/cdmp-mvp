@@ -375,6 +375,139 @@ function valueEquals(a: unknown, b: unknown): boolean {
   return String(a) === String(b);
 }
 
+// ===========================================================================
+// 泛用「完整列」加法式 seeder（帳號 / 篩選欄位 / 名單 / 部門・業務比例）
+// ---------------------------------------------------------------------------
+// 以 dev CDMP dump 之完整列（含 id / audit）為 ground truth 灌入 prod。逐列以 keyColumns 判存在、
+// 缺列即 INSERT 全欄（保留原 id / 時間戳）；冪等（再跑插 0）。ISO 日期字串 → Date（供 date 欄）；
+// condition_payload 等 JSON 以字串原樣寫入（dump 已是字串）。
+// ===========================================================================
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
+/** ISO 日期字串 → Date（date 欄）；其餘（含 JSON 字串 / 數值 / null）原樣。 */
+function coerceSeedValue(v: unknown): unknown {
+  if (typeof v === 'string' && ISO_DATE_RE.test(v)) return new Date(v);
+  return v;
+}
+
+/**
+ * 泛用加法式 seeder：逐 JSON 列以 keyColumns 判存在，缺列即 INSERT 全欄。回傳 { inserted, skipped }。
+ * 表名 / 欄名皆來自 seed JSON（本地檔案，非外部輸入）。
+ */
+async function seedFullRows(
+  qr: QueryRunner,
+  file: string,
+  table: string,
+  keyColumns: string[],
+): Promise<void> {
+  const rows = loadJson<Record<string, unknown>>(file);
+  let inserted = 0;
+  let skipped = 0;
+  for (const row of rows) {
+    const whereParams: unknown[] = [];
+    const where = keyColumns
+      .map((k) => keyMatch(k, row[k] ?? null, whereParams))
+      .join(' AND ');
+    const existing = await pquery(
+      qr,
+      `SELECT ${keyColumns[0]} FROM ${table} WHERE ${where}`,
+      whereParams,
+    );
+    if (existing.length > 0) {
+      skipped++;
+      continue;
+    }
+    const cols = Object.keys(row);
+    const params = cols.map((c) => coerceSeedValue(row[c]));
+    await pquery(
+      qr,
+      `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+      params,
+    );
+    inserted++;
+  }
+  console.log(`  ${table}: INSERT ${inserted} 缺列 / SKIP ${skipped} 已存在`);
+}
+
+/**
+ * 帳號 seeder（真實 hfcfinance 帳號；upsert by id）。
+ *
+ * ⚠️ michelleyou（director）之 id 與 seed.ts dev fixture manager@cdmp.test 共用同一 uuid
+ *   （dev 資料真實情況；dept_pct.created_by 亦指向此 id）。故用 **upsert by id**：prod bootstrap 之
+ *   seed.ts 先建該 id（dev 名為 manager），再由本 seeder UPDATE 為真實 director michelleyou；
+ *   其餘 4 個真實帳號 id 獨立 → INSERT。冪等（再跑值不變）。真實 bcrypt hash 依裁定寫入 seed。
+ */
+export async function seedUsers(qr: QueryRunner): Promise<void> {
+  const users = loadJson<Record<string, unknown>>('users-real.json');
+  let inserted = 0;
+  let updated = 0;
+  for (const u of users) {
+    const existing = await pquery(qr, `SELECT id FROM users WHERE id = ?`, [
+      u.id,
+    ]);
+    if (existing.length > 0) {
+      await pquery(
+        qr,
+        `UPDATE users SET email = ?, name = ?, role = ?, business_role = ?,
+           is_sales_manager = ?, status = ?, password_hash = ?, updated_at = ?
+         WHERE id = ?`,
+        [
+          u.email,
+          u.name,
+          u.role,
+          u.business_role ?? null,
+          u.is_sales_manager ?? false,
+          u.status,
+          u.password_hash,
+          coerceSeedValue(u.updated_at) ?? new Date(),
+          u.id,
+        ],
+      );
+      updated++;
+    } else {
+      const cols = Object.keys(u);
+      const params = cols.map((c) => coerceSeedValue(u[c]));
+      await pquery(
+        qr,
+        `INSERT INTO users (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+        params,
+      );
+      inserted++;
+    }
+  }
+  console.log(`  users（真實帳號）: INSERT ${inserted} / UPDATE ${updated}`);
+}
+
+/** 篩選欄位（whitelist + 篩選值 options，含排序 display_order）。 */
+export async function seedFilterFields(qr: QueryRunner): Promise<void> {
+  await seedFullRows(qr, 'pooldata-field-whitelist.json', 'pooldata_field_whitelist', [
+    'column_name',
+  ]);
+  await seedFullRows(qr, 'pooldata-field-option.json', 'pooldata_field_option', [
+    'column_name',
+    'option_value',
+  ]);
+}
+
+/** 2026-07 名單（基礎定義 + 部門比例 + 業務比例）；FK 序：list → dept_pct / empl_set。 */
+export async function seedLists202607(qr: QueryRunner): Promise<void> {
+  await seedFullRows(qr, 'ob-list-definition-202607.json', 'ob_list_definition', [
+    'list_no',
+  ]);
+  await seedFullRows(qr, 'ob-dept-pct-202607.json', 'ob_dept_pct', [
+    'project_workym',
+    'list_no',
+    'obdeptid',
+  ]);
+  await seedFullRows(qr, 'ob-empl-set-202607.json', 'ob_empl_set', [
+    'list_no',
+    'deptid_m',
+    'emplid',
+    'ration',
+  ]);
+}
+
 export async function seedCardTypes(qr: QueryRunner): Promise<void> {
   const rows = loadJson<CardType>('ob-card-type.json');
   await reconcileTable<CardType>(qr, rows, {
@@ -782,6 +915,8 @@ async function main(): Promise<void> {
   await qr.startTransaction();
 
   try {
+    // 帳號先行（名單 / 部門・業務比例之 created_by 指向真實 user id）。
+    await seedUsers(qr);
     await seedCardTypes(qr);
     await seedVersions(qr);
     const columnsResult = await seedColumns(qr);
@@ -793,6 +928,10 @@ async function main(): Promise<void> {
     await deriveMatchType(qr, columnsResult.insertedKeys);
     await seedExtractionTasks(qr);
     await seedEtlPipelines(qr);
+    // 篩選欄位（whitelist + 篩選值）
+    await seedFilterFields(qr);
+    // 2026-07 名單（list → dept_pct / empl_set；created_by 已由 seedUsers 建立）
+    await seedLists202607(qr);
     await qr.commitTransaction();
     console.log('Prod data seed complete.');
   } catch (err) {

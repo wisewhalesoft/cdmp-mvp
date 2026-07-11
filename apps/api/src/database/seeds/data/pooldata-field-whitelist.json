@@ -1,0 +1,172 @@
+[
+  {
+    "column_name": "best_case",
+    "display_name": "優質案件",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": true,
+    "created_at": "2026-05-20T02:52:42.363Z",
+    "updated_at": "2026-05-28T05:26:59.593Z"
+  },
+  {
+    "column_name": "brand_name",
+    "display_name": "廠牌名稱",
+    "field_type": "categorical",
+    "is_active": false,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-05-18T21:12:19.926Z",
+    "updated_at": "2026-05-19T22:52:54.110Z"
+  },
+  {
+    "column_name": "brand_no",
+    "display_name": "廠牌",
+    "field_type": "categorical",
+    "is_active": false,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-05-19T22:53:15.696Z",
+    "updated_at": "2026-07-10T10:24:20.105Z"
+  },
+  {
+    "column_name": "case_status",
+    "display_name": "案件結清期別",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-05-19T22:05:54.450Z",
+    "updated_at": "2026-05-19T22:05:54.450Z"
+  },
+  {
+    "column_name": "caseyear",
+    "display_name": "案件年度",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-05-19T01:28:26.610Z"
+  },
+  {
+    "column_name": "cpost_city",
+    "display_name": "居住城市",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "customer_core",
+    "is_system_fixed": false,
+    "created_at": "2026-07-01T19:38:11.413Z",
+    "updated_at": "2026-07-01T19:38:11.413Z"
+  },
+  {
+    "column_name": "customer_type_desc",
+    "display_name": "身分別",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "customer_core",
+    "is_system_fixed": false,
+    "created_at": "2026-07-01T19:38:11.413Z",
+    "updated_at": "2026-07-01T19:38:11.413Z"
+  },
+  {
+    "column_name": "date_of_birth",
+    "display_name": "年齡",
+    "field_type": "numeric",
+    "is_active": true,
+    "data_source": "customer_core",
+    "is_system_fixed": false,
+    "created_at": "2026-07-01T19:38:11.413Z",
+    "updated_at": "2026-07-01T19:38:11.413Z"
+  },
+  {
+    "column_name": "education_desc",
+    "display_name": "教育程度",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "customer_core",
+    "is_system_fixed": false,
+    "created_at": "2026-07-01T19:38:11.413Z",
+    "updated_at": "2026-07-01T19:38:11.413Z"
+  },
+  {
+    "column_name": "gender",
+    "display_name": "性別",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "customer_core",
+    "is_system_fixed": false,
+    "created_at": "2026-07-01T19:38:11.413Z",
+    "updated_at": "2026-07-01T19:38:11.413Z"
+  },
+  {
+    "column_name": "list_type",
+    "display_name": "名單類型",
+    "field_type": "categorical",
+    "is_active": false,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-07-10T10:24:31.019Z"
+  },
+  {
+    "column_name": "marital_status_desc",
+    "display_name": "婚姻狀況",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "customer_core",
+    "is_system_fixed": false,
+    "created_at": "2026-07-01T19:38:11.413Z",
+    "updated_at": "2026-07-01T19:38:11.413Z"
+  },
+  {
+    "column_name": "monthly_income_desc",
+    "display_name": "收入區間",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "customer_core",
+    "is_system_fixed": false,
+    "created_at": "2026-07-01T19:38:11.413Z",
+    "updated_at": "2026-07-01T19:38:11.413Z"
+  },
+  {
+    "column_name": "occupation_desc",
+    "display_name": "職業別",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "customer_core",
+    "is_system_fixed": false,
+    "created_at": "2026-07-01T19:38:11.413Z",
+    "updated_at": "2026-07-01T19:38:11.413Z"
+  },
+  {
+    "column_name": "prod_kind",
+    "display_name": "產品類別",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-05-19T01:28:26.610Z"
+  },
+  {
+    "column_name": "settle_src",
+    "display_name": "結清來源",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-05-19T01:28:26.610Z"
+  },
+  {
+    "column_name": "spec_tp",
+    "display_name": "專案類別",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-05-19T01:28:26.610Z",
+    "updated_at": "2026-05-19T22:46:26.340Z"
+  }
+]

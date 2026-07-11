@@ -1,0 +1,67 @@
+[
+  {
+    "id": "D4E5F6A7-B8C9-0123-DEF4-567890123456",
+    "name": "游馥瑄",
+    "email": "michelleyou@hfcfinance.com.tw",
+    "password_hash": "$2a$10$ybkpy/VI3QYl9szoCFrkdu91G5Kgok1unotprt4WI0IGFxZ3bf/7O",
+    "role": "user",
+    "status": "active",
+    "created_at": "2026-07-09T10:37:57.550Z",
+    "updated_at": "2026-07-10T17:09:14.460Z",
+    "password_changed_at": "2026-07-10T09:09:15.345Z",
+    "is_sales_manager": true,
+    "business_role": "director"
+  },
+  {
+    "id": "1939AF12-3F7C-F111-80A2-00155DC92813",
+    "name": "李青芳",
+    "email": "lvivi@hfcfinance.com.tw",
+    "password_hash": "$2a$10$O8IQVdoQwDjJcjHXoA9eauVTF0m2v/IDoj0imGUjX6J5Akt0sWWqO",
+    "role": "user",
+    "status": "active",
+    "created_at": "2026-07-10T17:09:37.343Z",
+    "updated_at": "2026-07-10T17:09:42.390Z",
+    "password_changed_at": "2026-07-10T09:09:43.268Z",
+    "is_sales_manager": false,
+    "business_role": "section_chief"
+  },
+  {
+    "id": "551AEF29-3F7C-F111-80A2-00155DC92813",
+    "name": "盧穎蓁",
+    "email": "feifei@hfcfinance.com.tw",
+    "password_hash": "$2a$10$KRfEOsKVsnrrvxSvV7TCXepryseixJUD/tyrprHUtCz/y9xjrbQKa",
+    "role": "user",
+    "status": "active",
+    "created_at": "2026-07-10T17:10:16.350Z",
+    "updated_at": "2026-07-10T17:10:21.400Z",
+    "password_changed_at": "2026-07-10T09:10:22.288Z",
+    "is_sales_manager": false,
+    "business_role": "section_chief"
+  },
+  {
+    "id": "08B28B44-3F7C-F111-80A2-00155DC92813",
+    "name": "林東陽",
+    "email": "joseph@hfcfinance.com.tw",
+    "password_hash": "$2a$10$bmhOH3g/gYuajXB5Gd20y.v8qG7h4J4OG/2.OGE75kyPqGNbTKXb.",
+    "role": "user",
+    "status": "active",
+    "created_at": "2026-07-10T17:11:00.993Z",
+    "updated_at": "2026-07-10T17:11:07.023Z",
+    "password_changed_at": "2026-07-10T09:11:07.933Z",
+    "is_sales_manager": false,
+    "business_role": "section_chief"
+  },
+  {
+    "id": "9D64A160-3F7C-F111-80A2-00155DC92813",
+    "name": "盧淑娟",
+    "email": "hfc22978@hfcfinance.com.tw",
+    "password_hash": "$2a$10$LevAs2KzKlhE7300Ozvu/O3r3P2sbLkZDe.3QHvHgFrf/HMZsFcZC",
+    "role": "user",
+    "status": "active",
+    "created_at": "2026-07-10T17:11:48.116Z",
+    "updated_at": "2026-07-10T17:11:53.320Z",
+    "password_changed_at": "2026-07-10T09:11:54.211Z",
+    "is_sales_manager": false,
+    "business_role": "section_chief"
+  }
+]
