@@ -100,7 +100,8 @@ export interface DeptEstimateWarning {
   code:
     | 'DEPT_HEADCOUNT_ZERO'
     | 'SCOPE_UNRESOLVED'
-    | 'STAGE0_LIST_ESTIMATE_PARTIAL';
+    | 'STAGE0_LIST_ESTIMATE_PARTIAL'
+    | 'CALENDAR_EMPTY';
   deptCode?: string;
   listNo?: string;
   message?: string;

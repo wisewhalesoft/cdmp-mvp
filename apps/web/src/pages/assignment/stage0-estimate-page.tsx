@@ -18,6 +18,7 @@ import {
   Table,
   ChevronDown,
   Info,
+  Loader2,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { MonthPicker } from '@/components/e07/MonthPicker';
@@ -234,6 +235,28 @@ export function Stage0EstimatePage() {
     </div>
   ) : undefined;
 
+  // ---- 試算計算中 → 載入提示（對齊 ready-summary；試算可能因去重/pool 查詢較久，避免使用者誤以為 0 資料）----
+  if (loading) {
+    return (
+      <AppLayout title="Stage 0 試算" actions={monthPicker}>
+        <main className="flex-1 p-6">
+          <div
+            data-testid="stage0-loading-card"
+            className="bg-white rounded-xl border border-gray-200 p-10 flex flex-col items-center justify-center text-center min-h-[240px]"
+          >
+            <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-4" />
+            <h3 className="text-base font-semibold text-gray-800 mb-1">
+              試算計算中…
+            </h3>
+            <p className="text-sm text-gray-500 max-w-md">
+              正在依工作日曆與部門比例計算每日分派工作量，資料量較大時可能需要數秒，請稍候。
+            </p>
+          </div>
+        </main>
+      </AppLayout>
+    );
+  }
+
   // ---- 處長 scope=null 友善降級 ----
   if (scopeUnresolved) {
     return (
@@ -417,6 +440,26 @@ export function Stage0EstimatePage() {
           >
             <AlertTriangle className="w-4 h-4 text-red-600 mt-0.5 shrink-0" />
             <span className="text-red-800">{error}</span>
+          </div>
+        )}
+
+        {/* 工作日曆無資料 → 無法計算（明確提示，取代靜默顯示 0） */}
+        {data?.warnings.some((w) => w.code === 'CALENDAR_EMPTY') && (
+          <div
+            data-testid="calendar-empty-warning"
+            className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-gray-700"
+          >
+            <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold text-red-700">
+                工作日曆無資料，無法計算每日分派量
+              </p>
+              <p className="text-xs text-gray-600 mt-0.5">
+                {data.warnings.find((w) => w.code === 'CALENDAR_EMPTY')
+                  ?.message ??
+                  '本月工作日曆（ob_calendar）無資料，請先執行「行事曆 ETL」載入後再試算。'}
+              </p>
+            </div>
           </div>
         )}
 

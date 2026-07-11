@@ -97,7 +97,8 @@ export interface Stage0DeptWarning {
   code:
     | 'DEPT_HEADCOUNT_ZERO'
     | 'SCOPE_UNRESOLVED'
-    | 'STAGE0_LIST_ESTIMATE_PARTIAL';
+    | 'STAGE0_LIST_ESTIMATE_PARTIAL'
+    | 'CALENDAR_EMPTY';
   deptCode?: string;
   listNo?: string;
   message?: string;
@@ -714,6 +715,16 @@ export class Stage0EstimateService {
         activeHeadcount,
       };
     });
+
+    // 工作日曆無資料 → days/departments 皆空（非 0 案件，而是無法計算）。發警示讓前端能明確提示
+    //   使用者「工作日曆無資料」而非靜默顯示 0（常見於 ob_calendar 未載入 / 被清空；對齊 poolWarning）。
+    const workingDayCount = days.filter((d) => d.isWorkday).length;
+    if (workingDayCount === 0) {
+      warnings.push({
+        code: 'CALENDAR_EMPTY',
+        message: `工作日曆（ob_calendar）於 ${startYmd}~${endYmd} 無工作日資料，無法計算每日分派量。請先執行「行事曆 ETL」載入工作日曆後再試算。`,
+      });
+    }
 
     return {
       ym,
