@@ -37,26 +37,21 @@ function loadDotEnv(envPath: string): void {
 loadDotEnv(path.resolve(__dirname, '../../.env.cli'));
 loadDotEnv(path.resolve(__dirname, '../../.env'));
 
-// AD-E07-38 D-1：顯式依 DB_TYPE 切 postgres | mssql（CLI 不吃 sqlite 分支）。
-const dbType = process.env.DB_TYPE === 'mssql' ? 'mssql' : 'postgres';
-const defaultPort = dbType === 'mssql' ? '1433' : '5432';
+// MSSQL 全面遷移完成：CLI DataSource 僅支援 mssql（PG 已移除）。
+const defaultPort = '1433';
 
-// AD-E07-39 P1b2：兩軌 baseline 各自獨立 glob，互不撿取對方的 baseline migration。
-//   - mssql：專屬子目錄 migrations/mssql/*（手寫 T-SQL baseline，MssqlBaselineSchema）。
-//   - postgres：維持 migrations/*.{ts,js}（非遞迴、單層 * 不含子目錄 → 不會撿到 mssql baseline）。
-// 若共用單一 glob，mssql migration:run 會嘗試跑 PG baseline（public schema / uuid / jsonb 等）→ 失敗，
-// 且 typeorm_migrations 會多出非預期紀錄（違反 BASELINE-003「恰 1 筆」）。
-const migrationsGlob =
-  dbType === 'mssql'
-    ? [path.join(__dirname, 'migrations', 'mssql', '*.{ts,js}')]
-    : [path.join(__dirname, 'migrations', '*.{ts,js}')];
+// mssql baseline 專屬子目錄 migrations/mssql/*（手寫 T-SQL baseline，MssqlBaselineSchema）。
+const migrationsGlob = [
+  path.join(__dirname, 'migrations', 'mssql', '*.{ts,js}'),
+];
 
-const commonOptions = {
+const AppDataSource = new DataSource({
+  type: 'mssql',
   host: process.env.DB_HOST || 'localhost',
   port: parseInt(process.env.DB_PORT || defaultPort, 10),
   username: process.env.DB_USERNAME || 'cdmp',
   password: process.env.DB_PASSWORD || 'cdmp_secret',
-  database: process.env.DB_NAME || (dbType === 'mssql' ? 'CDMP' : 'cdmp_dev'),
+  database: process.env.DB_NAME || 'CDMP',
   entities: [path.join(__dirname, 'entities', '*.entity.{ts,js}')],
   migrations: migrationsGlob,
   migrationsTableName: 'typeorm_migrations',
@@ -64,29 +59,18 @@ const commonOptions = {
   logging: (process.env.TYPEORM_LOG === 'true'
     ? ['query', 'error']
     : ['error']) as ('query' | 'error')[],
-};
-
-const AppDataSource =
-  dbType === 'mssql'
-    ? new DataSource({
-        type: 'mssql',
-        ...commonOptions,
-        // P6c / I-MSSQL-REQ-TIMEOUT-01：tedious requestTimeout 預設 15s，對長 migration / 大批
-        //   資料操作不足（PG 無 statement timeout）。env DB_MSSQL_REQUEST_TIMEOUT 覆蓋（預設 1hr）。
-        requestTimeout: Number(process.env.DB_MSSQL_REQUEST_TIMEOUT ?? 3600000),
-        options: {
-          encrypt: (process.env.DB_MSSQL_ENCRYPT || 'true') === 'true',
-          trustServerCertificate:
-            (process.env.DB_MSSQL_TRUST_CERT || 'true') === 'true',
-          // AD-E07-43 P5h / I-MSSQL-DATE-TZ-01：顯式 useUTC:true（CLI migration:run 連線；
-          //   與主應用/worker 連線語意一致，避免 date/datetime2 讀寫時區分歧）。理由同 app.module.ts。
-          useUTC: true,
-        },
-      })
-    : new DataSource({
-        type: 'postgres',
-        ...commonOptions,
-      });
+  // P6c / I-MSSQL-REQ-TIMEOUT-01：tedious requestTimeout 預設 15s，對長 migration / 大批
+  //   資料操作不足。env DB_MSSQL_REQUEST_TIMEOUT 覆蓋（預設 1hr）。
+  requestTimeout: Number(process.env.DB_MSSQL_REQUEST_TIMEOUT ?? 3600000),
+  options: {
+    encrypt: (process.env.DB_MSSQL_ENCRYPT || 'true') === 'true',
+    trustServerCertificate:
+      (process.env.DB_MSSQL_TRUST_CERT || 'true') === 'true',
+    // AD-E07-43 P5h / I-MSSQL-DATE-TZ-01：顯式 useUTC:true（CLI migration:run 連線；
+    //   與主應用/worker 連線語意一致，避免 date/datetime2 讀寫時區分歧）。
+    useUTC: true,
+  },
+});
 
 // typeorm CLI 預期 export default
 export default AppDataSource;

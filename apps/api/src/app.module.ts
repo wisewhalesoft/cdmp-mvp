@@ -141,16 +141,10 @@ const ALL_ENTITIES = [
           };
         }
 
-        return {
-          type: 'postgres',
-          host: configService.get<string>('DB_HOST', 'localhost'),
-          port: configService.get<number>('DB_PORT', 5432),
-          username: configService.get<string>('DB_USERNAME', 'cdmp'),
-          password: configService.get<string>('DB_PASSWORD', 'cdmp'),
-          database: configService.get<string>('DB_NAME', 'cdmp'),
-          entities: ALL_ENTITIES,
-          synchronize: configService.get<string>('NODE_ENV') !== 'production',
-        };
+        // PG 全面移除後僅支援 sqlite（測試）/ mssql（正式）；其餘明確拋錯（不再隱式 fallback postgres）。
+        throw new Error(
+          `不支援的 DB_TYPE='${dbType}'（PG 已移除；僅支援 mssql 或 sqlite）`,
+        );
       },
     }),
     ThrottlerModule.forRoot([

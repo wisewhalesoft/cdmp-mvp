@@ -90,16 +90,12 @@ describe('AD-E07-38 P1a HELPER-001 — 型別分歧收斂進 column-types.ts（I
   });
 });
 
-describe('AD-E07-38 P1a REG-003 — 未知 DB_TYPE 於 data-source.ts 落入 postgres fallback（記錄現況）', () => {
+describe('REG-003 — data-source.ts 僅支援 mssql（PG 全面移除後不再有 postgres fallback）', () => {
   it('DB_TYPE=mssql → data-source.ts 型別為 mssql', async () => {
     expect(await loadDataSourceType('mssql')).toBe('mssql');
   });
 
-  it('DB_TYPE=unknown → data-source.ts 隱式 fallback 至 postgres（過渡期保留，非「正確性」斷言）', async () => {
-    expect(await loadDataSourceType('unknown-driver')).toBe('postgres');
-  });
-
-  it('DB_TYPE=postgres → data-source.ts 型別為 postgres', async () => {
-    expect(await loadDataSourceType('postgres')).toBe('postgres');
+  it('DB_TYPE 未設 / 未知 → data-source.ts 一律為 mssql（不再 fallback postgres）', async () => {
+    expect(await loadDataSourceType('unknown-driver')).toBe('mssql');
   });
 });

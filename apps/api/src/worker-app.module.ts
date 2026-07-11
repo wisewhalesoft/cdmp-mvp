@@ -23,7 +23,7 @@ import { AssignmentWorkerModule } from './modules/assignment/assignment-worker.m
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => {
-        const dbType = configService.get<string>('DB_TYPE', 'postgres');
+        const dbType = configService.get<string>('DB_TYPE', 'mssql');
         const entities = [
           path.join(__dirname, 'database', 'entities', '*.entity.{ts,js}'),
         ];
@@ -68,16 +68,10 @@ import { AssignmentWorkerModule } from './modules/assignment/assignment-worker.m
           };
         }
 
-        return {
-          type: 'postgres',
-          host: configService.get<string>('DB_HOST', 'localhost'),
-          port: configService.get<number>('DB_PORT', 5432),
-          username: configService.get<string>('DB_USERNAME', 'cdmp'),
-          password: configService.get<string>('DB_PASSWORD', 'cdmp_secret'),
-          database: configService.get<string>('DB_NAME', 'cdmp_dev'),
-          entities,
-          synchronize: configService.get<string>('NODE_ENV') !== 'production',
-        };
+        // PG 全面移除後僅支援 sqlite（測試）/ mssql（正式）；其餘明確拋錯（不再隱式 fallback postgres）。
+        throw new Error(
+          `不支援的 DB_TYPE='${dbType}'（PG 已移除；僅支援 mssql 或 sqlite）`,
+        );
       },
     }),
     AssignmentWorkerModule,

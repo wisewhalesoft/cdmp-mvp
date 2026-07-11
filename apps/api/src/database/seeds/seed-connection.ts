@@ -19,36 +19,28 @@ export function isMssql(): boolean {
 }
 
 /**
- * 依 `DB_TYPE` 回傳 seed 用連線設定（比照 `data-source.ts` mssql 分支；預設 postgres）。
+ * 回傳 seed 用連線設定（MSSQL 全面遷移後僅支援 mssql；比照 `data-source.ts`）。
  * 呼叫端自行補上 entities / synchronize（各腳本需求不同）。
  */
 export function seedConnectionOptions(): Record<string, unknown> {
-  const dbType = isMssql() ? 'mssql' : 'postgres';
-  const defaultPort = dbType === 'mssql' ? '1433' : '5432';
-  const common = {
+  return {
+    type: 'mssql',
     host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || defaultPort, 10),
+    port: parseInt(process.env.DB_PORT || '1433', 10),
     username: process.env.DB_USERNAME || 'cdmp',
     password: process.env.DB_PASSWORD || 'cdmp_secret',
-    database: process.env.DB_NAME || (dbType === 'mssql' ? 'CDMP' : 'cdmp_dev'),
+    database: process.env.DB_NAME || 'CDMP',
+    // P6c / I-MSSQL-REQ-TIMEOUT-01：tedious 預設 15s 對 seed 大批寫入不足。
+    //   env DB_MSSQL_REQUEST_TIMEOUT 覆蓋（預設 1hr）。理由同 data-source.ts。
+    requestTimeout: Number(process.env.DB_MSSQL_REQUEST_TIMEOUT ?? 3600000),
+    options: {
+      encrypt: (process.env.DB_MSSQL_ENCRYPT || 'true') === 'true',
+      trustServerCertificate: (process.env.DB_MSSQL_TRUST_CERT || 'true') === 'true',
+      // AD-E07-43 P5h / I-MSSQL-DATE-TZ-01：顯式 useUTC:true（seed 腳本連線；
+      //   與主應用/worker/CLI 連線語意一致）。理由同 data-source.ts。
+      useUTC: true,
+    },
   };
-  if (dbType === 'mssql') {
-    return {
-      type: 'mssql',
-      ...common,
-      // P6c / I-MSSQL-REQ-TIMEOUT-01：tedious 預設 15s 對 seed 大批寫入不足（PG 無 statement timeout）。
-      //   env DB_MSSQL_REQUEST_TIMEOUT 覆蓋（預設 1hr）。理由同 data-source.ts。
-      requestTimeout: Number(process.env.DB_MSSQL_REQUEST_TIMEOUT ?? 3600000),
-      options: {
-        encrypt: (process.env.DB_MSSQL_ENCRYPT || 'true') === 'true',
-        trustServerCertificate: (process.env.DB_MSSQL_TRUST_CERT || 'true') === 'true',
-        // AD-E07-43 P5h / I-MSSQL-DATE-TZ-01：顯式 useUTC:true（seed 腳本連線；
-        //   與主應用/worker/CLI 連線語意一致）。理由同 data-source.ts。
-        useUTC: true,
-      },
-    };
-  }
-  return { type: 'postgres', ...common };
 }
 
 /**
