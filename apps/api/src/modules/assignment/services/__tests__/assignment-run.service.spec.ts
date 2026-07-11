@@ -28,6 +28,7 @@ import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.ent
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
+import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
 import { User } from '@/database/entities/user.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
@@ -55,6 +56,7 @@ async function buildModule(): Promise<{
           ObLevelcardVersion,
           EtlPipelineLog,
           EtlPipeline,
+          EtlPipelineVersion,
           User,
         ],
         synchronize: true,
@@ -66,6 +68,7 @@ async function buildModule(): Promise<{
         ObLevelcardVersion,
         EtlPipelineLog,
         EtlPipeline,
+        EtlPipelineVersion,
         User,
       ]),
     ],
@@ -366,6 +369,85 @@ describe('AssignmentRunService', () => {
       );
       const res = await env.service.getRunById(saved.run_id);
       expect(res.triggeredByName ?? null).toBeNull();
+    });
+
+    // F062 方案 1：getRunById 依 status + total_cases 合成 stages / totals，
+    // 供進度頁 stepper + 進度條 + 「X/Y 筆」渲染（原本恆缺 → 畫面卡 0%/全 pending）。
+    describe('getRunById：合成進度視圖（stages / totals）', () => {
+      it('completed → 5 階段全 completed、100%、processed = total = total_cases', async () => {
+        const saved = await env.runRepo.save(
+          env.runRepo.create({
+            project_workym: YM,
+            status: 'completed',
+            triggered_by: ACTOR_ID,
+            total_cases: 9500,
+            created_at: new Date(),
+          } as Partial<AssignmentRun>),
+        );
+        const res = await env.service.getRunById(saved.run_id);
+        expect(res.stages).toHaveLength(5);
+        expect(res.stages?.map((s) => s.name)).toEqual([
+          'Stage 0',
+          'Stage 1',
+          'Stage 2',
+          'Stage 3',
+          'Stage 4',
+        ]);
+        expect(res.stages?.every((s) => s.status === 'completed')).toBe(true);
+        expect(res.stages?.every((s) => s.progressPercent === 100)).toBe(true);
+        expect(res.totals).toEqual({
+          processedCount: 9500,
+          totalCount: 9500,
+          progressPercent: 100,
+        });
+      });
+
+      it('pending → 5 階段全 pending、0%、total = 0（total_cases 尚未寫入）', async () => {
+        const saved = await env.runRepo.save(
+          env.runRepo.create({
+            project_workym: YM,
+            status: 'pending',
+            triggered_by: ACTOR_ID,
+            created_at: new Date(),
+          } as Partial<AssignmentRun>),
+        );
+        const res = await env.service.getRunById(saved.run_id);
+        expect(res.stages?.every((s) => s.status === 'pending')).toBe(true);
+        expect(res.totals).toEqual({
+          processedCount: 0,
+          totalCount: 0,
+          progressPercent: 0,
+        });
+      });
+
+      it('running → 5 階段全 running、0%', async () => {
+        const saved = await env.runRepo.save(
+          env.runRepo.create({
+            project_workym: YM,
+            status: 'running',
+            triggered_by: ACTOR_ID,
+            created_at: new Date(),
+          } as Partial<AssignmentRun>),
+        );
+        const res = await env.service.getRunById(saved.run_id);
+        expect(res.stages?.every((s) => s.status === 'running')).toBe(true);
+        expect(res.totals?.progressPercent).toBe(0);
+      });
+
+      it('failed → 5 階段全 failed、0%', async () => {
+        const saved = await env.runRepo.save(
+          env.runRepo.create({
+            project_workym: YM,
+            status: 'failed',
+            triggered_by: ACTOR_ID,
+            error_message: '使用者取消',
+            created_at: new Date(),
+          } as Partial<AssignmentRun>),
+        );
+        const res = await env.service.getRunById(saved.run_id);
+        expect(res.stages?.every((s) => s.status === 'failed')).toBe(true);
+        expect(res.totals?.progressPercent).toBe(0);
+      });
     });
   });
 

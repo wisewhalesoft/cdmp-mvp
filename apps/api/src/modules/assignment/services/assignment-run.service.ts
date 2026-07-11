@@ -35,7 +35,42 @@ export interface RunSummary {
   totalCases: number | null;
   totalLists: number | null;
   errorMessage: string | null;
+  /**
+   * F062 進度頁視覺化：由 status + total_cases 合成的粗粒度逐階段進度。
+   * 僅 getRunById 附帶（listRuns 不需，避免清單 payload 膨脹）。
+   */
+  stages?: RunStageProgress[];
+  totals?: RunProgressTotals;
 }
+
+/** F062 逐階段進度（合成值；後端目前無逐階段 checkpoint，見 attachProgressView） */
+export interface RunStageProgress {
+  name: string;
+  status: AssignmentRun['status'];
+  progressPercent: number;
+  processedCount: number;
+  totalCount: number;
+}
+
+/** F062 總體進度（合成值） */
+export interface RunProgressTotals {
+  processedCount: number;
+  totalCount: number;
+  progressPercent: number;
+}
+
+/**
+ * F062 進度頁 5-step stepper 對應階段名。
+ * ⚠️ 須與前端 run-progress-page.tsx `EXPECTED_STAGES` 的 name 完全一致，
+ * 否則 buildStepperStages 對不上 → stepper 恆 pending。
+ */
+const PROGRESS_STAGE_NAMES = [
+  'Stage 0',
+  'Stage 1',
+  'Stage 2',
+  'Stage 3',
+  'Stage 4',
+] as const;
 
 /**
  * AssignmentRunService — F061 月跑觸發 + F062/F065/F066 查詢
@@ -222,7 +257,66 @@ export class AssignmentRunService {
     const summary = this.toSummary(row);
     // F062：與 listRuns 一致解析 triggered_by(UUID) → users.name（進度頁「觸發者」欄顯示名稱而非 UUID）
     await this.resolveTriggeredByNames([summary]);
+    // F062（方案 1）：附帶合成之逐階段 / 總體進度，供進度頁 stepper + 進度條 + 筆數渲染。
+    this.attachProgressView(summary);
     return summary;
+  }
+
+  /**
+   * F062（方案 1）：合成進度視圖。
+   *
+   * 背景：F098/pushdown 重構後，Stage 1~4 於 worker 內以原子 SQL 下推執行，
+   * DB 無逐階段 checkpoint（assignment_run 無 stage/progress 欄位）。進度頁
+   * （run-progress-page.tsx）之 stepper / 進度條 / 「X/Y 筆」全依賴 `stages` /
+   * `totals`，而原 getRunById 從不回這兩欄 → 畫面恆卡 0% / 全 pending，即使跑完。
+   *
+   * 本法依 run `status` + `total_cases` 合成粗粒度進度：
+   *   - pending   → 5 階段全 pending，0%
+   *   - running   → 5 階段全 running，0%（無真實中途值，以 badge + spinner 表達進行中）
+   *   - completed → 5 階段全 completed，100%，processed = total = total_cases
+   *   - failed    → 5 階段全 failed，0%
+   *
+   * 若日後 pipeline 補逐階段 checkpoint（方案 2），改由真實資料覆寫此合成值即可。
+   */
+  private attachProgressView(s: RunSummary): void {
+    const total = s.totalCases ?? 0;
+    let stageStatus: AssignmentRun['status'];
+    let processed: number;
+    let percent: number;
+    switch (s.status) {
+      case 'completed':
+        stageStatus = 'completed';
+        processed = total;
+        percent = 100;
+        break;
+      case 'failed':
+        stageStatus = 'failed';
+        processed = 0;
+        percent = 0;
+        break;
+      case 'running':
+        stageStatus = 'running';
+        processed = 0;
+        percent = 0;
+        break;
+      default:
+        stageStatus = 'pending';
+        processed = 0;
+        percent = 0;
+        break;
+    }
+    s.stages = PROGRESS_STAGE_NAMES.map((name) => ({
+      name,
+      status: stageStatus,
+      progressPercent: percent,
+      processedCount: processed,
+      totalCount: total,
+    }));
+    s.totals = {
+      processedCount: processed,
+      totalCount: total,
+      progressPercent: percent,
+    };
   }
 
   /**
