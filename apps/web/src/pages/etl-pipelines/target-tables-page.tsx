@@ -4,10 +4,20 @@ import {
   ArrowLeft,
   ChevronRight,
   ChevronDown,
+  Database,
+  AlertTriangle,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
-import { getTargetTables, getTargetTableSchema } from '@/api/etl-pipelines';
-import type { TargetTableSummary, TargetTableColumn } from '@cdmp/shared';
+import {
+  getTargetTables,
+  getTargetTableSchema,
+  getTargetTableStats,
+} from '@/api/etl-pipelines';
+import type {
+  TargetTableSummary,
+  TargetTableColumn,
+  TargetTableStat,
+} from '@cdmp/shared';
 
 const DOMAIN_COLORS: Record<string, { bg: string; text: string }> = {
   core: { bg: 'bg-blue-50', text: 'text-blue-700' },
@@ -22,12 +32,18 @@ export function TargetTablesPage() {
   const [expandedTable, setExpandedTable] = useState<string | null>(null);
   const [columns, setColumns] = useState<Record<string, TargetTableColumn[]>>({});
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<TargetTableStat[]>([]);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     getTargetTables()
       .then((res) => setTables(res.data))
       .catch(() => {})
       .finally(() => setLoading(false));
+    getTargetTableStats()
+      .then((res) => setStats(res.data))
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
   }, []);
 
   const handleToggle = async (tableName: string) => {
@@ -71,6 +87,117 @@ export function TargetTablesPage() {
   return (
     <AppLayout headerLeft={headerLeft}>
         <main className="flex-1 p-6 overflow-auto">
+          {/* ETL 資料表現況：真實筆數 + 上次載入（比照「資料擷取」；一眼看出「log 完成但表為空」） */}
+          <div
+            className="mb-6 bg-white rounded-lg shadow-sm border border-border overflow-hidden"
+            data-testid="target-table-stats"
+          >
+            <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+              <Database size={18} className="text-[#2563EB]" />
+              <div>
+                <h2 className="text-base font-semibold text-gray-800">
+                  ETL 資料表現況
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  各 Pipeline 目標資料表目前實際存在資料庫的筆數（0 筆代表空表 / 尚未載入，需重新執行 ETL）
+                </p>
+              </div>
+            </div>
+            {statsLoading ? (
+              <div className="text-center text-gray-400 py-8 text-sm">
+                載入中...
+              </div>
+            ) : stats.length === 0 ? (
+              <div className="text-center text-gray-400 py-8 text-sm">
+                尚無 ETL Pipeline 目標資料表
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-border">
+                    <tr>
+                      <th className="text-left px-5 py-2.5 font-medium text-gray-500">
+                        目標資料表
+                      </th>
+                      <th className="text-right px-5 py-2.5 font-medium text-gray-500 w-40">
+                        資料筆數
+                      </th>
+                      <th className="text-left px-5 py-2.5 font-medium text-gray-500 w-48">
+                        上次載入
+                      </th>
+                      <th className="text-left px-5 py-2.5 font-medium text-gray-500">
+                        Pipeline
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.map((s) => {
+                      const empty = s.rowCount === 0;
+                      return (
+                        <tr
+                          key={s.tableName}
+                          data-testid={`stat-row-${s.tableName}`}
+                          className={`border-b border-border ${empty ? 'bg-red-50/60' : ''}`}
+                        >
+                          <td className="px-5 py-2.5">
+                            <code className="text-xs font-mono text-gray-700">
+                              {s.tableName}
+                            </code>
+                          </td>
+                          <td className="px-5 py-2.5 text-right">
+                            {empty ? (
+                              <span
+                                className="inline-flex items-center gap-1 font-semibold text-danger"
+                                data-testid={`stat-empty-${s.tableName}`}
+                              >
+                                <AlertTriangle size={13} />0 筆
+                              </span>
+                            ) : (
+                              <span className="font-medium text-gray-800">
+                                {s.rowCount.toLocaleString()} 筆
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-5 py-2.5 text-gray-600">
+                            {s.lastLoadedAt ? (
+                              <span>
+                                {s.lastLoadedAt.slice(0, 16).replace('T', ' ')}
+                                {s.lastLoadStatus && (
+                                  <span
+                                    className={`ml-1.5 text-xs ${
+                                      s.lastLoadStatus === 'completed'
+                                        ? 'text-green-600'
+                                        : s.lastLoadStatus === 'failed'
+                                          ? 'text-danger'
+                                          : 'text-gray-400'
+                                    }`}
+                                  >
+                                    (
+                                    {s.lastLoadStatus === 'completed'
+                                      ? '完成'
+                                      : s.lastLoadStatus === 'failed'
+                                        ? '失敗'
+                                        : '執行中'}
+                                    )
+                                  </span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                          <td className="px-5 py-2.5 text-gray-600">
+                            {s.pipelineName}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           <div className="mb-6">
             <h2 className="text-xl font-semibold text-gray-800" data-testid="page-title">
               Domain-Oriented 目標表定義

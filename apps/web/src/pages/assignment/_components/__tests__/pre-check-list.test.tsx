@@ -30,19 +30,21 @@ function makeReadiness(overrides: Partial<ReadinessResponse> = {}): ReadinessRes
     monthlyRunStatus: 'none',
     scoringActive: true,
     etlStatus: {
-      pooldata: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
-      emphire: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
-      calendar: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
-      arreturndf: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
+      pooldata: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 9500 },
+      emphire: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 238 },
+      calendar: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 365 },
+      arreturndf: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 9420 },
     },
+    sourcesAllHaveData: true,
+    emptySourceTables: [],
     ...overrides,
   };
 }
 
 describe('buildPreChecksFromReadiness (pure function)', () => {
-  it('全部 ready 時回傳 6 項 check 且全部 pass', () => {
+  it('全部 ready 時回傳 7 項 check 且全部 pass', () => {
     const checks = buildPreChecksFromReadiness(makeReadiness());
-    expect(checks).toHaveLength(6);
+    expect(checks).toHaveLength(7);
     for (const c of checks) {
       expect(c.status).toBe('pass');
     }
@@ -102,38 +104,56 @@ describe('buildPreChecksFromReadiness (pure function)', () => {
     const checks = buildPreChecksFromReadiness(
       makeReadiness({
         etlStatus: {
-          pooldata: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
-          emphire: { status: 'missing', lastRunAt: null },
-          calendar: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
-          arreturndf: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
+          pooldata: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 9500 },
+          emphire: { status: 'missing', lastRunAt: null, rowCount: 0 },
+          calendar: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 365 },
+          arreturndf: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 9420 },
         },
       }),
     );
     const etl = checks.find((c) => c.id === 'etl-synced');
     expect(etl?.status).toBe('fail');
   });
+
+  it('emptySourceTables 非空 → check source-tables-loaded fail 且列出空表', () => {
+    const checks = buildPreChecksFromReadiness(
+      makeReadiness({
+        sourcesAllHaveData: false,
+        emptySourceTables: ['ob_calendar'],
+      }),
+    );
+    const c = checks.find((it) => it.id === 'source-tables-loaded');
+    expect(c?.status).toBe('fail');
+    expect(c?.detail).toContain('ob_calendar');
+  });
+
+  it('4 表皆有資料 → check source-tables-loaded pass', () => {
+    const checks = buildPreChecksFromReadiness(makeReadiness());
+    const c = checks.find((it) => it.id === 'source-tables-loaded');
+    expect(c?.status).toBe('pass');
+  });
 });
 
 describe('PreCheckList (component)', () => {
-  it('render 6 items', () => {
+  it('render 7 items', () => {
     render(<PreCheckList readiness={makeReadiness()} />);
-    expect(screen.getAllByTestId(/^pre-check-item-/).length).toBe(6);
+    expect(screen.getAllByTestId(/^pre-check-item-/).length).toBe(7);
   });
 
-  it('全部 pass 時 summary 顯示 6/6', () => {
+  it('全部 pass 時 summary 顯示 7/7', () => {
     render(<PreCheckList readiness={makeReadiness()} />);
     const summary = screen.getByTestId('pre-check-summary');
-    expect(summary.textContent).toContain('6/6');
+    expect(summary.textContent).toContain('7/7');
   });
 
-  it('1 失敗時 summary 顯示 5/6', () => {
+  it('1 失敗時 summary 顯示 6/7', () => {
     render(
       <PreCheckList
         readiness={makeReadiness({ scoringActive: false })}
       />,
     );
     const summary = screen.getByTestId('pre-check-summary');
-    expect(summary.textContent).toContain('5/6');
+    expect(summary.textContent).toContain('6/7');
   });
 
   it('loading 顯示載入中', () => {

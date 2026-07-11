@@ -15,6 +15,7 @@ vi.mock('@/stores/auth-store');
 
 const mockedGetTargetTables = vi.mocked(etlPipelinesApi.getTargetTables);
 const mockedGetTargetTableSchema = vi.mocked(etlPipelinesApi.getTargetTableSchema);
+const mockedGetTargetTableStats = vi.mocked(etlPipelinesApi.getTargetTableStats);
 const mockedGetUser = vi.mocked(authStore.getUser);
 
 // v2.0: Only 1 target table (customer_core), 54 columns
@@ -67,6 +68,24 @@ describe('TargetTablesPage (v2.0 — 1 table)', () => {
     mockedGetUser.mockReturnValue({ id: '1', name: 'Admin', email: 'a@b.c', role: 'admin' });
     mockedGetTargetTables.mockResolvedValue(mockTableList);
     mockedGetTargetTableSchema.mockResolvedValue(mockCoreSchema);
+    mockedGetTargetTableStats.mockResolvedValue({
+      data: [
+        {
+          tableName: 'ob_calendar',
+          pipelineName: '電銷人事行事曆 ETL',
+          rowCount: 0,
+          lastLoadedAt: '2026-07-09T09:14:59.617Z',
+          lastLoadStatus: 'completed',
+        },
+        {
+          tableName: 'ob_pool_data',
+          pipelineName: '電銷名單來源案件資料 ETL',
+          rowCount: 1679489,
+          lastLoadedAt: '2026-07-10T02:07:15.048Z',
+          lastLoadStatus: 'completed',
+        },
+      ],
+    });
   });
 
   it('should render page title and subtitle (Phase 1 MVP: 1 table)', async () => {

@@ -1014,6 +1014,19 @@ export interface TargetTableListResponse {
   data: TargetTableSummary[];
 }
 
+/** ETL 目標資料表現況（真實筆數 + 上次載入；rowCount=0 代表空表 / 未載入）。 */
+export interface TargetTableStat {
+  tableName: string;
+  pipelineName: string;
+  rowCount: number;
+  lastLoadedAt: string | null;
+  lastLoadStatus: 'completed' | 'failed' | 'running' | null;
+}
+
+export interface TargetTableStatsResponse {
+  data: TargetTableStat[];
+}
+
 export interface TargetTableSchemaResponse {
   tableName: string;
   displayName: string;

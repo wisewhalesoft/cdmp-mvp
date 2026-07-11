@@ -310,6 +310,18 @@
                 </div>
               </div>
             </div>
+
+            <!-- Check 7：來源資料表已載入（真實筆數 > 0；與 ETL 同步 log 不同——log 可能完成但表被清空/未載入） -->
+            <div class="check-item p-4 flex items-start gap-3" data-check="7" data-status="pass">
+              <span class="check-icon shrink-0 mt-0.5"></span>
+              <div class="flex-1">
+                <div class="flex items-center justify-between">
+                  <h4 class="text-sm font-semibold text-gray-800">來源資料表已載入</h4>
+                  <span class="check-badge text-xs"></span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">4 張來源資料表目前皆有資料（非僅 log 完成；空表 → 月跑會靜默算錯，擋觸發）</p>
+              </div>
+            </div>
           </div>
         </div>
 

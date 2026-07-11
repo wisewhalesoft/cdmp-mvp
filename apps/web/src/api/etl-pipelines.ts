@@ -30,6 +30,7 @@ import type {
   EtlDashboardSlowestResponse,
   TargetTableListResponse,
   TargetTableSchemaResponse,
+  TargetTableStatsResponse,
 } from '@cdmp/shared';
 
 export async function getPipelineStats(): Promise<PipelineStatsResponse> {
@@ -235,6 +236,14 @@ export async function getTargetTables(): Promise<TargetTableListResponse> {
 export async function getTargetTableSchema(tableName: string): Promise<TargetTableSchemaResponse> {
   const response = await apiClient.get<TargetTableSchemaResponse>(
     `/etl/target-tables/${tableName}/schema`,
+  );
+  return response.data;
+}
+
+// ETL 目標資料表現況（真實筆數 + 上次載入）
+export async function getTargetTableStats(): Promise<TargetTableStatsResponse> {
+  const response = await apiClient.get<TargetTableStatsResponse>(
+    '/etl/target-tables/stats',
   );
   return response.data;
 }

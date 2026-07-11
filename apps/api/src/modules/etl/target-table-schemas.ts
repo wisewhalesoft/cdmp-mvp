@@ -30,6 +30,22 @@ export interface TargetTableSummary {
   description: string;
 }
 
+/**
+ * ETL 目標資料表現況（比照「資料擷取」讓管理者知道目前真實存在 DB 的筆數）。
+ * 每列＝一個 ETL pipeline 的 target_load 目標表。rowCount 為快速 metadata 筆數（0 = 空表 / 未載入）。
+ */
+export interface TargetTableStat {
+  tableName: string;
+  pipelineName: string;
+  rowCount: number;
+  lastLoadedAt: string | null;
+  lastLoadStatus: 'completed' | 'failed' | 'running' | null;
+}
+
+export interface TargetTableStatsResponse {
+  data: TargetTableStat[];
+}
+
 // H. 稽核與 ETL 追蹤（共用）
 const ETL_TRACKING_COLUMNS: TargetTableColumn[] = [
   { name: 'data_source', type: 'VARCHAR(50)', nullable: false, isPrimaryKey: false, isEtlTracking: true, category: 'H', description: '資料來源識別（ETL 自動填充）' },

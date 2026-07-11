@@ -15,6 +15,12 @@ export class TargetTableController {
     return this.targetTableService.getAll();
   }
 
+  // ETL 目標資料表現況（真實筆數 + 上次載入）；置於 :tableName/schema 之前避免被通用參數路徑誤捕。
+  @Get('stats')
+  getStats() {
+    return this.targetTableService.getTargetTableStats();
+  }
+
   @Get(':tableName/schema')
   getSchema(@Param('tableName') tableName: string) {
     return this.targetTableService.getSchema(tableName);

@@ -27,7 +27,8 @@ export interface PreCheckItem {
     | 'personnel-ratio-100'
     | 'scoring-active'
     | 'no-running-run'
-    | 'etl-synced';
+    | 'etl-synced'
+    | 'source-tables-loaded';
   label: string;
   description: string;
   status: PreCheckStatus;
@@ -134,6 +135,21 @@ export function buildPreChecksFromReadiness(
       : `${etlFails.length} 項來源資料未完成：${etlFails
           .map((k) => ETL_SOURCE_LABELS[k])
           .join('、')}`,
+  });
+
+  // 7. 來源資料表有資料（rowCount>0）——與「ETL 同步」log 狀態不同：pipeline log 可能為 completed，
+  //    但目標表被清空 / 未載入（如 E2E 測試清表）→ 月跑會靜默算錯（ob_calendar 空→試算 0；
+  //    ob_arreturndf_min_cap 空→H 卡分數偏低）。空表視為 fail → 擋月跑觸發。
+  const emptyTables = readiness.emptySourceTables ?? [];
+  items.push({
+    id: 'source-tables-loaded',
+    label: '來源資料表已載入',
+    description: '4 張來源資料表目前皆有資料（非僅 log 完成）',
+    status: emptyTables.length === 0 ? 'pass' : 'fail',
+    detail:
+      emptyTables.length === 0
+        ? '4 張來源資料表均有資料'
+        : `${emptyTables.length} 張來源資料表為空，需重新執行對應 ETL：${emptyTables.join('、')}`,
   });
 
   return items;

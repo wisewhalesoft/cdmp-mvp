@@ -115,6 +115,35 @@
       <button onclick="showTableDemo('category-h')" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">展開 H.稽核與ETL追蹤</button>
     </div>
 
+    <!-- ETL 資料表現況：真實筆數 + 上次載入（比照「資料擷取」；一眼看出「log 完成但表為空」） -->
+    <div class="mb-6 bg-white rounded-lg shadow-sm border border-border overflow-hidden">
+      <div class="px-5 py-4 border-b border-border flex items-center gap-2">
+        <i data-lucide="database" class="w-[18px] h-[18px] text-[#2563EB]"></i>
+        <div>
+          <h2 class="text-base font-semibold text-gray-800">ETL 資料表現況</h2>
+          <p class="text-xs text-gray-500 mt-0.5">各 Pipeline 目標資料表目前實際存在資料庫的筆數（0 筆代表空表 / 尚未載入，需重新執行 ETL）</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-border">
+            <tr>
+              <th class="text-left px-5 py-2.5 font-medium text-gray-500">目標資料表</th>
+              <th class="text-right px-5 py-2.5 font-medium text-gray-500 w-40">資料筆數</th>
+              <th class="text-left px-5 py-2.5 font-medium text-gray-500 w-48">上次載入</th>
+              <th class="text-left px-5 py-2.5 font-medium text-gray-500">Pipeline</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-border"><td class="px-5 py-2.5"><code class="text-xs font-mono text-gray-700">customer_core</code></td><td class="px-5 py-2.5 text-right"><span class="font-medium text-gray-800">3,631,548 筆</span></td><td class="px-5 py-2.5 text-gray-600">2026-07-10 18:00 <span class="ml-1.5 text-xs text-danger">(失敗)</span></td><td class="px-5 py-2.5 text-gray-600">客戶資料 ETL</td></tr>
+            <tr class="border-b border-border bg-red-50/60"><td class="px-5 py-2.5"><code class="text-xs font-mono text-gray-700">ob_calendar</code></td><td class="px-5 py-2.5 text-right"><span class="inline-flex items-center gap-1 font-semibold text-danger"><i data-lucide="alert-triangle" class="w-[13px] h-[13px]"></i>0 筆</span></td><td class="px-5 py-2.5 text-gray-600">2026-07-09 09:14 <span class="ml-1.5 text-xs text-green-600">(完成)</span></td><td class="px-5 py-2.5 text-gray-600">電銷人事行事曆 ETL</td></tr>
+            <tr class="border-b border-border"><td class="px-5 py-2.5"><code class="text-xs font-mono text-gray-700">ob_emphire</code></td><td class="px-5 py-2.5 text-right"><span class="font-medium text-gray-800">317 筆</span></td><td class="px-5 py-2.5 text-gray-600">2026-07-09 10:39 <span class="ml-1.5 text-xs text-green-600">(完成)</span></td><td class="px-5 py-2.5 text-gray-600">電銷業務人員 ETL</td></tr>
+            <tr class="border-b border-border"><td class="px-5 py-2.5"><code class="text-xs font-mono text-gray-700">ob_pool_data</code></td><td class="px-5 py-2.5 text-right"><span class="font-medium text-gray-800">1,679,489 筆</span></td><td class="px-5 py-2.5 text-gray-600">2026-07-10 02:07 <span class="ml-1.5 text-xs text-green-600">(完成)</span></td><td class="px-5 py-2.5 text-gray-600">電銷名單來源案件資料 ETL</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="mb-6">
       <h2 class="text-xl font-semibold text-gray-800">Domain-Oriented 目標表定義</h2>
       <p class="text-sm text-gray-500 mt-1">Phase 1 MVP 預定義的 Domain Data Product 目標表，由 ETL Pipeline Load 節點寫入</p>

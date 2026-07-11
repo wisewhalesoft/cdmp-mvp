@@ -28,6 +28,7 @@ describe('MonthlyRunReadinessService', () => {
   let etlLogRepo: any;
   let etlPipelineRepo: any;
   let etlVersionRepo: any; // EtlPipelineVersion（definition → target_load）
+  let dataSource: any; // getTableRowCounts 用（sqlite 分支：query 回 [{n}]）
 
   /** 建 log query builder mock（新邏輯：where/orderBy/limit/getMany，無 join）。 */
   const makeLogQb = (logs: any[]) => ({
@@ -63,6 +64,11 @@ describe('MonthlyRunReadinessService', () => {
     etlLogRepo = { createQueryBuilder: vi.fn().mockReturnValue(makeLogQb([])) };
     etlPipelineRepo = { find: vi.fn().mockResolvedValue([]) };
     etlVersionRepo = { find: vi.fn().mockResolvedValue([]) };
+    // sqlite 分支：getTableRowCounts 逐表 `SELECT COUNT(*)`；預設回 100（4 表皆有資料）。
+    dataSource = {
+      options: { type: 'sqlite' },
+      query: vi.fn().mockResolvedValue([{ n: 100 }]),
+    };
     service = new MonthlyRunReadinessService(
       listRepo as Repository<ObListDefinition>,
       runRepo as Repository<AssignmentRun>,
@@ -70,6 +76,7 @@ describe('MonthlyRunReadinessService', () => {
       etlLogRepo as Repository<EtlPipelineLog>,
       etlPipelineRepo as Repository<EtlPipeline>,
       etlVersionRepo as Repository<EtlPipelineVersion>,
+      dataSource,
     );
   });
 
@@ -274,6 +281,33 @@ describe('MonthlyRunReadinessService', () => {
 
       const res = await service.calculateReadiness('202607');
       expect((res.etlStatus as any).emphire.status).toBe('completed');
+    });
+
+    // 🔴 空表 guard：來源表 rowCount=0（log 可能 completed 但表被清空）→ sourcesAllHaveData=false + 列出空表。
+    it('來源表為空（rowCount=0）→ sourcesAllHaveData=false + emptySourceTables 含該表', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      // sqlite 分支逐表 SELECT COUNT(*)：ob_calendar 回 0、其餘回 100。
+      dataSource.query = vi.fn().mockImplementation((sql: string) =>
+        /ob_calendar/.test(sql)
+          ? Promise.resolve([{ n: 0 }])
+          : Promise.resolve([{ n: 100 }]),
+      );
+
+      const res = await service.calculateReadiness('202607');
+      expect((res.etlStatus as any).calendar.rowCount).toBe(0);
+      expect((res.etlStatus as any).pooldata.rowCount).toBe(100);
+      expect(res.sourcesAllHaveData).toBe(false);
+      expect(res.emptySourceTables).toContain('ob_calendar');
+    });
+
+    it('4 來源表皆有資料 → sourcesAllHaveData=true + emptySourceTables=[]', async () => {
+      listRepo.find.mockResolvedValue([]);
+      runRepo.findOne.mockResolvedValue(null);
+      // 預設 dataSource.query 回 [{n:100}]（beforeEach）。
+      const res = await service.calculateReadiness('202607');
+      expect(res.sourcesAllHaveData).toBe(true);
+      expect(res.emptySourceTables).toEqual([]);
     });
   });
 });

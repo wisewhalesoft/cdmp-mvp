@@ -210,6 +210,8 @@ export type EtlStatusValue = 'completed' | 'failed' | 'running' | 'missing';
 export interface EtlSourceStatus {
   status: EtlStatusValue;
   lastRunAt: string | null;
+  /** 目標表目前真實筆數；0 = 空表 / 未載入（即使 log 為 completed）。 */
+  rowCount: number;
 }
 
 export interface EtlStatusMap {
@@ -228,6 +230,10 @@ export interface ReadinessResponse {
   monthlyRunStatus: 'none' | 'pending' | 'running' | 'completed' | 'failed';
   scoringActive: boolean;
   etlStatus: EtlStatusMap;
+  /** 4 張來源表是否皆有資料（rowCount>0）；false → 有空表，月跑會靜默算錯，應擋。 */
+  sourcesAllHaveData: boolean;
+  /** rowCount=0 之來源表清單。 */
+  emptySourceTables: string[];
 }
 
 export async function getReadiness(ym?: string): Promise<ReadinessResponse> {

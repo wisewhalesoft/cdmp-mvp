@@ -47,11 +47,13 @@ function makeReadiness(overrides: Partial<ReadinessResponse> = {}): ReadinessRes
     monthlyRunStatus: 'none',
     scoringActive: true,
     etlStatus: {
-      pooldata: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
-      emphire: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
-      calendar: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
-      arreturndf: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z' },
+      pooldata: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 9500 },
+      emphire: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 238 },
+      calendar: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 365 },
+      arreturndf: { status: 'completed', lastRunAt: '2026-05-15T03:00:00Z', rowCount: 9420 },
     },
+    sourcesAllHaveData: true,
+    emptySourceTables: [],
     ...overrides,
   };
 }
@@ -129,13 +131,13 @@ describe('TriggerRunPage (Phase 2 改造)', () => {
 
   afterEach(() => cleanup());
 
-  it('載入時顯示 6 項 pre-check', async () => {
+  it('載入時顯示 7 項 pre-check', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByTestId('pre-check-summary')).toBeInTheDocument();
     });
     const items = screen.getAllByTestId(/^pre-check-item-/);
-    expect(items.length).toBe(6);
+    expect(items.length).toBe(7);
   });
 
   it('全部 pre-check pass 時「啟動月跑」按鈕 enabled', async () => {

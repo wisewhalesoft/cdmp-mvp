@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Not, Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, In, IsNull, Not, Repository } from 'typeorm';
+import { getTableRowCounts } from '@/common/db/table-row-counts';
 import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
@@ -15,6 +16,8 @@ export type EtlStatusValue = 'completed' | 'failed' | 'running' | 'missing';
 export interface EtlSourceStatus {
   status: EtlStatusValue;
   lastRunAt: string | null;
+  /** 目標表目前真實筆數（metadata 快速查）；0 = 空表 / 未載入（即使 log 為 completed）。 */
+  rowCount: number;
 }
 
 export interface EtlStatusMap {
@@ -35,6 +38,13 @@ export interface ReadinessResult {
   scoringActive: boolean;
   /** F061 Phase 2 — 4 個關鍵 ETL pipeline 最新狀態 */
   etlStatus: EtlStatusMap;
+  /**
+   * 4 張來源表是否皆有資料（rowCount>0）。false → 有空表（log 可能 completed 但表被清空/未載入），
+   * 月跑會靜默算錯（如 ob_calendar 空→試算 0；ob_arreturndf_min_cap 空→H 卡分數偏低）→ 應擋月跑。
+   */
+  sourcesAllHaveData: boolean;
+  /** rowCount=0 之來源表清單（供前端明確提示）。 */
+  emptySourceTables: string[];
 }
 
 /**
@@ -83,6 +93,7 @@ export class MonthlyRunReadinessService {
     private readonly etlPipelineRepo: Repository<EtlPipeline>,
     @InjectRepository(EtlPipelineVersion)
     private readonly etlVersionRepo: Repository<EtlPipelineVersion>,
+    @InjectDataSource() private readonly dataSource: DataSource,
   ) {}
 
   async calculateReadiness(workYm: string): Promise<ReadinessResult> {
@@ -116,6 +127,14 @@ export class MonthlyRunReadinessService {
 
     const etlStatus = await this.calculateEtlStatus();
 
+    // 空來源表 guard：log 可能 completed 但表被清空/未載入 → 月跑靜默算錯。以 target 表反查回報空表。
+    const emptySourceTables = (
+      Object.entries(TARGET_TABLE_TO_KEY) as Array<[string, keyof EtlStatusMap]>
+    )
+      .filter(([, key]) => etlStatus[key].rowCount === 0)
+      .map(([table]) => table)
+      .sort((a, b) => a.localeCompare(b));
+
     return {
       workYm,
       totalActiveLists: total,
@@ -125,6 +144,8 @@ export class MonthlyRunReadinessService {
       monthlyRunStatus: (latestRun?.status as MonthlyRunStatus) ?? 'none',
       scoringActive,
       etlStatus,
+      sourcesAllHaveData: emptySourceTables.length === 0,
+      emptySourceTables,
     };
   }
 
@@ -139,13 +160,29 @@ export class MonthlyRunReadinessService {
    * 沒找到 → status='missing', lastRunAt=null。
    */
   private async calculateEtlStatus(): Promise<EtlStatusMap> {
-    const empty: EtlSourceStatus = { status: 'missing', lastRunAt: null };
+    const empty: EtlSourceStatus = {
+      status: 'missing',
+      lastRunAt: null,
+      rowCount: 0,
+    };
     const result: EtlStatusMap = {
       pooldata: { ...empty },
       emphire: { ...empty },
       calendar: { ...empty },
       arreturndf: { ...empty },
     };
+
+    // 各來源目標表真實筆數（metadata 快速查；獨立於 pipeline log —— 抓「log 為 completed 但表被清空/
+    //   未載入」之矛盾，正是 ob_calendar/ob_arreturndf_min_cap 被 E2E 清表致月跑/試算靜默壞的根因）。
+    const counts = await getTableRowCounts(
+      this.dataSource,
+      Object.keys(TARGET_TABLE_TO_KEY),
+    );
+    for (const [table, key] of Object.entries(TARGET_TABLE_TO_KEY) as Array<
+      [string, keyof EtlStatusMap]
+    >) {
+      result[key].rowCount = counts.get(table) ?? 0;
+    }
 
     const pipelineIdToKey = await this.buildPipelineTargetMap();
     if (pipelineIdToKey.size === 0) return result;
@@ -165,6 +202,7 @@ export class MonthlyRunReadinessService {
       result[key] = {
         status: (log.status as EtlStatusValue) ?? 'missing',
         lastRunAt: finishedAt ? new Date(finishedAt).toISOString() : null,
+        rowCount: result[key].rowCount, // 保留上方已填之真實筆數
       };
     }
     return result;
