@@ -24,10 +24,6 @@ const MSSQL_BASELINE_SRC = fs.readFileSync(
   path.join(API_ROOT, 'database/migrations/mssql/1751884800000-MssqlBaselineSchema.ts'),
   'utf8',
 );
-const PG_BASELINE_SRC = fs.readFileSync(
-  path.join(API_ROOT, 'database/migrations/1711360000000-BaselineSchema.ts'),
-  'utf8',
-);
 const SERVICE_SRC = fs.readFileSync(
   path.resolve(__dirname, '../assignment-run-report.service.ts'),
   'utf8',
@@ -38,16 +34,6 @@ function createTableStmt(src: string, table: string): string {
   const marker = `CREATE TABLE "${table}"`;
   const start = src.indexOf(marker);
   if (start < 0) throw new Error(`CREATE TABLE not found: ${table}`);
-  const rest = src.slice(start + marker.length);
-  const next = rest.indexOf('CREATE TABLE ');
-  return rest.slice(0, next < 0 ? rest.length : next);
-}
-
-/** 擷取 PG baseline 之 CREATE TABLE public.<name> (...) 陳述式文字。 */
-function pgCreateTableStmt(src: string, table: string): string {
-  const marker = `CREATE TABLE public.${table} (`;
-  const start = src.indexOf(marker);
-  if (start < 0) throw new Error(`PG CREATE TABLE not found: ${table}`);
   const rest = src.slice(start + marker.length);
   const next = rest.indexOf('CREATE TABLE ');
   return rest.slice(0, next < 0 ? rest.length : next);
@@ -112,11 +98,7 @@ describe('AD-E07-43 P5 收尾 — 顯示層靜態守門', () => {
       const stmt = createTableStmt(MSSQL_BASELINE_SRC, 'ob_pool_data_list');
       expect(stmt).toContain('"cr_nm" nvarchar(50)');
     });
-
-    it('TS-P5FU-CRNM-SCHEMA-005：PG baseline ob_monthly_run_result cr_nm 維持 character varying(50)（本 slice 不動 PG）', () => {
-      const stmt = pgCreateTableStmt(PG_BASELINE_SRC, 'ob_monthly_run_result');
-      expect(stmt).toContain('cr_nm character varying(50)');
-    });
+    // TS-P5FU-CRNM-SCHEMA-005（PG baseline cr_nm 守門）已隨 PG 全面移除刪除。
   });
 
   // -----------------------------------------------------------------------

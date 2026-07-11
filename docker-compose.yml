@@ -1,22 +1,6 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: cdmp-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: cdmp_dev
-      POSTGRES_USER: cdmp
-      POSTGRES_PASSWORD: cdmp_secret
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cdmp -d cdmp_dev"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
+  # MSSQL 為外部資料庫（dev = 遠端 dev CDMP，透過 gitignored docker-compose.override.yml 指定主機/帳密；
+  # prod = 企業 MSSQL，於部署環境以 .env 提供 DB_HOST/DB_USERNAME/DB_PASSWORD）。本 compose 不再內含 DB 容器。
   api:
     build:
       context: ./apps/api
@@ -29,12 +13,15 @@ services:
       # 本機 dev 預設 development（synchronize 建表）；正式部署以 shell/.env 設 NODE_ENV=production
       # 關閉 synchronize（schema 改由 baseline migration 提供，見 bootstrap 服務）。
       NODE_ENV: ${NODE_ENV:-development}
-      DB_TYPE: postgres
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USERNAME: cdmp
-      DB_PASSWORD: cdmp_secret
-      DB_NAME: cdmp_dev
+      DB_TYPE: ${DB_TYPE:-mssql}
+      DB_HOST: ${DB_HOST:-}
+      DB_PORT: ${DB_PORT:-1433}
+      DB_USERNAME: ${DB_USERNAME:-}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_NAME: ${DB_NAME:-CDMP}
+      # 企業 MSSQL 常見：需 TLS 但憑證為自簽 → encrypt=true + trust=true（tedious）
+      DB_MSSQL_ENCRYPT: ${DB_MSSQL_ENCRYPT:-true}
+      DB_MSSQL_TRUST_CERT: ${DB_MSSQL_TRUST_CERT:-true}
       JWT_SECRET: ${JWT_SECRET:-cdmp-dev-jwt-secret-key-2026}
       # datasource 密碼加解密金鑰：api/worker/bootstrap 必須共用同一把（否則測試連線解密失敗）
       AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2}
@@ -49,11 +36,8 @@ services:
     volumes:
       - ./apps/api/src:/app/src
       - ./apps/api/test:/app/test
-    depends_on:
-      postgres:
-        condition: service_healthy
 
-  # F098 / AD-E07-28 P1：月跑 worker 容器（pg-boss consumer + cancellation poller + orphan reaper）。
+  # F098 / AD-E07-28 P1：月跑 worker 容器（自建 T-SQL 佇列 consumer + cancellation poller + orphan reaper）。
   # 與 api 同一份 apps/api 程式碼（build.context: ./apps/api，避免 entity drift），
   # 共用相同 DB / AES / feature-flag env；worker entrypoint 不掛 HTTP server、不 expose port（AC-8）。
   worker:
@@ -65,27 +49,23 @@ services:
     command: npx ts-node -r tsconfig-paths/register src/worker-main.ts
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      DB_TYPE: postgres
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USERNAME: cdmp
-      DB_PASSWORD: cdmp_secret
-      DB_NAME: cdmp_dev
+      DB_TYPE: ${DB_TYPE:-mssql}
+      DB_HOST: ${DB_HOST:-}
+      DB_PORT: ${DB_PORT:-1433}
+      DB_USERNAME: ${DB_USERNAME:-}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_NAME: ${DB_NAME:-CDMP}
+      DB_MSSQL_ENCRYPT: ${DB_MSSQL_ENCRYPT:-true}
+      DB_MSSQL_TRUST_CERT: ${DB_MSSQL_TRUST_CERT:-true}
       AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2}
       # worker 才是真正執行 pipeline 者（AC-8 / TS-F098-WORKER-003）
       ENABLE_E07_REFACTOR_PHASE3: "true"
       ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL: "true"
-      # AD-E07-40 P2c DoD #4：mssql 自建佇列輪詢間隔（RunQueueConsumer.startMssqlPolling）。
-      #   cutover 前 DB_TYPE=postgres 走 pg-boss、本值不被使用；預留供 mssql cutover 後 prod 可調。
+      # 自建 T-SQL 佇列輪詢間隔（RunQueueConsumer.startMssqlPolling）。
       RUN_QUEUE_POLL_INTERVAL_MS: ${RUN_QUEUE_POLL_INTERVAL_MS:-2000}
-      # Bug A 修復（AD-E07-28）：PG 一律走 v2 SQL 下推（gate = DB_TYPE='postgres'）→ 真實計分。
-      #   ASSIGNMENT_PIPELINE_V2 對 PG 已無意義（僅非 PG in-memory 路徑用於選 v1/v2），故此處不設。
     volumes:
       - ./apps/api/src:/app/src
       - ./apps/api/test:/app/test
-    depends_on:
-      postgres:
-        condition: service_healthy
     # 刻意無 ports：worker 不對外提供 HTTP（AC-8 / TS-F098-WORKER-001）
 
   web:
@@ -112,8 +92,8 @@ services:
   #   docker exec cdmp-api npm run seed            # 只重建測試帳號
   #   docker exec cdmp-api npm run seed-datasource # 只補 datasource 空殼
   #   docker exec cdmp-api npm run data-seed       # 只 reconcile 計分卡 / pipeline / 擷取任務
-  # 正式部署（fresh DB）流程：
-  #   1) docker compose up -d postgres            # 等 healthy
+  # 正式部署（fresh MSSQL）流程（先於 .env 設好 DB_HOST/DB_USERNAME/DB_PASSWORD/DB_NAME 指向企業 MSSQL）：
+  #   1) 確認外部 MSSQL 可連線（本 compose 不含 DB 容器）
   #   2) NODE_ENV=production docker compose --profile bootstrap up bootstrap --build --abort-on-container-exit
   #   3) NODE_ENV=production docker compose up -d # 起 api/worker/web（synchronize 已關，schema 來自 migration）
   # datasource 一律建空殼（密碼留空），部署後於 UI「資料來源」逐一補密碼並測試連線。
@@ -123,12 +103,14 @@ services:
       target: dev
     container_name: cdmp-bootstrap
     environment:
-      DB_TYPE: postgres
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USERNAME: cdmp
-      DB_PASSWORD: cdmp_secret
-      DB_NAME: cdmp_dev
+      DB_TYPE: ${DB_TYPE:-mssql}
+      DB_HOST: ${DB_HOST:-}
+      DB_PORT: ${DB_PORT:-1433}
+      DB_USERNAME: ${DB_USERNAME:-}
+      DB_PASSWORD: ${DB_PASSWORD:-}
+      DB_NAME: ${DB_NAME:-CDMP}
+      DB_MSSQL_ENCRYPT: ${DB_MSSQL_ENCRYPT:-true}
+      DB_MSSQL_TRUST_CERT: ${DB_MSSQL_TRUST_CERT:-true}
       # 必須與 api/worker 共用同一把（datasource 密碼加密）
       AES_ENCRYPTION_KEY: ${AES_ENCRYPTION_KEY:-2cb10a653df8e0049caaf35dbc02aa80a18a56e8d7b2383ab6aa6a069b3192f2}
       # 選填：指定 etl_pipelines/datasource created_by 的 admin email（預設用 seed admin）
@@ -136,11 +118,5 @@ services:
     command: npm run bootstrap
     volumes:
       - ./apps/api/src:/app/src
-    depends_on:
-      postgres:
-        condition: service_healthy
     profiles:
       - bootstrap
-
-volumes:
-  pgdata:

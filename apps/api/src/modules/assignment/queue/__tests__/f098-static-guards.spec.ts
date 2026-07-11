@@ -84,10 +84,8 @@ describe('F098 靜態 / 回歸 guard', () => {
     expect(/\n\s*ports:/.test(workerBlock)).toBe(false);
     // 含 feature flag（worker 才是真正執行 pipeline 者）
     expect(/ENABLE_E07_REFACTOR_PHASE3/.test(workerBlock)).toBe(true);
-    // depends_on postgres healthy
-    expect(/depends_on:[\s\S]*postgres:[\s\S]*service_healthy/.test(workerBlock)).toBe(
-      true,
-    );
+    // MSSQL 全面遷移：DB 為外部 MSSQL，worker 不再 depends_on 本機 postgres 容器（compose 已無 DB 容器）
+    expect(/depends_on:[\s\S]*postgres/.test(workerBlock)).toBe(false);
   });
 
   it('TS-F098-WORKER-004：AssignmentModule 註冊 RunQueueProducer（api 程序）', () => {
@@ -104,17 +102,6 @@ describe('F098 靜態 / 回歸 guard', () => {
     );
     expect(/RunQueueConsumer/.test(src)).toBe(true);
     expect(/OrphanReaper/.test(src)).toBe(true);
-  });
-
-  it('TS-F098-PGINT-002（靜態部分）：pg-boss schema migration 檔存在且用 getConstructionPlans', () => {
-    const migDir = path.resolve(API_SRC, 'database/migrations');
-    const files = fs.readdirSync(migDir);
-    const mig = files.find((f) => /1711360000299-CreatePgBossSchema\.ts$/.test(f));
-    expect(mig).toBeTruthy();
-    const src = read(`database/migrations/${mig}`);
-    expect(/getConstructionPlans\(['"]pgboss['"]\)/.test(src)).toBe(true);
-    // SQLite no-op 慣例
-    expect(/DB_TYPE\s*===?\s*['"]sqlite['"]/.test(src)).toBe(true);
   });
 
   it('queue name / payload 為單一匯出常數（防 producer/consumer typo）', () => {

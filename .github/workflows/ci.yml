@@ -5,9 +5,8 @@ name: CI
 #
 # Lane 結構（互相獨立、無 needs → 一個失敗不會取消其他 → 等效 fail-fast: false）：
 #   1. lint-typecheck-unit  無 DB service。tsc 型別 gate + SQLite in-memory 單元（npm test）。
-#   2. pg-specs             postgres:16 service。跑全部 *.pg.spec.ts（+ f098 pg-integration）。
-#   3. mssql-specs          SQL Server 2022 service + init。跑全部 *.mssql.spec.ts。
-#   4. web-unit             apps/web 的 vitest（jsdom）。
+#   2. mssql-specs          SQL Server 2022 service + init。跑全部 *.mssql.spec.ts。
+#   3. web-unit             apps/web 的 vitest（jsdom）。
 #
 # 設計註記：
 #   - vitest skip（describe.skip / ctx.skip）本來就不算 fail；DB 不可達或 Linux mssql 容器
@@ -55,61 +54,13 @@ jobs:
         run: npx tsc --noEmit -p tsconfig.build.json
 
       # npm test = `vitest run`，DB_TYPE=sqlite（test/setup.ts）。
-      # 亦會 collect 到 *.pg.spec.ts / *.mssql.spec.ts，但此 lane 無 DB → 它們 skip（=通過）。
+      # 亦會 collect 到 *.mssql.spec.ts，但此 lane 無 DB → 它們 skip（=通過）。
       - name: Unit tests (SQLite in-memory)
         working-directory: apps/api
         run: npm test
 
   # ---------------------------------------------------------------------------
-  # Lane 2：真 PostgreSQL 整合（*.pg.spec.ts）
-  #   spec 連線讀 PG_BOSS_TEST_*（預設 127.0.0.1:5433 / cdmp / cdmp_secret / cdmp_test），
-  #   對齊 docker-compose.test.yml 的 postgres-test。
-  # ---------------------------------------------------------------------------
-  pg-specs:
-    name: PostgreSQL integration (*.pg.spec.ts)
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: cdmp_test
-          POSTGRES_USER: cdmp
-          POSTGRES_PASSWORD: cdmp_secret
-        # host 5433 → 對齊 spec 預設 PG_BOSS_TEST_PORT=5433
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U cdmp -d cdmp_test"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install (npm workspaces)
-        run: npm ci
-
-      # 序列化（--no-file-parallelism）：memory 教訓 feedback_pg_spec_parallel_timeout
-      # ——PG spec「單跑過、合跑 fail」多為 CPU 競爭下 testTimeout 超時；序列化 + 各 spec 唯一 schema 隔離。
-      # 正選檔案：所有 *.pg.spec.ts + f098-pg-integration.spec.ts（檔名非 .pg.spec 但需真 PG）。
-      - name: PG specs (serialized)
-        working-directory: apps/api
-        env:
-          PG_BOSS_TEST_HOST: 127.0.0.1
-          PG_BOSS_TEST_PORT: "5433"
-          PG_BOSS_TEST_USER: cdmp
-          PG_BOSS_TEST_PASSWORD: cdmp_secret
-          PG_BOSS_TEST_DB: cdmp_test
-        run: npx vitest run --no-file-parallelism "pg.spec" "f098-pg-integration"
-
-  # ---------------------------------------------------------------------------
-  # Lane 3：真 SQL Server 2022 整合（*.mssql.spec.ts）
+  # Lane 2：真 SQL Server 2022 整合（*.mssql.spec.ts）
   #   spec 連線讀 MSSQL_TEST_* → DB_* → 預設 localhost:1433 / cdmp / Cdmp_Dev_2026! / CDMP_TEST
   #   （見 src/database/__tests__/mssql-env-preload.ts）。此處以 DB_* 對應 .env.test.mssql。
   # ---------------------------------------------------------------------------
@@ -204,7 +155,7 @@ jobs:
         run: npx vitest run --no-file-parallelism "mssql.spec"
 
   # ---------------------------------------------------------------------------
-  # Lane 4（輕量）：前端 apps/web 單元測試（vitest + jsdom）。
+  # Lane 3（輕量）：前端 apps/web 單元測試（vitest + jsdom）。
   #   注意：apps/web 的 `tsc -b` build 目前有 pre-existing 型別債，故此 lane 只跑 `npm test`
   #   （vitest 不做型別檢查），不跑 web build。待 web 型別債清理後再考慮加 web typecheck gate。
   # ---------------------------------------------------------------------------
