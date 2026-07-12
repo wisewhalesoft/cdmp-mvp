@@ -1,6 +1,6 @@
 ---
 type: test-design-risks
-last_updated: 2026-07-09
+last_updated: 2026-07-12
 ---
 
 # 風險與缺口
@@ -1371,3 +1371,37 @@ last_updated: 2026-07-09
 - **影響**：若未注意此隱性約束，可能導致 tdd-implementation 誤以為既有測試發現了新缺陷而額外除錯，或反向地為了讓測試通過而被迫採用較不理想的程式碼組織方式。
 - **建議**：`infrastructure/AD-E07-43-P5-followup-display-test.md` §一 GATE-001 已明確要求 inline 組裝為預設方向，並提供「若選擇外部 helper 則同步更新測試斷言方式」之替代路徑，非強制唯一解。
 - **風險等級**：中（已有明確設計因應方案，純屬 tdd-implementation 落地時需留意之既有測試耦合關係，非設計缺陷）
+
+---
+
+## F112 類別型篩選欄位可選值自動建議測試風險與待決問題（AD-E07-47，2026-07-12 新增）
+
+> 完整測試設計見 [features/F112-test.md](features/F112-test.md)（US-178，81 場景：後端 59 + 前端 22）。本節彙整 test-designer 逐行比對 F112 spec v1.0、AD-E07-47 v1.0 與實際原始碼（`director.guard.ts`／`director-or-section-chief.guard.ts`／`options-tab.tsx`）後識別之落差與殘留風險。
+
+### R-F112-01（🔴🔴 高，test-designer 本輪逐行查證原始碼，糾正 spec/AD 敘述性文字）：section_chief 與無角色使用者呼叫新端點之拒絕錯誤碼並非 spec/AD 文字籠統提及的 `AUTH_FORBIDDEN`，而是兩種不同的既有碼
+
+- **問題**：F112 spec AC-17 與 AD-E07-47 皆以敘述性文字提及「403 `AUTH_FORBIDDEN`」，但 test-designer 本輪直接查證 `apps/api/src/common/guards/director.guard.ts:45,60` 與 `director-or-section-chief.guard.ts:43,62` 原始碼，發現：(a) 處長（`businessRole='section_chief'`）通過 class 級 `DirectorOrSectionChiefGuard` 後在 method 級 `DirectorGuard` 被攔截，實際拋出 `E07_REQUIRES_DIRECTOR`；(b) 無任何業務角色的一般使用者在 class 級 `DirectorOrSectionChiefGuard` 即被攔截，實際拋出 `E07_ROLE_NOT_ASSIGNED`——兩者錯誤碼不同、攔截層級也不同，皆非 `AUTH_FORBIDDEN`（該碼於本專案 E07 controller 家族現況已查無使用）。
+- **影響**：若 tdd-implementation 或前端消費邏輯依 spec/AD 文字誤植斷言 `AUTH_FORBIDDEN`，測試會與實際 guard 行為不符（測試永遠紅燈或誤用寬鬆斷言掩蓋錯誤），前端錯誤文案分流邏輯（依 `error` 代碼字串顯示對應訊息）亦可能對兩種拒絕情境顯示相同（甚至錯誤）的提示文字，無法區分「你沒有業務角色，請聯絡 admin」與「此操作需部長權限」兩種語意完全不同的使用者引導。
+- **建議**：`features/F112-test.md` GUARD 群組（GUARD-003/004/008/009）已明確斷言精確錯誤碼字串（非僅斷言 HTTP 403），並已在文件「Glossary — spec/AD 落差鎖定」表中鎖定此差異。建議 spec-writer 於下一輪 F112 spec 維護時同步修正 AC-17 之敘述文字為精確碼名。
+- **風險等級**：高（若未鎖定，下游測試/前端實作極易依 spec 字面誤植錯誤碼；已有明確查證結果與測試斷言方式因應，非開放性問題）
+
+### R-F112-02（中，AD 已裁定但下游文件尚未同步）：`error-handling.md` 與 F112 spec 原文尚未同步 AD-E07-47 之 500/504 與 `after_value` 裁定
+
+- **問題**：AD-E07-47 §3.6 已將 `DISTINCT_VALUES_QUERY_TIMEOUT` 由 spec 建議之 504 改判為 500，並在 §3.8 澄清稽核內容應寫入既有 `after_value` 欄位（非 spec/BR-13 文字所寫之 `details`）；§11 已將此列為 spec-writer 待辦，但截至本測試設計完成時（2026-07-12）尚未同步。
+- **影響**：若 tdd-implementation 僅參照 F112 spec 原文字面而非 AD-E07-47 或本測試設計文件，可能誤植 HTTP 504（`GatewayTimeoutException`，本專案全域無此使用前例）或誤在 `AssignmentAuditLog` entity 新增不必要的 `details` 欄位。
+- **建議**：`features/F112-test.md` 已在「Glossary — spec/AD 落差鎖定」表明確採用 AD 裁定值，TIMEOUT-002／AUDIT-003 兩案例為對應之 regression guard。建議 tdd-implementation 落地時第一步即依 AD §9 檔案異動清單新增 `error-codes.ts` 4 個常數（`DISTINCT_VALUES_QUERY_TIMEOUT` 明確標註 500），作為後續測試前提；spec-writer 排入下一輪 F112 spec 維護時一併更正 §5.1/§9/§12.3。
+- **風險等級**：中（已有明確裁定值與測試斷言因應，純屬文件同步落後，非設計層級缺口）
+
+### R-F112-03（中，test-designer 本輪查證既有程式碼慣例後發現之實作陷阱）：Entry 2 新按鈕「處長不渲染」要求與既有相鄰按鈕「disabled 但可見」模式不一致
+
+- **問題**：test-designer 查證 `apps/web/src/pages/assignment/_components/options-tab.tsx:87,469` 既有「新增可選值」按鈕採 `disabled={!canWrite}`（DOM 中該按鈕元素對處長仍然存在，僅呈現 disabled 狀態）。但 F112 spec §7.3 對新增之「從實際資料帶入可選值」按鈕明文要求「處長**不渲染**」（DOM 中應完全不存在該元素）。兩者為同一元件檔案內、視覺上緊鄰的兩個按鈕，卻要求不同的權限收斂模式。
+- **影響**：tdd-implementation 若依鄰近程式碼慣例直接複製既有 `disabled` pattern 實作新按鈕，會通過「肉眼檢查处長看不到按鈕文字被 disabled 灰階」的粗略驗收，但無法通過以 `queryByTestId(...) === null` 為斷言方式的嚴格測試，且與 spec 文字要求的語意（完全不暴露此操作入口給處長）不符。
+- **建議**：`features/F112-test.md` FE2-003 已明確標註斷言方式為「元素不存在於 DOM」而非「元素 disabled」，並在「Glossary」表與本文件皆記錄此落差。建議 tdd-implementation 實作時對這兩個按鈕採不同的條件渲染邏輯（既有按鈕維持 `disabled` 不變、新按鈕改用條件式 `{canWrite && <button .../>}` 或等價寫法），不可統一複製既有 pattern。
+- **風險等級**：中（已有明確測試斷言方式因應，純屬容易被忽略的鄰近程式碼慣例陷阱，非設計缺陷）
+
+### R-F112-04（低，AD 已明確標註為已知限制，非本次新增風險）：`DISTINCT_VALUES_TIMEOUT_MS=15000` 未經真實 MSSQL `customer_core` 大表實測，且 `Promise.race` 不真正取消 DB 端查詢
+
+- **問題**：AD-E07-47 §10.2 明文此逾時預設值延續 spec 原始（已過時）15s 假設，未針對 `customer_core.occupation_desc`（55 種 distinct 值散佈於約 360 萬列、無索引）做過真實 MSSQL 計時驗證；§10.1 另指出 `Promise.race` 僅讓 HTTP 回應提前逾時，並不會取消資料庫端已送出之查詢（orphaned query 會繼續執行至完成或撞上全域 1 小時 driver timeout）。
+- **影響**：若真實 `customer_core` 大型類別欄位之 DISTINCT 查詢在生產環境經常逼近或超過 15s 預算，使用者會頻繁看到逾時錯誤（即使資料本身合法）；orphaned query 若長期累積可能對 DB 連線池造成壓力（AD 已列為未來效能監控項）。
+- **建議**：`features/F112-test.md` 「殘留風險」§A/§E 與總結之「刻意排除範圍」已明確記錄此為單元測試層級無法驗證之範疇（需要真實 DB 連線與查詢監控），並建議 tdd-implementation 落地時於 dev CDMP 對 `customer_core.occupation_desc` 手動計時一次（AD §11 待裁決項），確認 15s 預算是否寬裕；若經常貼近逾時邊界，後續應為該欄位新增單欄索引或調整 `POOLDATA_DISTINCT_VALUES_TIMEOUT_MS` 環境變數。
+- **風險等級**：低（v1 不索引不阻擋上線，AD 已預留 env 覆寫與未來索引路徑；非測試設計缺口，屬產品上線後之營運觀測項）
