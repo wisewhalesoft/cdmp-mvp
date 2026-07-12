@@ -799,6 +799,7 @@
 
       conditions = [];
       condIdSeq = 1;
+      openValueDropdownId = null;  // 切換名單 / 重新載入時關閉任何殘留開啟的可選值清單
 
       if (isLegacy) {
         // 舊名單：read-only 模式
@@ -889,7 +890,9 @@
       if (!e.target.closest('#addFieldDropdown') && !e.target.closest('button[onclick="toggleAddFieldDropdown()"]')) {
         document.getElementById('addFieldDropdown').classList.add('hidden');
       }
+      // 同步關閉 valDrop（並清除開闔狀態，避免下次重繪又被開啟）
       if (!e.target.closest('[id^="valDrop-"]') && !e.target.closest('button[onclick^="toggleValueDropdown"]')) {
+        openValueDropdownId = null;
         document.querySelectorAll('[id^="valDrop-"]').forEach(d => d.classList.add('hidden'));
       }
     });
@@ -921,10 +924,43 @@
     }
     function setNumeric(id, key, v) { const c = conditions.find(x => x.id === id); if (c) { c[key] = v === '' ? '' : Number(v); renderConditions(); } }
     function setDate(id, key, v) { const c = conditions.find(x => x.id === id); if (c) { c[key] = v; renderConditions(); } }
+    // 值清單開闔狀態（以 state 保留，跨 renderConditions 重繪不關閉）——
+    // 讓多選 / 全選 / 清除 期間清單持續開啟，並讓「完成」成為明確的關閉入口。
+    let openValueDropdownId = null;
+    function syncValueDropdowns() {
+      document.querySelectorAll('[id^="valDrop-"]').forEach(d => {
+        const did = d.id.slice('valDrop-'.length);
+        d.classList.toggle('hidden', String(openValueDropdownId) !== did);
+      });
+    }
     function toggleValueDropdown(id) {
-      const all = document.querySelectorAll('[id^="valDrop-"]');
-      all.forEach(d => { if (d.id !== `valDrop-${id}`) d.classList.add('hidden'); });
-      document.getElementById(`valDrop-${id}`).classList.toggle('hidden');
+      openValueDropdownId = (openValueDropdownId === id) ? null : id;
+      syncValueDropdowns();
+    }
+    // 「完成」：明確關閉此欄位的值清單（不改動已選值）
+    function closeValueDropdown(id) {
+      if (openValueDropdownId === id) openValueDropdownId = null;
+      syncValueDropdowns();
+    }
+    // 「全選」＝僅套用「啟用」可選值。停用值月名單分派時不會匹配，故不納入批次選取；
+    // 但聯集保留使用者先前已選的停用值（編輯草稿時載入的既有已停用值），避免全選靜默移除既有選擇。
+    function selectAllCatValues(id) {
+      const c = conditions.find(x => x.id === id);
+      if (!c) return;
+      const opts = FIELD_VALUES[c.columnName] || [];
+      const activeVals = opts.filter(o => o.active).map(o => o.v);
+      const keepInactive = (c.values || []).filter(v => { const o = opts.find(x => x.v === v); return o && !o.active; });
+      c.values = [...new Set([...activeVals, ...keepInactive])];
+      openValueDropdownId = id;   // 保持清單開啟以便檢視結果
+      renderConditions();
+    }
+    // 「清除」＝移除此欄位所有已選值（含停用值）
+    function clearCatValues(id) {
+      const c = conditions.find(x => x.id === id);
+      if (!c) return;
+      c.values = [];
+      openValueDropdownId = id;
+      renderConditions();
     }
 
     // 欄位型別 / 欄位名稱中文顯示（不對使用者裸露 categorical / numeric / date 與欄位代碼）
@@ -1007,13 +1043,16 @@
           const dropdownOpts = opts.map(o => {
             const selected = selectedVals.includes(o.v);
             const inactiveTag = !o.active ? ' <span class="text-amber-600">(已停用)</span>' : '';
+            const specialTag = o.special ? ' <span class="text-amber-600 font-semibold">SPECIAL</span>' : '';
             const tip = c.columnName === 'case_status' && CASE_STATUS_TOOLTIPS[o.v] ? ` title="${CASE_STATUS_TOOLTIPS[o.v]}"` : '';
             return `<label class="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer text-sm ${!o.active ? 'opacity-70' : ''}"${tip}>
               <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleCatValue(${c.id}, '${o.v}')" class="rounded text-primary">
               ${o.v === o.l ? '' : `<span class="font-mono text-xs text-gray-500 w-8 shrink-0">${o.v}</span>`}
-              <span class="text-gray-700">${o.l}${inactiveTag}</span>
+              <span class="text-gray-700">${o.l}${inactiveTag}${specialTag}</span>
             </label>`;
           }).join('');
+          const activeCount = opts.filter(o => o.active).length;
+          const selectedCount = selectedVals.length;
           valueUI = `
             <span class="text-xs text-gray-500 font-mono">IN</span>
             <div class="flex-1 flex items-center gap-2 flex-wrap min-h-[36px] px-2 py-1 border border-border rounded-md bg-white">
@@ -1021,9 +1060,35 @@
               <div class="relative ml-auto">
                 <button type="button" onclick="toggleValueDropdown(${c.id})" class="text-xs px-2 py-1 border border-border rounded-md text-primary hover:bg-blue-50 inline-flex items-center gap-1">
                   <i data-lucide="plus" class="w-3 h-3"></i>選擇值
+                  <span class="text-gray-400">(${activeCount})</span>
                 </button>
-                <div id="valDrop-${c.id}" class="hidden absolute right-0 top-full mt-1 w-72 bg-white border border-border rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
-                  ${dropdownOpts}
+                <div id="valDrop-${c.id}" data-testid="value-dropdown-${f.columnName}" class="${openValueDropdownId === c.id ? '' : 'hidden'} absolute right-0 top-full mt-1 w-72 bg-white border border-border rounded-md shadow-lg z-10 max-h-64 overflow-y-auto">
+                  <!-- 批次操作 header：全選（僅啟用值）/ 清除，sticky 於清單頂部 -->
+                  <div class="sticky top-0 bg-white border-b border-border px-2.5 py-1.5 flex items-center justify-between gap-2 z-10">
+                    <span class="text-[10px] text-gray-400 leading-tight">全選僅含啟用值</span>
+                    <div class="flex items-center gap-0.5 shrink-0">
+                      <button type="button" onclick="selectAllCatValues(${c.id})" ${activeCount === 0 ? 'disabled' : ''}
+                        data-testid="value-select-all-${f.columnName}"
+                        class="text-[11px] px-1.5 py-0.5 rounded text-primary font-medium hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed">全選</button>
+                      <span class="text-gray-200 text-[10px]">|</span>
+                      <button type="button" onclick="clearCatValues(${c.id})" ${selectedCount === 0 ? 'disabled' : ''}
+                        data-testid="value-clear-${f.columnName}"
+                        class="text-[11px] px-1.5 py-0.5 rounded text-gray-500 font-medium hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed">清除</button>
+                    </div>
+                  </div>
+                  <!-- 可選值清單（中段可捲動） -->
+                  <div class="py-0.5">
+                    ${dropdownOpts || '<p class="px-3 py-4 text-center text-xs text-gray-400">此欄位尚無可選值</p>'}
+                  </div>
+                  <!-- footer：已選計數 + 完成（明確關閉清單），sticky 於清單底部 -->
+                  <div class="sticky bottom-0 bg-white border-t border-border px-2.5 py-1.5 flex items-center justify-between gap-2 z-10">
+                    <span class="text-[10px] text-gray-400">已選 <span class="font-semibold text-gray-600" data-testid="value-selected-count-${f.columnName}">${selectedCount}</span> 項</span>
+                    <button type="button" onclick="closeValueDropdown(${c.id})"
+                      data-testid="value-done-${f.columnName}"
+                      class="text-xs px-3 py-1 bg-primary text-white rounded-md hover:bg-blue-700 font-medium inline-flex items-center gap-1">
+                      <i data-lucide="check" class="w-3 h-3"></i>完成
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>`;

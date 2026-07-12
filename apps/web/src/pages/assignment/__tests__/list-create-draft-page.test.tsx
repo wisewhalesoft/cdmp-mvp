@@ -1080,6 +1080,181 @@ describe('ListCreateDraftPage — 預估命中筆數（US-176 抽樣估算）', 
   });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 值選擇器批次操作（全選 / 清除 / 完成）— 對齊 prototype 27a L895-921
+//   全選＝僅啟用值 ∪ 已選停用值（非破壞性聯集，不掉既有停用選擇）
+//   清除＝清空（含停用），面板保持開啟
+//   完成＝關閉面板、不改動已選值
+//   多選＝面板跨多次切換持續開啟
+// ═══════════════════════════════════════════════════════════════════════════
+describe('ListCreateDraftPage — 值選擇器批次操作（全選 / 清除 / 完成）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetUser.mockReturnValue({
+      id: 'd1',
+      name: 'Director',
+      email: 'manager@cdmp.test',
+      role: 'user',
+      isSalesManager: true,
+      businessRole: 'director',
+    });
+    mockedGetBusinessRole.mockReturnValue('director');
+    mockedGetEffectiveIdentity.mockReturnValue('director');
+    setupDefaultMocks();
+  });
+
+  afterEach(() => cleanup());
+
+  // 新增 categorical 條件（idx 0）並開啟值清單，等待指定 checkbox 出現
+  async function addCatAndOpen(addFieldTestId: string, waitCheckbox: string) {
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() =>
+      expect(screen.getByTestId(addFieldTestId)).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId(addFieldTestId));
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-open-values-0')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId(waitCheckbox)).toBeInTheDocument(),
+    );
+  }
+
+  it('全選：僅套用啟用值並聯集保留已選的停用值（不移除既有停用選擇）', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    // prod_kind：'01' 停用、'02'/'03' 啟用
+    await addCatAndOpen('add-field-prod_kind', 'value-checkbox-0-01');
+    // 先勾選停用值 '01'
+    fireEvent.click(screen.getByTestId('value-checkbox-0-01'));
+    expect(screen.getByTestId('value-checkbox-0-01')).toBeChecked();
+
+    // 點全選 → 納入啟用 '02'/'03'，並保留已選停用 '01'
+    fireEvent.click(screen.getByTestId('value-select-all-prod_kind'));
+    await waitFor(() =>
+      expect(screen.getByTestId('value-checkbox-0-02')).toBeChecked(),
+    );
+    expect(screen.getByTestId('value-checkbox-0-03')).toBeChecked();
+    expect(screen.getByTestId('value-checkbox-0-01')).toBeChecked(); // 停用值未被移除
+    expect(screen.getByTestId('value-selected-count-prod_kind')).toHaveTextContent(
+      '3',
+    );
+  });
+
+  it('清除：清空所有已選值（含停用），面板保持開啟', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    await addCatAndOpen('add-field-caseyear', 'value-checkbox-0-0');
+    fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+    fireEvent.click(screen.getByTestId('value-checkbox-0-1'));
+    expect(
+      screen.getByTestId('value-selected-count-caseyear'),
+    ).toHaveTextContent('2');
+
+    fireEvent.click(screen.getByTestId('value-clear-caseyear'));
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('value-selected-count-caseyear'),
+      ).toHaveTextContent('0'),
+    );
+    expect(screen.getByTestId('value-checkbox-0-0')).not.toBeChecked();
+    expect(screen.getByTestId('value-checkbox-0-1')).not.toBeChecked();
+    // 面板保持開啟
+    expect(screen.getByTestId('value-dropdown-caseyear')).toBeInTheDocument();
+  });
+
+  it('完成：關閉面板且不改動已選值', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    await addCatAndOpen('add-field-caseyear', 'value-checkbox-0-0');
+    fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+    expect(screen.getByTestId('value-dropdown-caseyear')).toBeInTheDocument();
+
+    // 完成 → 關閉面板
+    fireEvent.click(screen.getByTestId('value-done-caseyear'));
+    await waitFor(() =>
+      expect(screen.queryByTestId('value-dropdown-caseyear')).toBeNull(),
+    );
+    // 值未被改動：chip 仍在
+    expect(screen.getByTestId('value-chip-0-0')).toBeInTheDocument();
+    // 重新開啟後 checkbox 仍勾選（證明未清空）
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('value-checkbox-0-0')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('value-checkbox-0-0')).toBeChecked();
+  });
+
+  it('多選：連續切換多個值面板持續開啟（不因重繪關閉）', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    await addCatAndOpen('add-field-caseyear', 'value-checkbox-0-0');
+    fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+    expect(screen.getByTestId('value-dropdown-caseyear')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('value-checkbox-0-1'));
+    expect(screen.getByTestId('value-dropdown-caseyear')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('value-checkbox-0-2'));
+    expect(screen.getByTestId('value-dropdown-caseyear')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('value-selected-count-caseyear'),
+    ).toHaveTextContent('3');
+  });
+
+  it('全選在 0 個啟用值時 disabled', async () => {
+    // 覆寫 prod_kind options 為全部停用 → activeCount === 0
+    mockedListOptions.mockImplementation(async (col: string) => {
+      if (col === 'prod_kind')
+        return {
+          options: [
+            { columnName: 'prod_kind', optionValue: '01', optionLabel: '停用A', isActive: false, createdAt: '', updatedAt: '' },
+            { columnName: 'prod_kind', optionValue: '02', optionLabel: '停用B', isActive: false, createdAt: '', updatedAt: '' },
+          ],
+        };
+      return { options: [] };
+    });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    await addCatAndOpen('add-field-prod_kind', 'value-checkbox-0-01');
+    expect(screen.getByTestId('value-select-all-prod_kind')).toBeDisabled();
+  });
+
+  it('清除在 0 個已選時 disabled；有選取後 enabled', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    await addCatAndOpen('add-field-caseyear', 'value-checkbox-0-0');
+    // 初始未選 → 清除 disabled、全選 enabled（8 啟用值）
+    expect(screen.getByTestId('value-clear-caseyear')).toBeDisabled();
+    expect(screen.getByTestId('value-select-all-caseyear')).not.toBeDisabled();
+    // 勾一個 → 清除 enabled
+    fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+    expect(screen.getByTestId('value-clear-caseyear')).not.toBeDisabled();
+  });
+
+  it('系統固定 best_case 鎖定列不渲染值選擇器 / 全選 / 清除 / 完成', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('condition-row-best_case')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('value-dropdown-best_case')).toBeNull();
+    expect(screen.queryByTestId('value-select-all-best_case')).toBeNull();
+    expect(screen.queryByTestId('value-clear-best_case')).toBeNull();
+    expect(screen.queryByTestId('value-done-best_case')).toBeNull();
+  });
+});
+
 // TS-F050-W02：迴歸守門 — 靜態掃描確認假公式（12500 遞減）已移除
 describe('ListCreateDraftPage — 假公式移除迴歸守門（TS-F050-W02）', () => {
   it('list-create-draft-page.tsx 不得殘留 12500 / 0.85 假公式', async () => {

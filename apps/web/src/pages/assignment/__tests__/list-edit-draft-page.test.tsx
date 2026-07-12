@@ -1,6 +1,6 @@
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { ListEditDraftPage } from '../list-edit-draft-page';
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
@@ -507,5 +507,268 @@ describe('ListEditDraftPage v2.1 (Phase 5d 波 9)', () => {
       });
       expect(mockedUpdateList).not.toHaveBeenCalled();
     });
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 值選擇器批次操作（全選 / 清除 / 完成）— 由建立頁移植至編輯頁（各自獨立 picker）
+//   對齊 prototype 27b（等同 27a）+ list-create-draft-page 之 CategoricalValuesPicker
+//   全選＝僅啟用值 ∪ 已選停用值（非破壞性聯集）；編輯頁關鍵：載入的 condition_payload
+//     可能含「載入後才被停用」之值，全選不可靜默移除既有已選停用值。
+//   清除＝清空（含停用），面板保持開啟
+//   完成＝關閉面板、不改動已選值
+//   多選＝面板跨多次切換持續開啟
+//   生命週期重置＝切換載入名單（listNo 變更）時重置開啟中的面板 id
+// ═══════════════════════════════════════════════════════════════════════════
+describe('ListEditDraftPage — 值選擇器批次操作（全選 / 清除 / 完成）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetUser.mockReturnValue({
+      id: 'd1',
+      name: 'Director',
+      email: 'manager@cdmp.test',
+      role: 'user',
+      isSalesManager: true,
+      businessRole: 'director',
+    });
+    mockedGetBusinessRole.mockReturnValue('director');
+    mockedGetEffectiveIdentity.mockReturnValue('director');
+    setupDefaultMocks();
+  });
+
+  afterEach(() => cleanup());
+
+  // 載入含單一 prod_kind categorical 條件（values 由參數帶入，模擬 condition_payload 預填）
+  // 並開啟該欄位值清單，等待 checkbox 出現。
+  async function loadAndOpenProdKind(values: string[]) {
+    const l: AssignmentListItem = {
+      ...scenario1List,
+      listNo: 'OB202605001',
+      conditionPayload: {
+        conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values }],
+        logic: 'AND',
+      },
+    };
+    mockedListLists.mockResolvedValue(makeResp([l]));
+    renderPage('OB202605001');
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-open-values-0')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('value-checkbox-0-01')).toBeInTheDocument(),
+    );
+  }
+
+  it('全選（編輯關鍵）：載入自 condition_payload 的已選停用值，全選後被聯集保留（不靜默移除）', async () => {
+    // prod_kind '01' 停用、'02'/'03' 啟用；載入時 '01' 已選（模擬載入後才停用之值）
+    await loadAndOpenProdKind(['01']);
+    expect(screen.getByTestId('value-checkbox-0-01')).toBeChecked();
+
+    // 全選 → 納入啟用 '02'/'03'，並保留已載入的停用 '01'
+    fireEvent.click(screen.getByTestId('value-select-all-prod_kind'));
+    await waitFor(() =>
+      expect(screen.getByTestId('value-checkbox-0-02')).toBeChecked(),
+    );
+    expect(screen.getByTestId('value-checkbox-0-03')).toBeChecked();
+    expect(screen.getByTestId('value-checkbox-0-01')).toBeChecked(); // 停用值未被移除
+    expect(screen.getByTestId('value-selected-count-prod_kind')).toHaveTextContent(
+      '3',
+    );
+  });
+
+  it('清除：清空所有已選值（含停用），面板保持開啟', async () => {
+    await loadAndOpenProdKind(['02', '03']);
+    expect(screen.getByTestId('value-selected-count-prod_kind')).toHaveTextContent(
+      '2',
+    );
+
+    fireEvent.click(screen.getByTestId('value-clear-prod_kind'));
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('value-selected-count-prod_kind'),
+      ).toHaveTextContent('0'),
+    );
+    expect(screen.getByTestId('value-checkbox-0-02')).not.toBeChecked();
+    expect(screen.getByTestId('value-checkbox-0-03')).not.toBeChecked();
+    // 面板保持開啟
+    expect(screen.getByTestId('value-dropdown-prod_kind')).toBeInTheDocument();
+  });
+
+  it('完成：關閉面板且不改動已選值', async () => {
+    await loadAndOpenProdKind(['02']);
+    expect(screen.getByTestId('value-dropdown-prod_kind')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('value-done-prod_kind'));
+    await waitFor(() =>
+      expect(screen.queryByTestId('value-dropdown-prod_kind')).toBeNull(),
+    );
+    // 值未被改動：chip 仍在
+    expect(screen.getByTestId('value-chip-0-02')).toBeInTheDocument();
+    // 重新開啟後 checkbox 仍勾選（證明未清空）
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('value-checkbox-0-02')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('value-checkbox-0-02')).toBeChecked();
+  });
+
+  it('多選：連續切換多個值面板持續開啟（不因重繪關閉）', async () => {
+    await loadAndOpenProdKind([]);
+    fireEvent.click(screen.getByTestId('value-checkbox-0-01'));
+    expect(screen.getByTestId('value-dropdown-prod_kind')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('value-checkbox-0-02'));
+    expect(screen.getByTestId('value-dropdown-prod_kind')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('value-checkbox-0-03'));
+    expect(screen.getByTestId('value-dropdown-prod_kind')).toBeInTheDocument();
+    expect(screen.getByTestId('value-selected-count-prod_kind')).toHaveTextContent(
+      '3',
+    );
+  });
+
+  it('全選在 0 個啟用值時 disabled', async () => {
+    // 覆寫 prod_kind options 為全部停用 → activeCount === 0
+    mockedListOptions.mockImplementation(async (col: string) => {
+      if (col === 'prod_kind')
+        return {
+          options: [
+            { columnName: 'prod_kind', optionValue: '01', optionLabel: '停用A', isActive: false, createdAt: '', updatedAt: '' },
+            { columnName: 'prod_kind', optionValue: '02', optionLabel: '停用B', isActive: false, createdAt: '', updatedAt: '' },
+          ],
+        };
+      return { options: [] };
+    });
+    const l: AssignmentListItem = {
+      ...scenario1List,
+      listNo: 'OB202605001',
+      conditionPayload: {
+        conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] }],
+        logic: 'AND',
+      },
+    };
+    mockedListLists.mockResolvedValue(makeResp([l]));
+    renderPage('OB202605001');
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-open-values-0')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('value-checkbox-0-01')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('value-select-all-prod_kind')).toBeDisabled();
+  });
+
+  it('清除在 0 個已選時 disabled；有選取後 enabled', async () => {
+    await loadAndOpenProdKind([]);
+    // 初始未選 → 清除 disabled、全選 enabled（2 啟用值）
+    expect(screen.getByTestId('value-clear-prod_kind')).toBeDisabled();
+    expect(screen.getByTestId('value-select-all-prod_kind')).not.toBeDisabled();
+    // 勾一個 → 清除 enabled
+    fireEvent.click(screen.getByTestId('value-checkbox-0-02'));
+    expect(screen.getByTestId('value-clear-prod_kind')).not.toBeDisabled();
+  });
+
+  it('系統固定 best_case 鎖定列不渲染值選擇器 / 全選 / 清除 / 完成', async () => {
+    const listWithBestCase: AssignmentListItem = {
+      ...scenario1List,
+      listNo: 'OB202605001',
+      conditionPayload: {
+        conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] },
+          { columnName: 'best_case', fieldType: 'categorical', values: ['Y'] },
+        ],
+        logic: 'AND',
+      },
+    };
+    mockedListLists.mockResolvedValue(makeResp([listWithBestCase]));
+    renderPage('OB202605001');
+    await waitFor(() =>
+      expect(screen.getByTestId('condition-row-best_case')).toBeInTheDocument(),
+    );
+    // best_case 鎖定列無任何 picker 批次操作
+    expect(screen.queryByTestId('value-dropdown-best_case')).toBeNull();
+    expect(screen.queryByTestId('value-select-all-best_case')).toBeNull();
+    expect(screen.queryByTestId('value-clear-best_case')).toBeNull();
+    expect(screen.queryByTestId('value-done-best_case')).toBeNull();
+  });
+
+  it('LEGACY 唯讀名單不渲染任何值選擇器批次操作', async () => {
+    mockedListLists.mockResolvedValue(makeResp([scenario3List]));
+    renderPage('OB202604099');
+    await waitFor(() =>
+      expect(screen.getByTestId('legacy-condition-banner')).toBeInTheDocument(),
+    );
+    // LEGACY 唯讀摘要存在，但無互動 picker
+    expect(screen.getByTestId('readonly-condition-summary')).toBeInTheDocument();
+    expect(screen.queryByTestId('value-select-all-prod_kind')).toBeNull();
+    expect(screen.queryByTestId('value-done-prod_kind')).toBeNull();
+    expect(screen.queryByTestId('btn-open-values-0')).toBeNull();
+  });
+
+  it('生命週期重置：開啟面板後切換載入名單（listNo 變更）→ 面板不殘留開啟', async () => {
+    const listA: AssignmentListItem = {
+      ...scenario1List,
+      listNo: 'OB202605001',
+      listNm: 'A 名單',
+      conditionPayload: {
+        conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] }],
+        logic: 'AND',
+      },
+    };
+    const listB: AssignmentListItem = {
+      ...scenario1List,
+      listNo: 'OB202605002',
+      listNm: 'B 名單',
+      conditionPayload: {
+        conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['03'] }],
+        logic: 'AND',
+      },
+    };
+    // 兩者同月（202605）→ 同一 listLists 查詢回傳，load effect 以 listNo 過濾
+    mockedListLists.mockResolvedValue(makeResp([listA, listB]));
+
+    function NavToOther() {
+      const navigate = useNavigate();
+      return (
+        <button
+          type="button"
+          data-testid="nav-other"
+          onClick={() => navigate('/assignment/list-definitions/OB202605002/edit')}
+        >
+          go B
+        </button>
+      );
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/assignment/list-definitions/OB202605001/edit']}>
+        <ToastProvider>
+          <NavToOther />
+          <Routes>
+            <Route
+              path="/assignment/list-definitions/:listNo/edit"
+              element={<ListEditDraftPage />}
+            />
+          </Routes>
+        </ToastProvider>
+      </MemoryRouter>,
+    );
+
+    // 名單 A 載入並開啟面板
+    await waitFor(() => expect(screen.getByTestId('input-listNm')).toHaveValue('A 名單'));
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-open-values-0')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('value-dropdown-prod_kind')).toBeInTheDocument(),
+    );
+
+    // 切換至名單 B（listNo 變更）
+    fireEvent.click(screen.getByTestId('nav-other'));
+    await waitFor(() => expect(screen.getByTestId('input-listNm')).toHaveValue('B 名單'));
+
+    // 面板不得殘留開啟（若未重置 valueDropdownOpen，B 的 condition id 會與舊 id 相同而誤開）
+    expect(screen.queryByTestId('value-dropdown-prod_kind')).toBeNull();
   });
 });

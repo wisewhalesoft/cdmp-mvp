@@ -6,6 +6,7 @@ import {
   Plus,
   X,
   Copy,
+  Check,
   CheckCircle2,
   ChevronRight,
   ChevronDown,
@@ -314,6 +315,36 @@ export function ListCreateDraftPage() {
           : [...current, val];
         return { ...c, values: next };
       }),
+    );
+  }, []);
+
+  // 「全選」＝僅套用「啟用」可選值，並「非破壞性聯集」保留使用者先前已選的停用值
+  //   （例如自上月複製 / 編輯帶入），避免全選靜默移除既有停用選擇。
+  //   對齊 prototype 27a L773-784（selectAllCatValues）。
+  const selectAllCatValues = useCallback(
+    (id: number, opts: PooldataOption[]) => {
+      setConditions((prev) =>
+        prev.map((c) => {
+          if (c.id !== id) return c;
+          const current = c.values ?? [];
+          const activeVals = opts
+            .filter((o) => o.isActive)
+            .map((o) => o.optionValue);
+          const keepInactive = current.filter((v) => {
+            const o = opts.find((x) => x.optionValue === v);
+            return o ? !o.isActive : false;
+          });
+          return { ...c, values: [...new Set([...activeVals, ...keepInactive])] };
+        }),
+      );
+    },
+    [],
+  );
+
+  // 「清除」＝移除此欄位所有已選值（含停用值）。對齊 prototype 27a L786-792。
+  const clearCatValues = useCallback((id: number) => {
+    setConditions((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, values: [] } : c)),
     );
   }, []);
 
@@ -1075,6 +1106,14 @@ export function ListCreateDraftPage() {
                                 setValueDropdownOpen((v) => (v === c.id ? null : c.id))
                               }
                               onToggleValue={(v) => toggleCatValue(c.id, v)}
+                              onSelectAll={() =>
+                                selectAllCatValues(
+                                  c.id,
+                                  optionsByColumn[c.columnName] ?? [],
+                                )
+                              }
+                              onClear={() => clearCatValues(c.id)}
+                              onDone={() => setValueDropdownOpen(null)}
                             />
                           )}
                           {f.fieldType === 'numeric' && (
@@ -1390,6 +1429,12 @@ interface CategoricalValuesPickerProps {
   dropdownOpen: boolean;
   onToggleDropdown: () => void;
   onToggleValue: (v: string) => void;
+  /** 全選（僅啟用值 ∪ 已選停用值） */
+  onSelectAll: () => void;
+  /** 清除（清空所有已選值，含停用） */
+  onClear: () => void;
+  /** 完成（明確關閉值清單，不改動已選值） */
+  onDone: () => void;
 }
 
 function CategoricalValuesPicker({
@@ -1399,8 +1444,14 @@ function CategoricalValuesPicker({
   dropdownOpen,
   onToggleDropdown,
   onToggleValue,
+  onSelectAll,
+  onClear,
+  onDone,
 }: CategoricalValuesPickerProps) {
+  const col = cond.columnName;
   const selected = cond.values ?? [];
+  const activeCount = options.filter((o) => o.isActive).length;
+  const selectedCount = selected.length;
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-xs text-gray-500 font-mono">IN</span>
@@ -1449,38 +1500,92 @@ function CategoricalValuesPicker({
           </button>
           {dropdownOpen && (
             <div
-              data-testid={`values-dropdown-${idx}`}
-              className="absolute right-0 top-full mt-1 w-72 bg-white border border-gray-200 rounded-md shadow-lg z-10 max-h-60 overflow-y-auto"
+              data-testid={`value-dropdown-${col}`}
+              className="absolute right-0 top-full mt-1 w-72 bg-white border border-gray-200 rounded-md shadow-lg z-10 overflow-hidden"
             >
-              {options.length === 0 ? (
-                <div className="px-3 py-4 text-center text-xs text-gray-400">
-                  無可選值
-                </div>
-              ) : (
-                options.map((o) => (
-                  <label
-                    key={o.optionValue}
-                    className={`flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer text-sm ${!o.isActive ? 'opacity-70' : ''}`}
+              {/* 批次操作 header：全選（僅啟用值）/ 清除，sticky 於清單頂部 */}
+              <div className="sticky top-0 bg-white border-b border-gray-200 px-2.5 py-1.5 flex items-center justify-between gap-2 z-10">
+                <span className="text-[10px] text-gray-400 leading-tight">
+                  全選僅含啟用值
+                </span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    data-testid={`value-select-all-${col}`}
+                    onClick={onSelectAll}
+                    disabled={activeCount === 0}
+                    className="text-[11px] px-1.5 py-0.5 rounded text-primary font-medium hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    <input
-                      type="checkbox"
-                      data-testid={`value-checkbox-${idx}-${o.optionValue}`}
-                      checked={selected.includes(o.optionValue)}
-                      onChange={() => onToggleValue(o.optionValue)}
-                      className="rounded text-primary"
-                    />
-                    <span className="font-mono text-xs text-gray-500 w-8">
-                      {o.optionValue}
-                    </span>
-                    <span className="text-gray-700">
-                      {o.optionLabel}
-                      {!o.isActive && (
-                        <span className="text-amber-600 ml-1">(已停用)</span>
-                      )}
-                    </span>
-                  </label>
-                ))
-              )}
+                    全選
+                  </button>
+                  <span className="text-gray-200 text-[10px]">|</span>
+                  <button
+                    type="button"
+                    data-testid={`value-clear-${col}`}
+                    onClick={onClear}
+                    disabled={selectedCount === 0}
+                    className="text-[11px] px-1.5 py-0.5 rounded text-gray-500 font-medium hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    清除
+                  </button>
+                </div>
+              </div>
+
+              {/* 可選值清單（中段可捲動；長清單如職業別 / 居住城市時 header/footer 仍可觸及） */}
+              <div className="max-h-64 overflow-y-auto py-0.5">
+                {options.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-xs text-gray-400">
+                    無可選值
+                  </div>
+                ) : (
+                  options.map((o) => (
+                    <label
+                      key={o.optionValue}
+                      className={`flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer text-sm ${!o.isActive ? 'opacity-70' : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        data-testid={`value-checkbox-${idx}-${o.optionValue}`}
+                        checked={selected.includes(o.optionValue)}
+                        onChange={() => onToggleValue(o.optionValue)}
+                        className="rounded text-primary"
+                      />
+                      <span className="font-mono text-xs text-gray-500 w-8">
+                        {o.optionValue}
+                      </span>
+                      <span className="text-gray-700">
+                        {o.optionLabel}
+                        {!o.isActive && (
+                          <span className="text-amber-600 ml-1">(已停用)</span>
+                        )}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+
+              {/* footer：已選計數 + 完成（明確關閉清單，不改動已選值），sticky 於清單底部 */}
+              <div className="sticky bottom-0 bg-white border-t border-gray-200 px-2.5 py-1.5 flex items-center justify-between gap-2 z-10">
+                <span className="text-[10px] text-gray-400">
+                  已選{' '}
+                  <span
+                    className="font-semibold text-gray-600"
+                    data-testid={`value-selected-count-${col}`}
+                  >
+                    {selectedCount}
+                  </span>{' '}
+                  項
+                </span>
+                <button
+                  type="button"
+                  data-testid={`value-done-${col}`}
+                  onClick={onDone}
+                  className="text-xs px-3 py-1 bg-primary text-white rounded-md hover:bg-blue-700 font-medium inline-flex items-center gap-1"
+                >
+                  <Check className="w-3 h-3" />
+                  完成
+                </button>
+              </div>
             </div>
           )}
         </div>
