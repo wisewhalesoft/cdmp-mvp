@@ -27,6 +27,7 @@ import { C360Module } from './modules/c360/c360.module';
 import { AssignmentScoringModule } from './modules/assignment-scoring/assignment-scoring.module';
 import { AssignmentListModule } from './modules/assignment-list/assignment-list.module';
 import { AssignmentModule } from './modules/assignment/assignment.module';
+import { AssignmentOverviewModule } from './modules/assignment-overview/assignment-overview.module';
 import { AssignmentStageModule } from './modules/assignment-stage/assignment-stage.module';
 import { PooldataFieldModule } from './modules/pooldata-field/pooldata-field.module';
 import { SystemModule } from './modules/system/system.module';
@@ -167,6 +168,7 @@ const ALL_ENTITIES = [
     AssignmentScoringModule,
     AssignmentListModule,
     AssignmentModule,
+    AssignmentOverviewModule,
     AssignmentStageModule,
     PooldataFieldModule,
     SystemModule,

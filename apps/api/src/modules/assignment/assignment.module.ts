@@ -121,6 +121,9 @@ import { runQueueTuningProvider } from './queue/run-queue-tuning.provider';
     // worker module 之 RunQueueConsumer 需 MssqlQueueService（透過 import AssignmentModule 取得）。
     MssqlQueueService,
     runQueueTuningProvider,
+    // AD-E07-46 §3.2：F111 分派總覽聚合端點（AssignmentOverviewModule）需注入這兩個既有 service。
+    AssignmentRunService,
+    AssignmentRunReportService,
   ],
 })
 export class AssignmentModule {}
