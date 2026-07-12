@@ -15,6 +15,7 @@ import {
   PlayCircle,
   History,
   ClipboardCheck,
+  LayoutDashboard,
   type LucideIcon,
 } from 'lucide-react';
 import type { BusinessRole, UserRole } from '@cdmp/shared';
@@ -111,6 +112,14 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
         requires: 'director_or_section_chief',
         defaultOpen: true,
         items: [
+          // F111 / US-177 / BR-13 / AC-17：「分派總覽」為群組首項（#1），原「篩選欄位」降為 #2
+          // 對齊 prototype 38-assignment-overview.html L87（sidebar #1 分派總覽 · active）
+          {
+            to: '/assignment/overview',
+            label: '分派總覽',
+            icon: LayoutDashboard,
+            requires: 'director_or_section_chief',
+          },
           // F050 v2.1 / J4：「代碼維護」rename「篩選欄位」+ icon Tags→Filter
           // 對齊 prototype 37-base-code.html L60（單一 sidebar entry，37a/37b 合併為 2-Tab）
           // 路由 /assignment/field-base?tab=fields|options（既有 base-codes / whitelist / whitelist/options 三條 route 已刪）

@@ -1,4 +1,6 @@
 export { AssignmentStubPage } from './assignment-stub-page';
+// F111 / US-177：分派總覽儀表板（客戶名單分派模組新入口首頁）
+export { AssignmentOverviewPage } from './assignment-overview-page';
 export { ScoringConfigPage } from './scoring-config-page';
 export { ListDefinitionPage } from './list-definition-page';
 export { ListCreateDraftPage } from './list-create-draft-page';

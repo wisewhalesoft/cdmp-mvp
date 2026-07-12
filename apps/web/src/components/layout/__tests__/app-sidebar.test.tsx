@@ -93,15 +93,16 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     expect(allLabels).not.toContain('計分卡設定');
   });
 
-  it('menu 設定中 7 個 E07 子項（移除 4 個 run 詳情頁入口：執行進度/結果摘要/快照詳情/結果比對，改由執行歷史進入）', () => {
+  it('menu 設定中 8 個 E07 子項（F111 新增「分派總覽」為首項；移除 4 個 run 詳情頁入口：執行進度/結果摘要/快照詳情/結果比對，改由執行歷史進入）', () => {
     const directorView = getVisibleMenuItems('user', 'director');
     const assignmentGroup = directorView
       .flatMap((s) => s.groups)
       .find((g) => g.label === '客戶名單分派');
     expect(assignmentGroup).toBeDefined();
-    // run 詳情頁（執行進度/結果摘要/快照詳情/結果比對）移除後＝7 個子項
-    expect(assignmentGroup!.items.length).toBe(7);
+    // F111：新增「分派總覽」首項後＝8 個子項（原 7 + 分派總覽）
+    expect(assignmentGroup!.items.length).toBe(8);
     const labels = assignmentGroup!.items.map((i) => i.label);
+    expect(labels).toContain('分派總覽');
     expect(labels).toContain('執行歷史');
     expect(labels).not.toContain('執行進度');
     expect(labels).not.toContain('結果摘要');
@@ -169,6 +170,92 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     const labels = MENU_SECTIONS.map((s) => s.label);
     expect(labels).toContain('資料治理');
     expect(labels).toContain('應用模組');
+  });
+});
+
+// =============================================================================
+// F111 / US-177 / AC-17 / BR-13 / TC-177-14 — Sidebar 「分派總覽」排序（R 組）
+// =============================================================================
+describe('F111 SIDEBAR — 分派總覽為客戶名單分派群組首項（AC-17 / BR-13）', () => {
+  function assignmentGroupItems(
+    role: 'admin' | 'user',
+    businessRole: BusinessRole,
+  ) {
+    const visible = getVisibleMenuItems(role, businessRole);
+    const group = visible
+      .flatMap((s) => s.groups)
+      .find((g) => g.label === '客戶名單分派');
+    return group?.items ?? [];
+  }
+
+  it('TS-F111-FE-SIDEBAR-001：items[0] 為「分派總覽」（/assignment/overview）', () => {
+    const items = assignmentGroupItems('user', 'director');
+    expect(items[0].to).toBe('/assignment/overview');
+    expect(items[0].label).toBe('分派總覽');
+  });
+
+  it('TS-F111-FE-SIDEBAR-002：items[1] 為「篩選欄位」（/assignment/field-base，原 #1 降為 #2）', () => {
+    const items = assignmentGroupItems('user', 'director');
+    expect(items[1].to).toBe('/assignment/field-base');
+    expect(items[1].label).toBe('篩選欄位');
+  });
+
+  it('TS-F111-FE-SIDEBAR-003：其餘既有 6 項相對順序不變（僅整體後移一位）', () => {
+    const labels = assignmentGroupItems('user', 'director').map((i) => i.label);
+    expect(labels).toEqual([
+      '分派總覽',
+      '篩選欄位',
+      '計分卡設定',
+      '名單定義',
+      '準備完成摘要',
+      'Stage 0 試算',
+      '觸發月名單分派',
+      '執行歷史',
+    ]);
+  });
+
+  it('TS-F111-FE-SIDEBAR-004：「分派總覽」requires=director_or_section_chief（director/section_chief/admin 可見，user 不可見）', () => {
+    // director / admin：可見
+    expect(
+      assignmentGroupItems('user', 'director').some(
+        (i) => i.to === '/assignment/overview',
+      ),
+    ).toBe(true);
+    expect(
+      assignmentGroupItems('admin', null).some(
+        (i) => i.to === '/assignment/overview',
+      ),
+    ).toBe(true);
+    // section_chief：可見
+    expect(
+      assignmentGroupItems('user', 'section_chief').some(
+        (i) => i.to === '/assignment/overview',
+      ),
+    ).toBe(true);
+    // user：整個「客戶名單分派」群組不渲染 → 分派總覽亦不可見
+    expect(assignmentGroupItems('user', null).length).toBe(0);
+  });
+
+  it('TS-F111-FE-SIDEBAR-004（DOM）：director/section_chief/admin sidebar 顯示「分派總覽」；user 不顯示', () => {
+    for (const view of [
+      { role: 'admin' as const, businessRole: null },
+      { role: 'user' as const, businessRole: 'director' as BusinessRole },
+      { role: 'user' as const, businessRole: 'section_chief' as BusinessRole },
+    ]) {
+      const { unmount } = renderSidebar(view);
+      expect(screen.getByText('分派總覽')).toBeInTheDocument();
+      unmount();
+    }
+    const { container } = renderSidebar({ role: 'user', businessRole: null });
+    expect(container.textContent).not.toContain('分派總覽');
+  });
+
+  it('TS-F111-FE-SIDEBAR-005：群組標籤本身無點擊導覽（既有 SidebarGroup 僅折疊開合）— 條件式不適用，記錄為靜態確認', () => {
+    // 既有 SidebarGroup 元件的群組標籤按鈕僅切換 open/close，不 navigate（見 app-sidebar.tsx）。
+    // 依 test-design R 組 SIDEBAR-005 條件句：既有元件不支援群組導覽 → 本案例改為靜態確認、不適用強制導覽斷言。
+    const items = assignmentGroupItems('user', 'director');
+    // 使用者若欲進入分派總覽，透過 items[0]（/assignment/overview）子項連結即可。
+    expect(items[0].to).toBe('/assignment/overview');
   });
 });
 

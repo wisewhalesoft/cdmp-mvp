@@ -22,6 +22,7 @@ import { CustomerListPage } from '@/pages/c360/customer-list-page';
 import { CustomerDetailPage } from '@/pages/c360/customer-detail-page';
 import {
   AssignmentStubPage,
+  AssignmentOverviewPage,
   ScoringConfigPage,
   ListDefinitionPage,
   ListCreateDraftPage,
@@ -212,6 +213,16 @@ export function App() {
           </AssignmentWorkYmProvider>
         }
       >
+        {/* F111 / US-177：分派總覽儀表板（客戶名單分派模組新入口首頁；共享分派作業月份，AC-3）
+            Guard 沿用 DirectorOrSectionChiefRoute（比照 Stage 0 試算頁；user 整頁封鎖） */}
+        <Route
+          path="/assignment/overview"
+          element={
+            <DirectorOrSectionChiefRoute>
+              <AssignmentOverviewPage />
+            </DirectorOrSectionChiefRoute>
+          }
+        />
         {/* M01 名單定義：director + section_chief（讀），director only（寫入） */}
         <Route
           path="/assignment/list-definitions"
