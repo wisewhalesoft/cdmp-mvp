@@ -5,14 +5,16 @@ feature-id: F046
 source-story: US-060
 epic: E06
 priority: P0-MVP
-version: "1.0"
-date: 2026-04-13
+version: "1.1"
+date: 2026-07-12
 status: Draft
 ---
 
 # F046: Customer 360 — 客戶搜尋與清單
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-13
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-07-12
+
+> **v1.1（2026-07-12 / 前端可達性收斂，ref US-177 / F111）**：Customer 360（E06）前端可達性收斂為**系統管理者**與**一般使用者**；**業務部長 / 業務處長**不可於 sidebar 或前端路由存取（純前端限制，路由守衛重導向 `/assignment/overview`，權威來源見 [F002](F002-user-login.md) §4.5）。**後端行為不變**：本 Feature 端點維持 `authenticated`（無角色限制 Guard），依角色（Admin / User）之敏感資料遮罩規則亦不變。
 
 ## Agent Loading Guide
 
@@ -27,7 +29,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-13
 
 ## 1. 功能摘要
 
-提供已登入使用者（Admin / User）搜尋與瀏覽客戶清單的能力。系統從 `customer_core` 目標表讀取資料，支援統計摘要卡片、Full-Text Search（姓名）、精確比對（身分證/統編）、客戶類型篩選與分頁。敏感欄位依角色硬編碼遮罩。
+提供已登入使用者搜尋與瀏覽客戶清單的能力。系統從 `customer_core` 目標表讀取資料，支援統計摘要卡片、Full-Text Search（姓名）、精確比對（身分證/統編）、客戶類型篩選與分頁。敏感欄位依角色（Admin / User）硬編碼遮罩。
+
+> **前端可達性（v1.1，權威來源 [F002](F002-user-login.md) §4.5）**：本頁（Customer 360）於前端 sidebar 與路由僅對**系統管理者**與**一般使用者**（`businessRole IS NULL`）開放；**業務部長**（`director`）/ **業務處長**（`section_chief`）不可存取（路由守衛攔截並重導向 `/assignment/overview`）。此為純前端限制；後端本 Feature 端點維持 `authenticated`，不新增角色 Guard。
 
 ## 2. 使用者故事
 
@@ -332,7 +336,7 @@ WHERE (搜尋條件) AND (類型篩選條件)
 
 | 規則編號 | 說明 |
 |----------|------|
-| BR-1 | 所有已登入角色（Admin / User）皆可存取客戶清單，無角色限制 |
+| BR-1 | **後端**：所有已登入角色（Admin / User）皆可存取客戶清單端點，無角色限制（維持 `authenticated`）。**前端**：可達性另受 [F002](F002-user-login.md) §4.5（v2.1.0）限制——Customer 360 僅系統管理者 / 一般使用者可於 sidebar 與路由存取，業務部長 / 業務處長不可（純前端強制，重導向 `/assignment/overview`） |
 | BR-2 | 敏感資料遮罩硬編碼於 API 層，依 JWT Token 中的 role 判斷 |
 | BR-3 | `idNumber` 搜尋優先於 `keyword`；兩者同時存在時忽略 `keyword` |
 | BR-4 | 預設排序：依 `name` 欄位升序排列 |

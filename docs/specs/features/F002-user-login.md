@@ -5,14 +5,16 @@ feature-id: F002
 source-story: US-002
 epic: E01 — 驗證與登入
 priority: P0-MVP
-version: "2.0.1"
-date: 2026-06-26
+version: "2.1.0"
+date: 2026-07-12
 status: Draft
 ---
 
 # F002: User 登入
 
-**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-06-26
+**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-07-12
+
+> **v2.1.0（2026-07-12 / 業務角色移除 Customer 360 + 預設導向改分派總覽，ref US-177 / F111）**：**業務部長**（`business_role='director'`）與**業務處長**（`business_role='section_chief'`）不再具備 Customer 360（E06）存取權——sidebar 不顯示 Customer 360 群組、前端路由守衛攔截 `/c360/**`；且登入後預設導向由 `/c360/customers` 改為 `/assignment/overview`（分派總覽儀表板，客戶名單分派模組 landing，見 [F111](F111-assignment-overview-dashboard.md)）。**一般使用者**（`business_role IS NULL`）與**系統管理者**（`admin`）不受影響：一般使用者仍導向 `/c360/customers`、admin 仍導向 `/`，且兩者保有 Customer 360。本次強制為**純前端 RBAC**（sidebar 可見性 + 路由守衛 + 角色感知導向）；後端 Customer 360（E06）端點維持 `authenticated`，**不新增 Guard**。影響章節：§1 / §4 / §4.5 / AC-1 / AC-5 / AC-5b / AC-6 / §6 / §7 / §8 / BR-Redirect。
 
 > **v2.0.1（2026-06-26 / US-168 對齊 F049 v2.0）**：§4.6.2 Controller Guard 對應表將原「名單瀏覽 F048~F049 GET」拆分——F049 Stage 0 試算（部門矩陣 + per-list COUNT）獨立成列，授權為 `DirectorOrSectionChiefGuard` + service 層 dept scope filter（處長唯讀、限縮轄區 `obdeptid`），取代 v1.x 之 `DirectorGuard`（部長專屬）。其餘 §4.6 內容不變。
 
@@ -26,7 +28,7 @@ status: Draft
 
 提供 User（使用者）角色透過 Email 與密碼憑證登入 CDMP 平台的功能。系統角色維持 Admin / User 兩種（參考 F045），User 帳號可額外持有業務角色 `business_role`（enum: `'director'` / `'section_chief'` / `NULL`，由 [F006a](F006a-update-business-role.md) 寫入）。系統實質身份共 **4 種 label**：「系統管理者」/「業務部長」/「業務處長」/「一般使用者」（v2.0 廢除 v1.x「業務主管」中間語意層）。登入後的導向行為與 sidebar 可用功能須依此 4 種**實質身份**分別處理（詳見 §4.5 / §4.6 與 architecture-spec.md AD-E07 v3.0）。
 
-此功能與 F001（Admin 登入）共用同一個 API 端點，透過 JWT 中的 `role` + `businessRole` 組合決定前端導向目標。MVP 階段 Customer 360（E06）已對所有登入身份開放，因此一般使用者登入後直接導向 Customer 360，不再使用「無可用功能」說明頁面作為預設目的地。
+此功能與 F001（Admin 登入）共用同一個 API 端點，透過 JWT 中的 `role` + `businessRole` 組合決定前端導向目標。MVP 階段 Customer 360（E06）僅對**系統管理者**與**一般使用者**開放：**一般使用者**登入後直接導向 Customer 360（`/c360/customers`），不再使用「無可用功能」說明頁面作為預設目的地。**業務部長**與**業務處長**不具 Customer 360 存取權，登入後改導向**分派總覽**（`/assignment/overview`，客戶名單分派模組 landing，見 [F111](F111-assignment-overview-dashboard.md) / US-177）作為營運首頁。
 
 ---
 
@@ -47,6 +49,7 @@ status: Draft
 - **Then** 系統驗證 User 身份、發行 JWT Token（payload 含 `role=user`、`businessRole=null`），並重新導向至 `/c360/customers`
 - **And** sidebar 僅顯示 Customer 360 群組（不顯示客戶名單分派、帳號管理等 admin / 業務部長 / 業務處長專屬項目）
 - **註：** 此 AC 取代 v1.1 之前「導向說明頁面」的行為。MVP 階段 Customer 360 已可用，原 `/user-info` 不再作為預設導向目的地（保留作為 fallback 路由，詳見 §6 UI/UX 需求）
+- **註（v2.1.0 未變更）：** 一般使用者的預設導向維持 `/c360/customers`，且 Customer 360 為其唯一可見功能；v2.1.0 之變更僅影響業務部長 / 業務處長（見 AC-5 / AC-5b）
 
 ### AC-2：無效憑證
 
@@ -66,21 +69,22 @@ status: Draft
 - **When** User 以正確憑證嘗試登入
 - **Then** 系統顯示「您的帳號已被停用，請聯絡管理員。」，且不發行 JWT Token
 
-### AC-5：業務部長登入後導向 Customer 360
+### AC-5：業務部長登入後導向分派總覽
 
 - **Given** User 帳號 `business_role='director'` 且已啟用
 - **When** User 以正確憑證成功登入
-- **Then** 系統發行 JWT Token（payload 含 `role=user`、`businessRole='director'`），並重新導向至 `/c360/customers`
-- **And** sidebar 同時顯示 Customer 360 群組與「客戶名單分派」群組（含 M01~M07 全部子項，依 E07 相關 Feature 規格）
-- **And** 業務部長雖被導向 Customer 360 作為預設首頁，但可透過 sidebar 自由進入分派相關頁面（含名單 CRUD、計分卡寫入、月名單分派觸發、簽核等部長專屬入口），不會被路由守衛阻擋
+- **Then** 系統發行 JWT Token（payload 含 `role=user`、`businessRole='director'`），並重新導向至 `/assignment/overview`（分派總覽儀表板，客戶名單分派模組 landing，見 [F111](F111-assignment-overview-dashboard.md) / US-177）
+- **And** sidebar 顯示「客戶名單分派」群組（含 M01~M07 全部子項，依 E07 相關 Feature 規格），但**不顯示** Customer 360 群組（業務角色無 Customer 360 存取權，v2.1.0）
+- **And** 業務部長可透過 sidebar 自由進入分派相關頁面（含名單 CRUD、計分卡寫入、月名單分派觸發、簽核等部長專屬入口），不會被路由守衛阻擋；若嘗試存取 Customer 360 前端路由（`/c360/**`）則被前端路由守衛攔截並重導向回 `/assignment/overview`
 
-### AC-5b：業務處長登入後導向 Customer 360
+### AC-5b：業務處長登入後導向分派總覽
 
 - **Given** User 帳號 `business_role='section_chief'` 且已啟用
 - **When** User 以正確憑證成功登入
-- **Then** 系統發行 JWT Token（payload 含 `role=user`、`businessRole='section_chief'`），並重新導向至 `/c360/customers`
-- **And** sidebar 同時顯示 Customer 360 群組與「客戶名單分派」群組（僅顯示處長可存取之子項：名單瀏覽、計分卡 GET、個別業務比例、快照歷史等；隱藏部長專屬入口如名單建立、月名單分派觸發、部門比例編輯、簽核）
+- **Then** 系統發行 JWT Token（payload 含 `role=user`、`businessRole='section_chief'`），並重新導向至 `/assignment/overview`（分派總覽儀表板，客戶名單分派模組 landing，見 [F111](F111-assignment-overview-dashboard.md) / US-177）
+- **And** sidebar 顯示「客戶名單分派」群組（僅顯示處長可存取之子項：名單瀏覽、計分卡 GET、個別業務比例、快照歷史等；隱藏部長專屬入口如名單建立、月名單分派觸發、部門比例編輯、簽核），但**不顯示** Customer 360 群組（業務角色無 Customer 360 存取權，v2.1.0）
 - **And** 處長存取「個別業務比例」（F082）時，後端 service 層以 `scopeByCreator()` 限縮為該處長轄區資料
+- **And** 若嘗試存取 Customer 360 前端路由（`/c360/**`）則被前端路由守衛攔截並重導向回 `/assignment/overview`
 
 ### AC-6：sidebar 依實質身份動態顯示
 
@@ -88,6 +92,7 @@ status: Draft
 - **When** 進入任何受保護頁面
 - **Then** sidebar 僅渲染該身份可存取的選單項目；不可見項目**完全不渲染**（非 `disabled` 也非隱藏 CSS），避免任何揭露未授權功能存在的痕跡
 - **And** 「客戶名單分派」群組僅在 `role=admin` 或 `businessRole IN ('director','section_chief')` 時顯示；組內個別子項依 §4.6 矩陣決定可見性
+- **And** 「Customer 360」群組僅在 `role=admin` 或 `businessRole IS NULL`（一般使用者）時顯示；業務部長 / 業務處長**不顯示**（v2.1.0，US-177 / F111）
 - **And** 「帳號管理」「資料來源」「資料擷取」「ETL Pipeline」等管理者專屬群組僅在 `role=admin` 時顯示
 
 ---
@@ -115,7 +120,8 @@ status: Draft
 |------|------|
 | 一般使用者嘗試存取 admin 專屬前端路由 | 前端路由守衛攔截，重新導向至 `/c360/customers` |
 | 一般使用者嘗試存取業務角色專屬前端路由（`/assignment/**`） | 前端路由守衛攔截，重新導向至 `/c360/customers` |
-| 業務部長 / 業務處長嘗試存取 admin 專屬前端路由 | 前端路由守衛攔截，重新導向至 `/c360/customers` |
+| 業務部長 / 業務處長嘗試存取 admin 專屬前端路由 | 前端路由守衛攔截，重新導向至 `/assignment/overview`（業務角色預設 landing，v2.1.0） |
+| 業務部長 / 業務處長嘗試存取 Customer 360 前端路由（`/c360/**`） | 前端路由守衛攔截，重新導向至 `/assignment/overview`（業務角色無 Customer 360 存取權，US-177 / F111） |
 | 業務處長嘗試存取部長專屬前端路由（如 `/assignment/lists/create`、`/assignment/runs/trigger`） | 前端路由守衛攔截，重新導向至處長可達的預設頁（如 `/assignment/lists`） |
 | 任何 User 嘗試呼叫 admin 專屬 API 端點 | 後端回傳 HTTP 403 Forbidden，並記錄至日誌 |
 | 一般使用者呼叫 `/api/v1/assignment/**` 端點 | 後端 `DirectorGuard` 或 `DirectorOrSectionChiefGuard` 回傳 HTTP 403 + 錯誤碼 `E07_ROLE_NOT_ASSIGNED`（AD-E07 v3.0） |
@@ -141,9 +147,11 @@ status: Draft
 | 實質身份 label | 系統層 `users.role` | 業務層 `users.business_role` | JWT `role` claim | JWT `businessRole` claim | 登入後預設導向 |
 |---------------|---------------------|------------------------------|------------------|-------------------------|---------------|
 | **系統管理者** | `admin` | 不適用（DB 可為 NULL，後端忽略） | `"admin"` | `null`（或忽略） | `/`（帳號管理） |
-| **業務部長** | `user` | `'director'` | `"user"` | `"director"` | `/c360/customers` |
-| **業務處長** | `user` | `'section_chief'` | `"user"` | `"section_chief"` | `/c360/customers` |
+| **業務部長** | `user` | `'director'` | `"user"` | `"director"` | `/assignment/overview` |
+| **業務處長** | `user` | `'section_chief'` | `"user"` | `"section_chief"` | `/assignment/overview` |
 | **一般使用者** | `user` | `NULL` | `"user"` | `null` | `/c360/customers` |
+
+> **Customer 360（E06）可用性矩陣（v2.1.0，US-177 / F111）**：系統管理者 ✓ ／ 業務部長 ✗ ／ 業務處長 ✗ ／ 一般使用者 ✓。設計理由：**業務角色使用者（部長 / 處長）的營運首頁為分派總覽（`/assignment/overview`），Customer 360 對其非日常功能，故自 sidebar 與前端路由移除**。此為**純前端 RBAC**（sidebar 可見性 + 路由守衛 + 角色感知導向）；後端 Customer 360（E06）端點維持 `authenticated`，不因本矩陣新增 Guard。
 
 ### 欄位語意說明
 
@@ -159,6 +167,7 @@ status: Draft
 - **與後端對齊**：本節為前端 UX + JWT claim 規則；後端 Guard 體系（DirectorGuard / SectionChiefGuard / DirectorOrSectionChiefGuard）詳見 §4.6 與 AD-E07 v3.0，兩層必須對同一矩陣達成共識
 - **不可見項目不渲染**：sidebar 對該身份不可見的項目必須完全不出現在 DOM（不可僅用 `disabled` 或 CSS `hidden`），參考 AC-6
 - **客戶名單分派分組**：僅在 `role=admin` 或 `businessRole IN ('director','section_chief')` 時顯示；組內個別子項依 §4.6 矩陣決定可見性
+- **Customer 360 分組（v2.1.0）**：僅在 `role=admin` 或 `businessRole IS NULL`（一般使用者）時顯示；業務部長 / 業務處長不顯示，且前端路由守衛攔截其對 `/c360/**` 的存取並重導向 `/assignment/overview`（純前端強制；後端 E06 端點維持 `authenticated`）
 
 ---
 
@@ -264,7 +273,7 @@ status: Draft
 | BR-005 | RBAC 強制執行必須同時在前端路由層、前端 sidebar 渲染層與後端 API 層（Guard）實施（三層對齊 §4.5 / §4.6 矩陣） |
 | BR-006 | `/user-info` 說明頁面在 MVP 階段不作為任何身份的預設導向目的地；保留為極端 fallback 路由（無 sidebar 項可顯示時使用） |
 | BR-RBAC | §4.5「角色 label 矩陣」+ §4.6「Controller Guard 對應表」為 spec 層級**唯一權威來源**；架構層（Guard）與實作層（前端 router / sidebar / 後端 controller decorator）所有 RBAC 行為必須對齊此二矩陣，矩陣變更時須同步檢視 AD-E07 v3.0 |
-| BR-Redirect | 登入後預設導向遵循 §4.5 矩陣最後一欄：`admin` 導向 `/`（帳號管理）；`user` 不論 `businessRole` 為何均導向 `/c360/customers` |
+| BR-Redirect | 登入後預設導向遵循 §4.5 矩陣最後一欄：`admin` 導向 `/`（帳號管理）；`businessRole IN ('director','section_chief')` 導向 `/assignment/overview`（分派總覽，見 [F111](F111-assignment-overview-dashboard.md) / US-177）；`businessRole=null`（一般使用者）導向 `/c360/customers`。導向與 Customer 360 存取限制之強制皆為**純前端**（sidebar 可見性 + 路由守衛 + 角色感知導向）；後端 Customer 360（E06）端點維持 `authenticated`，不因本規則新增 Guard（v2.1.0） |
 | BR-Revoke | admin 透過 [F006a](F006a-update-business-role.md) 變更 `business_role` 時，同 transaction 將 `users.password_changed_at = NOW()`；該 user 既有 JWT 全數失效，下次 API 請求須重新登入（沿用 F010 機制） |
 | BR-LegacyJWT | 舊 JWT 不含 `businessRole` claim 時，後端 Guard 與前端一律視為 `null`；不阻擋既有 session、不強制 re-login，待自然過期或 `password_changed_at` 觸發 |
 
@@ -278,7 +287,7 @@ status: Draft
 
 ### 登入後預設頁面
 
-依 §4.5 矩陣決定，使用者登入成功後直接進入該身份的預設頁面（admin → `/`、業務部長 / 業務處長 / 一般使用者 → `/c360/customers`）。預設頁面本身的 UI/UX 由對應 Feature spec 規範（帳號管理 F005、Customer 360 E06 相關 Feature），本節不重複定義。
+依 §4.5 矩陣決定，使用者登入成功後直接進入該身份的預設頁面（admin → `/`、業務部長 / 業務處長 → `/assignment/overview`、一般使用者 → `/c360/customers`）。預設頁面本身的 UI/UX 由對應 Feature spec 規範（帳號管理 F005、分派總覽 [F111](F111-assignment-overview-dashboard.md)、Customer 360 E06 相關 Feature），本節不重複定義。
 
 ### Sidebar（跨頁共用元件）
 
@@ -296,7 +305,7 @@ status: Draft
 | 項目 | 說明 |
 |------|------|
 | 用途 | 僅在「無任何 sidebar 項可對該身份顯示」的極端情境下作為 fallback 目的地 |
-| MVP 階段預期 | **不應發生**，因 §4.5 矩陣保證所有合法登入身份至少擁有 Customer 360 入口 |
+| MVP 階段預期 | **不應發生**，因 §4.5 矩陣保證所有合法登入身份至少擁有一個預設 landing（admin → 帳號管理、業務部長 / 業務處長 → 分派總覽、一般使用者 → Customer 360） |
 | 內容 | 簡潔的品牌化頁面，顯示「目前尚無可用功能，請聯絡您的管理員。」與登出按鈕 |
 | 架構層處理 | 若 system-architect 評估後決議移除此 fallback 路由，本 spec 不阻擋；移除前須確認 §4.5 矩陣中無任何身份會落入「零可見 sidebar 項」狀態 |
 
@@ -305,12 +314,13 @@ status: Draft
 | 狀態 | 行為 |
 |------|------|
 | 登入成功（admin） | 重新導向至 `/`，sidebar 顯示完整系統管理者選單 |
-| 登入成功（user, businessRole='director'） | 重新導向至 `/c360/customers`，sidebar 顯示 Customer 360 + 客戶名單分派（M01~M07 全部子項） |
-| 登入成功（user, businessRole='section_chief'） | 重新導向至 `/c360/customers`，sidebar 顯示 Customer 360 + 客戶名單分派（僅處長可達子項，依 §4.6 矩陣） |
+| 登入成功（user, businessRole='director'） | 重新導向至 `/assignment/overview`，sidebar 顯示客戶名單分派（M01~M07 全部子項），**不顯示** Customer 360 |
+| 登入成功（user, businessRole='section_chief'） | 重新導向至 `/assignment/overview`，sidebar 顯示客戶名單分派（僅處長可達子項，依 §4.6 矩陣），**不顯示** Customer 360 |
 | 登入成功（user, businessRole=null） | 重新導向至 `/c360/customers`，sidebar 僅顯示 Customer 360 |
 | 一般使用者導航至 admin 路由 | 路由守衛攔截，重新導向至 `/c360/customers` |
 | 一般使用者導航至業務角色專屬路由（`/assignment/**`） | 路由守衛攔截，重新導向至 `/c360/customers` |
-| 業務部長 / 業務處長導航至 admin 路由 | 路由守衛攔截，重新導向至 `/c360/customers` |
+| 業務部長 / 業務處長導航至 admin 路由 | 路由守衛攔截，重新導向至 `/assignment/overview` |
+| 業務部長 / 業務處長導航至 Customer 360 路由（`/c360/**`） | 路由守衛攔截，重新導向至 `/assignment/overview` |
 | 業務處長導航至部長專屬路由（如 `/assignment/lists/create`） | 路由守衛攔截，重新導向至處長預設頁（如 `/assignment/lists`） |
 
 ---
@@ -325,7 +335,8 @@ status: Draft
 |---------|---------|--------------|---------|
 | 一般使用者存取 admin 前端路由 | N/A（前端攔截） | 無錯誤訊息，直接重新導向 | 前端路由守衛重新導向至 `/c360/customers` |
 | 一般使用者存取業務角色專屬前端路由 | N/A（前端攔截） | 無錯誤訊息，直接重新導向 | 前端路由守衛重新導向至 `/c360/customers` |
-| 業務部長 / 業務處長存取 admin 前端路由 | N/A（前端攔截） | 無錯誤訊息，直接重新導向 | 前端路由守衛重新導向至 `/c360/customers` |
+| 業務部長 / 業務處長存取 admin 前端路由 | N/A（前端攔截） | 無錯誤訊息，直接重新導向 | 前端路由守衛重新導向至 `/assignment/overview` |
+| 業務部長 / 業務處長存取 Customer 360 前端路由（`/c360/**`） | N/A（前端攔截） | 無錯誤訊息，直接重新導向 | 前端路由守衛重新導向至 `/assignment/overview`（業務角色無 Customer 360 存取權，US-177 / F111） |
 | 業務處長存取部長專屬前端路由 | N/A（前端攔截） | 無錯誤訊息，直接重新導向 | 前端路由守衛重新導向至處長預設頁 |
 | User 呼叫 admin 專屬 API | FORBIDDEN | 「您沒有權限執行此操作。」 | 回傳 HTTP 403，記錄存取嘗試至日誌 |
 | 一般使用者呼叫 `/api/v1/assignment/**` | E07_ROLE_NOT_ASSIGNED | 「您尚未被指派業務角色，請聯絡管理員。」 | 後端 `DirectorGuard` 或 `DirectorOrSectionChiefGuard` 回傳 HTTP 403，記錄至日誌 |
@@ -347,15 +358,16 @@ status: Draft
 | T-005 | User 呼叫 admin 專屬 API | User 已登入 | 以 User Token 呼叫 admin API 端點 | HTTP 403 Forbidden，日誌記錄存取嘗試 |
 | T-006 | 勾選「記住我」 | User 帳號已建立且啟用 | 勾選後成功登入 | Token 有效期為 30 天 |
 | T-007 | 未勾選「記住我」 | User 帳號已建立且啟用 | 不勾選，成功登入 | Token 於閒置 8 小時後失效 |
-| T-008 | 業務部長登入後導向 Customer 360 | User 帳號（`business_role='director'`）已建立且啟用 | 輸入正確 Email 與密碼，點擊登入 | HTTP 200，JWT 發行（payload `role=user`, `businessRole='director'`），重新導向至 `/c360/customers`，sidebar 顯示 Customer 360 + 客戶名單分派（M01~M07 全部子項） |
-| T-008b | 業務處長登入後導向 Customer 360 | User 帳號（`business_role='section_chief'`）已建立且啟用 | 輸入正確 Email 與密碼，點擊登入 | HTTP 200，JWT 發行（payload `role=user`, `businessRole='section_chief'`），重新導向至 `/c360/customers`，sidebar 顯示 Customer 360 + 客戶名單分派（僅處長可達子項） |
+| T-008 | 業務部長登入後導向分派總覽 | User 帳號（`business_role='director'`）已建立且啟用 | 輸入正確 Email 與密碼，點擊登入 | HTTP 200，JWT 發行（payload `role=user`, `businessRole='director'`），重新導向至 `/assignment/overview`，sidebar 顯示客戶名單分派（M01~M07 全部子項），**不顯示** Customer 360 |
+| T-008b | 業務處長登入後導向分派總覽 | User 帳號（`business_role='section_chief'`）已建立且啟用 | 輸入正確 Email 與密碼，點擊登入 | HTTP 200，JWT 發行（payload `role=user`, `businessRole='section_chief'`），重新導向至 `/assignment/overview`，sidebar 顯示客戶名單分派（僅處長可達子項），**不顯示** Customer 360 |
 | T-009 | 業務部長可存取分派路由 | User（`businessRole='director'`）已登入 | 點擊 sidebar 「客戶名單分派」項目 | 成功進入分派頁面，路由守衛不攔截 |
 | T-009b | 業務處長存取部長專屬路由被攔截 | User（`businessRole='section_chief'`）已登入 | 瀏覽器直接輸入 `/assignment/lists/create` | 路由守衛攔截，重新導向至處長預設頁；若直接呼叫對應 API 則後端 `DirectorGuard` 回 HTTP 403 + `E07_REQUIRES_DIRECTOR` |
-| T-010 | 業務角色嘗試存取 admin 路由 | User（`businessRole='director'` 或 `'section_chief'`）已登入 | 瀏覽器直接輸入 admin 路由 URL | 路由守衛攔截，重新導向至 `/c360/customers` |
+| T-010 | 業務角色嘗試存取 admin 路由 | User（`businessRole='director'` 或 `'section_chief'`）已登入 | 瀏覽器直接輸入 admin 路由 URL | 路由守衛攔截，重新導向至 `/assignment/overview` |
 | T-011 | 一般使用者嘗試存取分派路由 | User（`businessRole=null`）已登入 | 瀏覽器直接輸入 `/assignment/**` 路由 | 路由守衛攔截，重新導向至 `/c360/customers`；若直接呼叫 API 則後端回 HTTP 403 + `E07_ROLE_NOT_ASSIGNED` |
 | T-012 | sidebar 不渲染未授權項目 | User（`businessRole=null`）已登入 | 檢查 DOM 中 sidebar 結構 | 客戶名單分派與 admin 專屬群組完全不出現在 DOM（非 disabled、非 CSS hidden） |
 | T-013 | JWT 缺 `businessRole` 欄位（legacy）保守降級 | 後端發出舊版 JWT（payload 無 `businessRole` 欄位） | User 登入並由前端解析 JWT | 不阻擋登入；前端視為 `null`，導向 `/c360/customers`，sidebar 僅顯示 Customer 360；console 輸出 warning |
 | T-014 | admin 變更 business_role 觸發 token revoke | 業務部長 A 已登入並持有有效 JWT；admin 透過 F006a 將 A 改為 `section_chief` | A 嘗試以原 JWT 呼叫部長專屬端點 | 後端比對 `JWT.passwordChangedAt < user.password_changed_at` 回傳 HTTP 401，要求 re-login |
+| T-015 | 業務角色存取 Customer 360 路由被攔截 | User（`businessRole='director'` 或 `'section_chief'`）已登入 | 瀏覽器直接輸入 `/c360/customers`（或任一 `/c360/**`） | 前端路由守衛攔截，重新導向至 `/assignment/overview`；sidebar 不渲染 Customer 360 群組（後端 E06 端點本身仍為 `authenticated`，前端不呼叫） |
 
 ---
 
@@ -403,7 +415,7 @@ F002 特有的安全性要求：
 
 | 項目 | 要求 |
 |------|------|
-| RBAC 前端路由保護 | 前端路由守衛必須阻擋一般使用者存取 admin 路由與業務角色專屬路由；業務部長 / 業務處長存取 admin 路由同樣攔截；業務處長存取部長專屬路由同樣攔截（依 §4.5 / §4.6 矩陣） |
+| RBAC 前端路由保護 | 前端路由守衛必須阻擋一般使用者存取 admin 路由與業務角色專屬路由；業務部長 / 業務處長存取 admin 路由同樣攔截；業務處長存取部長專屬路由同樣攔截；業務部長 / 業務處長存取 Customer 360 路由（`/c360/**`）同樣攔截並重導向 `/assignment/overview`（v2.1.0，純前端強制；後端 E06 端點維持 `authenticated`）（依 §4.5 / §4.6 矩陣） |
 | RBAC 前端 sidebar 保護 | sidebar 元件不可渲染當前身份無權存取的項目（不可僅 disable），避免揭露未授權功能存在 |
 | RBAC 後端 API 保護 | 後端 Guard 體系（DirectorGuard / SectionChiefGuard / DirectorOrSectionChiefGuard）依 §4.6.2 對應表套用；違反者回傳 HTTP 403 + 對應錯誤碼（`E07_ROLE_NOT_ASSIGNED` / `E07_REQUIRES_DIRECTOR` / `E07_REQUIRES_SECTION_CHIEF`） |
 | Token revoke | admin 變更 `business_role` 同 transaction 觸發 `password_changed_at = NOW()` 使既有 JWT 失效，沿用 F010 機制（詳見 BR-Revoke） |
@@ -442,4 +454,5 @@ F002 特有的安全性要求：
 | v1.0 | 2026-04-02 | 初版（與 F001 拆分） |
 | v1.1 | 2026-04-24 | 補 `is_sales_manager` 旗標說明與 JWT payload 差異 |
 | v1.2 | 2026-05-13 | 彙整 RBAC 矩陣與登入導向邏輯（解決 `manager@cdmp.test` 登入後被導向無 sidebar 的 `/user-info`、無法導覽至 Customer 360 的 bug）：新增 §4.5「登入後導向與可用功能」實質身份矩陣作為唯一權威來源；修訂 AC-1（一般使用者導向 `/c360/customers`）；新增 AC-5（業務主管導向）、AC-6（sidebar 動態渲染）；新增 BR-RBAC、BR-Redirect；補強 §6 UI/UX 章節（sidebar 為共用元件、`/user-info` 改為極端 fallback）；§7 補 JWT `is_sales_manager` 解析失敗保守降級規則；新增 T-008~T-013 測試案例 |
+| **v2.1.0** | **2026-07-12** | **【業務角色移除 Customer 360 + 預設導向改分派總覽，ref US-177 / F111】** 業務部長（`business_role='director'`）與業務處長（`business_role='section_chief'`）不再具備 Customer 360（E06）存取權：sidebar 不顯示 Customer 360 群組、前端路由守衛攔截 `/c360/**` 並重導向 `/assignment/overview`；登入後預設導向由 `/c360/customers` 改為 `/assignment/overview`（分派總覽儀表板，客戶名單分派模組 landing）。一般使用者（`businessRole IS NULL`）與系統管理者（`admin`）不受影響（一般使用者仍 `/c360/customers`、admin 仍 `/` 且保有 Customer 360）。強制為**純前端 RBAC**（sidebar 可見性 + 路由守衛 + 角色感知導向），後端 Customer 360（E06）端點維持 `authenticated`、不新增 Guard。影響章節：§1 功能摘要；§4 RBAC 路由保護表（新增 `/c360/**` 攔截列 + 業務角色 admin 路由攔截改導向 `/assignment/overview`）；§4.5（業務部長 / 業務處長「登入後預設導向」欄改 `/assignment/overview` + 新增 Customer 360 可用性矩陣 + Customer 360 分組規則）；AC-1（補未變更註）；AC-5 / AC-5b（改導向分派總覽 + 移除 Customer 360）；AC-6（新增 Customer 360 群組可見性規則）；§6 UI/UX（登入後預設頁面 + `/user-info` fallback 說明 + 互動狀態表）；§7 錯誤場景（新增 `/c360/**` 攔截列）；§8 測試案例（T-008 / T-008b / T-010 更新 + 新增 T-015）；BR-Redirect（改寫）。 |
 | **v2.0** | **2026-05-16** | **【E07 合併重構 AD-E07 v3.0 — 破壞性變更】** 廢除 `users.is_sales_manager`（v1.x）與 `users.e07_role`（v1.4 短期過渡），整合為單一欄位 `users.business_role VARCHAR(20) NULL`（enum: `'director'` / `'section_chief'` / `NULL` + DB CHECK constraint）。實質身份由 3 種改為 **4 種 label**：「系統管理者」/「業務部長」/「業務處長」/「一般使用者」。**§4.5 完整重寫**為「4 角色 label 矩陣」，新增欄位語意說明、互斥性規則、單一寫入入口（F006a）。**新增 §4.6**「角色 × 模組權限矩陣與 Guard 對應」作為 E07 全系列 Feature（F048~F072 / F075~F089）Controller Guard 套用之**權威指引**：含 §4.6.1 模組權限矩陣（M01~M07）、§4.6.2 Controller Guard 對應表、§4.6.3 Guard 體系（DirectorGuard / SectionChiefGuard / DirectorOrSectionChiefGuard 取代 SalesManagerGuard）、§4.6.4 JWT payload 規格（`businessRole` claim 取代 `isSalesManager` + `e07Role`，含 legacy JWT 處理 + token revoke 機制）、§4.6.5 下游引用清單。AC-5 拆為 AC-5（部長）+ AC-5b（處長）；AC-6 改寫為 4 身份。BR-003/004/005/RBAC/Redirect 全面改寫；新增 BR-Revoke（`password_changed_at` 觸發）、BR-LegacyJWT（不阻擋既有 session）。§4 RBAC 路由保護表新增「業務處長存取部長路由攔截」與新錯誤碼（`E07_ROLE_NOT_ASSIGNED` / `E07_REQUIRES_DIRECTOR`）。§7 錯誤場景、§8 測試案例 T-008b/T-009b/T-014 補充處長與 token revoke 場景。§13 交叉參考新增 F006a / F073 / F074，F008 標 DEPRECATED。 |

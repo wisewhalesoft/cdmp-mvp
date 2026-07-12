@@ -1,8 +1,8 @@
 ---
 spec-id: scope
 title: 範圍定義
-version: "1.6"
-date: 2026-05-04
+version: "1.7"
+date: 2026-07-12
 status: Draft
 ---
 
@@ -71,8 +71,8 @@ status: Draft
 | F042 | US-055 | E05 | ETL 執行引擎核心框架 | P0-MVP | DAG 拓撲排序、Node Dispatcher、nodeOutputMap、temp table 管理 |
 | F043 | US-056, US-057, US-058 | E05 | ETL 節點執行器 | P0-MVP | 8 種 NodeExecutor（extract, merge, dedup, type_cast, derived_field, field_mapping, conditional, lookup），含 Lookup 雙輸入模式 |
 | F044 | US-057 | E05 | Target Load + UPSERT | P0-MVP | 批次寫入目標表、ETL 追蹤欄位填充、UPSERT 衝突處理 |
-| F046 | US-060 | E06 | Customer 360 — 客戶搜尋與清單 | P0-MVP | 統計摘要 + Full-Text Search + 類型篩選 + 分頁；依角色遮罩 |
-| F047 | US-061 | E06 | Customer 360 — 單一客戶 360 詳情 | P0-MVP | 85 欄位 8 個分類展示，ETL 新鮮度顯示 |
+| F046 | US-060 | E06 | Customer 360 — 客戶搜尋與清單 | P0-MVP | 統計摘要 + Full-Text Search + 類型篩選 + 分頁；依角色遮罩；前端可達性限系統管理者 / 一般使用者（業務部長 / 業務處長不可，見 F002 §4.5 v2.1.0） |
+| F047 | US-061 | E06 | Customer 360 — 單一客戶 360 詳情 | P0-MVP | 85 欄位 8 個分類展示，ETL 新鮮度顯示；前端可達性限系統管理者 / 一般使用者（業務部長 / 業務處長不可，見 F002 §4.5 v2.1.0） |
 | F048 | US-070 | E07 | 查看本月名單定義清單 | P0-MVP | M01 入口頁；使用中/已停用雙頁籤；月名單分派鎖 |
 | F049 | US-071 | E07 | Stage 0 每日分派數量估算 | P0-MVP | 每日估算 + 單一 LIST_NO 即時案件試算 |
 | F050 | US-088 | E07 | 新增名單定義 | P0-MVP | LIST_NO 自動產生（OB{YYYYMM}{NNN}）；同月 999 筆上限；PROD_KIND+CARD_TYPE 重複檢查；複製名單 |
@@ -144,7 +144,7 @@ E01（驗證與登入）
  ├── 封鎖 → E03（資料來源管理需要 Admin 已完成驗證）
  ├── 封鎖 → E04（資料擷取管理需要 Admin 已完成驗證）
  ├── 封鎖 → E05（ETL Pipeline 管理需要 Admin 已完成驗證）
- ├── 封鎖 → E06（Customer 360 需要已驗證使用者）
+ ├── 封鎖 → E06（Customer 360 需要已驗證使用者；前端限系統管理者 / 一般使用者，業務部長 / 業務處長不可存取）
  └── 封鎖 → E07（分派模組需要業務主管已驗證）
 E02（帳號與角色管理）
  └── 封鎖 → E07（業務主管旗標 is_sales_manager 由 E02 設定）
@@ -162,7 +162,7 @@ E05（ETL Pipeline 管理）
 - E03 依賴 E01：Admin 必須完成驗證才能執行資料來源管理操作
 - E04 依賴 E01 與 E03：Admin 已驗證且需有資料來源才能建立擷取任務
 - E05 依賴 E01 與 E04：Admin 已驗證且需有擷取任務產生 raw data 表
-- E06 依賴 E01 與 E05：已驗證使用者且 `customer_core` 已由 ETL 載入
+- E06 依賴 E01 與 E05：已驗證使用者且 `customer_core` 已由 ETL 載入；**前端可達性限系統管理者與一般使用者**（業務部長 / 業務處長不可存取，為純前端 sidebar + 路由守衛限制，後端 E06 端點維持 `authenticated`，見 F002 §4.5 v2.1.0 / US-177 / F111）
 - E07 依賴 E01、E02、E04、E05：業務主管需驗證並具備 `is_sales_manager = true`；`ob_pool_data` / `ob_emphire` / `ob_calendar` 由 E04 + E05 雙層 ETL 載入
 - **E07 涉及的 OB 系統表（OBPOOLDATA / OBEMPHIRE / OBCALENDAR）透過 E04 通用擷取機制抓取至 raw_xxx 中介表後，再由 E05 Pipeline TargetLoad 載入 `ob_pool_data` / `ob_emphire` / `ob_calendar`（雙層架構，AD-E07-12）**：
   - E04 端建立通用擷取任務（既有機制 → raw_{task_id_short}）；OBEMPHIRE 採 full 全量重抓策略（每日重抓）、OBCALENDAR 年初執行、OBPOOLDATA 每月名單分派前執行
