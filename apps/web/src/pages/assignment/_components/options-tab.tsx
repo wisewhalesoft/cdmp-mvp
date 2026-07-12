@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Search,
@@ -9,6 +9,14 @@ import {
   List,
   ChevronUp,
   ChevronDown,
+  Sparkles,
+  ArrowRight,
+  CloudOff,
+  RefreshCw,
+  Loader2,
+  Inbox,
+  CheckCheck,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -19,8 +27,11 @@ import {
   deactivateOption,
   reactivateOption,
   reorderOptions,
+  getDistinctValues,
+  createOptionsBulk,
   type PooldataField,
   type PooldataOption,
+  type DistinctValueItem,
 } from '@/api/pooldata-fields';
 import { getEffectiveIdentity } from '@/stores/auth-store';
 
@@ -79,6 +90,41 @@ function StatusBadgeOpt({ option }: { option: PooldataOption }) {
   );
 }
 
+/**
+ * F112 / US-178 進入點 2：批次帶入 Modal 之狀態機（AC-7/9/11/12/13/14，BR-11）。
+ * 六態：載入 / 候選清單就緒 / 無新可帶入（全部已存在）/ 空狀態 / 錯誤（依 kind 分流）。
+ */
+type BiErrorKind = 'not_ready' | 'timeout' | 'generic';
+
+type BulkImportState =
+  | { status: 'closed' }
+  | { status: 'loading' }
+  | {
+      status: 'ready';
+      candidates: DistinctValueItem[];
+      truncated: boolean;
+      cap: number;
+      existingCount: number;
+    }
+  | { status: 'no_new'; total: number }
+  | { status: 'empty' }
+  | { status: 'error'; kind: BiErrorKind; message: string };
+
+function classifyBulkError(err: unknown): { kind: BiErrorKind; message: string } {
+  const e = err as { response?: { data?: { error?: string } } };
+  const code = e?.response?.data?.error;
+  if (code === 'OBPOOLDATA_NOT_READY' || code === 'CUSTOMER_CORE_NOT_READY') {
+    return {
+      kind: 'not_ready',
+      message: '來源資料尚未就緒，請稍後再試或聯繫系統管理員',
+    };
+  }
+  if (code === 'DISTINCT_VALUES_QUERY_TIMEOUT') {
+    return { kind: 'timeout', message: '讀取可選值逾時，請稍後重試' };
+  }
+  return { kind: 'generic', message: '讀取可選值失敗，請稍後重試' };
+}
+
 export function OptionsTab() {
   const { showToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -106,6 +152,12 @@ export function OptionsTab() {
 
   const [reactivatingValue, setReactivatingValue] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
+
+  // F112 / US-178 進入點 2：批次帶入 Modal
+  const [bulkState, setBulkState] = useState<BulkImportState>({ status: 'closed' });
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
+  const bulkReqId = useRef(0);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -215,6 +267,94 @@ export function OptionsTab() {
       setCreateError(msg);
     } finally {
       setCreating(false);
+    }
+  };
+
+  // F112 進入點 2：偵測 distinct → 僅列 alreadyOption===false 候選（去重，AC-7）。
+  //   全部已存在 → 「無新可選值可帶入」（AC-9）；空值 → 空狀態（AC-14）；錯誤 → 依 kind 分流（BR-11）。
+  const fetchBulkDistinct = useCallback(async (columnName: string) => {
+    const reqId = ++bulkReqId.current;
+    setBulkState({ status: 'loading' });
+    setBulkSelected(new Set());
+    try {
+      const res = await getDistinctValues(columnName);
+      if (reqId !== bulkReqId.current) return; // stale
+      if (!res.values || res.values.length === 0) {
+        setBulkState({ status: 'empty' });
+        return;
+      }
+      const candidates = res.values.filter((v) => !v.alreadyOption);
+      const existingCount = res.values.length - candidates.length;
+      if (candidates.length === 0) {
+        setBulkState({ status: 'no_new', total: res.values.length });
+        return;
+      }
+      setBulkState({
+        status: 'ready',
+        candidates,
+        truncated: res.truncated,
+        cap: res.cap,
+        existingCount,
+      });
+      // 候選全部預設勾選（AC-7）
+      setBulkSelected(new Set(candidates.map((v) => v.value)));
+    } catch (err: unknown) {
+      if (reqId !== bulkReqId.current) return;
+      const { kind, message } = classifyBulkError(err);
+      setBulkState({ status: 'error', kind, message });
+    }
+  }, []);
+
+  const openBulkImport = () => {
+    if (!selectedCol) return;
+    void fetchBulkDistinct(selectedCol);
+  };
+
+  const closeBulkImport = () => {
+    if (bulkSubmitting) return;
+    bulkReqId.current += 1;
+    setBulkState({ status: 'closed' });
+    setBulkSelected(new Set());
+  };
+
+  const toggleBulkValue = (value: string) => {
+    setBulkSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  };
+
+  const setAllBulkSelected = (all: boolean) => {
+    if (bulkState.status !== 'ready') return;
+    setBulkSelected(
+      all ? new Set(bulkState.candidates.map((v) => v.value)) : new Set(),
+    );
+  };
+
+  // 確認帶入 → createOptionsBulk（僅勾選值，AC-8）→ 成功後刷新可選值列表 + 結果 toast
+  const submitBulkImport = async () => {
+    if (!selectedCol || bulkState.status !== 'ready') return;
+    const picked = bulkState.candidates
+      .filter((v) => bulkSelected.has(v.value))
+      .map((v) => ({ optionValue: v.value, optionLabel: v.value }));
+    if (picked.length === 0) return;
+    setBulkSubmitting(true);
+    try {
+      const res = await createOptionsBulk(selectedCol, picked);
+      const skippedNote =
+        res.skippedCount > 0 ? `（略過 ${res.skippedCount} 筆既有值）` : '';
+      showToast(`已帶入 ${res.createdCount} 筆可選值${skippedNote}`, 'success');
+      bulkReqId.current += 1;
+      setBulkState({ status: 'closed' });
+      setBulkSelected(new Set());
+      void fetchAll();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      showToast(e?.response?.data?.message ?? '帶入失敗，請稍後重試', 'error');
+    } finally {
+      setBulkSubmitting(false);
     }
   };
 
@@ -463,6 +603,23 @@ export function OptionsTab() {
                   />
                   顯示已停用值
                 </label>
+                {/*
+                 * F112 / US-178 進入點 2：「從實際資料帶入可選值」按鈕。
+                 * FE2-003 紅線：處長（canWrite=false）須「完全不渲染」此按鈕（非 disabled-but-visible）；
+                 * 故用條件式渲染 `{canWrite && currentItem && ...}`，刻意不沿用鄰近「新增可選值」之
+                 * `disabled={!canWrite}` 模式（該按鈕在 DOM 中仍存在，僅 disabled）。
+                 */}
+                {canWrite && currentItem && (
+                  <button
+                    type="button"
+                    data-testid={`btn-import-options-${currentItem.field.columnName}`}
+                    onClick={openBulkImport}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-primary border border-primary/40 text-xs font-medium rounded-md hover:bg-blue-50 shadow-sm"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    從實際資料帶入可選值
+                  </button>
+                )}
                 <button
                   type="button"
                   data-testid="btn-create-option"
@@ -800,6 +957,211 @@ export function OptionsTab() {
                 >
                   確認停用
                 </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== F112 / US-178 進入點 2：從實際資料帶入可選值（批次）Modal ===== */}
+      {bulkState.status !== 'closed' && (
+        <div className="fixed inset-0 z-50" data-testid="bulk-import-modal">
+          <div className="absolute inset-0 bg-black/50" onClick={closeBulkImport} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-800 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    從實際資料帶入可選值
+                  </h3>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    欄位：
+                    <span className="font-medium text-gray-700">
+                      {currentItem?.field.displayName ?? selectedCol}
+                    </span>{' '}
+                    <code className="font-mono text-gray-400">（{selectedCol}）</code>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeBulkImport}
+                  className="p-1 hover:bg-gray-100 rounded-md"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="px-6 py-5 min-h-[200px]">
+                {bulkState.status === 'loading' && (
+                  <div
+                    data-testid="bi-loading"
+                    className="py-6 flex flex-col items-center justify-center text-center gap-2"
+                  >
+                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    <p className="text-sm text-gray-500">正在讀取實際資料的可選值…</p>
+                  </div>
+                )}
+
+                {bulkState.status === 'ready' && (
+                  <div data-testid="bi-ready">
+                    {bulkState.truncated && (
+                      <div
+                        data-testid="bi-truncated-warning"
+                        className="mb-2.5 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md flex items-start gap-2"
+                      >
+                        <AlertTriangle className="w-3.5 h-3.5 text-warning mt-0.5 shrink-0" />
+                        <p className="text-[11px] text-amber-700 leading-relaxed">
+                          來源相異值過多，僅顯示前 {bulkState.cap} 筆。此欄位相異值數量偏高，可能不適合作為類別型欄位。
+                        </p>
+                      </div>
+                    )}
+                    <p className="text-sm text-gray-700 mb-1">
+                      偵測到{' '}
+                      <b className="text-primary" data-testid="bi-heading-count">
+                        {bulkState.candidates.length}
+                      </b>{' '}
+                      個尚未建立的可選值（已排除{' '}
+                      <span className="font-medium text-gray-600">
+                        {bulkState.existingCount}
+                      </span>{' '}
+                      個既有值），是否一併新增？
+                    </p>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2 text-xs">
+                        <button
+                          type="button"
+                          data-testid="bi-select-all"
+                          onClick={() => setAllBulkSelected(true)}
+                          className="text-primary hover:underline"
+                        >
+                          全選
+                        </button>
+                        <span className="text-gray-300">|</span>
+                        <button
+                          type="button"
+                          data-testid="bi-select-clear"
+                          onClick={() => setAllBulkSelected(false)}
+                          className="text-gray-500 hover:underline"
+                        >
+                          全部清除
+                        </button>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        已勾選{' '}
+                        <span
+                          data-testid="bi-sel-count"
+                          className="font-semibold text-primary"
+                        >
+                          {bulkSelected.size}
+                        </span>{' '}
+                        / <span data-testid="bi-sel-total">{bulkState.candidates.length}</span>
+                      </span>
+                    </div>
+                    <div
+                      data-testid="bi-list"
+                      className="max-h-56 overflow-y-auto border border-gray-200 rounded-md"
+                    >
+                      {bulkState.candidates.map((item) => (
+                        <label
+                          key={item.value}
+                          className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50/40 cursor-pointer border-b border-gray-100 last:border-0"
+                        >
+                          <input
+                            type="checkbox"
+                            data-testid={`bi-distinct-check-${item.value}`}
+                            checked={bulkSelected.has(item.value)}
+                            onChange={() => toggleBulkValue(item.value)}
+                            className="rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/30"
+                          />
+                          <span className="font-mono text-[11px] text-gray-500 min-w-[3.5rem] shrink-0">
+                            {item.value}
+                          </span>
+                          <ArrowRight className="w-3 h-3 text-gray-300 shrink-0" />
+                          <span className="text-sm text-gray-700 truncate">
+                            {item.value}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-gray-400 leading-relaxed mt-2">
+                      「欄位值」= 偵測到的實際值、「顯示名稱」預設同為該值，之後可於清單重新命名。
+                    </p>
+                  </div>
+                )}
+
+                {bulkState.status === 'no_new' && (
+                  <div
+                    data-testid="bi-no-new"
+                    className="py-8 flex flex-col items-center text-center gap-1.5"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center">
+                      <CheckCheck className="w-6 h-6 text-success" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700">無新可選值可帶入</p>
+                    <p className="text-[11px] text-gray-400 max-w-xs">
+                      此欄位既有的可選值已涵蓋來源資料的全部{' '}
+                      <span className="font-medium text-gray-600">{bulkState.total}</span>{' '}
+                      個相異值，沒有需要新增的候選值。
+                    </p>
+                  </div>
+                )}
+
+                {bulkState.status === 'empty' && (
+                  <div
+                    data-testid="bi-empty"
+                    className="py-8 flex flex-col items-center text-center gap-1.5"
+                  >
+                    <Inbox className="w-6 h-6 text-gray-300" />
+                    <p className="text-sm text-gray-600">未偵測到任何可選值</p>
+                    <p className="text-[11px] text-gray-400 max-w-xs">
+                      來源資料表此欄位無任何非空值，無可帶入之候選值。
+                    </p>
+                  </div>
+                )}
+
+                {bulkState.status === 'error' && (
+                  <div
+                    data-testid="bi-error"
+                    data-error-kind={bulkState.kind}
+                    className="py-8 flex flex-col items-center text-center gap-2"
+                  >
+                    <CloudOff className="w-6 h-6 text-danger" />
+                    <p className="text-sm text-gray-600">{bulkState.message}</p>
+                    <button
+                      type="button"
+                      data-testid="bi-retry"
+                      onClick={() => selectedCol && void fetchBulkDistinct(selectedCol)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary border border-primary/40 rounded-md hover:bg-blue-50"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      重試
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50/50">
+                <button
+                  type="button"
+                  onClick={closeBulkImport}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-white"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  data-testid="btn-confirm-bulk-import"
+                  disabled={
+                    bulkState.status !== 'ready' ||
+                    bulkSelected.size === 0 ||
+                    bulkSubmitting
+                  }
+                  onClick={() => void submitBulkImport()}
+                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {bulkSubmitting ? '帶入中...' : '確認帶入'}
+                </button>
               </div>
             </div>
           </div>
