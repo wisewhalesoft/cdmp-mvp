@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   ServiceUnavailableException,
@@ -16,6 +17,11 @@ import { User } from '@/database/entities/user.entity';
 import { ExtractionTask } from '@/database/entities/extraction-task.entity';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { MSSQLExecutor } from '../../extraction-task/executors/mssql-executor';
+import {
+  DISTINCT_VALUES_CAP,
+  DISTINCT_VALUES_TIMEOUT_MS,
+  SAFE_COLUMN_NAME_RE,
+} from '../pooldata-field.constants';
 
 /**
  * F075 v1.3 / P1 B5：POOLDATA 篩選欄位白名單 CRUD Service
@@ -86,6 +92,21 @@ export interface AvailableColumnItem {
 
 export interface GetAvailableColumnsResult {
   availableColumns: AvailableColumnItem[];
+}
+
+// F112 / AD-E07-47 §3.4：distinct-values 端點回應型別（LOCAL；不進 @cdmp/shared）
+export interface DistinctValueItem {
+  value: string;
+  alreadyOption: boolean;
+}
+
+export interface DistinctValuesResult {
+  columnName: string;
+  dataSource: 'ob_pool_data' | 'customer_core';
+  values: DistinctValueItem[];
+  totalReturned: number;
+  truncated: boolean;
+  cap: number;
 }
 
 // F075 v1.4 / _inferSuggestedFieldType 推斷規則（spec §5.5 / BR-12）
@@ -373,20 +394,8 @@ export class PooldataFieldWhitelistService {
     // MSSQL 方言：catalog 須大寫 INFORMATION_SCHEMA（BIN collation 大小寫敏感，I-MSSQL-CATALOG-CASE-01）、
     //   schema 為 'dbo'（非 PG 'public'）、`LIMIT`→`TOP`。SQLite test env 無 information_schema → catch。
     const isMssql = this.dataSource.options.type === 'mssql';
-    // Step 1：確認 ob_pool_data 表存在
-    const tableExistsSql = isMssql
-      ? `SELECT TOP 1 1 AS x
-           FROM INFORMATION_SCHEMA.TABLES
-          WHERE TABLE_SCHEMA = 'dbo'
-            AND TABLE_NAME = 'ob_pool_data'`
-      : `SELECT 1
-           FROM information_schema.tables
-          WHERE table_schema = 'public'
-            AND table_name = 'ob_pool_data'
-          LIMIT 1`;
-    const tableExists = await this.dataSource.query(tableExistsSql).catch(() => null);
-
-    if (!tableExists || tableExists.length === 0) {
+    // Step 1：確認 ob_pool_data 表存在（F112 / AD §3.3：重構為共用 `_checkTableExists`，零行為變更）
+    if (!(await this._checkTableExists('ob_pool_data'))) {
       throw new ServiceUnavailableException({
         error: ERROR_CODES.OBPOOLDATA_NOT_READY,
         message: ERROR_MESSAGES.OBPOOLDATA_NOT_READY,
@@ -483,6 +492,231 @@ export class PooldataFieldWhitelistService {
     if (NUMERIC_SET.has(dataType)) return 'numeric';
     if (DATE_SET.has(dataType)) return 'date';
     return 'categorical'; // 保守原則：字串型 / 未識別 / boolean / 其他 → categorical
+  }
+
+  // ============================================================
+  // F112 / AD-E07-47 — GET /pooldata-fields/:columnName/distinct-values
+  // ============================================================
+
+  /**
+   * 查詢某欄位來源表之實際 distinct 值（供兩進入點之核取清單）。
+   *
+   * 執行順序（AD §3.4；I-DVAL-SAFE-INTERP-01 / I-DVAL-READY-BEFORE-EXIST-01）：
+   *   1. `SAFE_COLUMN_NAME_RE` 正則驗證（函式第一行，先於任何 DB 呼叫）→ 400 SOURCE_COLUMN_NAME_INVALID
+   *   2. 來源表解析（`_resolveDistinctValueSource`；非 categorical → 400，重用 F076 既有碼）
+   *   3. **表就緒檢查先於欄位存在性檢查**（I-DVAL-READY-BEFORE-EXIST-01）：表不存在 → 503
+   *      OBPOOLDATA_NOT_READY / CUSTOMER_CORE_NOT_READY
+   *   4. 欄位存在性確認（參數化 INFORMATION_SCHEMA.COLUMNS）→ 404 SOURCE_COLUMN_NOT_FOUND
+   *   5. alreadyOption 查詢（含 inactive）與 DISTINCT 查詢並行（Promise.all）
+   *   6. truncation 判定（> CAP → truncated=true，取前 CAP 筆）
+   *
+   * @param opts.timeoutMs distinct 查詢之 app-level 逾時（預設 `DISTINCT_VALUES_TIMEOUT_MS`）；
+   *   比照既有 `Stage0EstimateService.estimateListCount(listNo, opts)` 之 F049 timeoutMs 注入慣例，
+   *   供測試以極小值強制逾時分支。controller 呼叫不帶此參數（用預設）。
+   */
+  async getDistinctValues(
+    columnName: string,
+    opts: { timeoutMs?: number } = {},
+  ): Promise<DistinctValuesResult> {
+    // 1) 欄位名稱安全驗證（第一道防線，先於白名單解析與任何 DB 呼叫；I-DVAL-SAFE-INTERP-01）
+    if (!SAFE_COLUMN_NAME_RE.test(columnName)) {
+      throw new BadRequestException({
+        error: ERROR_CODES.SOURCE_COLUMN_NAME_INVALID,
+        message: ERROR_MESSAGES.SOURCE_COLUMN_NAME_INVALID,
+      });
+    }
+
+    // 2) 來源表解析（白名單 data_source / 進入點 1 固定 ob_pool_data；非 categorical → 400）
+    const { table } = await this._resolveDistinctValueSource(columnName);
+
+    // 3) 表就緒檢查優先於欄位存在性檢查（I-DVAL-READY-BEFORE-EXIST-01）
+    if (!(await this._checkTableExists(table))) {
+      const code =
+        table === 'customer_core'
+          ? ERROR_CODES.CUSTOMER_CORE_NOT_READY
+          : ERROR_CODES.OBPOOLDATA_NOT_READY;
+      throw new ServiceUnavailableException({
+        error: code,
+        message: ERROR_MESSAGES[code],
+      });
+    }
+
+    // 4) 欄位存在性確認（參數化 INFORMATION_SCHEMA.COLUMNS）
+    if (!(await this._checkColumnExists(table, columnName))) {
+      throw new NotFoundException({
+        error: ERROR_CODES.SOURCE_COLUMN_NOT_FOUND,
+        message: ERROR_MESSAGES.SOURCE_COLUMN_NOT_FOUND,
+      });
+    }
+
+    // 5) alreadyOption 查詢與 DISTINCT 查詢互不相依 → 並行（沿用 getAvailableColumns Promise.all 先例）
+    const [existingOptionRows, distinctValues] = await Promise.all([
+      this.optionRepo.find({
+        where: { column_name: columnName },
+        select: ['option_value'],
+      }),
+      this._queryDistinctWithTimeout(
+        table,
+        columnName,
+        opts.timeoutMs ?? DISTINCT_VALUES_TIMEOUT_MS,
+      ),
+    ]);
+
+    const existingSet = new Set(existingOptionRows.map((r) => r.option_value));
+
+    // 6) truncation 判定：實際回傳 > CAP → 取前 CAP 筆、totalReturned=CAP、truncated=true
+    const truncated = distinctValues.length > DISTINCT_VALUES_CAP;
+    const sliced = truncated
+      ? distinctValues.slice(0, DISTINCT_VALUES_CAP)
+      : distinctValues;
+
+    return {
+      columnName,
+      dataSource: table,
+      values: sliced.map((v) => {
+        const asString = String(v);
+        return { value: asString, alreadyOption: existingSet.has(asString) };
+      }),
+      totalReturned: sliced.length,
+      truncated,
+      cap: DISTINCT_VALUES_CAP,
+    };
+  }
+
+  /**
+   * 來源表解析（AD §3.2 / BR-12）：
+   *   - 白名單存在此 columnName（不論 is_active）→ 使用其 data_source；非 categorical → 400（重用 F076 碼）
+   *   - 白名單不存在（進入點 1，新增欄位 Modal 選取尚未列入白名單之 ob_pool_data 欄位）→ 固定 ob_pool_data
+   *
+   * 刻意**不**重用 `assertCategorical()`：其 `findOneOrFail` 對「不存在」拋 404，但進入點 1 需要
+   * 「不存在 → 靜默視為 ob_pool_data」，語意不同不可共用（AD §3.2 末段）。
+   */
+  private async _resolveDistinctValueSource(
+    columnName: string,
+  ): Promise<{ table: 'ob_pool_data' | 'customer_core' }> {
+    const row = await this.fieldRepo.findOne({
+      where: { column_name: columnName },
+    });
+    if (row) {
+      if (row.field_type !== 'categorical') {
+        throw new BadRequestException({
+          error: ERROR_CODES.POOLDATA_OPTION_FIELD_TYPE_INVALID,
+          message: ERROR_MESSAGES.POOLDATA_OPTION_FIELD_TYPE_INVALID,
+        });
+      }
+      return { table: row.dataSource ?? 'ob_pool_data' };
+    }
+    // 進入點 1：欄位尚未列入白名單 → 固定 ob_pool_data
+    return { table: 'ob_pool_data' };
+  }
+
+  /**
+   * 確認來源表是否存在（AD §3.3；供 getAvailableColumns 與 getDistinctValues 共用，DRY 零行為變更）。
+   *
+   * `tableName` 恆為程式碼常數（'ob_pool_data' | 'customer_core'），仍以值參數化傳遞保持一致風格。
+   * SQLite 測試環境無 information_schema → catch 降級為 false（未就緒）。
+   */
+  private async _checkTableExists(
+    tableName: 'ob_pool_data' | 'customer_core',
+  ): Promise<boolean> {
+    const isMssql = this.dataSource.options.type === 'mssql';
+    const sql = isMssql
+      ? `SELECT TOP 1 1 AS x FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @0`
+      : `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = ? LIMIT 1`;
+    const rows = await this.dataSource.query(sql, [tableName]).catch(() => null);
+    return !!rows && rows.length > 0;
+  }
+
+  /**
+   * 確認 columnName 是否存在於解析出之來源表（AD §3.3）。
+   *
+   * `columnName` 此階段已通過 `SAFE_COLUMN_NAME_RE`，但仍以**值參數化**查詢（非識別字內插），
+   * 避免任何 SQL 文字插入。SQLite 無 information_schema → catch 降級為 false。
+   */
+  private async _checkColumnExists(
+    tableName: 'ob_pool_data' | 'customer_core',
+    columnName: string,
+  ): Promise<boolean> {
+    const isMssql = this.dataSource.options.type === 'mssql';
+    const sql = isMssql
+      ? `SELECT TOP 1 1 AS x FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = @0 AND COLUMN_NAME = @1`
+      : `SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND column_name = ? LIMIT 1`;
+    const rows = await this.dataSource
+      .query(sql, [tableName, columnName])
+      .catch(() => null);
+    return !!rows && rows.length > 0;
+  }
+
+  /**
+   * DISTINCT 查詢包上獨立 app-level 逾時（AD §3.5；I-DVAL-SCAN-BOUND-01 / I-DVAL-TIMEOUT-EXPLICIT-01）。
+   *
+   * 以 `Promise.race` 界定獨立於全域 driver requestTimeout（1 小時）之逾時視窗；逾時或任何非預期
+   * 例外一律收斂為 500 `DISTINCT_VALUES_QUERY_TIMEOUT`（忠實比照 `Stage0EstimateService.estimateListCount`
+   * 之 catch 語意：不外洩原始 SQL 錯誤訊息）。`finally` 之 `clearTimeout` 避免逾時 timer 於查詢先完成後
+   * 殘留並於稍後對已 settle 之 promise 產生 unhandled rejection（較 AD §3.5 片段之硬化）。
+   */
+  private async _queryDistinctWithTimeout(
+    table: 'ob_pool_data' | 'customer_core',
+    columnName: string,
+    timeoutMs: number,
+  ): Promise<unknown[]> {
+    // timeoutMs <= 0 即視為立即逾時（測試 / 強制中斷；沿用 F049 timeoutMs=0 慣例）
+    if (timeoutMs <= 0) {
+      throw new InternalServerErrorException({
+        error: ERROR_CODES.DISTINCT_VALUES_QUERY_TIMEOUT,
+        message: ERROR_MESSAGES.DISTINCT_VALUES_QUERY_TIMEOUT,
+      });
+    }
+
+    const queryPromise = this._runDistinctQuery(table, columnName);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () =>
+          reject(
+            new InternalServerErrorException({
+              error: ERROR_CODES.DISTINCT_VALUES_QUERY_TIMEOUT,
+              message: ERROR_MESSAGES.DISTINCT_VALUES_QUERY_TIMEOUT,
+            }),
+          ),
+        timeoutMs,
+      );
+    });
+
+    try {
+      return await Promise.race([queryPromise, timeoutPromise]);
+    } catch (e) {
+      if (e instanceof InternalServerErrorException) throw e;
+      this.logger.error(
+        `getDistinctValues query failed: ${(e as Error).message}`,
+      );
+      throw new InternalServerErrorException({
+        error: ERROR_CODES.DISTINCT_VALUES_QUERY_TIMEOUT,
+        message: ERROR_MESSAGES.DISTINCT_VALUES_QUERY_TIMEOUT,
+      });
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /**
+   * dialect-branch raw DISTINCT 查詢（AD §3.5；I-DVAL-NO-SAMPLE-01 精確 DISTINCT，禁用抽樣）。
+   *
+   * `columnName` 已通過 §3.3 之 regex + INFORMATION_SCHEMA 存在性驗證，此處可安全內插（I-DVAL-SAFE-INTERP-01）。
+   * 取 `CAP + 1` 筆以偵測 truncation；`WHERE ... IS NOT NULL` 天然滿足 AC-14 空狀態（全 NULL → []）。
+   * SQLite 無 information_schema 相關降級由上游檢查處理，此處查詢本體對兩方言皆有效。
+   */
+  private async _runDistinctQuery(
+    table: 'ob_pool_data' | 'customer_core',
+    columnName: string,
+  ): Promise<unknown[]> {
+    const isMssql = this.dataSource.options.type === 'mssql';
+    const cap1 = DISTINCT_VALUES_CAP + 1;
+    const sql = isMssql
+      ? `SELECT DISTINCT TOP (${cap1}) [${columnName}] AS v FROM ${table} WHERE [${columnName}] IS NOT NULL ORDER BY [${columnName}]`
+      : `SELECT DISTINCT "${columnName}" AS v FROM ${table} WHERE "${columnName}" IS NOT NULL ORDER BY "${columnName}" LIMIT ${cap1}`;
+    const rows = await this.dataSource.query(sql);
+    return (rows as Array<{ v: unknown }>).map((r) => r.v);
   }
 
   // ========================

@@ -22,6 +22,7 @@ import { FeatureFlagGuard } from '@/common/feature-flags/feature-flag.guard';
 import { RequireFeatureFlag } from '@/common/feature-flags/feature-flag.decorator';
 import { PooldataFieldOptionService } from '../services/pooldata-field-option.service';
 import { CreatePooldataOptionDto } from '../dto/create-pooldata-option.dto';
+import { BulkCreateOptionsDto } from '../dto/bulk-create-options.dto';
 import { UpdatePooldataOptionDto } from '../dto/update-pooldata-option.dto';
 import { DeactivatePooldataOptionDto } from '../dto/deactivate-pooldata-option.dto';
 import { ListPooldataOptionsQueryDto } from '../dto/list-pooldata-options-query.dto';
@@ -83,6 +84,26 @@ export class PooldataFieldOptionController {
       { optionValue: dto.optionValue, optionLabel: dto.optionLabel },
       actor,
     );
+  }
+
+  // ===== F112 §5.2 / AD-E07-47 §3.10 — 批次新增可選值 =====
+  //
+  // POST /:columnName/options/bulk — 兩進入點共用；'bulk' 為靜態子段，與 base @Post() 路徑字面量不同、
+  // 與 @Patch(':optionValue') 為不同 HTTP method，無 route param 衝突（AD §3.1）。
+  @Post('bulk')
+  @HttpCode(HttpStatus.OK)
+  @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
+  async createOptionsBulk(
+    @Param('columnName') columnName: string,
+    @Body() dto: BulkCreateOptionsDto,
+    @Req() req: any,
+  ) {
+    const actor = {
+      userId: req.user.userId,
+      ipAddress: req.ip ?? null,
+    };
+    return this.service.createOptionsBulk(columnName, dto.options, actor);
   }
 
   // ===== F076 §5.5 — 排序（先註冊以免被 :optionValue 攔截）=====
