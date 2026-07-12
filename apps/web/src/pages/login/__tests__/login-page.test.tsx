@@ -213,6 +213,50 @@ describe('LoginPage', () => {
       });
     });
 
+    // T-008（v2.1.0）：業務部長登入 → 導向 /assignment/overview（分派總覽）
+    it('業務部長（role=user, businessRole=director）登入 → 導向 /assignment/overview', async () => {
+      const user = userEvent.setup();
+      mockedLogin.mockResolvedValue({
+        token: 'director-token',
+        user: {
+          id: 'd1',
+          name: 'Director',
+          email: 'director@cdmp.test',
+          role: 'user',
+          businessRole: 'director',
+        },
+      });
+      renderLoginPage();
+      await user.type(screen.getByLabelText('Email'), 'director@cdmp.test');
+      await user.type(screen.getByLabelText('密碼'), 'P@ssw0rd123');
+      await user.click(screen.getByRole('button', { name: '登入' }));
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/assignment/overview');
+      });
+    });
+
+    // T-008b（v2.1.0）：業務處長登入 → 導向 /assignment/overview（分派總覽）
+    it('業務處長（role=user, businessRole=section_chief）登入 → 導向 /assignment/overview', async () => {
+      const user = userEvent.setup();
+      mockedLogin.mockResolvedValue({
+        token: 'chief-token',
+        user: {
+          id: 's1',
+          name: 'SectionChief',
+          email: 'chief@cdmp.test',
+          role: 'user',
+          businessRole: 'section_chief',
+        },
+      });
+      renderLoginPage();
+      await user.type(screen.getByLabelText('Email'), 'chief@cdmp.test');
+      await user.type(screen.getByLabelText('密碼'), 'P@ssw0rd123');
+      await user.click(screen.getByRole('button', { name: '登入' }));
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/assignment/overview');
+      });
+    });
+
     // 既有 user 但無 isSalesManager 欄位（舊 token）
     it('一般使用者（role=user，無 isSalesManager 欄位）登入 → 導向 /c360/customers', async () => {
       const user = userEvent.setup();

@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useNavigate } from 'react-router-dom';
 import { loginSchema, type LoginFormData } from './login-schema';
 import { login } from '@/api/auth';
-import { setAuth } from '@/stores/auth-store';
+import { setAuth, getDefaultHomePath } from '@/stores/auth-store';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -40,12 +40,12 @@ export function LoginPage() {
         rememberMe: data.rememberMe,
       });
       setAuth(result.token, result.user);
-      // AD-E02-4-D 登入後導向策略：
-      //   admin → /（帳號管理）
-      //   user（包含業務主管）→ /c360/customers
-      // 業務主管與一般使用者均導向 /c360/customers；功能差異由 sidebar 與
-      // SalesManagerRoute 在執行時控制（F002 v1.2 §4.5 矩陣）。
-      navigate(result.user.role === 'admin' ? '/' : '/c360/customers');
+      // F002 v2.1.0 / US-177 / F111 登入後角色感知導向（§4.5 矩陣 / BR-Redirect）：
+      //   admin                    → /（帳號管理）
+      //   director / section_chief → /assignment/overview（分派總覽）
+      //   一般使用者               → /c360/customers（Customer 360）
+      // 須在 setAuth 之後呼叫 getDefaultHomePath()，才能讀到剛登入的身份。
+      navigate(getDefaultHomePath());
     } catch (err: unknown) {
       const error = err as { response?: { status?: number } };
       const status = error.response?.status;

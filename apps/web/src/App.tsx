@@ -42,6 +42,7 @@ import {
 } from '@/pages/assignment';
 import {
   AdminRoute,
+  Customer360Route,
   DirectorOrSectionChiefRoute,
   DirectorRoute,
   ProtectedRoute,
@@ -166,20 +167,22 @@ export function App() {
           </AdminRoute>
         }
       />
+      {/* F002 v2.1.0 / US-177 / F111：Customer 360 僅 admin + 一般使用者可進；
+          業務角色（director / section_chief）由 Customer360Route 攔截 → /assignment/overview */}
       <Route
         path="/c360/customers"
         element={
-          <ProtectedRoute>
+          <Customer360Route>
             <CustomerListPage />
-          </ProtectedRoute>
+          </Customer360Route>
         }
       />
       <Route
         path="/c360/customers/:customerId"
         element={
-          <ProtectedRoute>
+          <Customer360Route>
             <CustomerDetailPage />
-          </ProtectedRoute>
+          </Customer360Route>
         }
       />
       {/* E07 客戶名單分派 stub 路由（SalesManagerRoute Guard） */}

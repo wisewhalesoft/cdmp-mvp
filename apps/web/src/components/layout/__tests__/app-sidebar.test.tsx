@@ -34,13 +34,14 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
     expect(allLabels).toContain('名單定義');
   });
 
-  it('業務部長（user + director） → Customer 360 + 客戶名單分派 7 子項（移除 run 詳情頁入口），無資料治理', () => {
+  it('業務部長（user + director） → 客戶名單分派子項，無 Customer 360（v2.1.0 / US-177 / F111），無資料治理', () => {
     const visible = getVisibleMenuItems('user', 'director');
     const allLabels = visible.flatMap((sec) => [
       ...(sec.items?.map((i) => i.label) ?? []),
       ...sec.groups.flatMap((g) => g.items.map((i) => i.label)),
     ]);
-    expect(allLabels).toContain('Customer 360');
+    // F002 v2.1.0：業務角色無 Customer 360 存取權 → sidebar 不顯示
+    expect(allLabels).not.toContain('Customer 360');
     expect(allLabels).toContain('篩選欄位');
     expect(allLabels).not.toContain('代碼維護');
     expect(allLabels).toContain('計分卡設定');
@@ -59,8 +60,9 @@ describe('getVisibleMenuItems (pure function) — F002 v2.0 / AD-E07 v3.0', () =
       ...(sec.items?.map((i) => i.label) ?? []),
       ...sec.groups.flatMap((g) => g.items.map((i) => i.label)),
     ]);
+    // F002 v2.1.0：業務角色無 Customer 360 存取權 → sidebar 不顯示
+    expect(allLabels).not.toContain('Customer 360');
     // 可見
-    expect(allLabels).toContain('Customer 360');
     expect(allLabels).toContain('篩選欄位');
     expect(allLabels).not.toContain('代碼維護');
     expect(allLabels).toContain('名單定義');
@@ -259,6 +261,39 @@ describe('F111 SIDEBAR — 分派總覽為客戶名單分派群組首項（AC-17
   });
 });
 
+// =============================================================================
+// F002 v2.1.0 / US-177 / F111 — Customer 360 sidebar 可見性（admin_or_general_user）
+// =============================================================================
+describe('F002 v2.1.0 — Customer 360 依身份可見性（AC-6）', () => {
+  function customer360Visible(
+    role: 'admin' | 'user',
+    businessRole: BusinessRole,
+  ): boolean {
+    const visible = getVisibleMenuItems(role, businessRole);
+    const allLabels = visible.flatMap((sec) => [
+      ...(sec.items?.map((i) => i.label) ?? []),
+      ...sec.groups.flatMap((g) => g.items.map((i) => i.label)),
+    ]);
+    return allLabels.includes('Customer 360');
+  }
+
+  it('admin → Customer 360 可見', () => {
+    expect(customer360Visible('admin', null)).toBe(true);
+  });
+
+  it('一般使用者（businessRole=null）→ Customer 360 可見', () => {
+    expect(customer360Visible('user', null)).toBe(true);
+  });
+
+  it('業務部長（director）→ Customer 360 不可見', () => {
+    expect(customer360Visible('user', 'director')).toBe(false);
+  });
+
+  it('業務處長（section_chief）→ Customer 360 不可見', () => {
+    expect(customer360Visible('user', 'section_chief')).toBe(false);
+  });
+});
+
 describe('AppSidebar (component)', () => {
   it('admin sidebar 顯示完整 menu（DOM）', () => {
     renderSidebar({ role: 'admin', businessRole: null });
@@ -270,9 +305,10 @@ describe('AppSidebar (component)', () => {
     expect(screen.getByText('客戶名單分派')).toBeInTheDocument();
   });
 
-  it('業務部長 sidebar 顯示 Customer 360 + 客戶名單分派，不顯示資料治理', () => {
+  it('業務部長 sidebar 顯示客戶名單分派，不顯示 Customer 360（v2.1.0）與資料治理', () => {
     renderSidebar({ role: 'user', businessRole: 'director' });
-    expect(screen.getByText('Customer 360')).toBeInTheDocument();
+    // F002 v2.1.0 / US-177 / F111：業務角色無 Customer 360 存取權
+    expect(screen.queryByText('Customer 360')).toBeNull();
     expect(screen.getByText('客戶名單分派')).toBeInTheDocument();
     expect(screen.queryByText('帳號管理')).toBeNull();
     expect(screen.queryByText('資料來源')).toBeNull();
@@ -280,9 +316,11 @@ describe('AppSidebar (component)', () => {
     expect(screen.queryByText('ETL Pipeline')).toBeNull();
   });
 
-  it('業務處長 sidebar 客戶名單分派可見；Stage 0 試算可見（F049 v2.0 / US-168 唯讀），仍不含其餘 director_only 子項', () => {
+  it('業務處長 sidebar 客戶名單分派可見、不顯示 Customer 360（v2.1.0）；Stage 0 試算可見（F049 v2.0 / US-168 唯讀），仍不含其餘 director_only 子項', () => {
     renderSidebar({ role: 'user', businessRole: 'section_chief' });
     expect(screen.getByText('客戶名單分派')).toBeInTheDocument();
+    // F002 v2.1.0 / US-177 / F111：業務角色無 Customer 360 存取權
+    expect(screen.queryByText('Customer 360')).toBeNull();
     expect(screen.getByText('Stage 0 試算')).toBeInTheDocument();
     expect(screen.queryByText('計分卡設定')).toBeNull();
     expect(screen.queryByText('觸發月名單分派')).toBeNull();

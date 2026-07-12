@@ -77,3 +77,28 @@ export function getEffectiveIdentity(): EffectiveIdentity {
   if (!user) return 'user';
   return deriveEffectiveIdentity(user.role, user.businessRole);
 }
+
+/**
+ * F002 v2.1.0 / US-177 / F111：依實質身份回傳登入後預設導向路徑（pure function）。
+ *
+ * 對應 §4.5「角色 label 矩陣」最後一欄（BR-Redirect）：
+ * - admin                        → '/'（帳號管理）
+ * - director / section_chief      → '/assignment/overview'（分派總覽，業務角色營運 landing）
+ * - user（一般使用者）            → '/c360/customers'（Customer 360）
+ */
+export function defaultHomePathFor(identity: EffectiveIdentity): string {
+  if (identity === 'admin') return '/';
+  if (identity === 'director' || identity === 'section_chief') {
+    return '/assignment/overview';
+  }
+  return '/c360/customers';
+}
+
+/**
+ * F002 v2.1.0：讀取當前登入身份（getEffectiveIdentity）並回傳其預設 home path。
+ *
+ * ⚠️ 須於 setAuth() 寫入 localStorage 之後呼叫，才能讀到剛登入的身份。
+ */
+export function getDefaultHomePath(): string {
+  return defaultHomePathFor(getEffectiveIdentity());
+}

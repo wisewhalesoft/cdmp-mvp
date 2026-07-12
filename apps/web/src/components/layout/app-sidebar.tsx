@@ -28,6 +28,9 @@ import type { BusinessRole, UserRole } from '@cdmp/shared';
  * 宣告式 menu 設定 + 純函式過濾邏輯：
  * - `requires: 'authenticated'`              → 任何登入身份顯示
  * - `requires: 'admin'`                      → role === 'admin'
+ * - `requires: 'admin_or_general_user'`      → admin OR 一般使用者（businessRole NOT IN
+ *                                              ('director','section_chief')）— F002 v2.1.0 / US-177 / F111：
+ *                                              Customer 360 對業務角色隱藏
  * - `requires: 'director_only'`              → admin OR director（M02 / M03a/c / M04 觸發 / M03d Rollback）
  * - `requires: 'director_or_section_chief'`  → admin OR director OR section_chief（E07 大部分）
  * - `requires: 'sales_manager'`              → ⚠️ DEPRECATED — 視為 director_or_section_chief（過渡期向下相容）
@@ -38,6 +41,7 @@ import type { BusinessRole, UserRole } from '@cdmp/shared';
 export type MenuRequires =
   | 'authenticated'
   | 'admin'
+  | 'admin_or_general_user'
   | 'director_only'
   | 'director_or_section_chief'
   | 'sales_manager'; // DEPRECATED
@@ -99,10 +103,12 @@ export const MENU_SECTIONS: readonly MenuSection[] = [
     label: '應用模組',
     items: [
       {
+        // F002 v2.1.0 / US-177 / F111：Customer 360 僅 admin + 一般使用者可見；
+        // 業務角色（director / section_chief）不顯示（sidebar 端 RBAC，AC-6）
         to: '/c360/customers',
         label: 'Customer 360',
         icon: Contact,
-        requires: 'authenticated',
+        requires: 'admin_or_general_user',
       },
     ],
     groups: [
@@ -192,6 +198,13 @@ function matchesRequires(
 ): boolean {
   if (requires === 'authenticated') return true;
   if (requires === 'admin') return role === 'admin';
+  if (requires === 'admin_or_general_user') {
+    // F002 v2.1.0 / US-177 / F111：admin 或 一般使用者（businessRole 非 director / section_chief）
+    return (
+      role === 'admin' ||
+      (businessRole !== 'director' && businessRole !== 'section_chief')
+    );
+  }
   if (requires === 'director_only') {
     return role === 'admin' || businessRole === 'director';
   }

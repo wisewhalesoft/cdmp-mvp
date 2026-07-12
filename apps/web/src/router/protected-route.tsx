@@ -4,6 +4,7 @@ import {
   getUserRole,
   getIsSalesManager,
   getBusinessRole,
+  getDefaultHomePath,
 } from '@/stores/auth-store';
 import type { ReactNode } from 'react';
 
@@ -12,14 +13,21 @@ interface ProtectedRouteProps {
 }
 
 /**
- * F002 v1.2 / AD-E02-4-A：Route Guard 模型
+ * F002 v1.2 / v2.1.0：Route Guard 模型
  *
  * - ProtectedRoute：僅檢查 isAuthenticated（全身份可用）
- * - AdminRoute：role === 'admin'；未通過 redirect /c360/customers
- * - SalesManagerRoute：role === 'admin' OR isSalesManager === true；
- *     未通過 redirect /c360/customers
+ * - AdminRoute：role === 'admin'；未通過 redirect 至角色感知預設頁（getDefaultHomePath）
+ * - Customer360Route（v2.1.0 / US-177 / F111）：admin 或 一般使用者（businessRole NOT IN
+ *     ('director','section_chief')）可進；業務角色（director / section_chief）redirect
+ *     至 /assignment/overview
+ * - SalesManagerRoute：role === 'admin' OR isSalesManager === true；未通過 redirect
+ *     至角色感知預設頁
  * - UserRoute：deprecated；保留 export 並 delegate 至 ProtectedRoute 以避免
  *     既有 import 出現 breaking 變更
+ *
+ * v2.1.0 變更：各 Guard 未通過時之 fallback 由硬編 /c360/customers 改為角色感知
+ * getDefaultHomePath()——業務角色（director / section_chief）落在 /assignment/overview
+ * （其已無 Customer 360 存取權），一般使用者落在 /c360/customers。
  */
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
@@ -35,8 +43,31 @@ export function AdminRoute({ children }: ProtectedRouteProps) {
   }
   const role = getUserRole();
   if (role !== 'admin') {
-    // AD-E02-4-A 變更：redirect 目標 /user-info → /c360/customers
-    return <Navigate to="/c360/customers" replace />;
+    // v2.1.0：角色感知 fallback（director / section_chief → /assignment/overview）
+    return <Navigate to={getDefaultHomePath()} replace />;
+  }
+  return <>{children}</>;
+}
+
+/**
+ * F002 v2.1.0 / US-177 / F111：Customer 360 路由守衛。
+ *
+ * 通過條件：role === 'admin' 或 businessRole NOT IN ('director','section_chief')
+ * （即一般使用者，businessRole 為 null/undefined）。
+ * 業務角色（director / section_chief）無 Customer 360 存取權 → redirect
+ * 至 /assignment/overview（純前端強制；後端 E06 端點維持 authenticated）。
+ */
+export function Customer360Route({ children }: ProtectedRouteProps) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  const role = getUserRole();
+  const businessRole = getBusinessRole();
+  if (
+    role !== 'admin' &&
+    (businessRole === 'director' || businessRole === 'section_chief')
+  ) {
+    return <Navigate to="/assignment/overview" replace />;
   }
   return <>{children}</>;
 }
@@ -48,7 +79,7 @@ export function SalesManagerRoute({ children }: ProtectedRouteProps) {
   const role = getUserRole();
   // 嚴格 === true 比對（RISK-AD-E02-4-1）：admin 為超集，無需持有旗標
   if (role !== 'admin' && getIsSalesManager() !== true) {
-    return <Navigate to="/c360/customers" replace />;
+    return <Navigate to={getDefaultHomePath()} replace />;
   }
   return <>{children}</>;
 }
@@ -59,7 +90,7 @@ export function SalesManagerRoute({ children }: ProtectedRouteProps) {
  * - DirectorRoute：role === 'admin' OR businessRole === 'director'（M02 / M03a/c / M04 trigger / M03d Rollback）
  * - DirectorOrSectionChiefRoute：role === 'admin' OR businessRole IN ('director', 'section_chief')
  *
- * 失敗時 redirect 至 /c360/customers（沿用既有 fallback 行為）。
+ * 失敗時 redirect 至角色感知預設頁（getDefaultHomePath；v2.1.0）。
  */
 
 export function DirectorRoute({ children }: ProtectedRouteProps) {
@@ -69,7 +100,7 @@ export function DirectorRoute({ children }: ProtectedRouteProps) {
   const role = getUserRole();
   const businessRole = getBusinessRole();
   if (role !== 'admin' && businessRole !== 'director') {
-    return <Navigate to="/c360/customers" replace />;
+    return <Navigate to={getDefaultHomePath()} replace />;
   }
   return <>{children}</>;
 }
@@ -85,7 +116,7 @@ export function DirectorOrSectionChiefRoute({ children }: ProtectedRouteProps) {
     businessRole !== 'director' &&
     businessRole !== 'section_chief'
   ) {
-    return <Navigate to="/c360/customers" replace />;
+    return <Navigate to={getDefaultHomePath()} replace />;
   }
   return <>{children}</>;
 }

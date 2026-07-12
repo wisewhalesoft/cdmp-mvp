@@ -23,6 +23,7 @@ vi.mock('@/stores/auth-store', () => ({
   getIsSalesManager: vi.fn(() => true),
   getBusinessRole: vi.fn(() => 'director'),
   getEffectiveIdentity: vi.fn(() => 'director'),
+  getDefaultHomePath: vi.fn(() => '/assignment/overview'),
   getUser: vi.fn(() => ({
     id: 'd1',
     name: 'Director',

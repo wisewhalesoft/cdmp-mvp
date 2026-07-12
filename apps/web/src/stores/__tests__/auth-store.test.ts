@@ -6,6 +6,8 @@ import {
   setAuth,
   clearAuth,
   isAuthenticated,
+  defaultHomePathFor,
+  getDefaultHomePath,
 } from '../auth-store';
 
 describe('auth-store', () => {
@@ -81,6 +83,84 @@ describe('auth-store', () => {
 
     it('回傳 false — 未登入', () => {
       expect(getIsSalesManager()).toBe(false);
+    });
+  });
+
+  // F002 v2.1.0 / US-177 / F111：角色感知登入後預設導向（§4.5 矩陣 / BR-Redirect）
+  describe('defaultHomePathFor (pure function)', () => {
+    it('admin → /（帳號管理）', () => {
+      expect(defaultHomePathFor('admin')).toBe('/');
+    });
+
+    it('director（業務部長）→ /assignment/overview（分派總覽）', () => {
+      expect(defaultHomePathFor('director')).toBe('/assignment/overview');
+    });
+
+    it('section_chief（業務處長）→ /assignment/overview（分派總覽）', () => {
+      expect(defaultHomePathFor('section_chief')).toBe('/assignment/overview');
+    });
+
+    it('user（一般使用者）→ /c360/customers（Customer 360）', () => {
+      expect(defaultHomePathFor('user')).toBe('/c360/customers');
+    });
+  });
+
+  describe('getDefaultHomePath (store wrapper — 讀取當前登入身份)', () => {
+    it('admin 登入後 → /', () => {
+      setAuth('tok', {
+        id: 'a1',
+        name: 'Admin',
+        email: 'admin@cdmp.test',
+        role: 'admin',
+      });
+      expect(getDefaultHomePath()).toBe('/');
+    });
+
+    it('director 登入後 → /assignment/overview', () => {
+      setAuth('tok', {
+        id: 'd1',
+        name: 'Director',
+        email: 'director@cdmp.test',
+        role: 'user',
+        businessRole: 'director',
+      });
+      expect(getDefaultHomePath()).toBe('/assignment/overview');
+    });
+
+    it('section_chief 登入後 → /assignment/overview', () => {
+      setAuth('tok', {
+        id: 's1',
+        name: 'SectionChief',
+        email: 'chief@cdmp.test',
+        role: 'user',
+        businessRole: 'section_chief',
+      });
+      expect(getDefaultHomePath()).toBe('/assignment/overview');
+    });
+
+    it('一般使用者（businessRole=null）登入後 → /c360/customers', () => {
+      setAuth('tok', {
+        id: 'u1',
+        name: 'User',
+        email: 'user@cdmp.test',
+        role: 'user',
+        businessRole: null,
+      });
+      expect(getDefaultHomePath()).toBe('/c360/customers');
+    });
+
+    it('legacy JWT（無 businessRole 欄位）登入後 → 保守視為一般使用者 /c360/customers', () => {
+      setAuth('tok', {
+        id: 'u9',
+        name: 'Legacy',
+        email: 'legacy@cdmp.test',
+        role: 'user',
+      });
+      expect(getDefaultHomePath()).toBe('/c360/customers');
+    });
+
+    it('未登入 → 保守回傳 /c360/customers（getEffectiveIdentity 預設 user）', () => {
+      expect(getDefaultHomePath()).toBe('/c360/customers');
     });
   });
 

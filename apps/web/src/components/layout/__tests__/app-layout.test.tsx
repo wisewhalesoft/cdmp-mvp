@@ -38,7 +38,7 @@ describe('AppLayout', () => {
     mockedLogout.mockResolvedValue({ message: '登出成功' });
   });
 
-  it('業務主管登入後 AppLayout 顯示 Customer 360 + 客戶名單分派 sidebar + header + main slot', () => {
+  it('業務部長登入後 AppLayout 顯示客戶名單分派 sidebar（無 Customer 360，v2.1.0）+ header + main slot', () => {
     mockedGetUser.mockReturnValue({
       id: 'm1',
       name: 'Manager',
@@ -55,8 +55,8 @@ describe('AppLayout', () => {
         </AppLayout>
       </MemoryRouter>,
     );
-    // sidebar
-    expect(screen.getByText('Customer 360')).toBeInTheDocument();
+    // sidebar：F002 v2.1.0 / US-177 / F111 — 業務角色無 Customer 360 存取權
+    expect(screen.queryByText('Customer 360')).toBeNull();
     expect(screen.getByText('客戶名單分派')).toBeInTheDocument();
     // header
     expect(screen.getByText('Manager')).toBeInTheDocument();
