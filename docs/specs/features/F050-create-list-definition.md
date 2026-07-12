@@ -2,19 +2,27 @@
 spec-id: F050
 title: 新增名單定義
 feature-id: F050
-source-story: US-088, US-106, US-107, US-120, US-121, US-125, US-126, US-127, US-128, US-129, US-131, US-133, US-144
+source-story: US-088, US-106, US-107, US-120, US-121, US-125, US-126, US-127, US-128, US-129, US-131, US-133, US-144, US-176
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "2.3.1"
-date: 2026-05-28
+version: "2.4"
+date: 2026-07-11
 status: Draft
 ---
 
 # F050: 新增名單定義
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-07-11
 
+> **v2.4（2026-07-11 / US-176 草稿「預估命中筆數」改真實抽樣估算）**：將「建立草稿名單」頁（`/assignment/list-definitions/new`）之「預估命中筆數」由現行**純前端假公式**（`list-create-draft-page.tsx` 之 `previewCount = 12500 * 遞減係數`，與 `ob_pool_data` 實際資料及使用者篩選條件內容完全無關）**替換為真實抽樣估算**。核心變更（不動既有 AC-1 ~ AC-17 / BR-1 ~ BR-14 之 contract，僅新增）：
+> 1. **新增 AC-18**：草稿頁預估命中筆數改為對 `ob_pool_data` 固定樣本套用**欄位篩選子步驟**（`buildStage1WhereConditions`（`ob_pool_data` 欄位，含經 BR-14 注入之系統固定 `best_case`）**＋ F109 customer_core 條件式 LEFT JOIN 子句**（客戶欄位，見第 2a 點））放大推算（AD-E07-45 抽樣估算）;隨條件編輯即時（live）更新;標示估算值;次秒級;失敗不顯示 0 / 誤導數字且不阻擋儲存。
+> 2. **範圍限定（D2）**：估算套用欄位篩選子步驟（`buildStage1WhereConditions` **＋ F109 customer_core 條件式 LEFT JOIN**），**不含** MONTH_CNT 期別過濾 / 近 3 個月去重 / 特殊業務 DELETE（此三者為 F049 / US-071 精確試算 `executeStage1Chain` 專屬）;本估算與 F049 精確試算為**互補而非取代**，UI 保留既有「開啟 Stage 0 試算」連結。
+> 2a. **customer_core 篩選欄位須納入估算（team-lead 2026-07-11 決議，覆蓋原 D2 排除範圍之未涵蓋處）**：若草稿以 F109 客戶資料來源欄位（年齡 / 居住城市 / 性別等，`data_source = 'customer_core'`）篩選，估算須比照月名單分派 Stage 1 條件式注入 `LEFT JOIN customer_core`（`ob_pool_data.custo_no = customer_core.source_customer_no`）+ NULL 排除語意（[F109](F109-customer-source-filter-fields.md) §6 BR-2 / BR-3），使**所有**篩選條件（案件 + 客戶）反映於估算;否則以客戶欄位篩選之草稿被**高估**（錯誤而非僅不精確）。對齊 F109 BR-10「名單試算 / 預覽」一致消費點。仍**不**含 MONTH_CNT / 去重 / 特殊 DELETE（D2 不變）。
+> 3. **新增 §6.3 端點**：`POST /assignment/list-definitions/preview-hit-count`，接受**尚未儲存**之 `condition_payload`（草稿階段無 `list_no`，無法用 F049 §5.2 需 listNo 之精確端點）。
+> 4. **新增 BR-15** 草稿命中筆數抽樣估算行為契約;與 [F055](F055-edit-card-level-thresholds.md) 各等級分佈預估、[F056](F056-edit-tier-mapping.md) 各 TIER 分布預估共用同一套抽樣估算產品邏輯（D1）;抽樣機制由 AD-E07-45 owns。
+> 5. **範圍鎖定**：僅「建立草稿」頁（`list-create-draft`）納入;「編輯既有草稿」頁（`list-edit-draft` / prototype 27b）目前無此面板，是否比照補上為 **deferred follow-up**（另立 Story;見 §9.2 / US-176 開放問題），本版本不 spec。
+>
 > **v2.3.1（2026-05-28 / US-144 最低條件數語意修正 — 系統固定欄位不計入「≥1 條件」門檻）**：依用戶決議，「名單至少 1 個篩選條件」之門檻改為**僅計算非系統固定（`is_system_fixed = false`）之 conditions**——`best_case`（系統固定、自動注入）**不**計入最低數；使用者必須自行提供至少 1 個非系統固定 condition，否則拒絕（更貼近舊系統：名單必有 `prod_kind` / `list_type` 等使用者條件）。核心變更（不動 v2.3 之 BR-14 注入契約 / AC-17，僅細化最低條件數驗證；沿用既有 `VALIDATION_ERROR` 422，**不**新增錯誤碼）：
 > 1. **AC-10 重寫**：最低條件數驗證改為「非系統固定 conditions 數 = 0 即拒絕」；訊息精修為明示「至少 1 個非系統固定 / 使用者自訂篩選條件」。
 > 2. **BR-6 補述**：condition_payload 必填之「至少 1 個」語意限定為「至少 1 個 `is_system_fixed = false` 之 condition」。
@@ -65,7 +73,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | TDD Developer | 本文件 + `data-model.md#e07-data-model` + `error-handling.md#assignment-errors` + F051 表單欄位規範 |
 | QA / Tester | 本文件 + `error-handling.md#assignment-errors` |
 | UI/UX Designer | 本文件（第 8 節 UI/UX 需求） |
-| Architect | 本文件 + `architecture-spec.md` §3.10（LIST_NO 自動產生規則） |
+| Architect | 本文件 + `architecture-spec.md` §3.10（LIST_NO 自動產生規則）+ §18.5（`buildStage1WhereConditions`）+ AD-E07-45（抽樣估算，撰寫中） |
 
 ---
 
@@ -234,6 +242,21 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 - **And** `best_case` 僅寫入 `condition_payload`，**不**屬於 BR-10 之 5 個 backward-compat 衍生 entity column 範圍（沿用 BR-12；其業務語意承接已移除之 `prod_best` 一級欄位）
 - **And** 「從上月名單複製」場景（AC-5）即使來源名單 `condition_payload` 不含 `best_case`，`injectSystemFixedConditions` 仍於 `createList` 強制注入 `best_case: ['Y']`（對應 US-144 AC-9）
 - **And** 前端篩選條件區之鎖定列渲染（🔒、無刪除按鈕、值 disabled）與「新增條件」dropdown 排除 `best_case` 之 UI 行為，依 F075 v1.7 API 回傳之 `isSystemFixed` 旗標驅動（US-144 AC-3 / AC-4；UI 細節由 ui-ux-designer 決議）
+
+### AC-18：草稿名單「預估命中筆數」改為真實抽樣估算（v2.4 新增 / US-176 / D2）
+
+- **Given** 部長或 Admin 於「建立草稿名單」頁（`/assignment/list-definitions/new`）設定或修改篩選條件
+- **When** 系統計算「預估命中筆數」
+- **Then** 移除前端純數學假公式（原 `list-create-draft-page.tsx` 之 `previewCount = 12500 * 遞減係數`，僅依條件「數量」遞減、與真實資料及條件內容完全無關），改呼叫真實估算能力（§6.3）：對 `ob_pool_data` 取**固定筆數隨機樣本**，套用目前表單**完整篩選條件集合**（含經 BR-14 注入之系統固定 `best_case` 條件，**以及 F109 客戶資料來源（`customer_core`）篩選欄位**）之**欄位篩選子步驟**，依樣本命中比例**放大推算至母體總筆數**（AD-E07-45 抽樣估算）
+- **And**（客戶資料來源欄位 / F109 / team-lead 2026-07-11 決議）若表單條件含任一 `data_source = 'customer_core'` 篩選欄位（性別 / 年齡 / 居住城市等），估算須比照月名單分派 Stage 1，對樣本**條件式注入 `LEFT JOIN customer_core cc ON ob_pool_data.custo_no = cc.source_customer_no`** 並套用 F109 §6「客戶欄 NULL = 案件排除」語意（`stage1-customer-core-clause`;[F109](F109-customer-source-filter-fields.md) BR-2 / BR-3）;未引用客戶欄位時不注入 JOIN（純案件資料名單行為 / 效能不變）。此舉確保草稿命中筆數反映**所有**篩選條件（案件資料 `ob_pool_data` 欄位 + 客戶資料 `customer_core` 欄位），對齊 [F109](F109-customer-source-filter-fields.md) BR-10「名單試算 / 預覽」為三個一致消費點之一;否則以客戶欄位篩選之草稿將被**高估**（屬**錯誤**，非僅不精確）
+- **And**（範圍限定 / D2）估算套用範圍限於**欄位篩選子步驟** — `buildStage1WhereConditions()`（`ob_pool_data` 欄位，對齊 architecture-spec §18.5）**加上** F109 customer_core 條件式 LEFT JOIN 子句（客戶欄位，見上一點）;**不**套用 MONTH_CNT 期別過濾、近 3 個月已派案去重、特殊業務 DELETE 規則（此三者為 F049 / US-071 精確試算 `executeStage1Chain` 專屬）;本估算與 F049 精確試算為**互補而非取代**之兩層功能，數字有落差屬預期、**非缺陷**
+- **And** UI 須保留既有「開啟 Stage 0 試算」連結（導向 F049 精確試算頁 US-071），供使用者查看精確數字（不因本 AC 移除）
+- **And** 隨條件新增 / 修改 / 刪除即時（live）更新（允許合理 debounce，避免逐字元觸發過多請求），不需手動點擊「試算」按鈕
+- **And** 結果標示為估算值（沿用 prototype 27a 之「基於樣本估算」語意標示;若樣本對象由「上月案件」改為「當前 Pool 資料」須據實修訂文案，最終措辭由 ui-ux-designer 確認，見 §8）;不得呈現為精確計數
+- **And** 效能次秒級（< 1 秒），沿用 AD-E07-45 抽樣估算之固定樣本 + 可重現種子行為契約（D1）
+- **And**（估算失敗）估算 API 失敗時面板**不得顯示 0 或任何誤導數字**，須顯示「預估暫時無法取得」提示;估算為**輔助資訊**，失敗不阻擋使用者繼續填表或儲存名單
+- **And**（無使用者條件）表單尚無任何非系統固定篩選條件時，沿用現行既有 UX（面板不顯示 / 顯示待新增條件提示），本 AC 不變更此既有行為（僅置換有條件時之數字來源與計算方式）
+- **And**（範圍）本 AC 僅適用「建立草稿」頁（`list-create-draft`）;「編輯既有草稿」頁（`list-edit-draft` / prototype 27b）目前無此面板，是否比照補上為 deferred follow-up（見 §9.2）
 
 ## 5. 表單欄位規範
 
@@ -573,6 +596,60 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 **呼叫者**：
 - [F048 v2.0](F048-view-list-definition.md) Kanban 卡片「查看」按鈕（所有 role / 所有 stage / 歷史月份 / 月名單分派鎖中皆可觸發，對齊 [F077 v1.3 BR-7 C-5](F077-month-switch-and-stage-overview.md)）
 
+### 6.3 POST /api/v1/assignment/list-definitions/preview-hit-count（v2.4 新增 / US-176 / 草稿階段抽樣估算）
+
+**用途**：於名單**尚未儲存**（無 `list_no`）之草稿建立階段，依表單當前 `condition_payload` 即時估算命中筆數，供 AC-18 之預估命中筆數 banner 使用。與 [F049 §5.2](F049-stage0-daily-estimate.md) `GET .../:listNo/estimate`（需已儲存 `listNo`、精確全量、完整 Stage 1 鏈）互補：本端點接受**未儲存**之 payload、採**抽樣**、僅套用**欄位篩選子步驟**。本端點為**唯讀**，不寫入任何資料。
+
+| 認證 | JWT 必填 |
+|---|---|
+| 權限 | `DirectorGuard` + `@RequireDirector()`（對齊 §6.1 POST 建立名單之寫入角色範圍：部長 / Admin;建立草稿頁僅此二角色可達） |
+
+**Request Body**
+
+```json
+{
+  "conditionPayload": {
+    "conditions": [
+      { "columnName": "prod_kind", "fieldType": "categorical", "values": ["01"] },
+      { "columnName": "spec_tp", "fieldType": "categorical", "values": ["02", "04"] }
+    ],
+    "logic": "AND"
+  }
+}
+```
+
+**Response — 200 OK**
+
+```json
+{
+  "estimatedHitCount": 8400,
+  "isEstimate": true,
+  "sampleSize": 50000,
+  "totalCount": 1679489
+}
+```
+
+| 欄位 | 型別 | 說明 |
+|---|---|---|
+| estimatedHitCount | number | 放大推算後之預估命中筆數（估算值，非精確計數） |
+| isEstimate | boolean | 固定 `true`，供前端渲染估算標示（AC-18 / US-176 AC-4） |
+| sampleSize | number | 固定樣本筆數（實際值由 AD-E07-45 決定，範例值僅示意;非依母體動態變動） |
+| totalCount | number | 母體 `ob_pool_data` 總筆數，供前端顯示推算基數 |
+
+> **計算方式（US-176 / D2 / AD-E07-45 抽樣估算;team-lead 2026-07-11 補入 F109 customer_core）**：對 `ob_pool_data` 固定筆數隨機樣本，套用 `injectSystemFixedConditions`（BR-14）正規化後之 `condition_payload` 的**欄位篩選子步驟**——`buildStage1WhereConditions`（`ob_pool_data` 欄位，architecture-spec §18.5）**加上** [F109](F109-customer-source-filter-fields.md) customer_core 條件式 LEFT JOIN 子句（`stage1-customer-core-clause`：payload 含任一 `data_source = 'customer_core'` condition 時注入 `LEFT JOIN customer_core cc ON ob_pool_data.custo_no = cc.source_customer_no` + F109 §6「客戶欄 NULL = 排除」BR-2 / BR-3;未引用客戶欄位時不注入）——依樣本命中比例放大推算;**不**套用 MONTH_CNT 期別過濾 / 近 3 個月去重 / 特殊 DELETE（D2，此三者屬 F049 精確試算 `executeStage1Chain`）。抽樣演算法 / 樣本大小 / 種子 / 放大公式、customer_core LEFT JOIN 於樣本上之 SQL 落點與衍生欄（AGE / LEFT3）運算式由 AD-E07-45 / AD-E07-37 owns，本 spec 僅定義行為契約。
+
+**錯誤回應**
+
+| HTTP | 錯誤碼 | 說明 |
+|---|---|---|
+| 400 | RESERVED_FIELD_IN_CONDITIONS | `conditions` 含一級保留欄位 `list_period_start` / `list_period_end` / `list_interval`（沿用 §5.4 / BR-8） |
+| 401 | AUTH_TOKEN_MISSING | 未登入 |
+| 403 | E07_REQUIRES_DIRECTOR | `businessRole` 非 `'director'`（`DirectorGuard` 攔截，依 F002 §4.6.2） |
+| 422 | CONDITION_COLUMN_NOT_IN_WHITELIST | `conditions[].columnName` 不在 F075 白名單或對應欄位 `is_active=false`（沿用 §5.4 / AC-11） |
+| 422 | VALIDATION_ERROR | condition_payload schema 違反（同 §5.4 schema 規則;`fieldType` 不合法、categorical `values` 空、numeric `max < min` 等） |
+
+> **註**：本端點僅校驗 condition_payload schema / 白名單 / 保留欄位（同 §5.4），**不**強制 AC-10 之「至少 1 個非系統固定條件」最低門檻（該門檻為儲存時規則;預覽階段無使用者條件時前端不呼叫本端點，見 AC-18 之「無使用者條件」行為）。本端點為唯讀輔助估算，**不**攔截 `ASSIGNMENT_RUN_ALREADY_RUNNING`（月名單分派執行中仍可估算）;估算失敗時前端不得顯示 0 或誤導數字（AC-18 / US-176 AC-7）。
+
 ## 7. 商業規則
 
 | 規則編號 | 說明 |
@@ -591,6 +668,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
 | BR-12 | **best_case 取代 prod_best 之語意映射（v2.1.1 新增，US-128 / US-129 / D2 / Q-B B3）**：(1) 業務語意「最佳產品 / 優質案件」改由 `condition_payload.conditions[columnName='best_case', fieldType='categorical', values: ['Y'\|'N']]` 表達；(2) `ob_list_definition.prod_best` schema 欄位保留為 deprecated（NOT NULL 放寬為 NULL），既有資料於本次一次性 migration 清空為 NULL（Q-B B3 決議）；新名單寫入不填值（後端 DTO 處置由 system-architect 決定）；(3) 月名單分派 Stage 1 不再讀 `prod_best` 欄位；依 `condition_payload.conditions` 之 `best_case` 條件對 `ob_pool_data.best_case` 以 `IN (...)` 過濾（對應 BR-7）；(4) `best_case` options 來源 = F076 v1.6 `pooldata_field_option WHERE column_name='best_case'`（`Y` = 優質案件、`N` = 非優質案件；US-129 AC-1）；(5) 完全 DROP COLUMN 屬 v2.2+ 後續決策，本 v2.1.1 不執行 |
 | BR-13 | **sessionStorage Signal Protocol — `cdmp.pendingToast`（v2.2 新增 / GAP-G2 / US-133 / single authority）**：跨頁 toast 訊號協定，限「子頁工作流完成後返回 M01 主頁」之情境使用。本 BR-13 為**唯一權威來源**，F079 / F082 / F086 / F087 之 §7 UI/UX 需求透過 cross-reference 引用本 BR-13，不重複定義。完整規範如下：<br><br>**(1) Key 命名**：`cdmp.pendingToast`（全小寫、點分隔；對齊 `cdmp.*` 全域 sessionStorage / localStorage key 命名規範）。<br><br>**(2) Payload JSON Schema**：<br>```json<br>{<br>  "type": "success" \| "info" \| "warning" \| "error",  // 必填<br>  "msg": string,                                       // 必填，主訊息（建議 ≤ 60 字）<br>  "sub": string                                        // 選填，副訊息（建議 ≤ 80 字）<br>}<br>```<br>對應 toast UI 4 種樣式（success = 綠 / info = 藍 / warning = 琥珀 / error = 紅）；前端 toast 元件依 `type` 渲染對應 icon 與顏色。<br><br>**(3) Producer 規範**（子頁寫入）：<br>- **寫入時機**：成功 / 取消決定後、`location.href` 跳轉**前**執行<br>- **寫入方式**：`sessionStorage.setItem('cdmp.pendingToast', JSON.stringify(payload))`<br>- **失敗處理**：以 `try/catch` 包覆，sessionStorage API 不可用（無痕模式 / 配額耗盡）時靜默吞 exception，不阻擋跳轉<br>- **適用子頁**：[F079](F079-set-dept-ratio.md) 部門比例設定（29a）、[F082](F082-set-per-sales-ratio.md) 個別比例設定（29b）、[F086](F086-approve-to-ready.md) 簽核核准 / [F087](F087-reject-to-personnel-ratio.md) 簽核拒絕（29c）；其他寫入操作 spec 如需採用須先 cross-reference 本 BR-13<br><br>**(4) Consumer 規範**（M01 主頁讀取）：<br>- **讀取時機**：M01 主頁（[F048 v2.0](F048-view-list-definition.md) Kanban 頁）`DOMContentLoaded`（或 React `useEffect([])`）執行、Kanban 渲染**之後**<br>- **行為**：`sessionStorage.getItem('cdmp.pendingToast')` → `JSON.parse`（包 try/catch）→ 依 `type` 顯示對應樣式 toast → 立即 `sessionStorage.removeItem('cdmp.pendingToast')`<br>- **無效 JSON / 無 key**：靜默不顯示、清除殘留 key（若有）；不拋出 uncaught exception<br><br>**(5) Consume-once 語意**：M01 主頁讀取後**立即** `removeItem`，確保：<br>- 同一 toast 不因頁面重整（F5）重複顯示<br>- 同一 toast 不因瀏覽器返回（browser back）重複顯示<br>- 同一 toast 不因多分頁同時開啟 M01 而重複顯示<br><br>**(6) 適用情境（限定範圍）**：<br>- **適用**：子頁完成（儲存 / 取消）後跳回 M01 主頁之 toast 提示（範例：「{LIST_NM} 部門比例已儲存 / 名單已推進至個別比例設定階段」、「已取消，返回名單定義」）<br>- **不適用**：同頁面內操作 toast（直接用 React state 即可）、Detail Drawer 操作回饋、橫向跨模組跳頁（如 M01 → M02）<br><br>**(7) 跨 spec reference**：F079 / F082 / F086 / F087 spec 之 §7 UI/UX 需求**僅描述**「子頁完成後依 [F050 v2.2 §7 BR-13](F050-create-list-definition.md) 寫入 `cdmp.pendingToast` 並跳回 M01 主頁」即可，不重複展開 payload / consume-once / key 命名等細節。 |
 | BR-14 | **系統固定篩選條件強制注入（`injectSystemFixedConditions` 契約）（v2.3 新增 / US-144 / Design A）**：(1) **觸發點**：`createList` 於 §5.4 condition_payload schema 驗證（含 AC-10 ~ AC-13 / BR-6 ~ BR-9 / BR-11）**通過後、寫入 `ob_list_definition` 前**，呼叫 `injectSystemFixedConditions(payload)`。(2) **契約**：input 為通過驗證之 condition_payload；service 層查 F075 v1.7 `pooldata_field_whitelist WHERE is_system_fixed = true` 之所有欄位，對每個 system-fixed 欄位於 output payload 之 `conditions` 中**確保存在對應條目且 `values` 強制為該欄位之固定值**——若 input 缺漏該條目則補入；若已存在則覆寫其 `values`（及 `fieldType`）為固定值。MVP 範圍唯一 system-fixed 欄位為 `best_case`，固定為 `{ columnName: 'best_case', fieldType: 'categorical', values: ['Y'] }`。(3) **tamper-normalization 靜默語意**：使用者就 system-fixed 欄位之任何竄改（傳 `['N']` / `[]` / 多值 / 完全省略）一律靜默正規化，**不**拒絕請求、**不**回錯誤碼，仍回 201 Created（對應 AC-17 / US-144 AC-1 / TC-144-01 / TC-144-02）。(4) **驅動旗標**：固定欄位集合與固定值之判定以 `pooldata_field_whitelist.is_system_fixed` 旗標為準（F075 v1.7 BR-15），**不** hardcode 字串 `'best_case'`，為未來擴充其他系統固定欄位預留。(5) **與 backward-compat 衍生欄位之關係**：`best_case` **不**在 BR-10 之 5 個衍生 entity column 範圍內（沿用 BR-12），僅存於 `condition_payload`。(6) **複製場景**：「從上月複製」（AC-5）之來源名單即使不含 `best_case`，注入仍於 `createList` 強制執行（US-144 AC-9）。(7) **Stage 1 無需修改**：注入後之 `best_case: ['Y']` 由既有 categorical `IN (...)` path（BR-7）產生 `"best_case" IN ('Y')`（US-144 AC-7）。(8) **回填**：既有 `stage = 'draft'` 名單之 `best_case` 回填由 migration 執行（draft only，凍結快照不回填，idempotent；US-144 AC-8）；migration 設計與 ordering 由 system-architect owns（AD-E07-18 或衍生決策），本 spec 僅引用 |
+| BR-15 | **草稿命中筆數抽樣估算（v2.4 新增 / US-176 / D2 / AD-E07-45;team-lead 2026-07-11 補入 F109 customer_core）**：建立草稿頁（`list-create-draft`）之「預估命中筆數」以 `ob_pool_data` 固定筆數隨機樣本 + 可重現種子放大推算（§6.3 端點）;套用範圍限**欄位篩選子步驟**＝`buildStage1WhereConditions`（`ob_pool_data` 欄位，對 payload 先經 BR-14 注入 `best_case`）**＋ [F109](F109-customer-source-filter-fields.md) customer_core 條件式 LEFT JOIN 子句**（`stage1-customer-core-clause`：若 payload 含 ≥1 個 `data_source = 'customer_core'` condition 則注入 `LEFT JOIN customer_core cc ON ob_pool_data.custo_no = cc.source_customer_no` 並套用 F109 §6 BR-2 / BR-3「客戶欄 NULL = 案件排除」語意，否則不注入）;**不含** MONTH_CNT 期別過濾 / 近 3 個月去重 / 特殊 DELETE（此三者屬 F049 / US-071 精確試算 `executeStage1Chain`）。**customer_core 欄位須納入估算**——否則以客戶欄位（年齡 / 居住城市 / 性別等）篩選之草稿會被高估（錯誤而非僅不精確）;對齊 F109 BR-10「名單試算 / 預覽」一致消費點。行為契約：(1) 固定樣本;(2) 可重現種子（相同輸入結果一致）;(3) 依樣本命中比例放大推算至母體總筆數;(4) 標示估算值（`isEstimate = true`）;(5) 次秒級;(6) 隨條件編輯 debounce 後 live 更新;(7) 估算失敗不得顯示 0 / 誤導數字且不阻擋儲存（估算為輔助資訊）;(8) UI 保留「開啟 Stage 0 試算」連結（導向 F049 精確試算，互補非取代）。**取代前端 `previewCount` 假公式**（`n = 12500 * 遞減係數`，與真實資料無關）。與 [F055 BR-8](F055-edit-card-level-thresholds.md)（各等級分佈預估）、[F056 BR-14](F056-edit-tier-mapping.md)（各 TIER 分布預估）共用同一套抽樣估算產品邏輯（D1）;抽樣演算法 / 樣本大小 / 種子 / 放大公式由 AD-E07-45 owns，本 spec 僅定義行為契約 |
 | ~~BR-6 v2.0~~ | ~~`case_status` 為獨立業務欄位...必填，至少選 1 項；可選代碼由 F068 維護~~ | **v2.1 廢除**：case_status 改由 condition_payload 必填 + columnName 白名單驗證統一覆蓋（A1 / A5）；可選代碼來源改為 F076 v1.5 `pooldata_field_option`（US-125 AC-2） |
 | ~~BR-7 v2.0~~ | ~~`case_status` 多選的篩選邏輯為 **OR**~~ | **v2.1 重寫**：OR / IN 語意適用所有 categorical 條件（BR-7），不限 case_status |
 
@@ -608,6 +686,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-28
   - `date` → 日期區間（`dateStart` / `dateEnd`）；前端驗證 `dateEnd >= dateStart`
 - **「複製名單」按鈕**：位於表單標頭，開啟 Modal 選擇來源；來源 dropdown 過濾條件 `status='active'` AND `stage='ready'` AND `condition_payload IS NOT NULL`（舊遷移名單不可作為複製來源；defense-in-depth：若繞過後端回 422 `LEGACY_LIST_NOT_COPYABLE`，拍板 Q4 / AC-5）；複製後整段 `condition_payload` 與 `list_period_*` 自動填入新表單；`cr_enabled` 恢復預設 `true`；`list_nm` 留空待填
 - 即時驗證：欄位失去焦點時觸發
+- **預估命中筆數面板（v2.4 / US-176 / AD-E07-45）**：建立草稿頁篩選條件區之「依此條件預估命中 N 筆案件」banner 改接 §6.3 抽樣估算端點（**移除**前端 `previewCount` 假公式 `n = 12500 * 遞減係數`）;隨條件編輯 debounce 後即時（live）更新;明確標示為估算值（prototype 27a 現行文案「基於上月案件樣本估算」若樣本來源改為「當前 Pool 資料」須據實修訂，最終措辭由 ui-ux-designer 確認）;估算失敗顯示「預估暫時無法取得」而非 0 / 誤導數字，且**不阻擋**填表與儲存;保留既有「開啟 Stage 0 試算」連結（導向 F049 精確試算，US-071，互補非取代）。**僅建立頁（`list-create-draft`）納入;編輯既有草稿頁（`list-edit-draft` / prototype 27b）為 deferred follow-up（§9.2）**
+- 即時驗證與估算面板為兩獨立行為：估算失敗不影響儲存按鈕啟用條件（下列儲存按鈕啟用條件不含估算成功）
 - **儲存按鈕**：以下所有條件通過才啟用 — `list_nm` 非空、`list_period_end >= list_period_start`、`condition_payload.conditions.length >= 1`、所有 categorical 條件至少選 1 個值、所有 numeric 條件 `max >= min`、所有 date 條件 `dateEnd >= dateStart`
 - **多值欄位 backward-compat 儲存規範（v2.1）**：v2.0 之「UI 提交時 `$$` 分隔字串」規範**已廢除**；v2.1 起前端送出 `conditionPayload` JSON 結構（`values: string[]`），後端衍生填入 entity column 時才轉為 `$$` 分隔（BR-10）。詳見 [data-model.md `ob_list_definition` 多值欄位儲存規範](../data-model.md#ob-list-definition-obmlistdf--名單定義)
 - **caseyear 選項來源（v2.1 重寫）**：caseyear 之 8 個 CheckBox（value `0` / `1` / `2` / `3` / `4` / `5` / `6` / `99`）由 `GET /api/v1/pooldata-fields/caseyear/options?active=true`（F076 v1.5）動態載入，**取代 v2.0 之前端 hard-coded 11 個 0~10**（A4 / J5 / US-125 AC-1 / AC-4）。`99` 顯示輔助說明文字「不限年數（全選）」（沿用 F076 v1.5 §7）。舊系統 hardcoded 11 筆 / 12 個（`reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`）僅供歷史對照；若管理員透過 F076 v1.5 新增 / 停用 caseyear 可選值，表單立即反映變更，不需重新部署前端。
@@ -631,10 +711,16 @@ v2.1.1（2026-05-20 業務複核補強）4 個 stories 之間存在雙向依賴�
 
 Backend DTO 對 `prodBest` 之處置（`@IsOptional()` 接受或直接刪除）由 system-architect 於實作前決定；本 spec 不規範。本 v2.1.1 補強之 migration（`prod_best` 清空 / `best_case` whitelist + options seed / `card_type` 不涉 DB）與 backend DTO 處置應由 system-architect 補入 AD-E07-18 或衍生決策。
 
+### 9.2 v2.4 範圍界定與 deferred follow-up（US-176）
+
+- **納入範圍**：僅「建立草稿名單」頁（`/assignment/list-definitions/new`，`list-create-draft-page.tsx`）之預估命中筆數改真實抽樣估算（AC-18 / BR-15 / §6.3）。
+- **Deferred follow-up（不在本版本範圍）**：「編輯既有草稿」頁（`list-edit-draft-page.tsx` / prototype 27b）目前**未實作**此預估命中筆數面板;是否比照補上同等即時估算能力，依 team lead 指示明確排除於本輪，待業務裁示後另立 Story（US-176 開放問題 1）。本 spec 不對編輯頁 spec 此行為。
+- **待 ui-ux-designer 確認**：prototype 27a 現行文案「基於上月案件樣本估算」之「上月」措辭是否符合實際樣本來源（現行 `ob_pool_data` vs 上月資料），若不符須據實修訂（US-176 開放問題 2）。
+
 ## 10. 交叉參考
 
 - 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_list_definition.condition_payload`、`ob_list_definition.prod_best` v2.1.1 DEPRECATED、`ob_list_definition.card_type` v2.1.1 下拉契約補述、[`ob_card_type` entity](../data-model.md#ob-card-type-entity)）
 - 錯誤處理：[error-handling.md#assignment-list-errors](../error-handling.md#assignment-list-errors)（含 v2.1 新增 `CONDITION_COLUMN_NOT_IN_WHITELIST` / `RESERVED_FIELD_IN_CONDITIONS` / `LEGACY_LIST_NOT_COPYABLE`）
-- 架構決策：AD-E07-1、AD-E07-2、**AD-E07-18**（F050 v2.1 whitelist-driven 重構：migration M1~M5 / Service 衍生規則 / Stage 1 動態 SQL / prod_kind 唯一性語意 / F068 廢除步驟；Phase 3a 落地，2026-05-20）；Phase 3a 待設計項目已全數由 AD-E07-18 覆蓋（BR-2 / BR-10 / E1~E7）。**v2.1.1 補強之 migration（`prod_best` 清空 / `best_case` whitelist + options seed）與 backend DTO 處置由 system-architect 補入 AD-E07-18 或衍生決策**（spec-writer 不規範架構細節）。**v2.3 補強（US-144）需 system-architect 補入**：(1) `pooldata_field_whitelist.is_system_fixed BOOLEAN NOT NULL DEFAULT false` 欄位 migration + `best_case` seed `is_system_fixed = true`（見 F075 v1.7）；(2) draft-only 之 `best_case: ['Y']` 回填 migration（idempotent，凍結快照不回填）；(3) 上述兩個 migration 與既有 v2.1 / v2.1.1 migration 之 ordering；spec-writer 僅以 BR-14 規範 service 層注入契約，不規範 migration / schema 細節
-- 相關功能：[F048](F048-view-list-definition.md)、[F051](F051-edit-list-definition.md)、[F069](F069-edit-card-type.md)（卡別計分卡主檔；卡別下拉資料來源 `ob_card_type`）、**[F075 v1.7](F075-manage-pooldata-field-whitelist.md)（`is_system_fixed` 旗標來源；`best_case.is_system_fixed = true`）**、[F076 v1.6](F076-manage-categorical-field-values.md)、[F077 v1.3](F077-month-switch-and-stage-overview.md)（Role × Stage 矩陣 single authority，本 spec §6.2 / §7 BR-13 對齊）、~~[F068](F068-edit-base-code.md)~~（**DEPRECATED v1.3**）
-- 對應 User Story：[US-121](../../stories/epics/E07-app-customer-list-assignment/US-121-M01-whitelist-condition-payload.md)、[US-122](../../stories/epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md)、[US-123](../../stories/epics/E07-app-customer-list-assignment/US-123-M01-backward-compat-list-read.md)、[US-124](../../stories/epics/E07-app-customer-list-assignment/US-124-M06-deprecate-f068-merge-field-base.md)、[US-125](../../stories/epics/E07-app-customer-list-assignment/US-125-M06-migrate-options-to-whitelist.md)、[US-126](../../stories/epics/E07-app-customer-list-assignment/US-126-M01-cardtype-dropdown-create.md)、[US-127](../../stories/epics/E07-app-customer-list-assignment/US-127-M01-cardtype-dropdown-edit.md)、[US-128](../../stories/epics/E07-app-customer-list-assignment/US-128-M01-remove-prodbest-field.md)、[US-129](../../stories/epics/E07-app-customer-list-assignment/US-129-M06-seed-bestcase-options.md)、**[US-131](../../stories/epics/E07-app-customer-list-assignment/US-131-M01-detail-drawer.md)（§6.2 Detail Snapshot API 來源）**、**[US-133](../../stories/epics/E07-app-customer-list-assignment/US-133-M01-pending-toast-signal.md)（§7 BR-13 sessionStorage Signal Protocol 來源）**、**[US-144](../../stories/epics/E07-app-customer-list-assignment/US-144-M01-bestcase-system-fixed-condition.md)（§4 AC-17 / §7 BR-14 best_case 系統固定條件 Design A 來源）**
+- 架構決策：AD-E07-1、AD-E07-2、**AD-E07-18**（F050 v2.1 whitelist-driven 重構：migration M1~M5 / Service 衍生規則 / Stage 1 動態 SQL / prod_kind 唯一性語意 / F068 廢除步驟；Phase 3a 落地，2026-05-20）；Phase 3a 待設計項目已全數由 AD-E07-18 覆蓋（BR-2 / BR-10 / E1~E7）。**v2.1.1 補強之 migration（`prod_best` 清空 / `best_case` whitelist + options seed）與 backend DTO 處置由 system-architect 補入 AD-E07-18 或衍生決策**（spec-writer 不規範架構細節）。**v2.3 補強（US-144）需 system-architect 補入**：(1) `pooldata_field_whitelist.is_system_fixed BOOLEAN NOT NULL DEFAULT false` 欄位 migration + `best_case` seed `is_system_fixed = true`（見 F075 v1.7）；(2) draft-only 之 `best_case: ['Y']` 回填 migration（idempotent，凍結快照不回填）；(3) 上述兩個 migration 與既有 v2.1 / v2.1.1 migration 之 ordering；spec-writer 僅以 BR-14 規範 service 層注入契約，不規範 migration / schema 細節。**v2.4 補強（US-176）需 system-architect 撰寫 AD-E07-45 抽樣估算**：§6.3 端點與 AC-18 / BR-15 依賴之抽樣機制（固定樣本大小、可重現種子產生、樣本→母體放大推算公式、`buildStage1WhereConditions` 套用於樣本之 SQL 下推、是否短期快取）由 AD-E07-45 owns（與 F055 / F056 共用）;本 spec 僅定義行為契約，不規範 SQL / 抽樣內部機制
+- 相關功能：[F048](F048-view-list-definition.md)、[F051](F051-edit-list-definition.md)、[F049 v1.4](F049-stage0-daily-estimate.md)（**Stage 0 精確試算;與本 spec §6.3 草稿抽樣估算為互補而非取代之兩層功能 — D2**）、[F069](F069-edit-card-type.md)（卡別計分卡主檔；卡別下拉資料來源 `ob_card_type`）、**[F075 v1.7](F075-manage-pooldata-field-whitelist.md)（`is_system_fixed` 旗標來源；`best_case.is_system_fixed = true`）**、[F076 v1.6](F076-manage-categorical-field-values.md)、[F077 v1.3](F077-month-switch-and-stage-overview.md)（Role × Stage 矩陣 single authority，本 spec §6.2 / §7 BR-13 對齊）、**[F055 v1.7](F055-edit-card-level-thresholds.md) / [F056 v1.6](F056-edit-tier-mapping.md)（共用 AD-E07-45 抽樣估算 D1）**、**[F109](F109-customer-source-filter-fields.md)（客戶資料來源篩選欄位;§6.3 草稿抽樣估算須比照月名單分派 Stage 1 條件式 LEFT JOIN customer_core + NULL 排除語意 §6 BR-2 / BR-3，team-lead 2026-07-11 決議納入）**、~~[F068](F068-edit-base-code.md)~~（**DEPRECATED v1.3**）
+- 對應 User Story：[US-121](../../stories/epics/E07-app-customer-list-assignment/US-121-M01-whitelist-condition-payload.md)、[US-122](../../stories/epics/E07-app-customer-list-assignment/US-122-M04-stage1-dynamic-filter.md)、[US-123](../../stories/epics/E07-app-customer-list-assignment/US-123-M01-backward-compat-list-read.md)、[US-124](../../stories/epics/E07-app-customer-list-assignment/US-124-M06-deprecate-f068-merge-field-base.md)、[US-125](../../stories/epics/E07-app-customer-list-assignment/US-125-M06-migrate-options-to-whitelist.md)、[US-126](../../stories/epics/E07-app-customer-list-assignment/US-126-M01-cardtype-dropdown-create.md)、[US-127](../../stories/epics/E07-app-customer-list-assignment/US-127-M01-cardtype-dropdown-edit.md)、[US-128](../../stories/epics/E07-app-customer-list-assignment/US-128-M01-remove-prodbest-field.md)、[US-129](../../stories/epics/E07-app-customer-list-assignment/US-129-M06-seed-bestcase-options.md)、**[US-131](../../stories/epics/E07-app-customer-list-assignment/US-131-M01-detail-drawer.md)（§6.2 Detail Snapshot API 來源）**、**[US-133](../../stories/epics/E07-app-customer-list-assignment/US-133-M01-pending-toast-signal.md)（§7 BR-13 sessionStorage Signal Protocol 來源）**、**[US-144](../../stories/epics/E07-app-customer-list-assignment/US-144-M01-bestcase-system-fixed-condition.md)（§4 AC-17 / §7 BR-14 best_case 系統固定條件 Design A 來源）**、**[US-176](../../stories/epics/E07-app-customer-list-assignment/US-176-M01-draft-hit-count-sampled-estimate.md)（§4 AC-18 / §6.3 / §7 BR-15 草稿命中筆數改真實抽樣估算來源）**

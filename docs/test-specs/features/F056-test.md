@@ -4,8 +4,8 @@ feature_id: F056
 feature_name: 編輯 TIER_LEVEL 對應表（M02 Tab 5）
 priority: P0-MVP
 related_spec: /docs/specs/features/F056-edit-tier-mapping.md
-last_updated: 2026-05-14
-spec_version: "1.5"
+last_updated: 2026-07-12
+spec_version: "1.6"
 ---
 
 # F056: 編輯 TIER_LEVEL 對應表（M02 Tab 5） — 測試設計
@@ -241,6 +241,9 @@ VALUES ('run-f056-run',  '202604', 'test-user-id', NOW(), 'running');
 | TS-F056-021 ~ 028（Frontend Unit） | 高 | React Testing Library；isLocked 以 mock prop 注入；v1.5 新增 Modal 規則類型切換測試 |
 | TS-F056-029 ~ 049（v1.5 新增，Integration + Frontend Unit） | 高 | TIER_LEVEL 列舉 / 互斥 / DELETE / CARD_TYPE 篩選均可自動化 |
 | BE-F056-001 ~ 005（邊界） | 高 | 直接 API 呼叫驗證 |
+| TS-F056-050 ~ 059、061 ~ 067（v1.6 新增，SQLite 小母體可行） | 高 | 業務彙總邏輯（多對一合計 / Fallback / 排序 / 無對應提示 / 讀鎖豁免 / 三態）不依賴真實 `TABLESAMPLE` 執行，可用小母體 fallback 於 SQLite 驗證 |
+| TS-F056-060（v1.6 新增，MSSQL 真實 DB） | 中 | 需 MSSQL 可達；本機無法連線時 `describe.skip` + SKIP_REASON，不假造綠燈；v1.2 起效能期望已修正為 ~12 秒可接受 |
+| TS-F056-068 ~ 070（T 組，v1.2 client-side TIER 彙總） | 高 | React Testing Library；純函式 oracle 比對，無需真實 DB / HTTP，spy 呼叫次數即可驗證「不觸發新 fetch」 |
 
 ---
 
@@ -311,3 +314,94 @@ VALUES ('run-f056-run',  '202604', 'test-user-id', NOW(), 'running');
 | 風險-2 | v1.5 TS-F056-017（M3 fallback）暫標 [SKIP]；M3 不在 ob_card_type seed 範圍（BR-6）；待業務透過 F070 新增 M3 後啟用 |
 | 風險-3 | TS-F056-019 / 020（跨層整合）依賴 fn_calc_tier_level；SQLite 不支援，需 Test Container PostgreSQL |
 | 風險-4 | TS-F056-041（NULL PK regression guard）同時引用 `docs/test-specs/regression/M02-regression-guards.md` TC-GUARD-NULL-PK-001 |
+| 風險-5（v1.6） | AD-E07-45 抽樣估算共用元件（`sampling-estimator.ts`：`POOL_DATA_SAMPLE_SIZE`/`POOL_DATA_SAMPLE_SEED`/`getPoolDataTotalCount`/`buildPoolDataSampleFrom`/`scaleEstimate`）之核心測試**唯一**位於 [F055-test.md](F055-test.md) I 組；本文件 L~S 組僅新增 F056 消費端特有整合案例（histogram → TIER 映射彙總、Fallback/Standard 分布、讀鎖豁免），不重複驗證共用元件本身 |
+| 風險-6（v1.6） | 本專案已完成 MSSQL-only 遷移，PG 測試基礎設施已移除；`TABLESAMPLE` 真實執行相關案例（效能 / 可重現性）標記為 `.mssql.spec.ts`，本機無 MSSQL 可達時誠實 `describe.skip`，不得以 SQLite 假造方言 SQL |
+| 風險-7（v1.6） | F056 spec v1.6 AC-11 字面敘述 Fallback 情境「佔比 100%」，但 AD-E07-45 §3.5 / §5.2 point 6 明確定義分母恆為 `effectiveSampleSize`（含 NULL-score 列），故 ratio 並非精確 1.0；本文件 M 組（TS-F056-054/055）刻意拆兩案例呈現此措辭落差，以 AD 之精確規則為準，非測試設計錯誤 |
+| 風險-8（v1.2 追加修正） | `AD-E07-45-sampling-estimator.md` 檔案本身截至本次修訂仍為 v1.1，未見 v1.2（histogram 欄位 + client-side TIER 彙總 + ~12 秒效能可接受）之正式文字；T 組依 coordinator 轉達之 team-lead 決策設計，AD 與 F056 spec §5.5 之正式同步為 system-architect / spec-writer 後續事項，非本測試設計阻擋項 |
+| 風險-9（v1.2 追加修正） | T 組（前端 client-side 計算）與 L~S 組（backend §5.5 端點）為互補、非取代關係；§5.5 端點依 coordinator 指示「仍為 server API」而保留，其確切消費者（若非互動式 Tab 5 UI）未在本輪說明範圍內，測試設計不代為假設，交 tdd-implementation / system-architect 後續釐清 |
+
+---
+
+## v1.6 新增 Test Scenarios（US-175 §5.5 新端點「預估各 TIER 分布」，AD-E07-45）
+
+> **背景**：F056 v1.6（US-175）新增 §5.5 `GET .../tier-mapping/preview` 唯讀端點：對選中 CARD_TYPE 之 `ob_pool_data` 抽樣，先套用該 CARD_TYPE **active** CARD_LEVEL 門檻（F055，非草稿值）分級，再依 `ob_tier` 對應規則映射並彙總至 TIER_LEVEL，共用 AD-E07-45 D1 抽樣估算邏輯。抽樣核心元件（`sampling-estimator.ts`）之常數 / `scaleEstimate` / `buildPoolDataSampleFrom` 核心測試已於 [F055-test.md](F055-test.md) I 組完整覆蓋，本組不重複驗證，僅新增 F056 消費端特有之 histogram→分桶→TIER 彙總邏輯與端點契約測試。
+>
+> **測試邊界**：沿用 [F055-test.md](F055-test.md) v1.7 章節「測試邊界」聲明（MSSQL-only、PG test container 已移除、`TABLESAMPLE` 不存在於 SQLite）；本組多數案例可透過**小母體 fallback**（`totalCount ≤ 50000`，無 `TABLESAMPLE`）於 SQLite 驗證業務彙總邏輯本身之正確性，僅效能 / 可重現性案例（P 組）需 MSSQL 真實 DB。
+
+### L. §5.5 GET tier-mapping/preview — 契約與 Standard 多對一合計（AC-10 / TC-175-01）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F056-050 | Standard 規則多對一合計（TC-175-01） | AC-10 | Integration（SQLite 小母體可行） | ob_card_type(H active)；ob_tier(H)：A→T1、B→T1、C→T2、D→T3；ob_levelcard_level(H active) 4 級門檻；ob_pool_data 小母體（≤50000，已知分數分佈使 A/B/C/D 各有已知筆數）；SM/處長 Token | GET /tier-mapping/preview?cardType=H | HTTP 200；`distribution` 含 T1（A+B 樣本放大推算後加總）、T2（C）、T3（D）三筆，非四筆（A/B 已合併）；`ratio` 加總約為 1 |
+| TS-F056-051 | 單一 CARD_LEVEL 對應單一 TIER（無合計情境）基本正確性 | AC-10 | Integration | ob_tier(H)：A→T1、B→T2、C→T3、D→T4（一對一，無合計） | GET /tier-mapping/preview?cardType=H | `distribution` 含 4 筆，每筆對應單一 CARD_LEVEL 之放大推算值，彼此不合併 |
+| TS-F056-052 | response 契約完整性（cardType/hasMapping/ruleType/isEstimate/sampleSize/totalCount/distribution[]） | spec §5.5 response schema | Integration | 同 TS-F056-050 | GET /tier-mapping/preview?cardType=H | response 含全部 7 個頂層鍵；`cardType==='H'`；`hasMapping===true`；`ruleType==='standard'`；`isEstimate===true`；`distribution[]` 每筆含 `tierLevel`/`count`/`ratio` |
+| TS-F056-053 | 🔴 `distribution[]` 依 tierLevel **數值序**排序（非字典序，T10 不得排在 T2 之前） | spec §5.5 point 8（AD-E07-45 §5.2 明確提醒陷阱） | Integration/Unit | ob_tier(H)：A→T1、B→T2、...含使結果同時出現 T2 與 T10 之對應規則（如 J→T10，J 為額外等級或改用 10 級測試卡） | GET /tier-mapping/preview?cardType=H | `distribution` 陣列順序為 `T1, T2, ..., T9, T10`（數值遞增）；**不得**為字典序 `T1, T10, T2, ...` |
+
+### M. Fallback 規則情境（AC-11 / TC-175-02）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F056-054 | Fallback 全樣本皆可計分 → 單一 TIER，`ratio` 恰為 1.0（對齊 AC-11 字面「100%」） | AC-11 | Integration（SQLite 小母體） | ob_tier(M5)：card_level=NULL → T5（Fallback）；ob_pool_data 小母體樣本內全部列皆落在 M5 active CARD_LEVEL 門檻可計分區間內（無 NULL-score 列） | GET /tier-mapping/preview?cardType=M5 | `distribution` 僅 1 筆（`tierLevel==='T5'`）；`ratio===1`（或近似 1.0000，四捨五入至小數點後 4 位） |
+| TS-F056-055 | ⚠️ 精確度落差案例：Fallback 樣本含 NULL-score 列 → 仍單一 TIER 條目，但 `ratio < 1.0`（分母含 NULL-score 列，AD-E07-45 §3.5 精確定義） | AC-11 vs AD-E07-45 §5.2 point 6（本案例明確記錄 spec「100%」字面敘述與 AD 精確定義之措辭落差，以 AD 為準） | Integration（SQLite 小母體） | 同上，但樣本中刻意植入部分列使其分數落於 CARD_LEVEL 門檻範圍外（不可計分，score IS NULL 之等效情境） | GET /tier-mapping/preview?cardType=M5 | `distribution` 仍僅 1 筆 `tierLevel==='T5'`（fallback 不因不可計分列而拆分）；`ratio < 1.0`（分母 `effectiveSampleSize` 含不可計分列，非僅計分列） |
+
+### N. 無對應規則 / 未選中 CARD_TYPE（AC-12 / TC-175-03 / TC-175-04）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F056-056 | CARD_TYPE 於 ob_tier 無任何對應（Standard 與 Fallback 皆無） | AC-12 | Integration | ob_card_type(S5 active)；ob_tier 無 S5 任何列 | GET /tier-mapping/preview?cardType=S5 | HTTP 200（非錯誤）；`hasMapping===false`；`ruleType==='none'`；`distribution===[]` |
+| TS-F056-057 | 未選中 CARD_TYPE（前端層級）→ 不呼叫 §5.5 端點，沿用既有空狀態提示 | AC-12（US-175 AC-5） | Frontend Unit | selectedCardType='' / undefined | 渲染 Tab 5 | 頁面顯示「請先在 Tab 1 選擇計分卡類型以查看設定」；`GET .../tier-mapping/preview` 未被呼叫（spy 確認呼叫次數為 0） |
+
+### O. 讀鎖豁免 / 唯讀（AC-13 / TC-175-05）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F056-058 | `assignment_run.status='running'` 時 GET tier-mapping/preview 仍回 200（不受寫入鎖影響） | AC-13, I-SAMPLE-LOCK-EXEMPT-01 | Integration（SQLite 小母體） | assignment_run(status='running')；ob_card_type(H active) | GET /tier-mapping/preview?cardType=H | HTTP 200（不回 409 SCORING_VERSION_LOCKED）；distribution 正常回傳 |
+| TS-F056-059 | 同一情境下對應表格 PUT / POST / DELETE 寫入端點仍回 409（確保 preview 唯讀豁免不誤擴大） | AC-5, AC-13 | Integration（交叉引用既有 TS-F056-010 / 011 / 018 / 042，不重複實作） | 同上 running 狀態 | 依序呼叫 PUT / POST / DELETE tier-mapping | 三者皆回 HTTP 409 SCORING_VERSION_LOCKED（既有行為不受本輪新增之 §5.5 讀鎖豁免影響） |
+
+### P. 效能與可重現性（AC-7 / TC-175-06）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F056-060 | 🔴 v1.2 修正：CARD_TYPE 對應規則不變，重複兩次載入 distribution 完全一致；各次回應時間 ~12 秒為可接受值（**不再是** sub-second — 本端點內部呼叫與 F055 相同之昂貴 `computeScoreHistogram`，見 AD-E07-45 v1.2） | AC-7, TC-175-06 | Integration（**MSSQL 真實 DB**，`.mssql.spec.ts`；本機無 MSSQL 可達時 `describe.skip` + SKIP_REASON） | ob_pool_data 大母體（> 50000 筆，MSSQL Test DB）；ob_tier(H) 對應規則固定 | 對 `cardType=H` 連續呼叫兩次 GET /tier-mapping/preview，分別量測回應時間 | 兩次 `distribution` 逐筆完全相等（決定性不受影響）；各次回應時間 ≈12 秒屬可接受，**不再要求** < 1000ms（正是此昂貴成本驅動 Group T 之前端 client-side 快取設計，避免互動式 UI 重複觸發本端點） |
+
+### Q. "重用 histogram、不重掃" 精確語意（AD-E07-45 §5.2）
+
+> **與 v1.2 Group T 的關係（易混淆，需區分）**：本組驗證的是**單一 HTTP request 內部**不重複查詢（backend 層級的既有語意，AD-E07-45 §5.2 原文）；v1.2 新增之 Group T 驗證的是**互動式 UI 層級**——切換至 Tab 5 時**完全不發出**本端點的 HTTP request（改用 F055 已快取之 histogram 於前端計算）。兩者是不同層級的「不重複」語意，不可互相取代：本組案例即使全數通過，仍無法保證 Group T 之行為成立（backend 端點本身效率如何，與前端是否選擇呼叫它是兩件事）。
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F056-061 | 單一 F056 request 內部 `computeScoreHistogram`（F055/F056 共用私有方法）僅被呼叫一次 | AD-E07-45 §5.2「不重掃」精確語意 | Unit/Integration（spy） | spy `computeScoreHistogram` 呼叫次數 | 呼叫一次 GET /tier-mapping/preview | `computeScoreHistogram` 恰好被呼叫 1 次（非為支援 CARD_LEVEL 分桶與 TIER 分桶各查一次） |
+| TS-F056-062 | F055 與 F056 為兩個獨立 HTTP request 時，各自重新查詢（不共用快取結果） | I-SAMPLE-NO-CACHE-01（F056 端點同樣適用） | Integration（SQLite 小母體） | 先呼叫 F055 GET card-levels/preview，DB 再變動 1 筆，再呼叫 F056 GET tier-mapping/preview | 依序呼叫兩端點 | F056 之 `totalCount` 反映變動後之最新筆數（未沿用 F055 request 之查詢結果或任何跨請求快取） |
+
+### R. RBAC / CARD_TYPE 範圍鎖（沿用既有模式）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F056-063 | 處長角色可讀取 §5.5 preview（`DirectorOrSectionChiefGuard`） | spec §5「Controller 規範」 | Integration | 處長 Token（businessRole='section_chief'） | GET /tier-mapping/preview?cardType=H | HTTP 200（處長可讀取，與 §5.1 GET 對應清單權限模型一致） |
+| TS-F056-064 | cardType 不存在於 active ob_card_type → 404 | 沿用 AC-9 | Integration | ob_card_type 無 'NOTEXIST' active 紀錄 | GET /tier-mapping/preview?cardType=NOTEXIST | HTTP 404；errorCode='CARD_TYPE_NOT_FOUND' |
+
+### S. Frontend Tests — Tab 5「預估各 TIER 分布」面板 UI（AC-3 / D3）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F056-065 | 面板三態（載入中 / 已顯示估算 / 錯誤重試）視覺可區分，比照 F055 Tab 4 | AC-13, US-175 AC-7 | Frontend Unit | 分別以三種 stub 狀態渲染 Tab 5 分布面板 | 檢視各狀態 DOM | 三態各自有獨立可辨識標記（`data-state` 或對應 testid），與 [F055 TS-F055-052](F055-test.md) 同一驗證手法 |
+| TS-F056-066 | 🔴 估算失敗顯示「預估分布暫時無法取得」+ 重試，不得空白 | AC-13「估算失敗時面板顯示錯誤 / 無法載入狀態而非空白」 | Frontend Unit | stub GET /tier-mapping/preview 回傳 500 或逾時 | 渲染面板 | 面板顯示明確錯誤文字 + 可重試操作；不得渲染為空白區塊（比照 [F055 AC-8](F055-edit-card-level-thresholds.md)） |
+| TS-F056-067 | 資訊架構比照 Tab 4（分類項目 + 人數 + 佔比 呈現邏輯一致，D3） | AC-3（US-175 AC-3） | Frontend Unit | stub GET tier-mapping/preview 回傳 3 筆 distribution | 渲染面板並比對 Tab 4 CARD_LEVEL 分布面板之 DOM 結構 | 兩面板之資料列結構（分類代碼欄 + 筆數欄 + 佔比欄）呈現邏輯相同；視覺樣式細節（顏色/圖示/排版）不在本案例斷言範圍（由 ui-ux-designer 決定） |
+
+---
+
+## v1.2 追加修正 Test Scenarios（AD-E07-45 v1.2 — team-lead 效能決策，2026-07-12）
+
+> **背景**：同 [F055-test.md](F055-test.md) v1.2 章節之背景說明（histogram threshold-/tier-independent、每 cardType 昂貴計算約 12 秒、故只抓一次並快取）。本次調整對 F056 之延伸：Tab 5「預估各 TIER 分布」面板之互動路徑（使用者從 Tab 4 切換至 Tab 5）**改為 client-side 計算**——複用 F055 已快取之 `histogram`（TS-F055-056 快取結果）+ 該 CARD_TYPE **active** CARD_LEVEL 門檻（既有 GET card-levels，非草稿值）+ 既有 `GET tier-mapping`（§5.1 對應清單，本身即需載入以顯示對應表格，非新增呼叫）之 `ob_tier` 映射，於前端 JS 完成「histogram → CARD_LEVEL 分桶 → TIER 彙總」全流程，**不**呼叫 §5.5 `GET tier-mapping/preview`。
+>
+> **§5.5 backend 端點仍保留**（coordinator 明確指示「it remains a server API」）——本文件 L~S 組（TS-F056-050~067）**維持不變**，作為該端點本身之契約 / 業務邏輯 / RBAC / 讀鎖豁免測試，惟 P 組（TS-F056-060）效能期望已修正為 ~12 秒可接受（見上）。本節（T 組）為**新增**之互動式 UI 層級案例，與既有 backend 案例並存、互補，不互相取代。
+>
+> **文件狀態誠實聲明**：同 F055-test.md 之聲明——`AD-E07-45-sampling-estimator.md` 檔案本身截至本次修訂仍為 v1.1，本節依 coordinator 轉達之 team-lead 決策設計，AD 與 F056 spec 之正式同步為 system-architect / spec-writer 後續事項。
+
+### T. F056 前端 — Client-side 即時 TIER 彙總（v1.2，取代逐次後端 scan）
+
+| ID | 場景 | 關聯需求 | 測試類型 | 前置條件 | 步驟 | 預期結果 |
+|----|------|---------|---------|---------|------|---------|
+| TS-F056-068 | 切換至 Tab 5（TIER 分布面板）不觸發新的 fetch/scan | AD-E07-45 v1.2 | Frontend Unit（spy fetch 呼叫次數） | 已於 Tab 4 載入 CARD_TYPE='H' 之 histogram（快取中）；Tab 5 既有 `GET tier-mapping`（對應清單）已載入 | 切換至 Tab 5 | `GET .../tier-mapping/preview`（§5.5）**未被呼叫**（spy 呼叫次數為 0）；TIER 分布面板仍正確顯示（由前端計算） |
+| TS-F056-069 | client-side TIER 彙總正確性 — 多對一合計（JS 計算，取代 TS-F056-050 之後端案例） | AD-E07-45 v1.2, AC-10 | Frontend Unit（純函式 / oracle 比對） | 已知 `histogram`（快取自 F055）+ 已知 active CARD_LEVEL 門檻（H: A/B/C/D）+ 已知 `ob_tier` 映射（H: A→T1、B→T1、C→T2、D→T3） | 呼叫前端 client-side TIER 彙總函式 | 計算結果 T1（A+B 加總）、T2（C）、T3（D）三筆，與 TS-F056-050 之後端案例數值一致（同一 first-match-wins 分桶邏輯 + 相同 `ob_tier` 映射，僅執行位置由 backend 移至 frontend） |
+| TS-F056-070 | client-side Fallback 100% 呈現正確性（JS 計算） | AD-E07-45 v1.2, AC-11 | Frontend Unit（純函式 / oracle 比對） | 已知 `histogram`（全樣本可計分，無 NULL-score）+ `ob_tier` Fallback 映射（M5: card_level=NULL→T5） | 呼叫前端 client-side TIER 彙總函式（Fallback 路徑：不套用 card_level 分桶，直接以 histogram 全部 count 加總） | 計算結果僅 1 筆（`tierLevel==='T5'`），`ratio===1`；與 TS-F056-054 之後端案例數值一致 |

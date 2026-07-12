@@ -2,18 +2,18 @@
 spec-id: F055
 title: 編輯 CARD_LEVEL 分級門檻（M02 Tab 4）
 feature-id: F055
-source-story: US-074
+source-story: US-074, US-174
 epic: E07
 module: M02 計分設定
 priority: P0-MVP
-version: "1.6"
-date: 2026-05-17
+version: "1.8"
+date: 2026-07-12
 status: Draft
 ---
 
 # F055: 編輯 CARD_LEVEL 分級門檻（M02 Tab 4）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-07-12
 
 ## Agent Loading Guide
 
@@ -22,7 +22,7 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | TDD Developer | 本文件 + `data-model.md#e07-data-model` + `data-model.md#ob-card-type-entity` + `error-handling.md#assignment-scoring-errors` |
 | QA / Tester | 本文件 + `error-handling.md#assignment-scoring-errors` |
 | UI/UX Designer | 本文件（第 7 節 UI/UX 需求） |
-| Architect | 本文件 + `architecture-spec.md` §3.10 |
+| Architect | 本文件 + `architecture-spec.md` §3.10 + AD-E07-45 v1.2（抽樣估算 + 分數直方圖 + 前端分桶，撰寫中） |
 
 ---
 
@@ -63,12 +63,17 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 - **And** 若修改後導致等級之間的區間重疊（例如 B 的 `score_s` ≤ A 的 `score_e`），顯示驗證錯誤，不允許儲存
 - **And** 寫入 `assignment_audit_log`（`action = 'UPDATE'`）
 
-### AC-3：門檻變更預覽影響
+### AC-3：門檻變更預覽影響（v1.8 直方圖 + 前端分桶 / US-174 / AD-E07-45 v1.2）
 
 - **Given** 業務部長修改門檻值（尚未儲存）
 - **When** 修改完成
-- **Then** 頁面顯示預估影響：「預估各等級客戶分佈：A 級 N 人 / B 級 N 人 / C 級 N 人 / D 級 N 人」
-- **And** 預覽計算以目前 `ob_pool_data` 套用新門檻（允許最多 1 分鐘的應用層快取）
+- **Then** 頁面顯示預估影響：「預估各等級客戶分佈：A 級 約 N 人 / B 級 約 N 人 / …」，等級數依 CARD_TYPE 動態決定（不硬編碼 4 級）
+- **And** 預覽計算改採**抽樣估算之分數直方圖（score histogram）+ 前端分桶**（AD-E07-45 v1.2 抽樣估算）：後端 §5.2 對選中 CARD_TYPE 之 `ob_pool_data` 取**固定筆數之隨機樣本**，計算並回傳**與門檻 / 等級無關**之分數直方圖 `histogram: [{score, count}]`（對樣本一次掃描即得）；前端**每個 cardType 僅取一次直方圖並快取**，之後依當前草稿門檻於**前端即時分桶（client-side bucketing）**算各等級樣本數並依 `totalCount / sampleSize` 放大推算至母體 — **門檻編輯不再回打後端**（取代 v1.7「每次門檻變更呼叫後端重算」與 v1.6 全量即時計分；後者於生產環境 CARD_TYPE=E 實測達 224.6 秒逾時，見 §11 A-3）
+- **And** 樣本筆數為**固定值**（非依當下母體筆數動態變動），實際數值由 AD-E07-45 依統計精度與效能權衡決定，本 spec 不指定數值
+- **And** 直方圖須採**可重現（repeatable）種子**：相同 CARD_TYPE + `ob_pool_data` 未變動時，多次呼叫回傳之直方圖必須完全一致（直方圖與門檻無關，故門檻編輯不影響其內容）；前端分桶結果僅在草稿門檻值或（重新取得之）直方圖變動時才改變
+- **And** **效能**：後端直方圖掃描為 **每 cardType 一次、約 12 秒（heavy card；取代 224.6 秒全量計分）**，取得後快取；**門檻編輯之前端重新分桶為即時（次秒級 / instant，不再打後端）** — 見 BR-2 / §11 A-3
+- **And** 估算結果須明確標示為約略值（UI 呈現見 §7），不得呈現為精確全量計數
+- **And** 沿用 CARD_TYPE 範圍鎖（BR-7）：估算與直方圖僅套用 Tab 1 選中之 CARD_TYPE
 
 ### AC-4：月名單分派執行中禁止修改
 
@@ -99,6 +104,14 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 - **And** 執行 DELETE 時，後端先檢查 `ob_tier WHERE card_type = :cardType AND card_level = :cardLevel`：
   - 若仍有紀錄存在 → 回 409 `CARD_LEVEL_REFERENCED`，要求業務先於 F056 移除對應後再回來刪除
   - 若無紀錄 → 執行 hard delete
+
+### AC-8：預覽估算失敗時顯示錯誤狀態（v1.7 新增 / v1.8 直方圖取得 / US-174 AC-4）
+
+- **Given** 「預估各等級客戶分佈」之直方圖 API（§5.2，每 cardType 一次）呼叫失敗（逾時、5xx、網路錯誤等任何原因）
+- **When** 前端接收失敗結果
+- **Then** 面板**不得直接變回空白**，須顯示明確的錯誤 / 無法載入狀態（如「預估分佈暫時無法取得，請稍後再試」）並提供可重試操作（重新整理按鈕或自動重試）
+- **And** 面板須具三態且視覺可清楚區分：載入中（直方圖掃描約 12 秒）/ 已顯示估算（直方圖已快取、門檻編輯即時分桶）/ 錯誤重試
+- **And** 修正生產環境現行前端靜默吞噬錯誤（`scoring-config-page.tsx` 之 `catch { setPreview(null) }`）而不告知使用者、直接呈現空白面板之缺陷
 
 ## 5. API 規格
 
@@ -179,15 +192,37 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | 參數 | 型別 | 必填 | 說明 |
 |---|---|---|---|
 | cardType | string | 是 | 計分卡類型（如 `H` / `S` / `E` / `S5` / `E5` / `M`） |
-| levels | JSON | 是 | 試算用新門檻陣列的 JSON，需 URL encode。範例：`levels=%5B%7B%22cardLevel%22%3A%22A%22%2C%22scoreS%22%3A243%2C%22scoreE%22%3A999%7D%5D`，解碼後對應 `[{"cardLevel":"A","scoreS":243,"scoreE":999}]` |
+| levels | JSON | 否（**v1.8 由必填改選填**） | 試算用新門檻陣列的 JSON，需 URL encode（範例：`levels=%5B%7B%22cardLevel%22%3A%22A%22%2C%22scoreS%22%3A243%2C%22scoreE%22%3A999%7D%5D`，解碼後對應 `[{"cardLevel":"A","scoreS":243,"scoreE":999}]`）。**提供時**後端以此門檻回傳伺服器端 `distribution`（供非互動呼叫者）；**省略時**僅回 `histogram`（互動前端於前端分桶，見下方 behavior note，AC-3） |
 
-**Response — 200 OK**
+**Response — 200 OK（v1.8 直方圖 + 抽樣估算）**
 
 ```json
 {
-  "distribution": { "A": 2000, "B": 4000, "C": 3000, "D": 500 }
+  "histogram": [
+    { "score": 243, "count": 5 },
+    { "score": 242, "count": 8 },
+    { "score": 241, "count": 12 }
+  ],
+  "distribution": { "A": 2000, "B": 4000, "C": 3000, "D": 500 },
+  "isEstimate": true,
+  "sampleSize": 50000,
+  "totalCount": 1679489
 }
 ```
+
+**Response 欄位說明（v1.7 估算中介資訊 / v1.8 新增 histogram / US-174）**：
+
+| 欄位 | 型別 | 說明 |
+|---|---|---|
+| histogram | array（**v1.8 新增**） | 選中 CARD_TYPE 之**樣本分數直方圖**：`[{ score, count }]`，`score` = 分數值、`count` = 樣本中該分數之筆數（**樣本層計數，非母體**）。**與門檻 / 等級無關**（門檻編輯不改變其內容）。前端每 cardType 取一次並快取，之後依當前草稿門檻於前端分桶並以 `totalCount / sampleSize` 放大推算各等級人數（AC-3 / BR-2） |
+| distribution | object | 各等級之**放大推算後**預估人數（key 為 cardLevel，依 CARD_TYPE 動態，不硬編碼 4 級）；為估算值非精確計數。**v1.8：僅當 `levels` 提供時回傳，供非互動呼叫者**；互動前端改用 `histogram` 於前端分桶，不依賴此欄位 |
+| isEstimate | boolean | 固定為 `true`，供前端渲染「約 / 估算」標示（AC-3） |
+| sampleSize | number | 本次抽樣之固定樣本筆數（實際數值由 AD-E07-45 決定，範例值僅示意；非依母體動態變動） |
+| totalCount | number | 母體（選中 CARD_TYPE 之 `ob_pool_data`）總筆數，供前端放大推算 / 顯示推算基數 |
+
+> **v1.8 behavior note（互動路徑 / US-174 / AD-E07-45 v1.2）**：直方圖對固定樣本一次掃描即得、**與門檻無關**，故前端**每個 cardType 僅呼叫本端點一次**取得 `histogram` 並快取；業務部長於 Tab 4 調整門檻時，各等級分佈由前端就快取直方圖**即時重新分桶（client-side）**，**門檻編輯不再回打後端**。伺服器端 `distribution`（需 `levels`）保留供非互動 / 程式化呼叫者。
+>
+> **v1.8 效能（US-174 / AD-E07-45 v1.2）**：直方圖掃描實測 **heavy card 約 12 秒（取代 v1.6 全量即時計分 CARD_TYPE=E 224.6 秒逾時）**，每 cardType 一次並快取；**門檻編輯之前端重新分桶為即時（次秒級 / instant）**。抽樣演算法 / 樣本大小 / 種子機制 / 直方圖 SQL / 放大公式由 AD-E07-45 v1.2 owns，本 spec 僅定義行為契約。
 
 **錯誤回應**
 
@@ -266,17 +301,19 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | 規則編號 | 說明 |
 |---|---|
 | BR-1 | 門檻區間不得重疊；相鄰等級的 `score_e + 1 = 下一級 score_s` 允許 |
-| BR-2 | 預覽計算允許應用層快取 60 秒 |
+| BR-2 | **預覽採直方圖 + 前端分桶（v1.8 改寫 / US-174 / AD-E07-45 v1.2）**：§5.2 preview 回傳選中 CARD_TYPE 之樣本分數直方圖（`histogram`，對 `ob_pool_data` 固定樣本一次掃描、與門檻無關、可重現種子）；前端**每 cardType 取一次直方圖並快取**，各等級分佈由前端依當前草稿門檻**即時分桶（client-side bucketing）**並以 `totalCount / sampleSize` 放大推算，**門檻編輯不回打後端**。效能：直方圖掃描 **heavy card 約 12 秒（每 cardType 一次、快取；取代 v1.6 全量即時計分 224.6 秒 + 60 秒應用層快取）**；前端重新分桶即時（次秒級）。伺服器端 `distribution`（需 `levels`）保留供非互動呼叫者。直方圖快取 TTL / 失效策略與 SQL 由 system-architect 於 AD-E07-45 v1.2 決定 |
 | BR-3 | 月名單分派鎖定：`assignment_run.status IN ('pending', 'running')` 時禁止修改 |
 | BR-4 | `ob_levelcard_version.status` 欄位於遷移時補建（原 OBLEVELCARD_VERSION 無此欄位），初值由 `(SDATE <= 今日 < EDATE)` 計算；本功能仍以 `status = 'active'` 判斷 active 計分版本 |
 | BR-5 | **hard delete 決策**：DELETE 採 hard delete（`ob_levelcard_level` 表無 status 欄位；與 F054 軟刪除 `ob_levelcard_column` 的設計刻意不同，理由：等級結構為「業務分級設計」而非「啟用狀態」，被刪除的等級應從歷史結構中移除，歷史追溯依賴月名單分派 snapshot F066） |
 | BR-6 | **cascade reference check**：刪除前必須先檢查 `ob_tier WHERE card_type = :cardType AND card_level = :cardLevel`，若存在紀錄則回 409 `CARD_LEVEL_REFERENCED`，業務需先於 F056 移除對應後才能刪除 |
 | BR-7 | **CARD_TYPE 範圍鎖**（v1.4 新增）：所有寫入操作之 `cardType` 必須對應 `ob_card_type.status = 'active'`；違反回 404 `CARD_TYPE_NOT_FOUND`；前端 Tab 4 操作以 Tab 1 selectedCardType 為唯一資料範圍，跨 CARD_TYPE 寫入不開放 |
+| BR-8 | **抽樣估算行為契約（v1.7 新增 / v1.8 直方圖 + 前端分桶 / US-174 / AD-E07-45 v1.2）**：(1) 樣本為固定筆數（非依母體動態變動）；(2) 抽樣使用可重現種子，相同輸入之直方圖結果一致；(3) 後端回傳**與門檻無關**之分數直方圖，前端依門檻分桶並以 `totalCount / sampleSize` 放大推算至母體；(4) 結果標示為估算值（`isEstimate = true`）；(5) **效能**：後端直方圖掃描每 cardType 一次、heavy card 約 12 秒後快取，**門檻編輯之前端重新分桶為即時（次秒級）**；(6) 直方圖取得失敗時前端顯示錯誤重試狀態、不得靜默呈現空白（AC-8）。[F056](F056-edit-tier-mapping.md)（各 TIER 分布預估）**共用本 F055 快取直方圖**於前端衍生（切至 Tab 5 不觸發新掃描）；[F050](F050-create-list-definition.md)（草稿命中筆數預估）共用同一套抽樣估算產品邏輯（D1）、其抽樣 COUNT 維持次秒級。抽樣演算法 / 樣本大小 / 種子機制 / 直方圖 SQL / 放大公式由 AD-E07-45 v1.2 owns，本 spec 僅定義行為契約 |
 
 ## 7. UI/UX 需求
 
 - 等級門檻表格：inline edit 或 Modal 編輯
-- 預覽影響區：以即時查詢或 debounce 300ms 顯示更新後分佈
+- **預覽影響區：直方圖前端分桶（v1.8 / US-174）**：切換 cardType 時取一次 §5.2 直方圖並快取（載入約 12 秒，顯示載入狀態）；業務部長調整門檻時，各等級分佈由前端就快取直方圖**即時重新分桶**顯示（instant，無需 debounce 打後端 / 無網路等待）。v1.7「debounce 300ms 打後端」語意由前端分桶取代
+- **預覽估算標示與三態（v1.7 / US-174）**：預覽面板各等級人數須明確標示為估算值（如「約 N 人」或「基於樣本估算」註記，具體文案由 ui-ux-designer 決定），不得呈現為精確全量計數；面板須具**載入中（直方圖掃描）/ 已顯示估算（直方圖已快取、門檻即時分桶）/ 錯誤重試**三態且視覺可清楚區分。直方圖取得失敗時顯示「預估分佈暫時無法取得，請稍後再試」與可重試操作，**不得**退回空白面板（修正現行 `catch { setPreview(null) }` 靜默吞噬缺陷，AC-8）
 - 錯誤提示：直接於有問題的等級列顯示紅色邊框 + 錯誤訊息
 - 等級列右側操作區新增「刪除」icon 按鈕（`trash-2` lucide icon，紅色 hover：`hover:text-danger hover:bg-red-50`），與 F056 TIER_LEVEL 對應表的刪除樣式一致
 - 點擊刪除按鈕觸發確認對話框（標題：「刪除 CARD_LEVEL 等級」、body：等級代碼 + AC-7 警告文字）
@@ -292,8 +329,9 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 
 - 資料模型：[data-model.md#e07-data-model](../data-model.md#e07-data-model)（`ob_levelcard_level`）、[data-model.md#ob-card-type-entity](../data-model.md#ob-card-type-entity)
 - 錯誤處理：[error-handling.md#assignment-scoring-errors](../error-handling.md#assignment-scoring-errors)（含 v1.3 新增的 `CARD_LEVEL_RECORD_NOT_FOUND`（404）、`CARD_LEVEL_REFERENCED`（409）；v1.4 引用 `CARD_TYPE_NOT_FOUND`（404））
-- 架構決策：AD-E07-3
-- 相關功能：[F053](F053-view-scoring-dimensions.md)、[F054](F054-edit-scoring-dimension.md)（軟刪除維度，作為刪除設計對照）、[F056](F056-edit-tier-mapping.md)、[F061](F061-trigger-assignment-run.md)、[F069](F069-view-card-type-list.md)、[F070](F070-create-card-type.md)
+- 架構決策：AD-E07-3、**AD-E07-45 抽樣估算 v1.2**（v1.7 抽樣估算 → v1.8 分數直方圖 + 前端分桶 / US-174 — 抽樣演算法 / 固定樣本大小 / 可重現種子 / 直方圖 SQL / 放大推算公式 / 直方圖快取 TTL 與失效策略；由 system-architect 後續撰寫，本 spec 僅引用其行為契約，不規範內部機制）
+- 相關功能：[F053](F053-view-scoring-dimensions.md)、[F054](F054-edit-scoring-dimension.md)（軟刪除維度，作為刪除設計對照）、[F056](F056-edit-tier-mapping.md)（各 TIER 分布預估，共用 AD-E07-45 抽樣估算 D1）、[F050](F050-create-list-definition.md)（草稿命中筆數預估，共用 D1）、[F061](F061-trigger-assignment-run.md)、[F069](F069-view-card-type-list.md)、[F070](F070-create-card-type.md)
+- 對應 User Story：US-074（原始門檻與預覽面板）、**US-174（預覽改抽樣估算並修正靜默吞噬缺陷）**
 
 ## 10. 變更紀錄
 
@@ -305,6 +343,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 | v1.4 | 2026-05-14 | CARD_TYPE 範圍鎖（BR-7）；AC-1 改為依 selectedCardType 顯示；所有端點補 404 CARD_TYPE_NOT_FOUND；Controller 規範註記；相依性補 F069 |
 | v1.5 | 2026-05-15 | 對齊 spec-index 與 US-097：補 M02 新建 CARD_LEVEL 流程相關 cross-ref（與 F070 / US-097 串接） |
 | v1.6 | 2026-05-17 | **RBAC 明文化（§5.4 新增）**：依 AD-E07 v3.0 + F002 §4.6.2 導入部長 / 處長 Guard 行為矩陣；GET 端點採 `DirectorOrSectionChiefGuard`、寫入端點採 `DirectorGuard`；對應錯誤碼 `E07_REQUIRES_DIRECTOR` / `E07_ROLE_NOT_ASSIGNED` 明列；正式廢棄 `is_sales_manager` / `SalesManagerGuard` 引用，全文改採 `businessRole`（`'director'` / `'section_chief'`）+ 新 Guard 名 |
+| v1.7 | 2026-07-11 | **§5.2 預覽改抽樣估算 + 修正靜默吞噬缺陷（US-174 / D1）**：(1) AC-3 重寫 — 全量即時計分改為 `ob_pool_data` 固定樣本 + 可重現種子放大推算（AD-E07-45），次秒級、標示估算值（取代生產環境 CARD_TYPE=E 224.6 秒逾時行為）；(2) 新增 AC-8 — 估算失敗顯示錯誤重試三態，修正前端 `catch { setPreview(null) }` 靜默吞噬導致面板空白之缺陷；(3) §5.2 response 補 `isEstimate` / `sampleSize` / `totalCount` 中介資訊；(4) BR-2 改寫（快取語意由抽樣取代）、新增 BR-8 抽樣估算行為契約；(5) §7 UI/UX 補估算標示與三態；(6) 引用 AD-E07-45（與 F056 / F050 共用抽樣估算 D1） |
+| v1.8 | 2026-07-12 | **§5.2 預覽改分數直方圖 + 前端分桶（互動效能決議 / US-174 / AD-E07-45 v1.2）**：(1) AC-3 重寫 — 後端回傳與門檻無關之 `histogram: [{score, count}]`（對固定樣本一次掃描），前端每 cardType 取一次並快取、依門檻**即時前端分桶**放大推算，**門檻編輯不再打後端**；(2) §5.2 response 新增 `histogram` 欄位、`levels` 改選填（提供才回伺服器端 `distribution` 供非互動呼叫者）+ behavior / 效能 note；(3) BR-2 改寫、BR-8 補直方圖 + 前端分桶效能契約；(4) AC-8 / §7 UI/UX 對齊直方圖三態；(5) 效能：直方圖掃描 heavy card **約 12 秒（取代 224.6 秒）**、每 cardType 一次快取，前端重新分桶即時（次秒級）；(6) 引用 **AD-E07-45 v1.2**；F056 各 TIER 分布共用本快取直方圖於前端衍生 |
 
 ## 11. 假設
 
@@ -312,3 +352,4 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-17
 |---|---|---|
 | A-1 | DELETE 採 hard delete 設計（`ob_levelcard_level` 無 status 欄位），歷史結構追溯依賴月名單分派 snapshot F066 | ✅ Decided（PO 2026-05-14） |
 | A-2 | AC-6 / AC-7 cascade 行為採方案 A（reference check 阻擋刪除）為 PO 決策；歷史追溯依賴 F066 snapshot；未採方案 B（cascade 連動刪除 `ob_tier` 對應）以避免跨表副作用 | ✅ Decided（PO 2026-05-14） |
+| A-3 | 預覽改採**分數直方圖 + 前端分桶**（固定樣本一次掃描得與門檻無關之 histogram + 可重現種子 + 前端依門檻即時分桶放大推算 + 估算標示），取代 v1.6 全量即時計分（生產環境 CARD_TYPE=E 實測 224.6 秒逾時 + 前端 `catch { setPreview(null) }` 靜默吞噬空白）與 v1.7「每次門檻變更打後端」。**效能**：直方圖掃描 heavy card 約 12 秒（每 cardType 一次、快取），門檻編輯之前端重新分桶即時（次秒級）。直方圖 / 快取機制細節交 AD-E07-45 v1.2 | ✅ Decided（D1 + team lead 2026-07-12 互動效能決議 / US-174） |

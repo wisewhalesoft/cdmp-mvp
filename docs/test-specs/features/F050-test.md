@@ -18,8 +18,9 @@ covers:
   - US-131
   - US-133
   - US-144
+  - US-176
 date: 2026-05-20
-last_updated: 2026-05-28
+last_updated: 2026-07-11
 ---
 
 # F050：新增名單定義（whitelist-driven v2.1.1）— 測試設計
@@ -48,6 +49,8 @@ last_updated: 2026-05-28
 | 主要測試層 | 後端 Unit（衍生規則 pure function）、後端 Integration（Service transaction + 唯一性 + Supertest API）、前端 Component（React Testing Library + MSW） |
 | 關鍵依賴 | `pooldata_field_whitelist` 已 seed 6 筆（含 case_status）；`pooldata_field_option` 已 seed caseyear 8 筆、case_status 4 筆 |
 | OQ 拍板引用 | OQ-TEST-001 已拍板（caseyear=99 wildcard 不加 year_cnt 條件）；OQ-TEST-002 已拍板（conditions=[] skip）— 本 spec 僅驗儲存側；月名單分派側見 IT-M01 |
+| **v2.4 抽樣估算（US-176 / AD-E07-45）** | §6.3 `preview-hit-count` 新端點，共用 F055/F056 之 AD-E07-45 抽樣估算核心元件（`sampling-estimator.ts`）；核心測試唯一位於 [F055-test.md](F055-test.md) I 組，本文件十七節（S~Y 群組）僅新增 F050 消費端整合案例，見附錄 H |
+| **v2.4 customer_core MSSQL-only 邊界** | `customer_core` 表無 SQLite Entity（`f109-customer-core-pg-only-patterns`）；T 群組涉及 customer_core 之案例一律 `.mssql.spec.ts`，本機無 MSSQL 可達時誠實 `describe.skip`，不可用 SQLite 假造 |
 
 ---
 
@@ -2076,6 +2079,314 @@ last_updated: 2026-05-28
 
 ---
 
+## 十七、v2.4 補強測試設計（US-176 草稿「預估命中筆數」改真實抽樣估算，AD-E07-45）
+
+> **背景**：F050 v2.4（US-176）新增 §6.3 `POST /assignment/list-definitions/preview-hit-count`，接受**尚未儲存**（無 `listNo`）之 `condition_payload`，對 `ob_pool_data` 抽樣後套用 `buildStage1WhereConditions`（欄位篩選子步驟）＋ F109 `buildCustomerCoreClause`（customer_core 條件式 LEFT JOIN），放大推算命中筆數，取代前端純假公式 `n = 12500 * (0.85 - i*0.08)`。與 F055（US-174）/ F056（US-175）共用 AD-E07-45 抽樣估算核心元件（`sampling-estimator.ts`），該元件之常數 / `scaleEstimate` / `buildPoolDataSampleFrom` 核心測試**唯一**位於 [F055-test.md](F055-edit-card-level-thresholds.md 對應之測試設計) I 組，本節不重複驗證，僅新增 F050 消費端特有整合案例（欄位篩選子步驟範圍限定、customer_core 納入、live debounce 更新、前端失敗行為）。
+>
+> **測試邊界**：沿用 F055-test.md v1.7 章節之 MSSQL-only 聲明。額外重點：`customer_core` 表**無 SQLite Entity**（依 `f109-customer-core-pg-only-patterns` 既有教訓），任何引用 customer_core 之案例（T 組）**必須**設計為 `.mssql.spec.ts`，本機無 MSSQL 可達時 `describe.skip` + SKIP_REASON；不引用 customer_core 之純欄位篩選案例（S 組多數）可用 SQLite 小母體驗證。
+>
+> **RBAC 提醒**：§6.3 端點採 `DirectorGuard`（僅部長 / Admin），**不同於** F055 §5.2 / F056 §5.5 之 `DirectorOrSectionChiefGuard`（含處長）——三個 D1 抽樣估算端點雖共用計算邏輯，RBAC 範圍並非全部一致，見 Y 群組。
+
+### S 群組：POST preview-hit-count — 基本契約與範圍限定（AC-18 / BR-15 / §6.3）
+
+#### TS-F050-S01：正常呼叫回傳 estimatedHitCount / isEstimate / sampleSize / totalCount 契約
+
+- **關聯需求**：F050 AC-18 / §6.3 response schema
+- **測試類型**：Positive / Integration（SQLite 小母體可行，僅 `ob_pool_data` 欄位條件）
+- **前置條件**：`ob_pool_data` ≤ 50000 筆（小母體）；白名單含 `prod_kind`；部長 Token
+- **步驟**：POST `/assignment/list-definitions/preview-hit-count`，`conditionPayload.conditions = [{ columnName: "prod_kind", fieldType: "categorical", values: ["01"] }]`
+- **預期結果**：HTTP 200；response 含 `estimatedHitCount`（number）、`isEstimate === true`、`sampleSize`（number）、`totalCount`（number）
+
+---
+
+#### TS-F050-S02：🔴 估算數字反映真實篩選條件（非假公式，TC-176-01）
+
+- **關聯需求**：F050 AC-18 / US-176 TC-176-01（MUST-FIX，取代 mock 公式）
+- **測試類型**：Positive / Integration（SQLite 小母體，精確可控）
+- **前置條件**：`ob_pool_data` 100 筆已知資料，其中 `prod_kind='01'` 恰 30 筆
+- **步驟**：POST preview-hit-count，`conditions=[{columnName:'prod_kind', values:['01']}]`
+- **預期結果**：`estimatedHitCount === 30`（小母體 fallback 下精確等於真實命中數）；**明確非** `12500 * 0.85 = 10625` 或任何與條件數量遞減相關之公式輸出
+
+---
+
+#### TS-F050-S03：🔴 範圍限定（D2）— 僅欄位篩選子步驟，不涉及 `executeStage1Chain`
+
+- **關聯需求**：F050 AC-18 / BR-15（MUST-FIX）
+- **測試類型**：Positive / Unit（spy）+ Integration
+- **前置條件**：spy `buildStage1WhereConditions` 與 `executeStage1Chain`（F049 精確試算專屬函式）
+- **步驟**：POST preview-hit-count 含合法條件
+- **預期結果**：`buildStage1WhereConditions` 被呼叫；`executeStage1Chain` **未**被呼叫（0 次）；本端點之估算範圍不含 MONTH_CNT 期別過濾 / 近 3 個月去重 / 特殊業務 DELETE 規則
+
+---
+
+#### TS-F050-S04：BR-14 先注入 `best_case` 系統固定條件才估算
+
+- **關聯需求**：F050 AC-18 / BR-15 §（1）
+- **測試類型**：Positive / Integration（SQLite 小母體，已知資料）
+- **前置條件**：`ob_pool_data` 100 筆，其中 `best_case='Y'` 60 筆 / `'N'` 40 筆；payload **未包含** `best_case` 條件
+- **步驟**：POST preview-hit-count，`conditions=[]`（或僅含其他非 best_case 條件）
+- **預期結果**：估算結果僅反映 `best_case='Y'` 之 60 筆（BR-14 `injectSystemFixedConditions` 先於估算執行，即使使用者未明確傳入 best_case 條件）
+
+---
+
+#### TS-F050-S05：`RESERVED_FIELD_IN_CONDITIONS` — 一級保留欄位入 conditions 回 400
+
+- **關聯需求**：§6.3 錯誤回應表（沿用 §5.4 / BR-8）
+- **測試類型**：Negative / Integration
+- **前置條件**：部長 Token
+- **步驟**：POST preview-hit-count，`conditions` 含 `{columnName:'list_period_start', ...}`
+- **預期結果**：HTTP 400；`error_code: RESERVED_FIELD_IN_CONDITIONS`
+
+---
+
+#### TS-F050-S06：`CONDITION_COLUMN_NOT_IN_WHITELIST` — columnName 不在白名單回 422
+
+- **關聯需求**：§6.3 錯誤回應表（沿用 §5.4 / AC-11）
+- **測試類型**：Negative / Integration
+- **步驟**：POST preview-hit-count，`conditions` 含 `{columnName:'INVALID_FIELD', ...}`
+- **預期結果**：HTTP 422；`error_code: CONDITION_COLUMN_NOT_IN_WHITELIST`
+
+---
+
+#### TS-F050-S07：本端點**不**強制 AC-10 最低條件數門檻（與 §6.1 建立名單不同）
+
+- **關聯需求**：§6.3 註「不強制 AC-10 之『至少 1 個非系統固定條件』最低門檻」
+- **測試類型**：Positive / Integration（對照差異案例）
+- **前置條件**：payload `conditions=[]`（無使用者條件，僅 best_case 系統固定將於 BR-14 注入）
+- **步驟**：POST preview-hit-count，`conditions=[]`
+- **預期結果**：HTTP 200（**不**回 422 VALIDATION_ERROR「篩選條件不得為空」——本端點與 §6.1 POST 建立名單之驗證規則不同，前端本身於無使用者條件時不呼叫本端點屬 UI 行為，非後端強制）
+
+---
+
+#### TS-F050-S08：不攔截 `ASSIGNMENT_RUN_ALREADY_RUNNING`（讀鎖豁免）
+
+- **關聯需求**：§6.3 註 + AD-E07-45 §6, I-SAMPLE-LOCK-EXEMPT-01
+- **測試類型**：Positive / Integration
+- **前置條件**：`assignment_run(status='running')`；部長 Token
+- **步驟**：POST preview-hit-count 含合法條件
+- **預期結果**：HTTP 200（不回 409 ASSIGNMENT_RUN_ALREADY_RUNNING；本端點與 F055 §5.2 / F056 §5.5 同屬 AD-E07-45 三估算端點一致裁決）
+
+---
+
+### T 群組：customer_core（F109）篩選欄位須納入估算 — I-SAMPLE-CC-INCLUDE-01（MUST-FIX）
+
+> **必要前置查證**：依既有記憶 [[ad-e07-43-p5-mssql-signoff-patterns]] 之 P5c 發現（2026-07-08），`buildCustomerCoreClause` / `stage1-customer-core-clause` 之 SQL 曾查證為「對 MSSQL 連線執行含 customer_core 條件之名單會拋錯」（PG-only 語法殘留，當時尚未解決）。本群組（T01~T05）之可執行性存在此**前置依賴**：tdd-implementation 執行前應先查證該相容性缺口目前狀態（可能已於後續 P6c customer_core ETL 全通作業中一併解決，**不可假設**已解決或未解決）。若缺口仍在，T01/T02/T03/T04/T05 應預期為揭露該既知缺口之紅燈，而非本測試設計有誤。
+
+#### TS-F050-T01：🔴🔴 旗艦 MUST-FIX — `age`（customer_core 衍生欄位）條件改變估算值，證明未被靜默 skip
+
+- **關聯需求**：F050 AC-18 第 2 點 / BR-15, I-SAMPLE-CC-INCLUDE-01
+- **測試類型**：Positive / Integration（**MSSQL 真實 DB**，`.mssql.spec.ts`；`customer_core` 無 SQLite Entity，本案例不可用 SQLite；本機無 MSSQL 可達時 `describe.skip` + SKIP_REASON）
+- **前置條件**：`ob_pool_data` 與 `customer_core` 已知關聯資料（`custo_no` 對應），部分案件之客戶 `age`（依 `workdt` 衍生）落在篩選區間內、部分不落在區間內
+- **步驟**：
+  1. POST preview-hit-count（不含 `age` 條件），記錄 `estimatedHitCount_A`
+  2. POST preview-hit-count（含 `age` 條件，`min`/`max` 縮小年齡區間），記錄 `estimatedHitCount_B`
+- **預期結果**：`estimatedHitCount_B !== estimatedHitCount_A`（且方向合理，B ≤ A，因區間為子集），證明 `age` 條件確實生效（未被 composer 對 customer_core 條件之既有 `skip` 行為吞掉）
+
+---
+
+#### TS-F050-T02：`city`（居住城市 LEFT3 衍生欄位）條件改變估算值
+
+- **關聯需求**：同上（第二個具體 customer_core 欄位案例）
+- **測試類型**：Positive / Integration（**MSSQL 真實 DB**）
+- **步驟**：比照 T01，改用 `city`（categorical，LEFT3 衍生）條件
+- **預期結果**：含 `city` 條件之估算值與不含時不同，且反映該城市前綴之真實客戶分布
+
+---
+
+#### TS-F050-T03：🔴 EMPTY_CONDITIONS 陷阱守門 — payload 僅含 customer_core 條件時仍生效
+
+- **關聯需求**：I-SAMPLE-CC-INCLUDE-01（既有 `f109-customer-core-pg-only-patterns` 教訓：composer 對純 customer_core 條件之 fragment 為空，若呼叫端誤判為「無條件」整批 skip） 
+- **測試類型**：Positive / Integration（**MSSQL 真實 DB**，MUST-FIX）
+- **前置條件**：`conditions` 僅含 1 個 customer_core 來源條件（如 `gender`），無任何 `ob_pool_data` 欄位條件（`best_case` 由 BR-14 自動注入除外）
+- **步驟**：POST preview-hit-count，`conditions=[{columnName:'gender', ...}]`
+- **預期結果**：`buildStage1WhereConditions` 產生之 `fieldFragment.where` 為空（或僅含 best_case），但最終 `estimatedHitCount` 仍正確反映 `gender` 條件之篩選效果（customer_core clause 未因 fieldFragment 為空而被整體略過）
+
+---
+
+#### TS-F050-T04：NULL 排除變體 1 — 客戶不存在於 customer_core（LEFT JOIN 無命中）
+
+- **關聯需求**：F109 §6 BR-2 / BR-3「客戶欄 NULL = 案件排除」
+- **測試類型**：Boundary / Integration（**MSSQL 真實 DB**）
+- **前置條件**：案件 A 之 `custo_no` 於 `customer_core` 查無對應列
+- **步驟**：POST preview-hit-count 含 `age` 條件（合法區間）
+- **預期結果**：案件 A 不計入估算命中（LEFT JOIN 無命中 → 該欄位值為 NULL → WHERE 求值非真 → 排除）
+
+---
+
+#### TS-F050-T05：NULL 排除變體 2 — 客戶存在但欄位本身為 NULL
+
+- **關聯需求**：同上
+- **測試類型**：Boundary / Integration（**MSSQL 真實 DB**）
+- **前置條件**：案件 B 之 `custo_no` 於 customer_core 有對應列，但 `age`（或來源出生日期欄位）為 NULL
+- **步驟**：POST preview-hit-count 含 `age` 條件
+- **預期結果**：案件 B 不計入估算命中（JOIN 有結果但比對欄位 NULL → 排除）
+
+---
+
+#### TS-F050-T06：NULL 排除變體 3 — 未引用客戶欄位時不注入 JOIN
+
+- **關聯需求**：同上（反向驗證「條件式 JOIN 觸發」規則）
+- **測試類型**：Positive / Integration（**SQLite 小母體可行** — 此變體驗證的是「不觸及 customer_core 表」這件事本身，故不需要 customer_core 表存在）
+- **前置條件**：`conditions` 完全不含任何 `data_source='customer_core'` 欄位
+- **步驟**：POST preview-hit-count，`conditions` 僅含 `ob_pool_data` 欄位條件
+- **預期結果**：查詢未注入 `LEFT JOIN customer_core`（spy SQL 組裝結果或執行計畫確認）；customer_core 表中即使存在大量 NULL 值資料，也不影響本次估算結果（純案件資料名單行為 / 效能不變）
+
+---
+
+#### TS-F050-T07：I-SAMPLE-ALIAS-PRESERVE-01 — `customerCoreClause` baseAlias 固定傳入 `'o'`
+
+- **關聯需求**：AD-E07-45 §5.3, I-SAMPLE-ALIAS-PRESERVE-01
+- **測試類型**：Unit（呼叫參數斷言，無需連線）
+- **前置條件**：spy `buildCustomerCoreClause` 呼叫參數
+- **步驟**：POST preview-hit-count 含 customer_core 條件
+- **預期結果**：`buildCustomerCoreClause(conditions, workdt, baseAlias, warnings)` 之 `baseAlias` 參數恆為 `'o'`（與抽樣來源別名一致，無論母體是否為小母體 fallback）
+
+---
+
+### U 群組：隨條件編輯即時（live）更新（AC-3 / TC-176-02 / TC-176-03）
+
+#### TS-F050-U01：新增第二個條件後，面板於 debounce 後更新為新估算值
+
+- **關聯需求**：F050 AC-18「隨條件編輯即時更新」/ TC-176-02
+- **測試類型**：Positive / Frontend Unit（fake timer）
+- **前置條件**：頁面已設定 1 個條件，面板顯示估算值 N1；stub 第二次呼叫回傳不同值 N2
+- **步驟**：新增第 2 個條件 → 推進 fake timer 超過 debounce 時間
+- **預期結果**：面板更新為 N2（反映兩個條件組合篩選結果，非任何遞減公式）
+
+---
+
+#### TS-F050-U02：條件疊加（AND）估算值不遞增
+
+- **關聯需求**：TC-176-03
+- **測試類型**：Boundary / Integration（已知 seed 子集關係）
+- **前置條件**：`ob_pool_data` 已知資料，條件 A 命中 50 筆，條件 A AND B 為條件 A 之真子集（命中 ≤50 筆）
+- **步驟**：POST preview-hit-count（僅 A）→ 記錄 N；POST preview-hit-count（A AND B）→ 記錄 N'
+- **預期結果**：`N' <= N`（允許抽樣誤差內合理波動，但不應出現條件變多、估算值大幅增加之反直覺結果）
+
+---
+
+#### TS-F050-U03：debounce 期間連續多次編輯只觸發一次 API 呼叫
+
+- **關聯需求**：AC-18「允許合理 debounce，避免逐字元觸發過多請求」
+- **測試類型**：Positive / Frontend Unit（fake timer，spy fetch 呼叫次數）
+- **步驟**：連續快速編輯條件 3 次（每次間隔小於 debounce 時間）→ 推進 fake timer 至 debounce 時間到
+- **預期結果**：估算 API 僅被呼叫 1 次（非 3 次）
+
+---
+
+### V 群組：估算標示 + 失敗行為（AC-4 / AC-7 / TC-176-04 / TC-176-05）
+
+#### TS-F050-V01：面板顯示估算標示文字（非精確計數用語）
+
+- **關聯需求**：F050 AC-18 第 6 點 / TC-176-04
+- **測試類型**：Positive / Frontend Unit
+- **前置條件**：stub POST preview-hit-count 回傳 200 + `isEstimate:true`
+- **步驟**：渲染面板
+- **預期結果**：面板顯示「約 N 筆」或「基於樣本估算」等效文字；不呈現為精確計數用語
+
+---
+
+#### TS-F050-V02：🔴 估算失敗顯示「預估暫時無法取得」，不顯示 0 或誤導數字
+
+- **關聯需求**：F050 AC-18 第 7 點 / US-176 AC-7 / TC-176-05（MUST-FIX）
+- **測試類型**：Negative / Frontend Unit
+- **前置條件**：stub POST preview-hit-count 回傳 500 或逾時
+- **步驟**：觸發估算後等待失敗
+- **預期結果**：面板顯示「預估暫時無法取得」等效文字；**不得**顯示 `0`（或任何具體數字）
+
+---
+
+#### TS-F050-V03：估算失敗不阻擋使用者繼續填表 / 儲存
+
+- **關聯需求**：F050 AC-18 第 7 點「估算為輔助資訊，失敗不阻擋」
+- **測試類型**：Positive / Frontend Unit
+- **前置條件**：估算面板處於失敗態；表單其餘必填欄位已填妥合法值
+- **步驟**：估算失敗後，點擊「儲存」
+- **預期結果**：POST `/assignment/list-definitions`（建立名單，§6.1）正常送出；儲存按鈕啟用條件**不**包含估算成功（沿用 §8 UI/UX「即時驗證與估算面板為兩獨立行為」）
+
+---
+
+#### TS-F050-V04：無使用者條件時不呼叫估算 API
+
+- **關聯需求**：F050 AC-18 第 8 點「無使用者條件，沿用現行既有 UX」
+- **測試類型**：Positive / Frontend Unit（spy）
+- **前置條件**：表單尚無任何非系統固定條件
+- **步驟**：渲染頁面（初始狀態）
+- **預期結果**：`POST /assignment/list-definitions/preview-hit-count` 未被呼叫（spy 呼叫次數為 0）；面板不顯示或顯示待新增條件提示（沿用既有行為）
+
+---
+
+### W 群組：Stage 0 試算連結保留 + 假公式移除迴歸守門（TC-176-06）
+
+#### TS-F050-W01：「開啟 Stage 0 試算」連結仍存在且可點擊
+
+- **關聯需求**：AC-18 / TC-176-06 / F050 AC-18 第 5 點
+- **測試類型**：Positive / Frontend Unit（regression）
+- **步驟**：渲染建立草稿頁；點擊「開啟 Stage 0 試算」連結
+- **預期結果**：連結存在，導向既有 F049（US-071）精確試算頁；本輪新增之抽樣估算面板未移除此連結
+
+---
+
+#### TS-F050-W02：🔴 迴歸守門 — 靜態掃描確認假公式（`12500` 遞減公式）已移除
+
+- **關聯需求**：F050 AC-18「移除前端純數學假公式」（MUST-FIX regression guard，依 `feedback_grep_negative_lookahead` 教訓，fs + regex 而非僅概念性 Grep）
+- **測試類型**：Unit（static/regression guard）
+- **前置條件**：讀取 `apps/web/src/pages/assignment/list-create-draft-page.tsx` 原始碼（原 mock 位置約 L354-362）
+- **步驟**：regex 掃描 `12500` 字面數值 與 `0.85`（遞減係數起始值）是否仍存在於 `previewCount` 相關程式碼區塊
+- **預期結果**：掃描結果為 0 命中（假公式已完全移除，非僅停用）
+
+---
+
+#### TS-F050-W03：面板改呼叫 §6.3 API（非本地 `useMemo` 公式）
+
+- **關聯需求**：F050 AC-18
+- **測試類型**：Positive / Frontend Unit（spy fetch）
+- **步驟**：設定條件後渲染
+- **預期結果**：`fetch`（或等效 HTTP client）被呼叫，目標路徑含 `/list-definitions/preview-hit-count`；面板數字來自該 API 回應，非本地同步計算
+
+---
+
+### X 群組：效能（TC-176-07）
+
+#### TS-F050-X01：🔴 大規模資料下回應時間 < 1 秒
+
+- **關聯需求**：F050 AC-18 第 6 點 / TC-176-07（效能量測，非硬性 CI gate，性質同 F055 TS-F055-044）
+- **測試類型**：Integration（**MSSQL 真實 DB**，`.mssql.spec.ts`；本機無 MSSQL 可達時 `describe.skip` + SKIP_REASON）
+- **前置條件**：`ob_pool_data` 比照生產規模（或等比例縮小之 MSSQL Test DB 規模）
+- **步驟**：POST preview-hit-count 含合法條件，量測回應時間
+- **預期結果**：回應時間 < 1000ms
+
+---
+
+### Y 群組：RBAC（`DirectorGuard`，與 F055 / F056 preview 端點不同）
+
+#### TS-F050-Y01：部長角色呼叫成功
+
+- **關聯需求**：§6.3「權限：`DirectorGuard` + `@RequireDirector()`」
+- **測試類型**：Positive / Integration
+- **步驟**：部長 Token POST preview-hit-count
+- **預期結果**：HTTP 200
+
+---
+
+#### TS-F050-Y02：⚠️ 處長角色呼叫回 403（與 F055 / F056 preview 端點 RBAC 不同，明確對照差異）
+
+- **關聯需求**：§6.3 權限範圍；**注意**：F055 §5.2 / F056 §5.5 之 preview 端點採 `DirectorOrSectionChiefGuard`（處長可讀取），本端點（F050 §6.3）採 `DirectorGuard`（處長不可用）——三個 D1 抽樣估算端點共用計算邏輯，但 RBAC 範圍**並非全部一致**，因建立草稿頁本身僅部長 / Admin 可達
+- **測試類型**：Negative / Integration（對照差異守門）
+- **步驟**：處長 Token（businessRole='section_chief'）POST preview-hit-count
+- **預期結果**：HTTP 403；`error_code: E07_REQUIRES_DIRECTOR`
+
+---
+
+#### TS-F050-Y03：未登入回 401
+
+- **關聯需求**：§6.3 錯誤回應表
+- **測試類型**：Negative / Integration
+- **步驟**：無 Token POST preview-hit-count
+- **預期結果**：HTTP 401；`error_code: AUTH_TOKEN_MISSING`
+
+---
+
 ## 附錄 F：v2.3 / v2.3.1 覆蓋對應表（Story AC → 測試場景）
 
 | AC / TC | 說明 | 測試場景 |
@@ -2111,3 +2422,37 @@ last_updated: 2026-05-28
 | **修改** | `apps/api/src/modules/assignment/stage1/__tests__/stage1-query-composer.spec.ts` | P 群組（波 7，追加，1 場景） |
 | **修改** | `apps/web/src/pages/assignment/__tests__/list-create-draft-page.test.tsx` | Q 群組（追加，6 場景） |
 | **修改** | `apps/web/src/pages/assignment/__tests__/list-edit-draft-page.test.tsx` | R 群組（追加，3 場景） |
+
+---
+
+## 附錄 H：v2.4 覆蓋對應表（US-176 AC / TC → 測試場景）
+
+| AC / TC | 說明 | 測試場景 |
+|---|---|---|
+| US-176 AC-1 / TC-176-01 | 真實抽樣估算取代前端假公式 | TS-F050-S01、S02 |
+| US-176 AC-2 | 範圍限定僅欄位篩選子步驟 | TS-F050-S03 |
+| US-176 AC-3 / TC-176-02 | 隨條件編輯即時更新 | TS-F050-U01、U03 |
+| TC-176-03 | 條件疊加估算值不遞增 | TS-F050-U02 |
+| US-176 AC-4 / TC-176-04 | 估算標示為約值 | TS-F050-V01 |
+| US-176 AC-5 | 無使用者條件既有行為 | TS-F050-V04 |
+| US-176 AC-6 / TC-176-07 | 效能次秒級 | TS-F050-X01 |
+| US-176 AC-7 / TC-176-05 | 估算失敗不誤導 + 不阻擋 | TS-F050-V02、V03 |
+| TC-176-06 | Stage 0 試算連結保留 | TS-F050-W01 |
+| — | 假公式移除迴歸守門 | TS-F050-W02、W03 |
+| F050 AC-18 第 2 點 / I-SAMPLE-CC-INCLUDE-01 | customer_core 篩選欄位須納入估算 | TS-F050-T01~T07 |
+| BR-15 | 草稿命中筆數抽樣估算行為契約（含 BR-14 先注入 best_case） | TS-F050-S01~S08 |
+| §6.3 RBAC | DirectorGuard（與 F055/F056 preview 不同） | TS-F050-Y01~Y03 |
+| AD-E07-45 §4（共用元件） | `sampling-estimator.ts` 核心測試（唯一位於 F055-test.md I 組，不重複） | 見 [F055-test.md](F055-test.md) TS-F055-028~039 |
+
+---
+
+## 附錄 I：v2.4 檔案分布計劃
+
+| 操作 | 測試檔案路徑 | 涵蓋群組 |
+|---|---|---|
+| **新建** | `apps/api/src/modules/assignment-list/__tests__/preview-hit-count.spec.ts` | S 群組（8 場景，SQLite 小母體可行） |
+| **新建** | `apps/api/src/modules/assignment-list/__tests__/preview-hit-count-customer-core.mssql.spec.ts` | T 群組（7 場景；T01/T02/T03/T04/T05 需真實 MSSQL；T06/T07 可離線） |
+| **新建** | `apps/api/src/modules/assignment-list/__tests__/preview-hit-count-perf.mssql.spec.ts` | X 群組（1 場景，效能量測，需真實 MSSQL） |
+| **修改** | `apps/web/src/pages/assignment/__tests__/list-create-draft-page.test.tsx` | U / V / W 群組（追加，10 場景） |
+| **修改** | `apps/api/src/modules/assignment-list/__tests__/preview-hit-count.spec.ts` | Y 群組（RBAC，3 場景，與 S 群組同檔） |
+| 交叉引用（不新增檔案） | [F055-test.md](F055-test.md) I 組對應之 `apps/api/src/modules/assignment/stage1/__tests__/sampling-estimator.spec.ts` + `sampling-estimator.mssql.spec.ts` | 共用元件核心測試，F050 不重複建立 |

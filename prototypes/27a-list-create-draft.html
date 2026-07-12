@@ -315,16 +315,47 @@
             </div>
           </div>
 
-          <!-- Stage 0 預覽 banner（mock） -->
+          <!-- ===== 預估命中筆數（US-176 / F050 §6.3：真實抽樣估算，隨條件即時更新，三態） ===== -->
+          <!-- prototype-only：模擬估算失敗（React 依 API error 狀態 toggle，不需此按鈕） -->
+          <div id="previewDemoToggle" class="hidden items-center justify-end gap-1.5 text-[10px] text-gray-400" data-demo-only>
+            <span>Demo</span>
+            <button type="button" onclick="togglePreviewFail()" class="px-1.5 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-50">模擬估算失敗 / 恢復</button>
+          </div>
+
+          <!-- 狀態 1：估算中（debounce 後短暫顯示） -->
+          <div id="previewLoadingBanner" class="hidden rounded-lg p-3 bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm">
+            <i data-lucide="loader-2" class="w-5 h-5 text-primary shrink-0 animate-spin"></i>
+            <div class="flex-1">
+              <p class="font-medium text-primary">估算中…</p>
+              <p class="text-xs text-blue-700/80 mt-0.5">正在對目前案件母體抽樣推估命中筆數</p>
+            </div>
+          </div>
+
+          <!-- 狀態 2：已顯示估算 -->
           <div id="previewBanner" class="hidden rounded-lg p-3 bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm">
             <i data-lucide="calculator" class="w-5 h-5 text-primary shrink-0"></i>
             <div class="flex-1">
-              <p class="font-semibold text-primary">依此條件預估命中 <span id="previewCount" class="text-lg">0</span> 筆案件</p>
-              <p class="text-xs text-blue-700/80 mt-0.5">基於上月案件樣本估算。完整試算請使用 Stage 0 試算頁。</p>
+              <p class="font-semibold text-primary">
+                依此條件預估命中 <span id="previewCount" class="text-lg">約 0</span> 筆案件
+                <span class="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700 align-middle"><i data-lucide="sparkles" class="w-3 h-3"></i>估算</span>
+              </p>
+              <p class="text-xs text-blue-700/80 mt-0.5">基於目前案件母體（<code class="font-mono">ob_pool_data</code>）抽樣推估（含已設定之客戶資料條件），為約略值、非精確計數。完整精確試算請使用 Stage 0 試算頁。</p>
             </div>
-            <a href="30-stage0-estimate.html" class="text-xs px-2.5 py-1 border border-primary text-primary rounded-md hover:bg-blue-100">
+            <a href="30-stage0-estimate.html" class="text-xs px-2.5 py-1 border border-primary text-primary rounded-md hover:bg-blue-100 shrink-0">
               開啟 Stage 0 試算
             </a>
+          </div>
+
+          <!-- 狀態 3：估算失敗（不顯示 0 / 不誤導、不阻擋儲存） -->
+          <div id="previewErrorBanner" class="hidden rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-center gap-3 text-sm">
+            <i data-lucide="cloud-off" class="w-5 h-5 text-warning shrink-0"></i>
+            <div class="flex-1">
+              <p class="font-semibold text-amber-900">預估暫時無法取得</p>
+              <p class="text-xs text-amber-800 mt-0.5">估算服務忙碌或連線異常；此為輔助資訊，不影響您繼續填寫或儲存名單。</p>
+            </div>
+            <button type="button" onclick="retryPreview()" class="text-xs px-2.5 py-1 border border-amber-400 text-amber-800 rounded-md hover:bg-amber-100 shrink-0 inline-flex items-center gap-1">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>重試
+            </button>
           </div>
         </section>
 
@@ -740,7 +771,7 @@
       empty.classList.toggle('hidden', userCondCount > 0);
       if (conditions.length === 0) {
         list.innerHTML = '';
-        document.getElementById('previewBanner').classList.add('hidden');
+        hidePreviewBanners();
         document.getElementById('inactiveValueWarn').classList.add('hidden');
         return;
       }
@@ -890,15 +921,74 @@
       document.getElementById('inactiveWarnDetail').textContent = warned.join('、');
     }
 
-    function updatePreview() {
-      const valid = conditions.filter(isConditionComplete);
-      const banner = document.getElementById('previewBanner');
-      if (valid.length === 0) { banner.classList.add('hidden'); return; }
-      banner.classList.remove('hidden');
-      let n = 12500;
-      valid.forEach((c, i) => { n = Math.floor(n * (0.85 - i * 0.08)); });
-      document.getElementById('previewCount').textContent = Math.max(0, n).toLocaleString();
+    // ============================================================
+    // 預估命中筆數（US-176 / F050 §6.3）：真實抽樣估算（取代原 12500 遞減假公式）
+    //   - 對目前案件母體之固定樣本套用「欄位篩選子步驟」選擇率 → 放大推算（示意；反映實際條件）
+    //   - 隨條件即時更新（debounce 300ms）；三態：估算中 / 已顯示 / 失敗
+    //   - 失敗不顯示 0 或誤導數字、不阻擋儲存（估算為輔助資訊）
+    //   - 註：文案由「上月案件樣本」據實改為「目前案件母體 ob_pool_data 抽樣」（US-176 開放問題 2 / F050 §8）
+    // ============================================================
+    const PREVIEW_TOTAL = 1679489;   // 母體 ob_pool_data 總筆數（示意，對齊 spec）
+    const PREVIEW_SAMPLE = 50000;    // 固定樣本筆數（AD-E07-45）
+    // 各欄位之選項域大小（估算選擇率用；含僅示範前段之職業別/城市的實際域大小）
+    const PREVIEW_DOMAIN = {
+      prod_kind:3, caseyear:8, spec_tp:6, case_status:4, settle_src:2, best_case:2,
+      gender:3, occupation_desc:55, education_desc:8, marital_status_desc:5,
+      customer_type_desc:4, monthly_income_desc:9, cpost_city:22,
+      month_cnt:24, date_of_birth:80
+    };
+    let previewTimer = null;
+    let previewFail = false;
+
+    function condSelectivity(c) {
+      const domain = PREVIEW_DOMAIN[c.columnName] || 10;
+      if (c.fieldType === 'categorical') {
+        const chosen = (c.values || []).length || 1;
+        return Math.min(1, Math.max(0.01, chosen / domain));
+      }
+      if (c.fieldType === 'numeric') {
+        const span = Math.max(0, Number(c.max) - Number(c.min)) + 1;
+        return Math.min(1, Math.max(0.01, span / domain));
+      }
+      if (c.fieldType === 'date') {
+        const days = Math.max(1, (new Date(c.dateEnd) - new Date(c.dateStart)) / 86400000 + 1);
+        return Math.min(1, Math.max(0.01, days / 3650));
+      }
+      return 1;
     }
+    function userConditions() {
+      return conditions.filter(c => { const f = FIELDS.find(x => x.columnName === c.columnName); return !(f && f.isSystemFixed); });
+    }
+    function hidePreviewBanners() {
+      ['previewLoadingBanner','previewBanner','previewErrorBanner'].forEach(id => document.getElementById(id).classList.add('hidden'));
+      const dm = document.getElementById('previewDemoToggle'); dm.classList.add('hidden'); dm.classList.remove('flex');
+    }
+    function showOnlyPreview(id) {
+      ['previewLoadingBanner','previewBanner','previewErrorBanner'].forEach(x => document.getElementById(x).classList.toggle('hidden', x !== id));
+      const dm = document.getElementById('previewDemoToggle'); dm.classList.remove('hidden'); dm.classList.add('flex');
+      lucide.createIcons();
+    }
+
+    // 對外沿用名稱（renderConditions() 呼叫 updatePreview()）
+    function updatePreview() { schedulePreview(); }
+
+    function schedulePreview() {
+      // 僅系統固定條件（無使用者條件）→ 沿用既有行為：面板不顯示（AC-5）
+      if (userConditions().filter(isConditionComplete).length === 0) { hidePreviewBanners(); return; }
+      showOnlyPreview('previewLoadingBanner');
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(runPreview, 300);
+    }
+    function runPreview() {
+      if (previewFail) { showOnlyPreview('previewErrorBanner'); return; }   // 失敗：不顯示 0、不誤導
+      const valid = conditions.filter(isConditionComplete);                // 含系統固定 best_case
+      const sel = valid.reduce((p, c) => p * condSelectivity(c), 1);
+      const est = Math.max(1, Math.round(PREVIEW_TOTAL * sel));
+      document.getElementById('previewCount').textContent = '約 ' + est.toLocaleString();
+      showOnlyPreview('previewBanner');
+    }
+    function retryPreview() { previewFail = false; schedulePreview(); }
+    function togglePreviewFail() { previewFail = !previewFail; schedulePreview(); }
 
     function isConditionComplete(c) {
       if (c.fieldType === 'categorical') return (c.values || []).length >= 1;

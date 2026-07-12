@@ -1,10 +1,56 @@
 ---
 type: architecture-spec
-version: "2.26"
+version: "2.28"
 status: draft
-last_updated: 2026-07-09
+last_updated: 2026-07-12
 covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105, F108, F109, F110]
 ---
+
+> **v2.28 / 2026-07-12 變更摘要（AD-E07-45 v1.2 修正：實測結果推翻「抽樣後即次秒級」+ 前端 histogram 快取）**：
+>
+> 更新 §5.17 摘要以對齊 [`implementation-log/AD-E07-45-sampling-estimator.md`](implementation-log/AD-E07-45-sampling-estimator.md) v1.2。
+> 實測（team lead 提供）推翻 v2.27 changelog／§5.17.3 原「抽樣後已達次秒級」之敘述：`TABLESAMPLE` 抽樣本身
+> ≈0.5s（設計有效），但 score histogram 查詢對重卡（CARD_TYPE=E）實測 **≈12s**——根因為 `buildStage2ScoreExprMssql`
+> （不得修改之單一真源）對 AGE／gender 等衍生欄位逐處字串內嵌、非計算一次重用；F050 實測 619ms 確認抽樣核心
+> 本身無問題。**伺服器端維持「不快取」結論不變**；新增前端 per-cardType histogram 快取策略：F055
+> `card-levels/preview` 回應新增 `histogram: [{score, count}]` 原始欄位，前端每個 cardType 僅需成功呼叫一次
+> 並快取，Tab 4 草稿門檻編輯與 Tab 5 TIER 分布切換皆改為前端純函式對已快取 histogram 重新分桶（零額外伺服器
+> 呼叫）；F056 `tier-mapping/preview` 與 F055 `distribution` 之伺服器端計算維持不變、作為 canonical／測試
+> 基準（deliberate perf split，非邏輯重複）。新增不變式 `I-SAMPLE-CLIENT-HISTOGRAM-01` /
+> `I-SAMPLE-BUCKET-PARITY-01`。殘留風險：US-174 AC-1「1 秒內回應」字面上不再對端點本身成立，需 PO /
+> spec-writer 審視措辭（AD §9.4(a) / §10 已記錄）。covers 不變。
+
+> **v2.27 / 2026-07-11 變更摘要（AD-E07-45 抽樣估算共用元件，F050/F055/F056 / US-174/175/176）**：
+>
+> 新增 **§5.17「抽樣估算共用元件（F050/F055/F056 / AD-E07-45）」** 與決策記錄
+> [`implementation-log/AD-E07-45-sampling-estimator.md`](implementation-log/AD-E07-45-sampling-estimator.md)。
+> 背景：`GET .../card-levels/preview`（F055）現行對 `ob_pool_data` 全表 1,679,489 列即時 Stage 2 計分，
+> CARD_TYPE=E 實測 224.6 秒逾時；F056 新增「預估各 TIER 分布」面板（現行無）；F050 建立草稿頁「預估命中
+> 筆數」現行為與真實資料無關之前端假公式。核心決策：(1) **三者共用單一抽樣核心**（`sampling-estimator.ts`，
+> `apps/api/src/modules/assignment/stage1/`）——固定樣本 50,000 筆（≈母體 3%，95% CI 最大誤差 ≈0.44pp）+
+> 固定 `REPEATABLE` 種子（不隨輸入變動）；(2) 兩階段抽樣：`TABLESAMPLE`（MSSQL `(n PERCENT) REPEATABLE(seed)
+> AS o`；PG `AS o TABLESAMPLE SYSTEM(n) REPEATABLE(seed)`）頁級粗抽樣達成 I/O 縮減，疊加
+> `ORDER BY <hash(orgno,appl_no,seed)> {TOP|LIMIT} 50000` 決定性修剪至精確筆數（hash 排序避免與 ETL 載入
+> 物理順序相關之系統性偏誤）；(3) 母體 `totalCount <= 50,000` 時完全略過 `TABLESAMPLE`（小母體 fallback，
+> 涵蓋開發/測試環境）；(4) 抽樣來源別名恆為 `o`，`buildStage2ScoreExpr(Mssql)` / `buildStage1WhereConditions` /
+> `buildCustomerCoreClause`（F109／AD-E07-37 既有函式）零修改即可運作（僅 FROM 目標從 `ob_pool_data o` 換成
+> 抽樣 CTE）；F050 消費者並同時呼叫 `buildCustomerCoreClause` 將 customer_core 條件式 `LEFT JOIN` 掛在抽樣後
+> 之 `o` 之上，草稿估算之欄位篩選子步驟因此**含** customer_core（F109）來源篩選欄位；(5) 縮放公式
+> `scaleEstimate = round(sampleMatchCount / effectiveSampleSize * totalCount)`；(6) **移除** F055 既有
+> `cardLevelHistogramCache`（60 秒應用層快取），三端點皆不做任何跨請求快取（抽樣後已達次秒級，快取存在
+> 理由消失）；(7) F056 新端點重用 F055 之 histogram 查詢邏輯（同一 service 抽出共用 private method），
+> 依 active（非草稿）門檻分桶後再依 `ob_tier` 映射彙總（Standard 多對一加總／Fallback 單一 TIER 100%）；
+> (8) **讀鎖豁免裁決**（解 F056 A-8 標記）：三估算端點統一不受 `SCORING_VERSION_LOCKED` /
+> `ASSIGNMENT_RUN_ALREADY_RUNNING` 影響——查證確認 F055 `previewCardLevels` 現行程式碼本就未呼叫
+> `assertNotLocked()`，F055 §5.2 錯誤表之 409 列為文件與程式碼不一致之舊版遺留描述，非現行行為，本裁定
+> 為文件對齊程式碼，零程式碼回歸風險，需 spec-writer 於 F055 下一輪修訂（v1.8）採納。新增 9 個不變式
+> （`I-SAMPLE-FIXED-SIZE-01` / `I-SAMPLE-LITERAL-01` / `I-SAMPLE-ALIAS-PRESERVE-01` /
+> `I-SAMPLE-SINGLE-REF-01` / `I-SAMPLE-SMALLPOOL-FALLBACK-01` / `I-SAMPLE-SCALE-DENOM-01` /
+> `I-SAMPLE-NO-CACHE-01` / `I-SAMPLE-LOCK-EXEMPT-01` / `I-SAMPLE-CC-INCLUDE-01`）。無 schema / migration
+> 變更。**v1.1（同日修訂）**：F050 消費者納入 customer_core（F109）篩選欄位——composer 對 customer_core
+> 條件之既有 skip 行為不代表草稿估算可忽略，改為與 `buildStage1WhereConditions` 一併呼叫既有
+> `buildCustomerCoreClause`（AD-E07-37 不修改），D2 之其餘排除範圍（MONTH_CNT／去重／特殊 DELETE）不變。
+> covers 不變（F050/F055/F056 已在列）。
 
 > **v2.26 / 2026-07-09 變更摘要（AD-E05-7 `code_decode` 節點架構，F110 / US-173）**：
 >
@@ -2525,6 +2571,75 @@ graph TD
 #### 5.16.5 測試邊界
 
 `customer_core` 僅存在於 PostgreSQL（SQLite 測試 DB 無此表）；含 customer_core 條件之 Stage 1 測試（AC-6~AC-11）僅能寫在 `.pg.spec.ts`。純案件資料 regression（AC-11 無 customer_core 條件不注入 JOIN）可在既有 SQLite 測試中驗證。
+
+---
+
+### 5.17 抽樣估算共用元件（F050/F055/F056 / AD-E07-45）
+
+> 完整設計決策（樣本大小/種子/放大公式推導）、`sampling-estimator.ts` 程式碼契約、三消費者 SQL 契約、
+> 讀鎖豁免裁決全文、不變式、風險：見
+> [`implementation-log/AD-E07-45-sampling-estimator.md`](implementation-log/AD-E07-45-sampling-estimator.md)。
+> 本節為架構主文概要，供 Test Designer / TDD Developer 快速定位。
+
+#### 5.17.1 背景
+
+`GET .../card-levels/preview`（F055）現行對 `ob_pool_data` 全表（1,679,489 列）即時套用完整 Stage 2 計分表達式後分桶統計，CARD_TYPE=E 實測 224.6 秒逾時；F056 新增「預估各 TIER 分布」面板（現行無對應能力）；F050 建立草稿頁「預估命中筆數」現行為與真實資料無關之前端假公式。team lead 已就三者共用之產品邏輯拍板（D1）：`ob_pool_data` 固定筆數隨機樣本 + 可重現種子 + 放大推算 + 估算標示 + 次秒級；抽樣機制本身授權本 AD 決定。核心主張：**三個消費者共用同一個抽樣核心元件**，差異僅在於「對抽樣後的列做什麼聚合」（F055/F056 算分後依 score 分桶；F050 套欄位篩選 WHERE 後 COUNT），抽樣本身是完全共用的正交關注點。
+
+#### 5.17.2 資料流
+
+```mermaid
+graph TD
+    T["getPoolDataTotalCount()\nSELECT COUNT(*) FROM ob_pool_data"] --> S["buildPoolDataSampleFrom(totalCount, dialect)\nTABLESAMPLE 頁級粗抽樣 + hash 排序決定性修剪至 50,000 筆\n（母體 <= 50,000 時 fallback 全表直連）"]
+    S --> C1["score histogram 查詢\n（既有 buildStage2ScoreExpr(Mssql) 不變，FROM 換成樣本）"]
+    C1 --> F055["F055 previewCardLevels\nhistogram → 草稿 levels 分桶"]
+    C1 --> F056["F056 previewTierMapping（新）\nhistogram → active levels 分桶 → ob_tier 映射彙總"]
+    S --> C3["buildStage1WhereConditions + buildCustomerCoreClause\n（皆既有不變）FROM 換成樣本 → COUNT(*)"]
+    C3 --> F050["F050 previewHitCount（新）\n草稿 condition_payload，先經 injectSystemFixedConditions；\n含 customer_core 篩選欄位"]
+    F055 --> SC["scaleEstimate()\nround(sampleMatchCount / effectiveSampleSize * totalCount)"]
+    F056 --> SC
+    F050 --> SC
+
+    classDef shared fill:#d4f4dd,stroke:#2a9d5c
+    classDef unchanged fill:#e8e8e8,stroke:#888
+    class T,S,SC shared
+    class C1,C3 unchanged
+```
+
+#### 5.17.3 核心設計決策摘要
+
+| 決策 | 內容 |
+|---|---|
+| 樣本大小 | 固定常數 `POOL_DATA_SAMPLE_SIZE = 50,000`（≈母體 3%，95% CI 最大誤差 ≈±0.44 個百分點），三消費者共用同一常數，不依 CARD_TYPE / 條件 / 當下母體筆數變動 |
+| 抽樣機制 | 兩階段：`TABLESAMPLE`（頁級粗抽樣，I/O 降低之主要來源）+ `ORDER BY <hash(orgno,appl_no,seed)> {TOP\|LIMIT} 50000` 決定性修剪至精確筆數；hash 排序（非原始欄位排序）避免與 ETL 載入物理順序相關之系統性偏誤 |
+| 種子 | 固定常數 `POOL_DATA_SAMPLE_SEED = 42`，不隨 cardType / 條件 / 時間變動（AC-2 可重現性之基礎） |
+| 小母體 fallback | `totalCount <= 50,000` 時完全略過 `TABLESAMPLE`，直接全表查詢，`sampleSize = totalCount`（精確值） |
+| 別名保留 | 抽樣來源恆別名 `o`，`buildStage2ScoreExpr(Mssql)` / `buildStage1WhereConditions` / `buildCustomerCoreClause` 零修改即可運作 |
+| 縮放公式 | `scaleEstimate = round(sampleMatchCount / effectiveSampleSize * totalCount)`，分母恆為實際樣本列數 |
+| 快取取捨（伺服器端） | **移除** F055 既有 `cardLevelHistogramCache`（60 秒 TTL），三端點皆不做跨請求快取；不因效能實測結果重新引入 |
+| **v1.2 實測與根因** | `TABLESAMPLE` 抽樣本身 ≈0.5s（設計有效），但 score histogram 查詢對重卡（CARD_TYPE=E）實測 **≈12s**，推翻原「抽樣後已次秒級」之假設；根因為 `buildStage2ScoreExprMssql`（不得修改之單一真源）對 AGE／gender 等衍生欄位逐處字串內嵌、非計算一次重用；F050 實測 619ms 確認抽樣核心本身無問題 |
+| **v1.2 前端 histogram 快取** | F055 `card-levels/preview` 回應新增 `histogram: [{score, count}]` 原始欄位；前端每個 cardType 僅需成功呼叫一次並快取，Tab 4 草稿門檻編輯與 Tab 5 TIER 分布切換皆為前端純函式對已快取 histogram 重新分桶（零額外伺服器呼叫）；≈12s 成本因此每 cardType 僅發生一次，為已知、已接受之成本 |
+| F056 histogram 重用 | 與 F055 同一 service 抽出共用 `computeScoreHistogram` private method；依 **active**（非草稿）門檻分桶後再依 `ob_tier` 映射彙總（Standard 多對一加總 / Fallback 單一 TIER 100%）；伺服器端契約與行為不受 v1.2 影響，作為 canonical／測試基準保留（deliberate perf split，非邏輯重複） |
+| 讀鎖豁免裁決 | 三估算端點統一不受 `SCORING_VERSION_LOCKED` / `ASSIGNMENT_RUN_ALREADY_RUNNING` 影響；查證確認 F055 `previewCardLevels` 現行程式碼本就未呼叫 `assertNotLocked()`，§5.2 錯誤表 409 列為文件與程式碼不一致之舊版遺留描述，本裁定為文件對齊程式碼、零程式碼回歸風險（解 F056 A-8 標記） |
+
+#### 5.17.4 不變式
+
+| 不變式 | 說明 |
+|---|---|
+| **I-SAMPLE-FIXED-SIZE-01** | 樣本大小與種子為應用程式常數，跨三消費者共用，不得成為 API 可調參數 |
+| **I-SAMPLE-LITERAL-01** | `samplePercent` / `seed` / `targetSampleSize` 出現於 `TABLESAMPLE`/`TOP`/`LIMIT` 子句時為驗證過之數值字面量直接嵌入 SQL，不透過繫結參數傳遞 |
+| **I-SAMPLE-ALIAS-PRESERVE-01** | 抽樣來源別名恆為 `o`，既有 SQL 片段產生器零修改 |
+| **I-SAMPLE-SINGLE-REF-01** | 抽樣 CTE 於單一查詢中只能被引用一次 |
+| **I-SAMPLE-SMALLPOOL-FALLBACK-01** | 母體 <= 樣本目標時略過 `TABLESAMPLE`，直接全表查詢 |
+| **I-SAMPLE-SCALE-DENOM-01** | 縮放分母恆為實際樣本列數；`totalCount` 每次即時查詢，不快取 |
+| **I-SAMPLE-NO-CACHE-01** | 三估算端點皆不做任何跨請求應用層快取 |
+| **I-SAMPLE-LOCK-EXEMPT-01** | 三估算端點皆為讀鎖豁免，不受月名單分派 / 計分設定鎖定影響 |
+| **I-SAMPLE-CC-INCLUDE-01** | F050 消費者之欄位篩選子步驟包含 customer_core（F109）來源條件，經既有 `buildCustomerCoreClause`（AD-E07-37 不修改）條件式 LEFT JOIN 至抽樣後之 `o` |
+| **I-SAMPLE-CLIENT-HISTOGRAM-01**（v1.2） | F055 回應之 `histogram` 為前端 per-cardType 快取之權威來源；同一 cardType 於同一 session 內僅需成功呼叫一次，後續門檻編輯 / 分頁切換皆為前端重新計算，不得重新呼叫伺服器端點 |
+| **I-SAMPLE-BUCKET-PARITY-01**（v1.2） | 前端分桶／彙總演算法須與後端既有演算法保持邏輯等價（移植，非重新設計）；為刻意的效能分工而非邏輯重複，建議以共享 histogram fixture 驗證前後端輸出一致 |
+
+#### 5.17.5 測試邊界
+
+`TABLESAMPLE` 不存在於 SQLite，抽樣 CTE 分支只能於 `.pg.spec.ts` / `.mssql.spec.ts` 驗證；小母體 fallback 分支不含 `TABLESAMPLE`，可於 SQLite 單元測試驗證。純函式部分（`scaleEstimate`、F056 histogram→card_level→tier 彙總邏輯）為 driver-agnostic，應以一般單元測試覆蓋。**v1.2**：`card-levels/preview` / `tier-mapping/preview` 端點本身之效能斷言不應為 <1 秒（重卡實測 ≈12s），僅 F050 端點與前端 re-bucketing 行為（不觸發新 HTTP 請求）為 <1 秒之驗收點。
 
 ---
 
