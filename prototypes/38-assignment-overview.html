@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>分派總覽 — 客戶名單分派 - CDMP</title>
+  <!--
+    F111 / US-177 分派總覽儀表板（客戶名單分派模組新首頁；路由 /assignment/overview）
+    UI ground truth for Phase 6 React 實作（TanStack Query 單一 query key ['assignment','overview',ym] + recharts）。
+    純唯讀彙總視圖：四大區塊全部彙總既有服務資料、無任何寫入操作，所有可點擊項目僅限導覽。
+      區塊一 名單階段待辦（stageTodo）：5 KPI 階段卡 + 未完成名單待辦清單（>50 顯示前 50 + 查看全部）
+      區塊二 月名單分派就緒狀態（runReadiness）：就緒燈號 + 月跑狀態徽章 + 4 項 ETL 前置 + 計分卡狀態 + 觸發連結（部長/admin）
+      區塊三 預計撥打量（dialingVolume）：本月/次月固定對比 headline + 選定月份每日圖表 + 部門分佈 + 人均可行性
+      區塊四 最近一次月跑結果回顧（recentRun）：部門設定 vs 實際偏差 + CARD_LEVEL/TIER 分布 + 空狀態（noRun / noCompletedRun）
+    角色 scope：director/admin 全公司；section_chief 唯讀 + 僅轄區（XTC0 北一處）+ 組織級加總/佔比隱藏「（僅本部門）」+ 無觸發連結；user 整頁封鎖。
+    跨區塊三態（loading / empty / error）明確可區分；單一區塊失敗不阻擋其他三區塊（HTTP 200 + 區塊 {error:true}）；empty ≠ zero。
+  -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { colors: { primary: '#2563EB', danger: '#EF4444', success: '#22C55E', warning: '#F59E0B', unknown: '#9CA3AF', surface: '#FFFFFF', border: '#E5E7EB', bg: '#F9FAFB' } } }
+    }
+  </script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    /* toast */
+    .toast { transition: all 0.3s ease; }
+    .toast.toast-enter { opacity: 0; transform: translateY(-8px); }
+    .toast.toast-show { opacity: 1; transform: translateY(0); }
+    /* tooltip */
+    .has-tip { position: relative; }
+    .has-tip .tip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #111827; color: #fff; font-size: 11px; padding: 5px 8px; border-radius: 6px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 40; box-shadow: 0 4px 12px rgba(0,0,0,.18); }
+    .has-tip:hover .tip { opacity: 1; }
+    /* deviation bars（沿用 33-run-summary） */
+    .bar-track { background: #F3F4F6; height: 14px; border-radius: 6px; position: relative; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 6px; transition: width 0.4s ease; }
+    .bar-marker { position: absolute; top: -3px; bottom: -3px; width: 2px; background: rgba(31,41,55,0.55); z-index: 2; }
+    /* 每日撥打量 column chart */
+    .chart-area { display: flex; align-items: flex-end; gap: 3px; height: 172px; }
+    .chart-col { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1 1 0; min-width: 20px; height: 100%; }
+    .col-bar { width: 66%; max-width: 20px; min-height: 3px; border-radius: 4px 4px 0 0; background: #3B82F6; transition: height .35s ease; }
+    .col-bar.over { background: #EF4444; }
+    .col-bar.rest { background: #E5E7EB; min-height: 6px; }
+    .col-xlabel { font-size: 9px; margin-top: 4px; line-height: 1; color: #9CA3AF; }
+    /* skeleton */
+    .skel { background: linear-gradient(90deg,#F3F4F6 25%,#E9EBEF 37%,#F3F4F6 63%); background-size: 400% 100%; animation: skel 1.4s ease infinite; border-radius: 6px; }
+    @keyframes skel { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+    /* running chip pulse */
+    @keyframes soft-pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+    .pulse-soft { animation: soft-pulse 1.5s ease-in-out infinite; }
+    .demo-btn { transition: all .12s ease; }
+  </style>
+</head>
+<body class="bg-bg min-h-screen">
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="fixed top-0 left-0 h-full w-56 bg-white border-r border-border flex flex-col z-30 overflow-y-auto">
+    <div class="px-5 py-4 border-b border-border">
+      <div class="text-xl font-bold text-primary">CDMP</div>
+      <div class="text-xs text-gray-500 mt-0.5">資料治理平台</div>
+    </div>
+    <nav class="flex-1 py-3">
+      <!-- Group: 資料治理 -->
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">資料治理</div>
+      <a href="07-account-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="users" class="w-4 h-4"></i>帳號管理</a>
+      <a href="08-datasource-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="database" class="w-4 h-4"></i>資料來源</a>
+      <a href="12-extraction-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i>資料擷取</a>
+      <a href="17-pipeline-management.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="workflow" class="w-4 h-4"></i>ETL Pipeline</a>
+
+      <div class="mx-5 my-3 border-t border-border"></div>
+
+      <!-- Group: 應用模組 -->
+      <div class="px-5 py-1 text-[0.7rem] font-semibold text-gray-400 uppercase tracking-wider">應用模組</div>
+      <a href="25-customer-360-list.html" class="flex items-center gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="contact" class="w-4 h-4"></i>Customer 360</a>
+
+      <!-- Collapsible：客戶名單分派（AC-17 / BR-13：分派總覽 #1、篩選欄位 #2） -->
+      <button id="assignment-section-header" type="button" onclick="toggleAssignmentSection()" aria-expanded="true"
+        class="w-full flex items-center justify-between gap-3 px-5 py-2.5 text-sm text-gray-600 hover:bg-gray-50 transition">
+        <span class="flex items-center gap-3"><i data-lucide="list-checks" class="w-4 h-4"></i>客戶名單分派</span>
+        <i data-lucide="chevron-right" id="assignment-chevron" class="w-4 h-4 transition-transform duration-200 rotate-90"></i>
+      </button>
+      <div id="assignment-section" class="overflow-hidden transition-[max-height] duration-200 ease-out" style="max-height: 720px;">
+        <!-- #1 分派總覽（本頁 · active） -->
+        <a href="38-assignment-overview.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm font-medium text-primary bg-blue-50 border-r-2 border-primary"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>分派總覽</a>
+        <!-- #2 篩選欄位（降為第 2 項） -->
+        <a href="37-base-code.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="filter" class="w-4 h-4"></i>篩選欄位</a>
+        <a href="28-scoring-config.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="sliders-horizontal" class="w-4 h-4"></i>計分卡設定</a>
+        <a href="27-list-definition.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-list" class="w-4 h-4"></i>名單定義</a>
+        <a href="29d-ready-summary.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="clipboard-check" class="w-4 h-4"></i>準備完成摘要</a>
+        <a href="30-stage0-estimate.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="calculator" class="w-4 h-4"></i>Stage 0 試算</a>
+        <a href="31-trigger-run.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="play-circle" class="w-4 h-4"></i>觸發月名單分派</a>
+        <a href="34-run-history.html" class="flex items-center gap-3 px-5 py-2 pl-12 text-sm text-gray-600 hover:bg-gray-50 transition"><i data-lucide="history" class="w-4 h-4"></i>執行歷史</a>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ===== Header ===== -->
+  <header class="fixed top-0 left-56 right-0 h-14 bg-white border-b border-border flex items-center justify-between px-6 z-20">
+    <div class="flex items-center gap-2">
+      <i data-lucide="layout-dashboard" class="w-4.5 h-4.5 text-primary"></i>
+      <h1 class="text-base font-semibold text-gray-800">分派總覽</h1>
+      <span class="text-xs text-gray-400 ml-1 hidden xl:inline">客戶名單分派 · 本月營運狀況彙總</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <!-- 分派作業月份 MonthPicker（F097：target_work_ym，預設下月；AC-3 四區塊共用） -->
+      <div class="flex items-center gap-2" data-testid="overview-month-picker">
+        <span class="text-xs text-gray-500 whitespace-nowrap">分派作業月份</span>
+        <div class="flex items-center gap-1">
+          <button id="mp-prev" onclick="dsMonthShift(-1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+          </button>
+          <select id="mp-select" onchange="dsMonthChange(this.value)" class="px-3 py-1.5 border border-border rounded-md text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-primary"></select>
+          <button id="mp-next" onclick="dsMonthShift(1)" class="w-8 h-8 inline-flex items-center justify-center border border-border rounded-md text-gray-600 hover:bg-white hover:border-primary hover:text-primary disabled:opacity-30 disabled:cursor-not-allowed">
+            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+      <!-- 重新整理（BR-12：單一 cheap 呼叫刷新四區塊） -->
+      <button onclick="refreshAll()" title="重新整理（一次刷新四區塊）"
+        class="inline-flex items-center gap-1.5 px-3 h-8 border border-border rounded-md text-xs font-medium text-gray-600 hover:bg-gray-50 hover:border-primary hover:text-primary">
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>重新整理
+      </button>
+      <div class="flex items-center gap-1.5 bg-gray-100 rounded-lg px-1 py-0.5">
+        <span class="text-[10px] text-gray-400 px-1">角色</span>
+        <select id="role-switcher" onchange="setRole(this.value)" class="text-xs bg-transparent border-0 focus:outline-none focus:ring-0 font-medium text-gray-700 cursor-pointer">
+          <option value="admin">系統管理者</option>
+          <option value="director">業務部長</option>
+          <option value="section_chief_xtc0">業務處長（XTC0 北一處）</option>
+          <option value="user">一般使用者（無權）</option>
+        </select>
+      </div>
+      <div id="role-badge-container"></div>
+      <span class="text-sm text-gray-600" id="user-name">張部長</span>
+    </div>
+  </header>
+
+  <!-- ===== Main ===== -->
+  <main class="ml-56 pt-14">
+
+    <!-- 角色封鎖卡片（一般使用者，AC-1） -->
+    <div id="blockedBanner" class="hidden p-6">
+      <div class="bg-white rounded-xl border border-border p-12 flex flex-col items-center text-center">
+        <div class="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+          <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
+        </div>
+        <h3 class="text-lg font-semibold text-gray-800 mb-1">分派總覽為部長 / 處長 / Admin 專屬功能</h3>
+        <p class="text-sm text-gray-500 max-w-md">「分派總覽」彙總本月名單分派營運狀況，供業務部長、業務處長與系統管理者檢視。一般使用者角色無此檢視權限；請至 Customer 360 查看您被分派的客戶名單。</p>
+        <a href="25-customer-360-list.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
+          <i data-lucide="contact" class="w-4 h-4"></i>前往 Customer 360
+        </a>
+      </div>
+    </div>
+
+    <div id="mainWrap">
+      <!-- Demo Bar（示範跨區塊狀態；mock 不發 API） -->
+      <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap text-xs">
+        <span class="text-gray-400 mr-1">名單就緒</span>
+        <button onclick="setDemo('readiness','partial')" data-demo="readiness:partial" class="demo-btn px-2.5 py-1 rounded border">部分就緒</button>
+        <button onclick="setDemo('readiness','all')" data-demo="readiness:all" class="demo-btn px-2.5 py-1 rounded border">全部就緒</button>
+        <button onclick="setDemo('readiness','none')" data-demo="readiness:none" class="demo-btn px-2.5 py-1 rounded border">本月尚無名單</button>
+        <button onclick="setDemo('readiness','many')" data-demo="readiness:many" class="demo-btn px-2.5 py-1 rounded border">大量待辦（&gt;50）</button>
+        <span class="mx-1 text-gray-300">|</span>
+        <span class="text-gray-400 mr-1">月跑回顧</span>
+        <button onclick="setDemo('recentRun','present')" data-demo="recentRun:present" class="demo-btn px-2.5 py-1 rounded border">有完成結果</button>
+        <button onclick="setDemo('recentRun','noRun')" data-demo="recentRun:noRun" class="demo-btn px-2.5 py-1 rounded border">無月跑</button>
+        <button onclick="setDemo('recentRun','running')" data-demo="recentRun:running" class="demo-btn px-2.5 py-1 rounded border">執行中</button>
+        <button onclick="setDemo('recentRun','failed')" data-demo="recentRun:failed" class="demo-btn px-2.5 py-1 rounded border">執行失敗</button>
+        <span class="mx-1 text-gray-300">|</span>
+        <span class="text-gray-400 mr-1">ETL</span>
+        <button onclick="setDemo('etl','ok')" data-demo="etl:ok" class="demo-btn px-2.5 py-1 rounded border">正常</button>
+        <button onclick="setDemo('etl','bad')" data-demo="etl:bad" class="demo-btn px-2.5 py-1 rounded border">ETL 異常</button>
+        <span class="mx-1 text-gray-300">|</span>
+        <span class="text-gray-400 mr-1">區塊錯誤</span>
+        <select id="blockErrorSelect" onchange="setBlockError(this.value)" class="px-2 py-1 rounded border border-gray-300 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-primary">
+          <option value="none">無（四區塊正常）</option>
+          <option value="b1">區塊一 失敗</option>
+          <option value="b2">區塊二 失敗</option>
+          <option value="b3">區塊三 失敗</option>
+          <option value="b4">區塊四 失敗</option>
+        </select>
+        <span class="ml-auto text-[10px] text-gray-400">切換角色請用右上角選單 · 單一區塊失敗不影響其他三區塊（HTTP 200）</span>
+      </div>
+
+      <div id="contentArea" class="p-6 space-y-4">
+
+        <!-- 處長轄區檢視 banner（AC-2） -->
+        <div id="scopeBanner" class="hidden rounded-lg p-3 bg-purple-50 border border-purple-200 flex items-start gap-2 text-sm">
+          <i data-lucide="scan-eye" class="w-4 h-4 text-purple-700 mt-0.5 shrink-0"></i>
+          <div class="flex-1">
+            <p class="font-semibold text-purple-900" id="scopeBannerTitle">轄區檢視：僅顯示您轄區部門（北一處）的分派資料</p>
+            <p class="text-xs text-purple-700 mt-0.5">此頁為唯讀。組織級加總、缺口與部門佔比在轄區視角下不顯示；您無法在此觸發月名單分派。</p>
+          </div>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0" style="background:#EDE9FE;color:#6D28D9;">
+            <i data-lucide="user-cog" class="w-3 h-3"></i>轄區檢視
+          </span>
+        </div>
+
+        <!-- ===================== 區塊一：名單階段待辦 ===================== -->
+        <section id="block1"></section>
+
+        <!-- ===================== 區塊二：月名單分派就緒狀態 ===================== -->
+        <section id="block2"></section>
+
+        <!-- ===================== 區塊三：預計撥打量 ===================== -->
+        <section id="block3"></section>
+
+        <!-- ===================== 區塊四：最近一次月跑結果（回顧） ===================== -->
+        <section id="block4"></section>
+
+        <!-- footer note -->
+        <div class="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+          <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+          <p>本頁為純唯讀彙總，不觸發任何分派或寫入操作；所有可點擊項目僅導覽至對應功能頁。實際分派件數以月名單分派執行結果為準。</p>
+        </div>
+
+      </div><!-- /#contentArea -->
+    </div><!-- /#mainWrap -->
+  </main>
+
+  <!-- Toast container -->
+  <div id="toastContainer" class="fixed top-20 right-6 z-[60] space-y-2"></div>
+
+  <script>
+    // ============================================================
+    // Sidebar collapsible
+    // ============================================================
+    function toggleAssignmentSection() {
+      const sec = document.getElementById('assignment-section');
+      const chev = document.getElementById('assignment-chevron');
+      const expanded = sec.style.maxHeight !== '0px';
+      if (expanded) { sec.style.maxHeight = '0px'; chev.classList.remove('rotate-90'); }
+      else { sec.style.maxHeight = '720px'; chev.classList.add('rotate-90'); }
+    }
+
+    // ============================================================
+    // 分派作業月份 MonthPicker（F097：預設下月 target_work_ym；AC-3）
+    // ============================================================
+    function pad2(n) { return n < 10 ? '0' + n : '' + n; }
+    function shiftYm(ym, delta) {
+      const [y, m] = ym.split('-').map(Number);
+      const d = new Date(y, m - 1 + delta, 1);
+      return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+    }
+    function ymCompact(ym) { return ym.replace('-', ''); }
+    const CURRENT_WORK_YM = '2026-07';
+    const DEFAULT_TARGET_WORK_YM = shiftYm(CURRENT_WORK_YM, 1); // 2026-08
+    const mpState = { current: DEFAULT_TARGET_WORK_YM, min: shiftYm(CURRENT_WORK_YM, -6), max: shiftYm(CURRENT_WORK_YM, 6) };
+
+    function dsBuildMonthOptions() {
+      const sel = document.getElementById('mp-select');
+      if (!sel) return;
+      sel.innerHTML = '';
+      let cur = mpState.min;
+      while (cur <= mpState.max) {
+        const opt = document.createElement('option');
+        opt.value = cur;
+        let suffix;
+        if (cur < CURRENT_WORK_YM) suffix = '（歷史）';
+        else if (cur === CURRENT_WORK_YM) suffix = '（本月）';
+        else if (cur === DEFAULT_TARGET_WORK_YM) suffix = '（下月・分派作業月）';
+        else suffix = '（未來）';
+        opt.textContent = `${cur}${suffix}`;
+        if (cur < CURRENT_WORK_YM) opt.style.color = '#9CA3AF';
+        if (cur === mpState.current) opt.selected = true;
+        sel.appendChild(opt);
+        cur = shiftYm(cur, 1);
+      }
+    }
+    function dsMonthShift(delta) {
+      const next = shiftYm(mpState.current, delta);
+      if (next < mpState.min || next > mpState.max) return;
+      mpState.current = next;
+      dsBuildMonthOptions();
+      onMonthChanged();
+    }
+    function dsMonthChange(ym) { mpState.current = ym; onMonthChanged(); }
+    function onMonthChanged() {
+      const prev = document.getElementById('mp-prev');
+      const next = document.getElementById('mp-next');
+      if (prev) prev.disabled = mpState.current <= mpState.min;
+      if (next) next.disabled = mpState.current >= mpState.max;
+      state.selectedYm = mpState.current;
+      reload(false); // AC-3：四區塊依新月份重新載入（各自 loading → content）
+    }
+
+    // ============================================================
+    // 角色 meta（沿用 29d：含處長 scope 變體）
+    // ============================================================
+    const ROLE_META = {
+      admin:              { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',    name: '王小明', scope: null,   canView: true,  canTrigger: true  },
+      director:           { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase',name: '張部長', scope: null,   canView: true,  canTrigger: true  },
+      section_chief_xtc0: { label: '業務處長',   bg: '#CFFAFE', fg: '#0E7490', icon: 'user-cog', name: '李處長', scope: 'XTC0', canView: true,  canTrigger: false },
+      user:               { label: '一般使用者', bg: '#F3F4F6', fg: '#374151', icon: 'user',     name: '陳業務', scope: null,   canView: false, canTrigger: false }
+    };
+    function meta() { return ROLE_META[state.role] || ROLE_META.director; }
+    function isChief() { return state.role.startsWith('section_chief'); }
+    function scopeDept() { return meta().scope; }
+    function scopeDeptObj() { return DEPTS.find(d => d.code === scopeDept()); }
+
+    function setRole(role) {
+      state.role = role;
+      const m = ROLE_META[role] || ROLE_META.director;
+      const sw = document.getElementById('role-switcher'); if (sw) sw.value = role;
+      document.getElementById('role-badge-container').innerHTML =
+        `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
+      document.getElementById('user-name').textContent = m.name;
+      const blocked = !m.canView;
+      document.getElementById('blockedBanner').classList.toggle('hidden', !blocked);
+      document.getElementById('mainWrap').classList.toggle('hidden', blocked);
+      if (blocked) { lucide.createIcons(); return; }
+      const chief = isChief();
+      document.getElementById('scopeBanner').classList.toggle('hidden', !chief);
+      if (chief) {
+        const dep = scopeDeptObj();
+        document.getElementById('scopeBannerTitle').textContent = `轄區檢視：僅顯示您轄區部門（${dep ? dep.name : '—'}）的分派資料`;
+      }
+      renderAll();
+    }
+
+    // ============================================================
+    // Demo 狀態
+    // ============================================================
+    const demo = { readiness: 'partial', recentRun: 'present', etl: 'ok', blockError: 'none' };
+    function setDemo(key, val) { demo[key] = val; syncDemoButtons(); reload(false); }
+    function setBlockError(val) { demo.blockError = val; renderAll(); }
+    function syncDemoButtons() {
+      document.querySelectorAll('[data-demo]').forEach(b => {
+        const [k, v] = b.getAttribute('data-demo').split(':');
+        const active = demo[k] === v;
+        b.className = 'demo-btn px-2.5 py-1 rounded border ' + (active ? 'border-primary bg-blue-50 text-primary' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50');
+      });
+    }
+
+    // ============================================================
+    // Mock 資料
+    // ============================================================
+    // 部門（含在職人數用於人均可行性；AM00 headcount=0 示範「—」；ratio=部門配置比例）
+    const DEPTS = [
+      { code: 'XTC0', name: '北一處', chief: '李處長', headcount: 22, ratio: 30 },
+      { code: 'XTC1', name: '北二處', chief: '王處長', headcount: 28, ratio: 24 },
+      { code: 'XTC2', name: '中區處', chief: '陳處長', headcount: 22, ratio: 18 },
+      { code: 'XTC3', name: '南一處', chief: '黃處長', headcount: 18, ratio: 14 },
+      { code: 'XTC4', name: '南二處', chief: '蔡處長', headcount: 16, ratio: 12 },
+      { code: 'AM00', name: '數位專案組', chief: '—', headcount: 0, ratio: 2 }
+    ];
+    const THRESHOLD = 22; // 每人每日上限（超過紅色警示；null 時不警示）
+    const HOLIDAYS = {};  // 國定假日 map（date -> 名稱）；本 mock 月份無國定假日
+    // 各月份預估總量（僅 2026-06/07/08 有啟用名單；其餘月份 → empty≠zero）
+    const MONTH_TOTALS = { '2026-06': 40100, '2026-07': 42350, '2026-08': 39800 };
+    function monthHasLists(ym) {
+      if (demo.readiness === 'none' && ym === state.selectedYm) return false; // 示範 hasAnyList=false
+      return Object.prototype.hasOwnProperty.call(MONTH_TOTALS, ym);
+    }
+
+    const state = { selectedYm: DEFAULT_TARGET_WORK_YM, role: 'director', loading: false };
+
+    // 區塊一：階段統計（stageCounts）
+    function stageCounts() {
+      if (demo.readiness === 'none') return { draft: 0, dept_ratio: 0, personnel_ratio: 0, approval: 0, ready: 0 };
+      if (demo.readiness === 'all')  return isChief() ? { draft: 0, dept_ratio: 0, personnel_ratio: 0, approval: 0, ready: 3 } : { draft: 0, dept_ratio: 0, personnel_ratio: 0, approval: 0, ready: 10 };
+      if (demo.readiness === 'many') return { draft: 20, dept_ratio: 18, personnel_ratio: 15, approval: 10, ready: 8 };
+      // partial（預設）
+      return isChief() ? { draft: 0, dept_ratio: 1, personnel_ratio: 1, approval: 0, ready: 3 }
+                       : { draft: 1, dept_ratio: 2, personnel_ratio: 1, approval: 1, ready: 8 };
+    }
+    const NOT_READY_PARTIAL = [
+      { listNo: 'OB202608005', listNm: '個貸主力名單',     stage: 'personnel_ratio' },
+      { listNo: 'OB202608009', listNm: '車貸滿期名單',     stage: 'draft' },
+      { listNo: 'OB202608011', listNm: '信用卡代償名單',   stage: 'dept_ratio' },
+      { listNo: 'OB202608014', listNm: '機車中度逾期名單', stage: 'approval' },
+      { listNo: 'OB202608017', listNm: '房貸優質戶名單',   stage: 'dept_ratio' }
+    ];
+    function genManyLists(n) {
+      const stages = ['draft', 'dept_ratio', 'personnel_ratio', 'approval'];
+      const names = ['個貸名單', '車貸名單', '信貸名單', '房貸名單', '機車名單', '代償名單', '循環信用名單', '滿期名單'];
+      const arr = [];
+      for (let i = 1; i <= n; i++) arr.push({ listNo: 'OB2026' + ymCompact(state.selectedYm).slice(4) + String(i).padStart(3, '0'), listNm: names[i % names.length] + ' ' + i, stage: stages[i % stages.length] });
+      return arr;
+    }
+    function notReadyLists() {
+      if (demo.readiness === 'none' || demo.readiness === 'all') return [];
+      if (demo.readiness === 'many') return genManyLists(63);
+      return isChief() ? NOT_READY_PARTIAL.slice(0, 2) : NOT_READY_PARTIAL;
+    }
+
+    // 區塊二：就緒 + ETL
+    function readiness() {
+      const s = stageCounts();
+      const notReady = s.draft + s.dept_ratio + s.personnel_ratio + s.approval;
+      const total = notReady + s.ready + (demo.readiness === 'many' ? 0 : 0);
+      let totalActive, ready, allReady;
+      if (demo.readiness === 'none') { totalActive = 0; ready = 0; allReady = false; }
+      else if (demo.readiness === 'all') { totalActive = s.ready; ready = s.ready; allReady = true; }
+      else if (demo.readiness === 'many') { totalActive = 63 + s.ready; ready = s.ready; allReady = false; }
+      else { totalActive = isChief() ? 5 : 10; ready = s.ready; allReady = false; }
+      // 月跑狀態跟隨 recentRun demo（與名單就緒為不同維度，BR-7）
+      const runMap = { present: 'completed', noRun: 'none', running: 'running', failed: 'failed' };
+      return { totalActive, ready, allReady, monthlyRunStatus: runMap[demo.recentRun] || 'none', etl: etlStatus(), scoringActive: demo.etl !== 'bad' };
+    }
+    const ETL_SOURCES = [
+      { key: 'pooldata',   label: '客戶名單池',   table: 'ob_pool_data',    icon: 'database' },
+      { key: 'emphire',    label: '在職名單',     table: 'ob_emphire',      icon: 'user-check' },
+      { key: 'calendar',   label: '工作日曆',     table: 'ob_calendar',     icon: 'calendar-days' },
+      { key: 'arreturndf', label: '最低回收上限', table: 'ob_arreturndf',   icon: 'shield' }
+    ];
+    function etlStatus() {
+      if (demo.etl === 'bad') return {
+        pooldata:   { status: 'failed',    lastRunAt: '2026-08-01 02:05', rowCount: 0 },
+        emphire:    { status: 'completed', lastRunAt: '2026-08-01 02:12', rowCount: 1180 },
+        calendar:   { status: 'completed', lastRunAt: '2026-08-01 02:13', rowCount: 0 },
+        arreturndf: { status: 'running',   lastRunAt: null,               rowCount: 0 }
+      };
+      return {
+        pooldata:   { status: 'completed', lastRunAt: '2026-08-01 02:10', rowCount: 3631548 },
+        emphire:    { status: 'completed', lastRunAt: '2026-08-01 02:12', rowCount: 1180 },
+        calendar:   { status: 'completed', lastRunAt: '2026-08-01 02:13', rowCount: 366 },
+        arreturndf: { status: 'completed', lastRunAt: '2026-08-01 02:15', rowCount: 55863 }
+      };
+    }
+
+    // 區塊四：最近一次月跑結果（回顧）
+    const RUN_DEPT_SUMMARY = [
+      { deptId: 'XTC0', deptName: '北一處',     configRatio: 30.0, actualRatio: 33.9, count: 18940 },
+      { deptId: 'XTC1', deptName: '北二處',     configRatio: 24.0, actualRatio: 20.1, count: 11230 },
+      { deptId: 'XTC2', deptName: '中區處',     configRatio: 18.0, actualRatio: 18.4, count: 10280 },
+      { deptId: 'XTC3', deptName: '南一處',     configRatio: 14.0, actualRatio: 13.6, count: 7600 },
+      { deptId: 'XTC4', deptName: '南二處',     configRatio: 12.0, actualRatio: 12.0, count: 6710 },
+      { deptId: 'AM00', deptName: '數位專案組', configRatio: 2.0,  actualRatio: 2.0,  count: 1103 }
+    ];
+    const RUN_LEVELS = [
+      { cardLevel: 'A', count: 6271,  color: '#2563EB' },
+      { cardLevel: 'B', count: 22400, color: '#06B6D4' },
+      { cardLevel: 'C', count: 24300, color: '#22C55E' },
+      { cardLevel: 'D', count: 2892,  color: '#F59E0B' }
+    ];
+    const RUN_TIERS = [
+      { tierLevel: 'T1', count: 1748,  color: '#6366F1' },
+      { tierLevel: 'T2', count: 8200,  color: '#0EA5E9' },
+      { tierLevel: 'T3', count: 26800, color: '#14B8A6' },
+      { tierLevel: 'T4', count: 12900, color: '#84CC16' },
+      { tierLevel: 'T5', count: 6215,  color: '#F59E0B' }
+    ];
+
+    // ============================================================
+    // 行事曆 + 每日撥打量（沿用 30-stage0 內部權重法；僅上班日）
+    // ============================================================
+    function monthRange(ym) {
+      const [y, m] = ym.split('-').map(Number);
+      const last = new Date(y, m, 0).getDate();
+      return { y, m, start: `${ym}-01`, end: `${ym}-${pad2(last)}` };
+    }
+    function buildCalendar(ym) {
+      const { start, end } = monthRange(ym);
+      const days = [];
+      let d = new Date(start + 'T00:00:00');
+      const ed = new Date(end + 'T00:00:00');
+      const wk = ['日', '一', '二', '三', '四', '五', '六'];
+      while (d <= ed) {
+        const ymd = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+        const dow = d.getDay();
+        const isWeekend = (dow === 0 || dow === 6);
+        const holiday = HOLIDAYS[ymd];
+        const isWorkday = !isWeekend && !holiday;
+        days.push({ date: ymd, dn: d.getDate(), dow, weekday: wk[dow], isWorkday, restReason: isWeekend ? '週末' : (holiday || null) });
+        d.setDate(d.getDate() + 1);
+      }
+      return days;
+    }
+    function assignShare(days) {
+      const wd = days.filter(d => d.isWorkday);
+      const n = wd.length;
+      if (n === 0) { days.forEach(d => d.share = 0); return; }
+      const base = Math.floor(1000 / n);
+      const rem = 1000 % n;
+      const bonus = new Set([...wd].sort((a, b) => b.date.localeCompare(a.date)).slice(0, rem).map(d => d.date));
+      days.forEach(d => d.share = d.isWorkday ? (bonus.has(d.date) ? base + 1 : base) : 0);
+    }
+    // 選定月份的每日投影（依 scope 決定部門集合）
+    function computeSelected() {
+      const ym = state.selectedYm;
+      const days = buildCalendar(ym);
+      assignShare(days);
+      const hasLists = monthHasLists(ym);
+      const orgTotal = hasLists ? (MONTH_TOTALS[ym] || 0) : 0;
+      const depts = isChief() ? DEPTS.filter(d => d.code === scopeDept()) : DEPTS.slice();
+      const deptMonthly = {};
+      depts.forEach(dep => deptMonthly[dep.code] = Math.round(orgTotal * dep.ratio / 100));
+      days.forEach(d => {
+        d.deptCases = {}; d.perPerson = {}; d.over = {};
+        if (!d.isWorkday || !hasLists) { d.orgCases = 0; depts.forEach(dep => { d.deptCases[dep.code] = 0; d.perPerson[dep.code] = null; d.over[dep.code] = false; }); return; }
+        d.orgCases = Math.round(orgTotal * d.share / 1000);
+        depts.forEach(dep => {
+          const c = Math.round(deptMonthly[dep.code] * d.share / 1000);
+          d.deptCases[dep.code] = c;
+          d.perPerson[dep.code] = dep.headcount > 0 ? Math.round(c / dep.headcount) : null;
+          d.over[dep.code] = (dep.headcount > 0 && THRESHOLD !== null && d.perPerson[dep.code] > THRESHOLD);
+        });
+      });
+      // 部門分佈 + 尖峰人均
+      const wds = days.filter(d => d.isWorkday);
+      const dist = depts.map(dep => {
+        const totalCases = wds.reduce((s, d) => s + (d.deptCases[dep.code] || 0), 0);
+        const peakPer = dep.headcount > 0 && wds.length ? Math.max(...wds.map(d => d.perPerson[dep.code] || 0)) : null;
+        return { ...dep, totalCases, peakPer, over: (peakPer !== null && THRESHOLD !== null && peakPer > THRESHOLD) };
+      });
+      const grand = dist.reduce((s, x) => s + x.totalCases, 0);
+      dist.forEach(x => x.ratio = grand > 0 ? +(x.totalCases / grand * 100).toFixed(1) : 0);
+      return { ym, days, dist, depts, orgTotal, workingDays: wds.length, hasLists };
+    }
+
+    // ============================================================
+    // Render helpers
+    // ============================================================
+    function blockCard(num, title, sub, rightHtml, innerHtml, numBg, numFg) {
+      return `
+        <div class="bg-white rounded-xl border border-border p-5">
+          <div class="flex items-center justify-between gap-3 mb-4">
+            <h2 class="text-base font-semibold text-gray-800 inline-flex items-center gap-2">
+              <span class="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-semibold" style="background:${numBg || '#DBEAFE'};color:${numFg || '#1D4ED8'};">${num}</span>
+              ${title}
+              ${sub ? `<span class="text-xs text-gray-400 font-normal">${sub}</span>` : ''}
+            </h2>
+            <div>${rightHtml || ''}</div>
+          </div>
+          ${innerHtml}
+        </div>`;
+    }
+    function errorBlock(num, title) {
+      return `
+        <div class="bg-white rounded-xl border border-red-200 p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-semibold bg-red-100 text-red-700">${num}</span>
+            <h2 class="text-base font-semibold text-gray-800">${title}</h2>
+          </div>
+          <div class="rounded-lg bg-red-50/60 border border-red-200 p-6 flex flex-col items-center text-center">
+            <div class="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-3"><i data-lucide="cloud-off" class="w-6 h-6 text-danger"></i></div>
+            <p class="text-sm font-semibold text-red-900">本區塊資料暫時無法取得，請稍後重試</p>
+            <p class="text-xs text-red-700 mt-1">其他區塊不受影響（單一來源失敗時整體仍回 HTTP 200）。</p>
+            <button onclick="refreshAll()" class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-danger border border-red-300 rounded-md hover:bg-red-100">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>重試
+            </button>
+          </div>
+        </div>`;
+    }
+    function skeletonBlock(num, title, rows) {
+      let bars = '';
+      for (let i = 0; i < (rows || 3); i++) bars += `<div class="skel h-16"></div>`;
+      return `
+        <div class="bg-white rounded-xl border border-border p-5">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="w-6 h-6 rounded-full inline-flex items-center justify-center text-xs font-semibold bg-gray-100 text-gray-400">${num}</span>
+            <div class="skel h-4 w-40"></div>
+          </div>
+          <div class="grid grid-cols-1 gap-3">${bars}</div>
+        </div>`;
+    }
+
+    // ---- 區塊一：名單階段待辦 ----
+    const STAGE_CARDS = [
+      { key: 'draft',           label: '草稿',     icon: 'file-edit',      box: 'bg-gray-100', ic: 'text-gray-500' },
+      { key: 'dept_ratio',      label: '待部門比例', icon: 'building-2',    box: 'bg-blue-50',  ic: 'text-blue-600' },
+      { key: 'personnel_ratio', label: '待個別比例', icon: 'users',        box: 'bg-indigo-50',ic: 'text-indigo-600' },
+      { key: 'approval',        label: '待簽核',   icon: 'file-check',     box: 'bg-amber-50', ic: 'text-amber-600' },
+      { key: 'ready',           label: '準備完成', icon: 'check-circle-2', box: 'bg-emerald-50',ic: 'text-emerald-600' }
+    ];
+    const STAGE_BADGE = {
+      draft:           { label: '草稿',     cls: 'bg-gray-100 text-gray-600' },
+      dept_ratio:      { label: '部門比例', cls: 'bg-blue-100 text-blue-700' },
+      personnel_ratio: { label: '個別比例', cls: 'bg-indigo-100 text-indigo-700' },
+      approval:        { label: '待簽核',   cls: 'bg-amber-100 text-amber-700' }
+    };
+    function renderBlock1() {
+      const el = document.getElementById('block1');
+      if (demo.blockError === 'b1') { el.innerHTML = errorBlock(1, '名單階段待辦'); return; }
+      if (state.loading) { el.innerHTML = skeletonBlock(1, '', 2); return; }
+      const counts = stageCounts();
+      const hasAny = monthHasLists(state.selectedYm);
+      // 5 KPI 卡
+      const cards = STAGE_CARDS.map(c => `
+        <button onclick="nav('名單定義 · ${c.label}')" class="text-left bg-white rounded-xl border border-border p-4 hover:shadow-md hover:border-blue-200 transition cursor-pointer group">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-gray-500">${c.label}</span>
+            <span class="w-8 h-8 rounded-lg ${c.box} flex items-center justify-center"><i data-lucide="${c.icon}" class="w-4 h-4 ${c.ic}"></i></span>
+          </div>
+          <div class="text-2xl font-bold tabular text-gray-900">${counts[c.key]}</div>
+          <div class="mt-1 text-[11px] text-gray-400 inline-flex items-center gap-0.5 group-hover:text-primary">前往名單定義<i data-lucide="arrow-right" class="w-3 h-3"></i></div>
+        </button>`).join('');
+
+      // 未完成名單待辦清單
+      let todoHtml;
+      if (!hasAny) {
+        todoHtml = `
+          <div class="rounded-lg border border-dashed border-border p-8 flex flex-col items-center text-center">
+            <div class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3"><i data-lucide="clipboard-plus" class="w-6 h-6 text-gray-400"></i></div>
+            <p class="text-sm font-semibold text-gray-700">本月尚無名單定義</p>
+            <p class="text-xs text-gray-500 mt-1">請至名單定義頁建立本月分派名單。</p>
+            <button onclick="nav('名單定義')" class="mt-3 inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary text-white text-xs rounded-md hover:bg-blue-700"><i data-lucide="plus" class="w-3.5 h-3.5"></i>前往建立</button>
+          </div>`;
+      } else {
+        const lists = notReadyLists();
+        if (lists.length === 0) {
+          todoHtml = `
+            <div class="rounded-lg bg-green-50/60 border border-green-200 p-6 flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center shrink-0"><i data-lucide="party-popper" class="w-5 h-5 text-success"></i></div>
+              <div><p class="text-sm font-semibold text-green-900">目前無未完成名單</p><p class="text-xs text-green-700 mt-0.5">本月所有名單皆已進入「準備完成」階段。</p></div>
+            </div>`;
+        } else {
+          const total = lists.length;
+          const shown = lists.slice(0, 50);
+          const rows = shown.map(l => {
+            const b = STAGE_BADGE[l.stage] || { label: l.stage, cls: 'bg-gray-100 text-gray-600' };
+            return `
+              <button onclick="nav('名單定義 · ${l.listNo} 詳情')" class="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg border border-border hover:border-blue-200 hover:bg-blue-50/40 transition cursor-pointer">
+                <span class="font-mono text-xs text-gray-500 w-28 shrink-0">${l.listNo}</span>
+                <span class="flex-1 text-sm text-gray-800 truncate">${l.listNm}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${b.cls}">${b.label}</span>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-gray-300 shrink-0"></i>
+              </button>`;
+          }).join('');
+          const moreLink = total > 50
+            ? `<div class="mt-2 flex items-center justify-between px-1">
+                 <span class="text-xs text-gray-400">顯示前 50 筆 · 共 <span class="font-semibold text-gray-600">${total}</span> 筆</span>
+                 <button onclick="nav('名單定義（查看全部未完成名單）')" class="text-xs text-primary hover:underline inline-flex items-center gap-1">查看全部<i data-lucide="arrow-right" class="w-3 h-3"></i></button>
+               </div>` : '';
+          todoHtml = `
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-semibold text-gray-700 inline-flex items-center gap-1.5"><i data-lucide="list-todo" class="w-4 h-4 text-warning"></i>未完成名單待辦清單</h3>
+              <span class="text-xs text-gray-400">共 <span class="font-semibold text-gray-600">${total}</span> 筆未就緒</span>
+            </div>
+            <div class="space-y-2 overflow-y-auto pr-1" style="max-height: 260px;">${rows}</div>
+            ${moreLink}`;
+        }
+      }
+
+      const inner = `
+        <div class="grid grid-cols-5 gap-3 mb-4">${cards}</div>
+        ${todoHtml}`;
+      el.innerHTML = blockCard(1, '名單階段待辦', '點卡片前往名單定義聚焦該階段', '', inner);
+    }
+
+    // ---- 區塊二：月名單分派就緒狀態 + ETL 前置 ----
+    const RUN_STATUS_CHIP = {
+      none:      { label: '尚未執行', cls: 'bg-gray-100 text-gray-600',  icon: 'circle-dashed' },
+      pending:   { label: '等待中',   cls: 'bg-blue-100 text-blue-700',  icon: 'clock' },
+      running:   { label: '執行中',   cls: 'bg-amber-100 text-amber-700 pulse-soft', icon: 'loader' },
+      completed: { label: '已完成',   cls: 'bg-green-100 text-success',  icon: 'check-circle-2' },
+      failed:    { label: '失敗',     cls: 'bg-red-100 text-red-700',    icon: 'x-circle' }
+    };
+    function etlChip(src, st) {
+      const bad = st.status !== 'completed' || st.rowCount === 0;
+      const running = st.status === 'running';
+      let cls, iconName, note;
+      if (running) { cls = 'border-amber-200 bg-amber-50'; iconName = 'loader'; note = '同步中'; }
+      else if (st.status === 'failed') { cls = 'border-red-200 bg-red-50'; iconName = 'x-circle'; note = '同步失敗'; }
+      else if (st.status === 'missing') { cls = 'border-gray-200 bg-gray-50'; iconName = 'help-circle'; note = '無紀錄'; }
+      else if (st.rowCount === 0) { cls = 'border-amber-200 bg-amber-50'; iconName = 'alert-triangle'; note = '空表'; }
+      else { cls = 'border-green-200 bg-green-50'; iconName = 'check-circle-2'; note = '已同步'; }
+      const cntTxt = st.status === 'running' ? '—' : st.rowCount.toLocaleString();
+      const cntCls = bad ? 'text-amber-700' : 'text-gray-700';
+      const iconCls = running ? 'text-warning pulse-soft' : (bad ? (st.status === 'failed' ? 'text-danger' : 'text-warning') : 'text-success');
+      return `
+        <div class="rounded-lg border ${cls} p-3">
+          <div class="flex items-center gap-2 mb-1.5">
+            <i data-lucide="${src.icon}" class="w-4 h-4 text-gray-400"></i>
+            <span class="text-xs font-medium text-gray-700">${src.label}</span>
+            <i data-lucide="${iconName}" class="w-4 h-4 ${iconCls} ml-auto"></i>
+          </div>
+          <div class="flex items-baseline justify-between">
+            <span class="text-lg font-bold tabular ${cntCls}">${cntTxt}</span>
+            <span class="text-[10px] ${bad ? 'text-amber-700 font-medium' : 'text-gray-400'}">${note}</span>
+          </div>
+          <div class="text-[10px] text-gray-400 mt-0.5 font-mono truncate">${src.table}</div>
+        </div>`;
+    }
+    function renderBlock2() {
+      const el = document.getElementById('block2');
+      if (demo.blockError === 'b2') { el.innerHTML = errorBlock(2, '月名單分派就緒狀態'); return; }
+      if (state.loading) { el.innerHTML = skeletonBlock(2, '', 2); return; }
+      const r = readiness();
+      const chip = RUN_STATUS_CHIP[r.monthlyRunStatus] || RUN_STATUS_CHIP.none;
+
+      // 就緒燈號
+      let banner;
+      if (r.totalActive === 0) {
+        banner = `
+          <div class="rounded-lg bg-gray-50 border border-border p-4 flex items-center gap-3">
+            <div class="w-11 h-11 rounded-full bg-gray-100 flex items-center justify-center shrink-0"><i data-lucide="inbox" class="w-5 h-5 text-gray-400"></i></div>
+            <div class="flex-1"><p class="text-sm font-semibold text-gray-700">本月尚無啟用名單</p><p class="text-xs text-gray-500 mt-0.5">尚無可執行月名單分派的名單。</p></div>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${chip.cls}"><i data-lucide="${chip.icon}" class="w-3.5 h-3.5"></i>${chip.label}</span>
+          </div>`;
+      } else if (r.allReady) {
+        banner = `
+          <div class="rounded-lg bg-green-50/60 border border-green-200 p-4 flex items-center gap-3">
+            <div class="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center shrink-0"><i data-lucide="check-circle-2" class="w-6 h-6 text-success"></i></div>
+            <div class="flex-1">
+              <p class="text-sm font-semibold text-green-900">本月所有名單已就緒 · 可執行月名單分派</p>
+              <p class="text-xs text-green-700 mt-0.5"><span class="font-semibold tabular">${r.ready} / ${r.totalActive}</span> 已就緒</p>
+            </div>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${chip.cls}"><i data-lucide="${chip.icon}" class="w-3.5 h-3.5"></i>月跑：${chip.label}</span>
+          </div>`;
+      } else {
+        const n = r.totalActive - r.ready;
+        banner = `
+          <div class="rounded-lg bg-amber-50/70 border border-amber-200 p-4 flex items-center gap-3">
+            <div class="w-11 h-11 rounded-full bg-amber-100 flex items-center justify-center shrink-0"><i data-lucide="alert-triangle" class="w-6 h-6 text-warning"></i></div>
+            <div class="flex-1">
+              <p class="text-sm font-semibold text-amber-900">尚有 <span class="tabular">${n}</span> 筆未就緒</p>
+              <p class="text-xs text-amber-800 mt-0.5"><span class="font-semibold tabular">${r.ready} / ${r.totalActive}</span> 已就緒，待全部就緒方可執行月名單分派</p>
+            </div>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${chip.cls}"><i data-lucide="${chip.icon}" class="w-3.5 h-3.5"></i>月跑：${chip.label}</span>
+          </div>`;
+      }
+      const runningHint = r.monthlyRunStatus === 'running'
+        ? `<div class="rounded-lg bg-amber-50/50 border border-amber-100 p-2.5 flex items-center gap-2 text-xs text-amber-800"><i data-lucide="loader" class="w-3.5 h-3.5 text-warning pulse-soft"></i>月名單分派執行中，本頁資料仍可檢視。</div>`
+        : '';
+
+      // ETL 4 項 + 計分卡
+      const chips = ETL_SOURCES.map(s => etlChip(s, r.etl[s.key])).join('');
+      const scoringBad = !r.scoringActive;
+      const scoringCard = `
+        <div class="rounded-lg border ${scoringBad ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'} p-3">
+          <div class="flex items-center gap-2 mb-1.5">
+            <i data-lucide="sliders-horizontal" class="w-4 h-4 text-gray-400"></i>
+            <span class="text-xs font-medium text-gray-700">計分卡</span>
+            <i data-lucide="${scoringBad ? 'x-circle' : 'check-circle-2'}" class="w-4 h-4 ml-auto ${scoringBad ? 'text-danger' : 'text-success'}"></i>
+          </div>
+          <div class="text-sm font-semibold ${scoringBad ? 'text-red-700' : 'text-success'}">${scoringBad ? '未啟用' : '已啟用'}</div>
+          <div class="text-[10px] text-gray-400 mt-0.5">計分版本 ${scoringBad ? '無 active' : 'active'}</div>
+        </div>`;
+
+      // 空表 / 失敗提示
+      const empties = ETL_SOURCES.filter(s => { const st = r.etl[s.key]; return st.status !== 'completed' || st.rowCount === 0; });
+      const warnLine = (empties.length || scoringBad) ? `
+        <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 flex items-start gap-2 text-xs text-amber-900">
+          <i data-lucide="alert-triangle" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+          <div>
+            <p class="font-semibold">前置檢查未全數通過</p>
+            <p class="mt-0.5 text-amber-800">${empties.map(s => { const st = r.etl[s.key]; return st.status === 'failed' ? `${s.label}同步失敗` : (st.status === 'running' ? `${s.label}同步中` : `${s.label}為空表`); }).concat(scoringBad ? ['計分卡未啟用'] : []).join('、')}。請確認來源資料已完成同步後再執行月名單分派。</p>
+          </div>
+        </div>` : '';
+
+      // 觸發連結（AC-8：director/admin 才顯示）
+      const right = meta().canTrigger
+        ? `<button onclick="nav('觸發月名單分派')" class="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-primary border border-blue-200 bg-blue-50 rounded-md hover:bg-blue-100"><i data-lucide="play-circle" class="w-4 h-4"></i>前往觸發月名單分派</button>`
+        : `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-gray-100 text-gray-500"><i data-lucide="eye" class="w-3.5 h-3.5"></i>唯讀 · 無觸發權限</span>`;
+
+      const inner = `
+        ${banner}
+        ${runningHint}
+        <div class="mt-4">
+          <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="list-checks" class="w-4 h-4 text-primary"></i>
+            <h3 class="text-sm font-semibold text-gray-700">來源資料前置檢查</h3>
+            <span class="text-xs text-gray-400">4 張來源表 + 計分卡</span>
+          </div>
+          <div class="grid grid-cols-5 gap-3">${chips}${scoringCard}</div>
+        </div>
+        ${warnLine ? `<div class="mt-3">${warnLine}</div>` : ''}`;
+      el.innerHTML = blockCard(2, '月名單分派就緒狀態', '名單就緒與月跑狀態為不同維度', right, inner, '#EDE9FE', '#6D28D9');
+    }
+
+    // ---- 區塊三：預計撥打量 ----
+    function headlineCard(title, ym, total, scoped) {
+      const isEmpty = (total === null);
+      const iconBox = title.indexOf('本月') === 0 ? 'bg-blue-50' : 'bg-indigo-50';
+      const iconCls = title.indexOf('本月') === 0 ? 'text-blue-600' : 'text-indigo-600';
+      return `
+        <div class="rounded-xl border border-border p-4">
+          <div class="flex items-center justify-between mb-2">
+            <div>
+              <span class="text-xs text-gray-500">${title}</span>
+              <span class="ml-1 font-mono text-[10px] text-gray-400">${ymCompact(ym)}</span>
+              ${scoped ? '<span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium bg-purple-100 text-purple-700">僅本部門</span>' : ''}
+            </div>
+            <span class="w-8 h-8 rounded-lg ${iconBox} flex items-center justify-center"><i data-lucide="phone-outgoing" class="w-4 h-4 ${iconCls}"></i></span>
+          </div>
+          ${isEmpty
+            ? `<div class="text-3xl font-bold text-gray-300 tabular">—</div><p class="text-xs text-warning mt-1 inline-flex items-center gap-1"><i data-lucide="info" class="w-3 h-3"></i>本月尚無啟用名單</p>`
+            : `<div class="text-3xl font-bold text-gray-900 tabular">${total.toLocaleString()}<span class="text-sm font-medium text-gray-400 ml-1">件</span></div><p class="text-xs text-gray-400 mt-1">預估撥打總量</p>`}
+        </div>`;
+    }
+    function renderDailyChart(sel) {
+      if (!sel.hasLists) {
+        return `<div class="rounded-lg border border-dashed border-border p-8 flex flex-col items-center text-center">
+          <i data-lucide="calendar-off" class="w-8 h-8 text-gray-300 mb-2"></i>
+          <p class="text-sm font-semibold text-gray-600">本月尚無啟用名單</p>
+          <p class="text-xs text-gray-400 mt-0.5">無每日撥打量可估算（empty ≠ 0）。</p>
+        </div>`;
+      }
+      const chief = isChief();
+      const valOf = d => chief ? (d.deptCases[scopeDept()] || 0) : d.orgCases;
+      const wds = sel.days.filter(d => d.isWorkday);
+      const maxVal = Math.max(1, ...wds.map(valOf));
+      const cols = sel.days.map(d => {
+        const dowCls = d.dow === 0 ? 'text-rose-500' : d.dow === 6 ? 'text-blue-500' : 'text-gray-400';
+        if (!d.isWorkday) {
+          return `<div class="chart-col has-tip"><span class="tip">${d.date.slice(5)}（${d.weekday}）· 休息日</span><div class="col-bar rest" style="height:6px"></div><span class="col-xlabel ${dowCls}">${d.dn}</span></div>`;
+        }
+        const v = valOf(d);
+        const over = chief ? (d.over[scopeDept()]) : false;
+        const h = Math.round(8 + (v / maxVal) * 150);
+        const pp = chief && d.perPerson[scopeDept()] !== null ? ` · 人均 ${d.perPerson[scopeDept()]}` : '';
+        return `<div class="chart-col has-tip"><span class="tip">${d.date.slice(5)}（${d.weekday}）：${v.toLocaleString()} 件${pp}</span><div class="col-bar ${over ? 'over' : ''}" style="height:${h}px"></div><span class="col-xlabel ${dowCls}">${d.dn}</span></div>`;
+      }).join('');
+      const cap = chief ? '您轄區部門每日預估撥打量' : '全名單每日預估撥打總量';
+      return `
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs text-gray-500">${cap} · ${ymCompact(sel.ym)} · 共 <span class="font-semibold text-gray-700">${sel.workingDays}</span> 個上班日</span>
+          <span class="flex items-center gap-3 text-[11px] text-gray-500">
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-blue-500"></span>上班日</span>
+            ${chief ? '<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-danger"></span>人均超上限</span>' : ''}
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-gray-200"></span>休息日</span>
+          </span>
+        </div>
+        <div class="chart-area overflow-x-auto pb-1">${cols}</div>`;
+    }
+    function renderBlock3() {
+      const el = document.getElementById('block3');
+      if (demo.blockError === 'b3') { el.innerHTML = errorBlock(3, '預計撥打量'); return; }
+      if (state.loading) { el.innerHTML = skeletonBlock(3, '', 3); return; }
+      const chief = isChief();
+      const sel = computeSelected();
+
+      // (a) headline 本月 / 次月（固定，AC-9）
+      const scoped = chief;
+      const curTotal = monthHasLists(CURRENT_WORK_YM) ? (scoped ? Math.round(MONTH_TOTALS[CURRENT_WORK_YM] * scopeDeptObj().ratio / 100) : MONTH_TOTALS[CURRENT_WORK_YM]) : null;
+      const nextTotal = monthHasLists(DEFAULT_TARGET_WORK_YM) ? (scoped ? Math.round(MONTH_TOTALS[DEFAULT_TARGET_WORK_YM] * scopeDeptObj().ratio / 100) : MONTH_TOTALS[DEFAULT_TARGET_WORK_YM]) : null;
+      const headline = `
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          ${headlineCard('本月預計撥打量', CURRENT_WORK_YM, curTotal, scoped)}
+          ${headlineCard('次月預計撥打量', DEFAULT_TARGET_WORK_YM, nextTotal, scoped)}
+        </div>`;
+
+      // (b) 每日圖表
+      const daily = `<div class="rounded-xl border border-border p-4 mb-4">${renderDailyChart(sel)}</div>`;
+
+      // (c) 部門分佈 + (d) 人均可行性
+      const distMax = Math.max(1, ...sel.dist.map(d => d.totalCases));
+      const distBars = sel.dist.map(d => {
+        const w = (d.totalCases / distMax) * 100;
+        const ratioTxt = chief ? '<span class="text-[10px] text-gray-400">（僅本部門）</span>' : `<span class="text-xs text-gray-500 w-12 text-right tabular">${d.ratio}%</span>`;
+        return `
+          <div class="flex items-center gap-3">
+            <span class="w-16 text-xs text-gray-700 truncate">${d.name}</span>
+            <div class="flex-1 bar-track"><div class="bar-fill bg-primary" style="width:${w}%"></div></div>
+            <span class="text-xs font-mono text-gray-700 w-16 text-right tabular">${d.totalCases.toLocaleString()}</span>
+            ${ratioTxt}
+          </div>`;
+      }).join('');
+      const feasRows = sel.dist.map(d => {
+        let badge;
+        if (d.headcount === 0) badge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-orange-100 text-orange-700">— 待補人力</span>`;
+        else if (d.over) badge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700"><i data-lucide="alert-triangle" class="w-3 h-3"></i>${d.peakPer} · 超上限</span>`;
+        else badge = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-100 text-emerald-700">${d.peakPer} · 正常</span>`;
+        return `
+          <div class="flex items-center justify-between px-3 py-2 rounded-lg border ${d.over ? 'border-red-200 bg-red-50/50' : 'border-border'}">
+            <div><span class="text-sm text-gray-800">${d.name}</span><span class="ml-2 text-[11px] text-gray-400">在職 ${d.headcount === 0 ? '0（待同步）' : d.headcount} 人</span></div>
+            ${badge}
+          </div>`;
+      }).join('');
+      const distFeas = `
+        <div class="grid grid-cols-2 gap-4">
+          <div class="rounded-xl border border-border p-4">
+            <div class="flex items-center gap-2 mb-3"><i data-lucide="bar-chart-3" class="w-4 h-4 text-primary"></i><h3 class="text-sm font-semibold text-gray-700">部門預計撥打量分佈</h3></div>
+            <div class="space-y-2.5">${distBars}</div>
+          </div>
+          <div class="rounded-xl border border-border p-4">
+            <div class="flex items-center gap-2 mb-3"><i data-lucide="gauge" class="w-4 h-4 text-primary"></i><h3 class="text-sm font-semibold text-gray-700">人均每日可行性</h3><span class="text-xs text-gray-400">尖峰人均/日 · 上限 ${THRESHOLD} 件</span></div>
+            <div class="space-y-2">${feasRows}</div>
+          </div>
+        </div>`;
+
+      const right = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-primary border border-blue-100"><i data-lucide="calendar" class="w-3.5 h-3.5"></i>選定月份 ${ymCompact(state.selectedYm)}</span>`;
+      const inner = headline + daily + distFeas +
+        `<p class="mt-3 text-[11px] text-gray-400 inline-flex items-center gap-1"><i data-lucide="info" class="w-3 h-3"></i>上方「本月 / 次月」為固定營運節奏對比（不受月份選擇器影響）；每日圖表 / 部門分佈 / 可行性依選定月份。</p>`;
+      el.innerHTML = blockCard(3, '預計撥打量', '', right, inner, '#DCFCE7', '#15803D');
+    }
+
+    // ---- 區塊四：最近一次月跑結果（回顧） ----
+    function deviationStyle(dev) {
+      const a = Math.abs(dev);
+      if (a > 3) return { fill: 'bg-danger', text: 'text-danger', tag: '警示' };
+      if (a > 1) return { fill: 'bg-warning', text: 'text-warning', tag: '輕微' };
+      return { fill: 'bg-success', text: 'text-success', tag: '正常' };
+    }
+    function distBarRow(label, count, total, max, color) {
+      const pct = ((count / total) * 100).toFixed(1);
+      const w = (count / max) * 100;
+      return `
+        <div class="flex items-center gap-3">
+          <span class="w-10 text-xs font-mono font-semibold text-gray-700">${label}</span>
+          <div class="flex-1 bar-track"><div class="bar-fill" style="width:${w}%;background:${color}"></div></div>
+          <span class="text-xs font-mono text-gray-600 w-16 text-right tabular">${count.toLocaleString()}</span>
+          <span class="text-xs text-gray-500 w-12 text-right tabular">${pct}%</span>
+        </div>`;
+    }
+    function renderBlock4() {
+      const el = document.getElementById('block4');
+      if (demo.blockError === 'b4') { el.innerHTML = errorBlock(4, '最近一次月跑結果（回顧）'); return; }
+      if (state.loading) { el.innerHTML = skeletonBlock(4, '', 3); return; }
+
+      // 空狀態（AC-14；不 fallback 其他月份）
+      if (demo.recentRun !== 'present') {
+        let icon, title, sub;
+        if (demo.recentRun === 'noRun') { icon = 'calendar-x'; title = '本月尚無已完成的月名單分派結果'; sub = '選定月份沒有任何月跑紀錄（不會顯示其他月份結果）。'; }
+        else if (demo.recentRun === 'running') { icon = 'loader'; title = '本月月名單分派執行中，尚無可回顧結果'; sub = '待本次月跑完成後，此處將顯示部門偏差與等級分布。'; }
+        else { icon = 'x-circle'; title = '本月最近一次月名單分派執行失敗，尚無可回顧結果'; sub = '請至執行歷史檢視失敗原因後重新觸發（不會顯示其他月份結果）。'; }
+        const inner = `
+          <div class="rounded-lg border border-dashed border-border p-8 flex flex-col items-center text-center">
+            <div class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3"><i data-lucide="${icon}" class="w-6 h-6 ${demo.recentRun === 'failed' ? 'text-danger' : (demo.recentRun === 'running' ? 'text-warning pulse-soft' : 'text-gray-400')}"></i></div>
+            <p class="text-sm font-semibold text-gray-700">${title}</p>
+            <p class="text-xs text-gray-500 mt-1 max-w-md">${sub}</p>
+            <button onclick="nav('執行歷史')" class="mt-3 inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50"><i data-lucide="history" class="w-3.5 h-3.5"></i>查看執行歷史</button>
+          </div>`;
+        el.innerHTML = blockCard(4, '最近一次月跑結果（回顧）', '', '', inner, '#FEF3C7', '#B45309');
+        return;
+      }
+
+      // 有完成結果
+      const chief = isChief();
+      let depts = RUN_DEPT_SUMMARY;
+      if (chief) depts = depts.filter(d => d.deptId === scopeDept());
+      const anyAlert = depts.some(d => Math.abs(d.actualRatio - d.configRatio) > 3);
+      const maxRatio = Math.max(...depts.map(d => Math.max(d.configRatio, d.actualRatio))) * 1.15;
+      const deptChart = depts.map(d => {
+        const dev = +(d.actualRatio - d.configRatio).toFixed(1);
+        const s = deviationStyle(dev);
+        const cfgW = (d.configRatio / maxRatio) * 100;
+        const actW = (d.actualRatio / maxRatio) * 100;
+        return `
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-2">
+                <span class="font-mono text-xs font-semibold text-gray-600">${d.deptId}</span>
+                <span class="text-sm font-medium text-gray-800">${d.deptName}</span>
+                <span class="inline-flex px-2 py-0.5 text-[10px] font-semibold rounded-full ${s.fill} text-white">${s.tag}</span>
+              </div>
+              <div class="flex items-center gap-2 text-xs">
+                <span class="text-gray-500">設定 <span class="font-mono text-gray-700">${d.configRatio.toFixed(1)}%</span></span>
+                <span class="text-gray-300">/</span>
+                <span class="text-gray-500">實際 <span class="font-mono text-gray-700">${d.actualRatio.toFixed(1)}%</span></span>
+                <span class="font-mono ${s.text} font-semibold">${dev > 0 ? '+' : ''}${dev}%</span>
+                <span class="text-gray-400 tabular">(${d.count.toLocaleString()})</span>
+              </div>
+            </div>
+            <div class="space-y-1.5">
+              <div class="flex items-center gap-2"><span class="w-8 text-[10px] text-gray-400">設定</span><div class="bar-track flex-1"><div class="bar-fill bg-gray-300" style="width:${cfgW}%"></div></div></div>
+              <div class="flex items-center gap-2"><span class="w-8 text-[10px] text-gray-400">實際</span><div class="bar-track flex-1 relative"><div class="bar-fill ${s.fill}" style="width:${actW}%"></div><div class="bar-marker" style="left:${cfgW}%"></div></div></div>
+            </div>
+          </div>`;
+      }).join('');
+
+      const levelTotal = RUN_LEVELS.reduce((s, x) => s + x.count, 0);
+      const levelMax = Math.max(...RUN_LEVELS.map(x => x.count));
+      const levelBars = RUN_LEVELS.map(x => distBarRow(x.cardLevel, x.count, levelTotal, levelMax, x.color)).join('');
+      const tierTotal = RUN_TIERS.reduce((s, x) => s + x.count, 0);
+      const tierMax = Math.max(...RUN_TIERS.map(x => x.count));
+      const tierBars = RUN_TIERS.map(x => distBarRow(x.tierLevel, x.count, tierTotal, tierMax, x.color)).join('');
+
+      const alertNote = anyAlert ? `
+        <div class="rounded-lg bg-red-50/60 border border-red-200 p-3 flex items-start gap-2 text-xs text-red-900 mb-4">
+          <i data-lucide="alert-circle" class="w-4 h-4 text-danger mt-0.5 shrink-0"></i>
+          <div><p class="font-semibold">部門偏差警示（NFR-005）</p><p class="mt-0.5 text-red-800">偵測到部門實際比例與設定比例偏差超過 3%。建議檢查部門比例設定或前往結果摘要比對。</p></div>
+        </div>` : '';
+
+      const right = `<div class="flex items-center gap-2">
+          <button onclick="nav('結果摘要 · 550e8400')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50"><i data-lucide="file-bar-chart" class="w-3.5 h-3.5"></i>查看完整結果摘要</button>
+          <button onclick="nav('執行歷史')" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50"><i data-lucide="history" class="w-3.5 h-3.5"></i>執行歷史</button>
+        </div>`;
+
+      const runMeta = `
+        <div class="flex items-center flex-wrap gap-x-5 gap-y-1 mb-4 text-xs text-gray-500">
+          <span>Run ID <span class="font-mono text-gray-700 bg-gray-100 px-1.5 py-0.5 rounded">e3c839b7</span></span>
+          <span>完成時間 <span class="font-mono text-gray-700">2026-08-02 09:00</span></span>
+          <span>總分派 <span class="font-semibold text-gray-800 tabular">55,863</span> 件</span>
+          <span>名單覆蓋率 <span class="font-semibold text-success tabular">98.0%</span></span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-success font-medium"><i data-lucide="check-circle-2" class="w-3 h-3"></i>已完成</span>
+        </div>`;
+
+      const inner = `
+        ${runMeta}
+        ${alertNote}
+        <div class="rounded-xl border border-border overflow-hidden mb-4">
+          <div class="px-4 py-3 border-b border-border flex items-center justify-between">
+            <div class="flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-4 h-4 text-primary"></i><h3 class="text-sm font-semibold text-gray-700">部門設定 vs 實際偏差</h3></div>
+            <div class="flex items-center gap-3 text-xs">
+              <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-success"></span>≤1%</span>
+              <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-warning"></span>1~3%</span>
+              <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-sm bg-danger"></span>&gt;3% (NFR-005)</span>
+            </div>
+          </div>
+          <div class="px-4 py-4 space-y-4">${deptChart}</div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="rounded-xl border border-border p-4">
+            <div class="flex items-center gap-2 mb-3"><i data-lucide="layers" class="w-4 h-4 text-primary"></i><h3 class="text-sm font-semibold text-gray-700">CARD_LEVEL 分布</h3></div>
+            <div class="space-y-2.5">${levelBars}</div>
+          </div>
+          <div class="rounded-xl border border-border p-4">
+            <div class="flex items-center gap-2 mb-3"><i data-lucide="award" class="w-4 h-4 text-primary"></i><h3 class="text-sm font-semibold text-gray-700">TIER 分布</h3></div>
+            <div class="space-y-2.5">${tierBars}</div>
+          </div>
+        </div>`;
+      el.innerHTML = blockCard(4, '最近一次月跑結果（回顧）', chief ? '（僅本部門偏差）' : '選定月份最近一次完成月跑', right, inner, '#FEF3C7', '#B45309');
+    }
+
+    // ============================================================
+    // Render orchestration
+    // ============================================================
+    function renderAll() {
+      if (!meta().canView) { lucide.createIcons(); return; }
+      renderBlock1();
+      renderBlock2();
+      renderBlock3();
+      renderBlock4();
+      lucide.createIcons();
+    }
+    // reload：四區塊各自 loading → content（示範 AC-15 loading 三態 + AC-3 月份連動）
+    function reload(showToastMsg) {
+      if (!meta().canView) return;
+      state.loading = true;
+      renderAll();
+      setTimeout(() => {
+        state.loading = false;
+        renderAll();
+        if (showToastMsg) toast('已重新整理四區塊資料', 'success');
+      }, 650);
+    }
+    function refreshAll() { reload(true); }
+
+    // ============================================================
+    // 導覽（唯讀：一律 toast，不執行任何寫入）
+    // ============================================================
+    function nav(label) { toast(`將前往「${label}」頁`, 'info'); }
+
+    // ============================================================
+    // Toast
+    // ============================================================
+    function toast(msg, type) {
+      const palette = {
+        success: { bg: '#ECFDF5', border: '#86EFAC', fg: '#065F46', icon: 'check-circle-2' },
+        warning: { bg: '#FFFBEB', border: '#FDE68A', fg: '#92400E', icon: 'alert-triangle' },
+        info:    { bg: '#EFF6FF', border: '#BFDBFE', fg: '#1E40AF', icon: 'info' }
+      };
+      const p = palette[type] || palette.info;
+      const div = document.createElement('div');
+      div.className = 'toast toast-enter rounded-lg shadow-lg px-4 py-3 flex items-center gap-2 text-sm border';
+      div.style.cssText = `background:${p.bg};border-color:${p.border};color:${p.fg};min-width:280px;max-width:460px;`;
+      div.innerHTML = `<i data-lucide="${p.icon}" class="w-4 h-4 shrink-0"></i><span>${msg}</span>`;
+      document.getElementById('toastContainer').appendChild(div);
+      lucide.createIcons();
+      requestAnimationFrame(() => { div.classList.remove('toast-enter'); div.classList.add('toast-show'); });
+      setTimeout(() => { div.classList.add('toast-enter'); div.classList.remove('toast-show'); setTimeout(() => div.remove(), 300); }, 3200);
+    }
+
+    // ============================================================
+    // Init
+    // ============================================================
+    (function init() {
+      dsBuildMonthOptions();
+      const prev = document.getElementById('mp-prev'); if (prev) prev.disabled = mpState.current <= mpState.min;
+      const next = document.getElementById('mp-next'); if (next) next.disabled = mpState.current >= mpState.max;
+      syncDemoButtons();
+      setRole('director');
+      lucide.createIcons();
+    })();
+  </script>
+</body>
+</html>
