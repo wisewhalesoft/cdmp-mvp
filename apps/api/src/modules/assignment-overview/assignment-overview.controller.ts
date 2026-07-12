@@ -1,5 +1,5 @@
 import { Controller, Get, Query, Request, UseGuards } from '@nestjs/common';
-import type { AssignmentOverviewResponse } from '@cdmp/shared';
+import type { AssignmentOverviewResponse } from './assignment-overview.types';
 import { AuthGuard } from '@/common/guards/auth.guard';
 import { DirectorGuard } from '@/common/guards/director.guard';
 import { DirectorOrSectionChiefGuard } from '@/common/guards/director-or-section-chief.guard';

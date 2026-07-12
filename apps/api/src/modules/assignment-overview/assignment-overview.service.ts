@@ -9,7 +9,7 @@ import type {
   RecentRunBlock,
   RunReadinessBlock,
   StageTodoBlock,
-} from '@cdmp/shared';
+} from './assignment-overview.types';
 import { AssignmentListService } from '@/modules/assignment-list/assignment-list.service';
 import {
   Stage0EstimateService,

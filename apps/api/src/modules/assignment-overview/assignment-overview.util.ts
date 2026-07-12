@@ -3,7 +3,7 @@ import type {
   DeptDistributionItem,
   OverviewBlock,
   OverviewBlockError,
-} from '@cdmp/shared';
+} from './assignment-overview.types';
 import type { Stage0DeptEstimateResult } from '@/modules/assignment-list/stage0-estimate.service';
 
 /**
