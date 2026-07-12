@@ -338,6 +338,35 @@ export class AssignmentRunReportService {
     const deptActual = new Map<string, number>();
     for (const row of deptRows) deptActual.set(row.deptId, Number(row.cnt));
 
+    // 部門實際「數量」與「比例」一律以全 run（未 scope）為基準：部門的實際比例＝該部門占「整批
+    // 月名單分派」的份額，與 configRatio（部門設定占全公司比例）同基準、與部長視角一致。
+    // 若以 scoped 分母（stage4Count＝處長轄區子集）計，處長會看到自己部門 actualRatio≈100%、
+    // deviation 假警示，且與部長檢視同一部門的數字不符（F063/F111 Block 4 bug）。可視部門（列出
+    // 哪些 dept）仍依 scope 限縮（見下方 allDeptIds），但每列的 actualCount / actualRatio 取全 run。
+    // director / admin 之 scoped 即全 run，直接重用 stage4Count / deptActual，不重複查詢。
+    let wholeRunTotal = stage4Count;
+    let wholeDeptActual = deptActual;
+    if (shouldFilter) {
+      const wholeTotalsRow = await resultRepo
+        .createQueryBuilder('r')
+        .select('COUNT(*)', 'cnt')
+        .where('r.run_id = :runId', { runId })
+        .getRawOne<{ cnt: string }>();
+      wholeRunTotal = Number(wholeTotalsRow?.cnt ?? 0);
+      const wholeDeptRows = await resultRepo
+        .createQueryBuilder('r')
+        .select('r.dept_id', 'deptId')
+        .addSelect('COUNT(*)', 'cnt')
+        .where('r.run_id = :runId', { runId })
+        .andWhere('r.dept_id IS NOT NULL')
+        .groupBy('r.dept_id')
+        .getRawMany<{ deptId: string; cnt: string }>();
+      wholeDeptActual = new Map<string, number>();
+      for (const row of wholeDeptRows) {
+        wholeDeptActual.set(row.deptId, Number(row.cnt));
+      }
+    }
+
     // 部門設定比例：聚合 config 快照 deptPct 各 deptId 的 ration 平均（spec L62「設定比例」；
     //   只載 config 快照——體積小、非 result/input_list 巨大 payload）。
     const configSnap = await this.snapshotRepo.findOne({
@@ -386,15 +415,15 @@ export class AssignmentRunReportService {
 
     const deptSummary: SummaryDeptRow[] = [];
     for (const deptId of allDeptIds) {
-      const actualCount = deptActual.get(deptId) ?? 0;
+      const actualCount = wholeDeptActual.get(deptId) ?? 0;
       // 排除「未分派部門」（actualCount=0）：部門於 ob_dept_pct 有設定比例但本次月名單分派無任何實際
       // 分派時，其 deviation 恆為 -configRatio（假警示）、實際比例 0%，對使用者無意義 → 不列入
       // deptSummary（連動上方「分派部門數」stat card、部門偏差 chart 與 NFR-005 footer 一次收斂）。
       if (actualCount === 0) continue;
       const actualRatio =
-        stage4Count === 0
+        wholeRunTotal === 0
           ? 0
-          : Math.round(((actualCount / stage4Count) * 100) * 10) / 10;
+          : Math.round(((actualCount / wholeRunTotal) * 100) * 10) / 10;
       const configRatio =
         Math.round((deptConfigRatio.get(deptId) ?? 0) * 10) / 10;
       const deviation =

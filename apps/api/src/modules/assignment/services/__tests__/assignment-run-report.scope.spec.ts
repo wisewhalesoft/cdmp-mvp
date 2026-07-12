@@ -254,6 +254,27 @@ describe('AssignmentRunReportService + SnapshotService — scopeByCreator (F063/
       expect(s.totalCases).toBe(2);
     });
 
+    it('TC-SCOPE-001b：section_chief 部門實際數量/比例以全 run 為基準，與部長檢視同部門一致（bug fix）', async () => {
+      const run = await seedStandardRun();
+      const sc = await env.reportService.getSummary(
+        run.run_id,
+        ACTOR_SECTION_CHIEF,
+      );
+      const dir = await env.reportService.getSummary(run.run_id, ACTOR_DIRECTOR);
+      const scD01 = sc.deptSummary.find((x) => x.deptId === 'D01')!;
+      const dirD01 = dir.deptSummary.find((x) => x.deptId === 'D01')!;
+      // 全 run 4 筆、D01 實際 2 筆 → 50%（非以 scoped 分母 2 算成 100%）；config 50% → deviation 0
+      expect(scD01.actualCount).toBe(2);
+      expect(scD01.actualRatio).toBe(50);
+      expect(scD01.deviation).toBe(0);
+      expect(scD01.alert).toBe(false);
+      // 與部長檢視同一部門之實際數量/比例/偏差完全一致（處長 stage4Count/totalCases 仍為轄區子集 2）
+      expect(scD01.actualCount).toBe(dirD01.actualCount);
+      expect(scD01.actualRatio).toBe(dirD01.actualRatio);
+      expect(scD01.deviation).toBe(dirD01.deviation);
+      expect(sc.stage4Count).toBe(2);
+    });
+
     it('TC-SCOPE-002：director bypass 看全公司', async () => {
       const run = await seedStandardRun();
       const s = await env.reportService.getSummary(run.run_id, ACTOR_DIRECTOR);
