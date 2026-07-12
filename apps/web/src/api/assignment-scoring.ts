@@ -219,8 +219,27 @@ export async function updateCardLevels(payload: {
   return res.data;
 }
 
+/** AD-E07-45 v1.2：原始（未分桶、未放大）樣本 score 分布 bin。 */
+export interface ScoreHistogramBin {
+  score: number;
+  count: number;
+}
+
 export interface PreviewCardLevelsResponse {
+  /** 各 CARD_LEVEL 放大推算後之母體命中數（後端依傳入 levels 分桶） */
   distribution: Record<string, number>;
+  /**
+   * AD-E07-45 v1.2：原始樣本 score 直方圖（未分桶、未放大）。
+   * 前端每 cardType 快取一次，門檻編輯 / TIER 彙總皆對此 client-side 重新分桶（零額外呼叫）。
+   * 舊版後端未回此欄時前端優雅降級（histogram 視為空）。
+   */
+  histogram?: ScoreHistogramBin[];
+  /** 恆為 true（含小母體 fallback 情境，AD-E07-45 §3.5） */
+  isEstimate?: boolean;
+  /** 本次實際使用之樣本列數（effectiveSampleSize）；小母體 fallback 時 === totalCount */
+  sampleSize?: number;
+  /** 母體總筆數（ob_pool_data，每次即時查詢，不快取） */
+  totalCount?: number;
 }
 
 export async function previewCardLevels(

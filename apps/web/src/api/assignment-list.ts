@@ -204,6 +204,38 @@ export async function updateList(
   return response.data;
 }
 
+// ============================================================================
+// F050 v2.4 §6.3 / US-176 — 草稿「預估命中筆數」抽樣估算（AD-E07-45）
+// ============================================================================
+
+export interface PreviewHitCountResponse {
+  /** 放大推算後之母體命中筆數 */
+  estimatedHitCount: number;
+  /** 恆為 true（含小母體 fallback 情境） */
+  isEstimate: boolean;
+  /** 本次實際使用之樣本列數 */
+  sampleSize: number;
+  /** 母體總筆數（ob_pool_data） */
+  totalCount: number;
+}
+
+/**
+ * F050 §6.3：對 `ob_pool_data` 固定樣本套用草稿 condition_payload 之「欄位篩選子步驟」，
+ * 放大推算命中筆數（AD-E07-45）。權限：DirectorGuard（僅部長；處長 → 403）。
+ *
+ * 前端由建立草稿頁 debounce 呼叫；估算為輔助資訊，失敗不阻擋儲存。
+ */
+export async function previewHitCount(conditionPayload: {
+  conditions: ConditionItem[];
+  logic?: 'AND';
+}): Promise<PreviewHitCountResponse> {
+  const res = await apiClient.post<PreviewHitCountResponse>(
+    '/assignment/list-definitions/preview-hit-count',
+    { conditionPayload },
+  );
+  return res.data;
+}
+
 /**
  * F052：停用名單（軟刪除）。
  */

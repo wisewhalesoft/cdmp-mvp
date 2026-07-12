@@ -222,8 +222,20 @@ beforeEach(() => {
       { cardType: 'C3', cardLevel: null, tierLevel: 'T3C', listNm: null },
     ],
   });
+  // AD-E07-45 v1.2：previewCardLevels 回應新增 histogram/sampleSize/totalCount。
+  // histogram 依 H 門檻（A[243,999]/B[214,242]/C[185,213]/D[0,184]）first-match-wins 分桶
+  // 後 = A:20 / B:40 / C:30 / D:10（小母體 sampleSize===totalCount===100 → 精確）。
   mockedPreviewCardLevels.mockResolvedValue({
     distribution: { A: 20, B: 40, C: 30, D: 10 },
+    histogram: [
+      { score: 300, count: 20 }, // → A
+      { score: 220, count: 40 }, // → B
+      { score: 200, count: 30 }, // → C
+      { score: 100, count: 10 }, // → D
+    ],
+    isEstimate: true,
+    sampleSize: 100,
+    totalCount: 100,
   });
 });
 
@@ -1690,5 +1702,160 @@ describe('ScoringConfigPage — v1.3 / v1.4 錯誤碼 rename 對齊', () => {
     // 舊名單獨出現視為殘留（允許 CARD_LEVEL_NOT_FOUND_IN_VERSION / _RECORD_NOT_FOUND）
     const stale = pageSrc.match(/CARD_LEVEL_NOT_FOUND(?!_IN_VERSION|_RECORD_NOT_FOUND)/g);
     expect(stale).toBeNull();
+  });
+});
+
+// ============================================================
+// F055 v1.7 / AD-E07-45（US-174）：CARD_LEVEL 預估分佈抽樣估算三態 +
+//   client-side 即時重新分桶（histogram 每 cardType 僅載入一次）
+// ============================================================
+
+async function openLevelTab() {
+  render(wrap(<ScoringConfigPage />));
+  await switchToLegacyTabs();
+  await waitFor(() => {
+    expect(screen.getByTestId('tab-level')).toBeInTheDocument();
+  });
+  fireEvent.click(screen.getByTestId('tab-level'));
+  await waitFor(() => {
+    expect(screen.getByTestId('level-A-scoreS')).toBeInTheDocument();
+  });
+}
+
+describe('ScoringConfigPage — F055 CARD_LEVEL 抽樣估算三態（K 組）', () => {
+  it('TS-F055-047：histogram 抓取中顯示 loading 態（非空白、非舊資料）', async () => {
+    // 永不 resolve 的 promise → query 停在 pending → isLoading=true
+    mockedPreviewCardLevels.mockReturnValue(new Promise(() => {}) as any);
+    await openLevelTab();
+    await waitFor(() => {
+      expect(screen.getByTestId('level-dist-loading')).toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId('level-dist-loading').getAttribute('data-state'),
+    ).toBe('loading');
+    // 非空白：不得渲染 estimate / error 容器
+    expect(screen.queryByTestId('preview-distribution')).toBeNull();
+    expect(screen.queryByTestId('level-dist-error')).toBeNull();
+  });
+
+  it('TS-F055-048 + TS-F055-021：估算態顯示「約 N 人」+ 樣本/母體來源說明', async () => {
+    await openLevelTab();
+    await waitFor(() => {
+      expect(screen.getByTestId('preview-distribution')).toBeInTheDocument();
+    });
+    const estimate = screen.getByTestId('preview-distribution');
+    expect(estimate.getAttribute('data-state')).toBe('estimate');
+    // 約略值標示
+    expect(screen.getByTestId('preview-A').textContent).toContain('約');
+    expect(screen.getByTestId('preview-A').textContent).toContain('20');
+    // 樣本/母體來源說明（TS-F055-021 等效文字）
+    const caption = screen.getByTestId('level-dist-sample-caption');
+    expect(caption.textContent).toContain('樣本');
+    expect(caption.textContent).toContain('100');
+  });
+
+  it('TS-F055-049：histogram 抓取失敗顯示錯誤 + 重試（不得空白）', async () => {
+    mockedPreviewCardLevels.mockRejectedValue({
+      response: { status: 500, data: { error: 'INTERNAL' } },
+    });
+    await openLevelTab();
+    await waitFor(() => {
+      expect(screen.getByTestId('level-dist-error')).toBeInTheDocument();
+    });
+    const err = screen.getByTestId('level-dist-error');
+    expect(err.getAttribute('data-state')).toBe('error');
+    expect(err.textContent).toContain('暫時無法取得');
+    // 可重試按鈕存在；不得渲染為空白（無 estimate 容器）
+    expect(screen.getByTestId('level-dist-retry')).toBeInTheDocument();
+    expect(screen.queryByTestId('preview-distribution')).toBeNull();
+  });
+
+  it('TS-F055-051：點「重新整理」→ 重新呼叫 API → 切回估算態', async () => {
+    mockedPreviewCardLevels
+      .mockRejectedValueOnce({ response: { status: 500 } })
+      .mockResolvedValue({
+        distribution: { A: 20, B: 40, C: 30, D: 10 },
+        histogram: [
+          { score: 300, count: 20 },
+          { score: 220, count: 40 },
+          { score: 200, count: 30 },
+          { score: 100, count: 10 },
+        ],
+        isEstimate: true,
+        sampleSize: 100,
+        totalCount: 100,
+      });
+    await openLevelTab();
+    await waitFor(() => {
+      expect(screen.getByTestId('level-dist-retry')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId('level-dist-retry'));
+    await waitFor(() => {
+      expect(screen.getByTestId('preview-distribution')).toBeInTheDocument();
+    });
+    expect(mockedPreviewCardLevels.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('TS-F055-052：三態 DOM 標記互斥（估算態僅 estimate 容器存在）', async () => {
+    await openLevelTab();
+    await waitFor(() => {
+      expect(screen.getByTestId('preview-distribution')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('level-dist-loading')).toBeNull();
+    expect(screen.queryByTestId('level-dist-error')).toBeNull();
+  });
+});
+
+describe('ScoringConfigPage — F055 client-side 重新分桶（N 組）', () => {
+  it('TS-F055-056：門檻連續編輯 5 次，histogram 僅載入 1 次（不逐次呼叫後端）', async () => {
+    await openLevelTab();
+    await waitFor(() => {
+      expect(screen.getByTestId('preview-distribution')).toBeInTheDocument();
+    });
+    const before = mockedPreviewCardLevels.mock.calls.length;
+    expect(before).toBe(1);
+    const input = screen.getByTestId('level-A-scoreS');
+    for (const v of ['250', '260', '270', '280', '290']) {
+      fireEvent.change(input, { target: { value: v } });
+    }
+    // 5 次編輯後仍為 1 次呼叫（re-bucket 為 client-side 純函式，無新 HTTP）
+    expect(mockedPreviewCardLevels.mock.calls.length).toBe(1);
+  });
+
+  it('TS-F055-057：門檻編輯即時 client-side 重新分桶（無新 API 呼叫）', async () => {
+    await openLevelTab();
+    await waitFor(() => {
+      expect(screen.getByTestId('preview-distribution')).toBeInTheDocument();
+    });
+    // 初始：A=20、B=40
+    expect(screen.getByTestId('preview-A').textContent).toContain('20');
+    expect(screen.getByTestId('preview-B').textContent).toContain('40');
+
+    // 將 A 級下限 243 → 215：score 220 改由 A 承接（first-match-wins）→ A=60、B=0
+    fireEvent.change(screen.getByTestId('level-A-scoreS'), {
+      target: { value: '215' },
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('preview-A').textContent).toContain('60');
+    });
+    expect(screen.getByTestId('preview-B').textContent?.trim()).toBe('約 0 人');
+    // 仍為 1 次呼叫
+    expect(mockedPreviewCardLevels.mock.calls.length).toBe(1);
+  });
+});
+
+// TS-F055-050：迴歸守門 — 靜態掃描確認 catch{setPreview(null)} 靜默吞噬已移除
+describe('ScoringConfigPage — F055 靜默吞噬缺陷迴歸守門（TS-F055-050）', () => {
+  it('scoring-config-page.tsx 不得殘留 catch 區塊內 setPreview(null) 吞噬 pattern', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '../scoring-config-page.tsx'),
+      'utf-8',
+    );
+    // setPreview 整個識別字已隨三態重構移除
+    expect(src).not.toMatch(/setPreview\s*\(/);
+    // catch { ... setPreview(null) ... } 吞噬 pattern（保守 multiline 掃描）
+    expect(src).not.toMatch(/catch[\s\S]{0,80}setPreview\s*\(\s*null\s*\)/);
   });
 });

@@ -2,21 +2,35 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertCircle,
+  CloudOff,
+  Eye,
   GitFork,
   Info,
   Inbox,
   ListChecks,
+  Loader2,
+  PieChart,
   Plus,
+  RefreshCw,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import {
   deleteTierMapping,
+  getCardLevels,
   getTierMapping,
   LEGACY_TIER_VALUES,
   type TierMappingItem,
+  type CardType,
 } from '@/api/assignment-scoring';
 import { useSelectedCardType } from '../_hooks/use-selected-card-type';
+import { useCardLevelHistogram } from '../_hooks/use-card-level-histogram';
+import {
+  deriveTierDistribution,
+  type LevelBand,
+  type TierDistResult,
+} from '../_utils/sampling-estimate';
 import { NoCardTypeSelectedEmpty } from './card-type-list-tab';
 import { CreateTierMappingModal } from './create-tier-mapping-modal';
 // Iter 8：拔除 VersionStrip（prototype 28 v3+ 已移除 .version-strip）；
@@ -81,6 +95,36 @@ export function TierMappingTabV15({
   const standardCount = mappings.filter((m) => m.cardLevel != null).length;
   const fallbackCount = mappings.filter((m) => m.cardLevel == null).length;
 
+  // F056 v1.6 / AD-E07-45 §3.4.2：預估各 TIER 分布 —— 由共用之 histogram 快取 client-side 推算，
+  // 不呼叫 §5.5 端點、切換分頁不重新掃描（histogram 每 cardType 快取一次，與 Tab 4 共用同一 key）。
+  const activeLevelsQuery = useQuery({
+    queryKey: ['card-levels', selectedCardType],
+    queryFn: () => getCardLevels(selectedCardType! as CardType),
+    enabled: !!selectedCardType,
+  });
+  const activeLevels: LevelBand[] = useMemo(
+    () =>
+      (activeLevelsQuery.data?.levels ?? []).map((l) => ({
+        cardLevel: l.cardLevel,
+        scoreS: l.scoreS,
+        scoreE: l.scoreE,
+      })),
+    [activeLevelsQuery.data],
+  );
+  const histogramQuery = useCardLevelHistogram(selectedCardType, activeLevels);
+  const histoData = histogramQuery.data;
+
+  const tierDist = useMemo(() => {
+    if (!histoData) return null;
+    return deriveTierDistribution(
+      histoData.histogram ?? [],
+      activeLevels,
+      mappings,
+      histoData.sampleSize ?? 0,
+      histoData.totalCount ?? 0,
+    );
+  }, [histoData, activeLevels, mappings]);
+
   const deleteMutation = useMutation({
     mutationFn: ({
       cardType,
@@ -142,6 +186,9 @@ export function TierMappingTabV15({
       {/* Mode Banner */}
       <ModeBanner standardCount={standardCount} fallbackCount={fallbackCount} />
 
+      <div className="grid grid-cols-3 gap-0">
+        {/* 左：TIER 對應表（2/3） */}
+        <div className="col-span-2 border-r border-gray-200">
       <div className="px-4 py-3 border-b border-gray-200 bg-gray-50/40 flex items-center gap-3">
         <span className="text-sm text-gray-500">
           共 {mappings.length} 筆對應
@@ -287,6 +334,18 @@ export function TierMappingTabV15({
           ob_pool_data_list.tier_level
         </p>
       </div>
+        </div>
+
+        {/* 右：預估各 TIER 分布（1/3，F056 §5.5 / AD-E07-45：抽樣估算三態，資訊架構比照 Tab 4） */}
+        <TierDistPanel
+          isLoading={histogramQuery.isLoading}
+          isError={histogramQuery.isError}
+          onRetry={() => void histogramQuery.refetch()}
+          sampleSize={histoData?.sampleSize ?? 0}
+          totalCount={histoData?.totalCount ?? 0}
+          dist={tierDist}
+        />
+      </div>
 
       <CreateTierMappingModal
         open={createOpen}
@@ -374,4 +433,185 @@ function cardLevelColor(level: string): string {
     default:
       return 'bg-gray-100 text-gray-700';
   }
+}
+
+const TIER_DOT: Record<string, string> = {
+  T1: 'bg-indigo-500',
+  T2: 'bg-blue-500',
+  T3: 'bg-cyan-500',
+  T4: 'bg-teal-500',
+  T5: 'bg-emerald-500',
+  T6: 'bg-lime-500',
+  T7: 'bg-amber-500',
+  T8: 'bg-orange-500',
+  T9: 'bg-rose-500',
+  T10: 'bg-fuchsia-500',
+};
+
+/**
+ * F056 v1.6 / AD-E07-45：預估各 TIER 分布面板（三態 + 無對應 + Fallback）。
+ * 資訊架構比照 Tab 4（分類代碼 + 筆數 + 佔比 + 進度條）。純唯讀，讀鎖豁免。
+ */
+function TierDistPanel({
+  isLoading,
+  isError,
+  onRetry,
+  sampleSize,
+  totalCount,
+  dist,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  onRetry: () => void;
+  sampleSize: number;
+  totalCount: number;
+  dist: TierDistResult | null;
+}) {
+  return (
+    <div>
+      <div className="px-4 py-3 border-b border-gray-200 bg-blue-50/30">
+        <div className="flex items-center justify-between gap-2">
+          <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <PieChart size={16} className="text-blue-600" />
+            預估各 TIER 分布
+          </h4>
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700"
+            title="抽樣估算值，非精確全量計數"
+          >
+            <Sparkles size={12} />約 · 估算
+          </span>
+        </div>
+        {!isLoading && !isError && dist && (
+          <p
+            data-testid="tier-dist-sample-caption"
+            className="text-[11px] text-gray-500 mt-1.5 flex items-start gap-1"
+          >
+            <Info size={12} className="text-gray-400 shrink-0 mt-0.5" />
+            <span>
+              套 active 門檻分級 → 依對應規則映射彙總至 TIER（多對一加總）· 樣本{' '}
+              <span className="tabular-nums font-medium">
+                {sampleSize.toLocaleString()}
+              </span>
+              ／母體{' '}
+              <span className="tabular-nums font-medium">
+                {totalCount.toLocaleString()}
+              </span>{' '}
+              筆
+            </span>
+          </p>
+        )}
+      </div>
+
+      {/* 載入中 */}
+      {isLoading && (
+        <div
+          data-testid="tier-dist-loading"
+          data-state="loading"
+          className="p-5 space-y-3"
+        >
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <Loader2 size={16} className="animate-spin text-blue-600" /> 估算中…
+          </div>
+          <div className="space-y-3">
+            {[0, 1].map((i) => (
+              <div key={i}>
+                <div className="h-3 w-14 rounded bg-gray-100 animate-pulse" />
+                <div className="w-full h-2 rounded-full bg-gray-100 animate-pulse mt-1" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 估算失敗（可重試，永不留白） */}
+      {!isLoading && isError && (
+        <div
+          data-testid="tier-dist-error"
+          data-state="error"
+          className="p-6 flex flex-col items-center text-center gap-2"
+        >
+          <CloudOff size={32} className="text-gray-300" />
+          <p className="text-sm font-medium text-gray-700">預估分布暫時無法取得</p>
+          <p className="text-xs text-gray-400">估算服務逾時或連線異常，請稍後再試</p>
+          <button
+            type="button"
+            data-testid="tier-dist-retry"
+            onClick={onRetry}
+            className="mt-1 inline-flex items-center gap-1 px-3 py-1.5 text-xs border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50"
+          >
+            <RefreshCw size={14} />
+            重新整理
+          </button>
+        </div>
+      )}
+
+      {/* 無對應規則提示（AC-12：不留白、不報錯） */}
+      {!isLoading && !isError && dist && dist.mode === 'none' && (
+        <div
+          data-testid="tier-dist-empty"
+          data-state="empty"
+          className="p-6 flex flex-col items-center text-center gap-2"
+        >
+          <GitFork size={32} className="text-gray-300" />
+          <p className="text-sm font-medium text-gray-700">尚未設定 TIER 對應規則</p>
+          <p className="text-xs text-gray-400">
+            請先於左側新增對應後，即可查看各 TIER 分布預估
+          </p>
+        </div>
+      )}
+
+      {/* 已顯示估算（standard / fallback） */}
+      {!isLoading && !isError && dist && dist.mode !== 'none' && (
+        <div
+          data-testid="tier-dist-ready"
+          data-state="estimate"
+          className="p-5 space-y-3"
+        >
+          {dist.mode === 'fallback' && (
+            <div className="mb-1 flex items-start gap-1.5 rounded-md bg-purple-50 border border-purple-200 p-2 text-[11px] text-purple-700">
+              <GitFork size={14} className="mt-0.5 shrink-0" />
+              Fallback 規則 · 不分等級，全部可計分案件歸單一 TIER
+            </div>
+          )}
+          {dist.rows.map((r) => {
+            const dot = TIER_DOT[r.tierLevel] ?? 'bg-gray-500';
+            const w = Math.min(100, Math.round(r.ratio * 100));
+            return (
+              <div key={r.tierLevel} data-testid={`tier-dist-row-${r.tierLevel}`}>
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
+                    <span className="font-mono font-semibold">{r.tierLevel}</span>
+                  </span>
+                  <span className="text-right leading-tight">
+                    <span
+                      data-testid={`tier-dist-count-${r.tierLevel}`}
+                      className="block font-semibold text-gray-900 tabular-nums"
+                    >
+                      約 {r.count.toLocaleString()} 筆
+                    </span>
+                    <span className="block text-[11px] text-gray-400 tabular-nums">
+                      {(r.ratio * 100).toFixed(1)}%
+                    </span>
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden mt-1">
+                  <div className={`h-2 ${dot}`} style={{ width: `${w}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 唯讀說明（AC-13 / AD-E07-45 §6 讀鎖豁免） */}
+      <div className="px-4 py-2.5 border-t border-gray-200 bg-gray-50/40">
+        <p className="text-[11px] text-gray-400 flex items-start gap-1.5">
+          <Eye size={12} className="mt-0.5 shrink-0" />
+          唯讀預估 · 月名單分派執行中仍可檢視，不受編輯鎖影響
+        </p>
+      </div>
+    </div>
+  );
 }

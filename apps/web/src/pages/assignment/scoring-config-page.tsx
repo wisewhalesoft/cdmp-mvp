@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   BarChart3,
   ChevronDown,
+  CloudOff,
   CreditCard,
   Eye,
   GitFork,
@@ -13,13 +14,17 @@ import {
   Info,
   Layers,
   Layers3,
+  Loader2,
   Pencil,
+  PieChart,
   Ban,
   Power,
   Check,
   Plus,
+  RefreshCw,
   Save,
   SlidersHorizontal,
+  Sparkles,
   Tag,
   Trash2,
   X,
@@ -44,7 +49,6 @@ import {
   getCardLevels,
   getScoring,
   getTierMapping,
-  previewCardLevels,
   updateCardLevels,
   updateDimensions,
   updateTierMapping,
@@ -54,6 +58,12 @@ import {
   SelectedCardTypeProvider,
   useSelectedCardType,
 } from './_hooks/use-selected-card-type';
+// F055 v1.7 / AD-E07-45：抽樣估算 histogram 快取 + client-side 重新分桶
+import { useCardLevelHistogram } from './_hooks/use-card-level-histogram';
+import {
+  deriveLevelDistribution,
+  type LevelBand,
+} from './_utils/sampling-estimate';
 import {
   CardTypeListTab,
   ProdKindInfoBanner,
@@ -1456,8 +1466,6 @@ function CardLevelsTab({
   ) => Promise<T>;
 }) {
   const [drafts, setDrafts] = useState<LevelDraft[]>([]);
-  const [preview, setPreview] = useState<Record<string, number> | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [errorMap, setErrorMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -1468,42 +1476,16 @@ function CardLevelsTab({
         scoreE: String(l.scoreE),
       })),
     );
-    setPreview(null);
     setErrorMap({});
   }, [levels]);
 
-  // debounce preview
-  useEffect(() => {
-    if (drafts.length === 0) return;
-    const valid = drafts.every(
-      (d) =>
-        d.scoreS !== '' &&
-        d.scoreE !== '' &&
-        !Number.isNaN(Number(d.scoreS)) &&
-        !Number.isNaN(Number(d.scoreE)),
-    );
-    if (!valid) return;
-
-    const t = window.setTimeout(async () => {
-      setPreviewLoading(true);
-      try {
-        const res = await previewCardLevels(
-          cardType,
-          drafts.map((d) => ({
-            cardLevel: d.cardLevel,
-            scoreS: Number(d.scoreS),
-            scoreE: Number(d.scoreE),
-          })),
-        );
-        setPreview(res.distribution);
-      } catch {
-        setPreview(null);
-      } finally {
-        setPreviewLoading(false);
-      }
-    }, 300);
-    return () => window.clearTimeout(t);
-  }, [drafts, cardType]);
+  // F055 v1.7 / AD-E07-45 §3.4.2：每 cardType 僅抓取一次 histogram（score → 樣本列數，
+  // threshold-independent）；門檻編輯改為對已快取 histogram 之 client-side 即時重新分桶
+  // （first-match-wins，與後端 previewCardLevels 分桶邏輯等價），不再逐次呼叫後端。
+  // 三態（載入中 / 估算 / 錯誤重試）由 React Query 狀態驅動——移除舊「catch 靜默把 preview
+  // 設為 null」之吞噬缺陷（US-174 AC-4，永不留白）。
+  const histogramQuery = useCardLevelHistogram(cardType, levels);
+  const histoData = histogramQuery.data;
 
   function updateDraft(idx: number, patch: Partial<LevelDraft>) {
     setDrafts((prev) => prev.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
@@ -1537,12 +1519,33 @@ function CardLevelsTab({
     }
   }
 
+  // AD-E07-45 §3.4.2：以目前草稿門檻對已快取 histogram 即時 first-match-wins 重新分桶。
+  const levelBands: LevelBand[] = useMemo(
+    () =>
+      drafts.map((d) => ({
+        cardLevel: d.cardLevel,
+        scoreS: Number(d.scoreS),
+        scoreE: Number(d.scoreE),
+      })),
+    [drafts],
+  );
+
+  const distribution = useMemo(() => {
+    if (!histoData) return null;
+    return deriveLevelDistribution(
+      histoData.histogram ?? [],
+      levelBands,
+      histoData.sampleSize ?? 0,
+      histoData.totalCount ?? 0,
+    );
+  }, [histoData, levelBands]);
+
   const distributionTotal = useMemo(
     () =>
-      preview
-        ? Object.values(preview).reduce((sum, v) => sum + v, 0)
+      distribution
+        ? Object.values(distribution).reduce((sum, v) => sum + v, 0)
         : null,
-    [preview],
+    [distribution],
   );
 
   return (
@@ -1735,24 +1738,100 @@ function CardLevelsTab({
           </div>
         </div>
 
-        {/* Preview */}
+        {/* Preview（F055 v1.7 / AD-E07-45：抽樣估算三態面板 + client-side 重新分桶） */}
         <div>
           <div className="px-4 py-3 border-b border-[#E5E7EB] bg-blue-50/30">
-            <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-              <Eye className="w-4 h-4 text-[#2563EB]" />
-              預估各等級分佈
-            </h4>
-          </div>
-          <div className="p-5 space-y-3" data-testid="preview-distribution">
-            {previewLoading && (
-              <p className="text-xs text-gray-400">計算中...</p>
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <PieChart className="w-4 h-4 text-[#2563EB]" />
+                預估各等級分佈
+              </h4>
+              <span
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700"
+                title="抽樣估算值，非精確全量計數"
+              >
+                <Sparkles className="w-3 h-3" />約 · 估算
+              </span>
+            </div>
+            {histoData && (
+              <p
+                data-testid="level-dist-sample-caption"
+                className="text-[11px] text-gray-500 mt-1.5 flex items-center gap-1"
+              >
+                <Info className="w-3 h-3 text-gray-400 shrink-0" />
+                抽樣估算 · 樣本{' '}
+                <span className="tabular-nums font-medium">
+                  {(histoData.sampleSize ?? 0).toLocaleString()}
+                </span>{' '}
+                筆／母體{' '}
+                <span className="tabular-nums font-medium">
+                  {(histoData.totalCount ?? 0).toLocaleString()}
+                </span>{' '}
+                筆
+              </p>
             )}
-            {!previewLoading && preview &&
-              drafts.map((d) => {
-                const count = preview[d.cardLevel] ?? 0;
-                const pct = distributionTotal && distributionTotal > 0
-                  ? Math.round((count / distributionTotal) * 100)
-                  : 0;
+          </div>
+
+          {/* 狀態 1：載入中（每 cardType 首次 histogram 抓取，可能較久，見 TS-F055-044） */}
+          {histogramQuery.isLoading && (
+            <div
+              data-testid="level-dist-loading"
+              data-state="loading"
+              className="p-5 space-y-3"
+            >
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin text-[#2563EB]" /> 估算中…
+              </div>
+              <div className="space-y-3">
+                {[0, 1, 2].map((i) => (
+                  <div key={i}>
+                    <div className="h-3 w-14 rounded bg-gray-100 animate-pulse" />
+                    <div className="w-full h-2 rounded-full bg-gray-100 animate-pulse mt-1" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 狀態 3：估算失敗（可重試，永不留白）— 取代舊 catch 靜默吞噬寫法 */}
+          {!histogramQuery.isLoading && histogramQuery.isError && (
+            <div
+              data-testid="level-dist-error"
+              data-state="error"
+              className="p-6 flex flex-col items-center text-center gap-2"
+            >
+              <CloudOff className="w-8 h-8 text-gray-300" />
+              <p className="text-sm font-medium text-gray-700">
+                預估分佈暫時無法取得
+              </p>
+              <p className="text-xs text-gray-400">
+                估算服務逾時或連線異常，請稍後再試
+              </p>
+              <button
+                type="button"
+                data-testid="level-dist-retry"
+                onClick={() => void histogramQuery.refetch()}
+                className="mt-1 inline-flex items-center gap-1 px-3 py-1.5 text-xs border border-[#2563EB] text-[#2563EB] rounded-md hover:bg-blue-50"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                重新整理
+              </button>
+            </div>
+          )}
+
+          {/* 狀態 2：已顯示估算 */}
+          {!histogramQuery.isLoading && !histogramQuery.isError && distribution && (
+            <div
+              className="p-5 space-y-3"
+              data-testid="preview-distribution"
+              data-state="estimate"
+            >
+              {drafts.map((d) => {
+                const count = distribution[d.cardLevel] ?? 0;
+                const pct =
+                  distributionTotal && distributionTotal > 0
+                    ? Math.round((count / distributionTotal) * 100)
+                    : 0;
                 const dotBar =
                   d.cardLevel === 'A'
                     ? 'bg-emerald-500'
@@ -1772,7 +1851,7 @@ function CardLevelsTab({
                         data-testid={`preview-${d.cardLevel}`}
                         className="font-semibold text-gray-900 tabular-nums"
                       >
-                        {count.toLocaleString()} 人
+                        約 {count.toLocaleString()} 人
                       </span>
                     </div>
                     <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden mt-1">
@@ -1784,9 +1863,15 @@ function CardLevelsTab({
                   </div>
                 );
               })}
-            {!previewLoading && !preview && drafts.length > 0 && (
-              <p className="text-xs text-gray-400">無預覽資料</p>
-            )}
+            </div>
+          )}
+
+          {/* 唯讀說明（AD-E07-45 §6 讀鎖豁免：月名單分派執行中仍可檢視） */}
+          <div className="px-4 py-2.5 border-t border-[#E5E7EB] bg-gray-50/40">
+            <p className="text-[11px] text-gray-400 flex items-start gap-1.5">
+              <Eye className="w-3 h-3 mt-0.5 shrink-0" />
+              唯讀預估 · 月名單分派執行中仍可檢視，不受編輯鎖影響
+            </p>
           </div>
         </div>
       </div>

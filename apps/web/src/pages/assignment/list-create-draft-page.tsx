@@ -20,6 +20,9 @@ import {
   Lock,
   Folder,
   Contact,
+  Loader2,
+  RefreshCw,
+  Sparkles,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -27,10 +30,12 @@ import { useToast } from '@/components/ui/toast';
 import {
   createList,
   listLists,
+  previewHitCount,
   type AssignmentListItem,
   type ConditionItem,
   type ConditionPayload,
 } from '@/api/assignment-list';
+import { getBusinessRole } from '@/stores/auth-store';
 import {
   listFields,
   listOptions,
@@ -350,16 +355,56 @@ export function ListCreateDraftPage() {
 
   const hasInactive = inactiveDetails.length > 0;
 
-  // ─── Stage 0 預覽 mock（對齊 prototype 27a L767-775） ───
-  const previewCount = useMemo(() => {
-    const valid = conditions.filter(isConditionComplete);
-    if (valid.length === 0) return null;
-    let n = 12500;
-    valid.forEach((_c, i) => {
-      n = Math.floor(n * (0.85 - i * 0.08));
-    });
-    return Math.max(0, n);
-  }, [conditions]);
+  // ─── F050 v2.4 / US-176（AD-E07-45）：預估命中筆數（真實抽樣估算，取代原假公式） ───
+  //   對 ob_pool_data 固定樣本套用「欄位篩選子步驟」放大推算；隨條件編輯 debounce 300ms 更新；
+  //   三態（估算中 / 已顯示 / 失敗）；失敗不顯示 0 / 不誤導、不阻擋儲存；§6.3 端點為 DirectorGuard，
+  //   處長（section_chief）不可呼叫 → 隱藏整個估算區（不呼叫、不顯示 403）。
+  const businessRole = getBusinessRole();
+  const canEstimate = businessRole !== 'section_chief';
+  const [estimateState, setEstimateState] = useState<
+    'idle' | 'loading' | 'ready' | 'error'
+  >('idle');
+  const [estimateCount, setEstimateCount] = useState<number | null>(null);
+  const [estimateNonce, setEstimateNonce] = useState(0);
+
+  // 完整條件之穩定序列化（避免 conditions 物件參照變動造成多餘呼叫）
+  const completeConditionsKey = useMemo(
+    () =>
+      JSON.stringify(
+        conditions.filter(isConditionComplete).map(toConditionItem),
+      ),
+    [conditions],
+  );
+
+  useEffect(() => {
+    if (!canEstimate) return; // 處長：不呼叫 §6.3（DirectorGuard）
+    const items = JSON.parse(completeConditionsKey) as ConditionItem[];
+    if (items.length === 0) {
+      // US-176 AC-5：無使用者條件 → 不呼叫估算 API，沿用既有空狀態
+      setEstimateState('idle');
+      setEstimateCount(null);
+      return;
+    }
+    setEstimateState('loading');
+    let aborted = false;
+    const t = window.setTimeout(async () => {
+      try {
+        const res = await previewHitCount({ conditions: items, logic: 'AND' });
+        if (aborted) return;
+        setEstimateCount(res.estimatedHitCount);
+        setEstimateState('ready');
+      } catch {
+        if (aborted) return;
+        // US-176 AC-7：失敗不顯示 0 / 不誤導；估算為輔助資訊，不阻擋儲存
+        setEstimateCount(null);
+        setEstimateState('error');
+      }
+    }, 300);
+    return () => {
+      aborted = true;
+      window.clearTimeout(t);
+    };
+  }, [completeConditionsKey, canEstimate, estimateNonce]);
 
   // ─── validation ───
   const validate = useCallback((): string | null => {
@@ -1131,31 +1176,82 @@ export function ListCreateDraftPage() {
                 </div>
               )}
 
-              {/* Stage 0 預覽 banner（mock，對齊 prototype 27a L307-316） */}
-              {previewCount !== null && (
+              {/* 預估命中筆數（US-176 / F050 §6.3：真實抽樣估算，三態；對齊 prototype 27a L318-359）
+                  處長（section_chief）§6.3 為 DirectorGuard → 整區隱藏（不呼叫、不顯示 403） */}
+              {canEstimate && estimateState === 'loading' && (
                 <div
-                  data-testid="stage0-preview-banner"
+                  data-testid="hit-estimate-loading"
+                  data-state="loading"
                   className="rounded-lg p-3 bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm"
                 >
-                  <Calculator className="w-5 h-5 text-primary shrink-0" />
+                  <Loader2 className="w-5 h-5 text-primary shrink-0 animate-spin" />
                   <div className="flex-1">
-                    <p className="font-semibold text-primary">
-                      依此條件預估命中{' '}
-                      <span data-testid="stage0-preview-count" className="text-lg">
-                        {previewCount.toLocaleString()}
-                      </span>{' '}
-                      筆案件
-                    </p>
+                    <p className="font-medium text-primary">估算中…</p>
                     <p className="text-xs text-blue-700/80 mt-0.5">
-                      基於上月案件樣本估算。完整試算請使用 Stage 0 試算頁。
+                      正在對目前案件母體抽樣推估命中筆數
                     </p>
                   </div>
-                  <Link
-                    to="/assignment/estimate"
-                    className="text-xs px-2.5 py-1 border border-primary text-primary rounded-md hover:bg-blue-100"
+                </div>
+              )}
+              {canEstimate &&
+                estimateState === 'ready' &&
+                estimateCount !== null && (
+                  <div
+                    data-testid="stage0-preview-banner"
+                    data-state="ready"
+                    className="rounded-lg p-3 bg-blue-50 border border-blue-200 flex items-center gap-3 text-sm"
                   >
-                    開啟 Stage 0 試算
-                  </Link>
+                    <Calculator className="w-5 h-5 text-primary shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-primary">
+                        依此條件預估命中{' '}
+                        <span
+                          data-testid="hit-estimate-count"
+                          className="text-lg"
+                        >
+                          約 {estimateCount.toLocaleString()}
+                        </span>{' '}
+                        筆案件
+                        <span className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-blue-100 text-blue-700 align-middle">
+                          <Sparkles className="w-3 h-3" />
+                          估算
+                        </span>
+                      </p>
+                      <p className="text-xs text-blue-700/80 mt-0.5">
+                        基於目前案件母體（ob_pool_data）抽樣推估（含已設定之客戶資料條件），為約略值、非精確計數。完整精確試算請使用
+                        Stage 0 試算頁。
+                      </p>
+                    </div>
+                    <Link
+                      to="/assignment/estimate"
+                      className="text-xs px-2.5 py-1 border border-primary text-primary rounded-md hover:bg-blue-100 shrink-0"
+                    >
+                      開啟 Stage 0 試算
+                    </Link>
+                  </div>
+                )}
+              {canEstimate && estimateState === 'error' && (
+                <div
+                  data-testid="hit-estimate-error"
+                  data-state="error"
+                  className="rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-center gap-3 text-sm"
+                >
+                  <AlertTriangle className="w-5 h-5 text-warning shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-semibold text-amber-900">預估暫時無法取得</p>
+                    <p className="text-xs text-amber-800 mt-0.5">
+                      估算服務忙碌或連線異常；此為輔助資訊，不影響您繼續填寫或儲存名單。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="hit-estimate-retry"
+                    onClick={() => setEstimateNonce((n) => n + 1)}
+                    className="text-xs px-2.5 py-1 border border-amber-400 text-amber-800 rounded-md hover:bg-amber-100 shrink-0 inline-flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    重試
+                  </button>
                 </div>
               )}
             </section>

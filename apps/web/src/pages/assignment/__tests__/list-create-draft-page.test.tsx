@@ -40,6 +40,7 @@ const mockedListCardTypes = vi.mocked(cardTypeApi.listCardTypes);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
+const mockedPreviewHitCount = vi.mocked(assignmentListApi.previewHitCount);
 
 // 對齊 prototype 27a L510-519 之 FIELDS mock（含拍板 UI-Q5 birth_date date type）
 // v2.1.1（US-128/US-129）：新增 best_case categorical（承接已移除之 prod_best 業務語意）
@@ -863,5 +864,232 @@ describe('F109 ListCreateDraftPage — 新增條件選單依 dataSource 分組',
     await waitFor(() => expect(screen.getByTestId('condition-row-0')).toBeInTheDocument());
     expect(screen.getByTestId('input-numeric-min-0')).toBeInTheDocument();
     expect(screen.getByTestId('input-numeric-max-0')).toBeInTheDocument();
+  });
+});
+
+// ============================================================
+// F050 v2.4 / AD-E07-45（US-176）：草稿「預估命中筆數」真實抽樣估算
+// ============================================================
+describe('ListCreateDraftPage — 預估命中筆數（US-176 抽樣估算）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetUser.mockReturnValue({
+      id: 'd1',
+      name: 'Director',
+      email: 'manager@cdmp.test',
+      role: 'user',
+      isSalesManager: true,
+      businessRole: 'director',
+    });
+    mockedGetBusinessRole.mockReturnValue('director');
+    mockedGetEffectiveIdentity.mockReturnValue('director');
+    setupDefaultMocks();
+    mockedPreviewHitCount.mockResolvedValue({
+      estimatedHitCount: 8500,
+      isEstimate: true,
+      sampleSize: 50000,
+      totalCount: 1679489,
+    });
+  });
+
+  afterEach(() => cleanup());
+
+  // 新增一個完整 caseyear categorical 條件（勾第一個值 → 條件完整）
+  async function addCompleteCaseyear() {
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() =>
+      expect(screen.getByTestId('add-field-caseyear')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('add-field-caseyear'));
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-open-values-0')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('value-checkbox-0-0')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+  }
+
+  it('TS-F050-V01 + W03：呼叫 §6.3 API，面板顯示「約 N」估算標示（非本地假公式）', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    await addCompleteCaseyear();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('stage0-preview-banner')).toBeInTheDocument(),
+    );
+    // 數字來自 API（8,500），非 12500 遞減公式
+    const countEl = screen.getByTestId('hit-estimate-count');
+    expect(countEl.textContent).toContain('約');
+    expect(countEl.textContent).toContain('8,500');
+    // 呼叫 §6.3 端點，body 含 conditionPayload
+    expect(mockedPreviewHitCount).toHaveBeenCalled();
+    const arg = mockedPreviewHitCount.mock.calls[0][0];
+    expect(arg.conditions).toEqual([
+      { columnName: 'caseyear', fieldType: 'categorical', values: ['0'] },
+    ]);
+  });
+
+  it('TS-F050-U01：新增第二值後面板更新為新估算值', async () => {
+    mockedPreviewHitCount
+      .mockResolvedValueOnce({
+        estimatedHitCount: 8500,
+        isEstimate: true,
+        sampleSize: 50000,
+        totalCount: 1679489,
+      })
+      .mockResolvedValue({
+        estimatedHitCount: 12345,
+        isEstimate: true,
+        sampleSize: 50000,
+        totalCount: 1679489,
+      });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    await addCompleteCaseyear();
+    await waitFor(() =>
+      expect(screen.getByTestId('hit-estimate-count').textContent).toContain('8,500'),
+    );
+    // 勾第二個值 → 條件改變 → 重新估算
+    fireEvent.click(screen.getByTestId('value-checkbox-0-1'));
+    await waitFor(() =>
+      expect(screen.getByTestId('hit-estimate-count').textContent).toContain('12,345'),
+    );
+  });
+
+  it('TS-F050-U03：debounce 期間連續多次編輯只觸發一次 API 呼叫', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() =>
+      expect(screen.getByTestId('add-field-caseyear')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('add-field-caseyear'));
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-open-values-0')).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() =>
+      expect(screen.getByTestId('value-checkbox-0-0')).toBeInTheDocument(),
+    );
+    // 連續同步勾選 3 個值（皆在同一 debounce 窗內）
+    fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+    fireEvent.click(screen.getByTestId('value-checkbox-0-1'));
+    fireEvent.click(screen.getByTestId('value-checkbox-0-2'));
+
+    await waitFor(() =>
+      expect(mockedPreviewHitCount).toHaveBeenCalledTimes(1),
+    );
+  });
+
+  it('TS-F050-V02：估算失敗顯示「預估暫時無法取得」，不顯示 0 或誤導數字', async () => {
+    mockedPreviewHitCount.mockRejectedValue({ response: { status: 500 } });
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    await addCompleteCaseyear();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('hit-estimate-error')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('hit-estimate-error').textContent).toContain(
+      '預估暫時無法取得',
+    );
+    // 不得顯示 0 / 任何具體數字
+    expect(screen.queryByTestId('hit-estimate-count')).toBeNull();
+    expect(screen.queryByTestId('stage0-preview-banner')).toBeNull();
+  });
+
+  it('TS-F050-V03：估算失敗不阻擋儲存', async () => {
+    mockedPreviewHitCount.mockRejectedValue({ response: { status: 500 } });
+    mockedCreateList.mockResolvedValue({ listNo: 'OB202605099' } as never);
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('input-listNm')).toBeInTheDocument(),
+    );
+    fireEvent.change(screen.getByTestId('input-listNm'), {
+      target: { value: '估算失敗仍可存' },
+    });
+    fireEvent.change(screen.getByTestId('input-listPeriodStart'), {
+      target: { value: '1' },
+    });
+    fireEvent.change(screen.getByTestId('input-listPeriodEnd'), {
+      target: { value: '6' },
+    });
+    fireEvent.change(screen.getByTestId('input-listInterval'), {
+      target: { value: '1' },
+    });
+    await addCompleteCaseyear();
+    await waitFor(() =>
+      expect(screen.getByTestId('hit-estimate-error')).toBeInTheDocument(),
+    );
+    // 估算失敗態下仍可儲存
+    fireEvent.click(screen.getByTestId('btn-save-draft'));
+    await waitFor(() => expect(mockedCreateList).toHaveBeenCalledTimes(1));
+  });
+
+  it('TS-F050-V04：無使用者條件時不呼叫估算 API（不顯示估算面板）', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    // 未新增任何條件
+    await new Promise((r) => setTimeout(r, 350));
+    expect(mockedPreviewHitCount).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('stage0-preview-banner')).toBeNull();
+    expect(screen.queryByTestId('hit-estimate-loading')).toBeNull();
+  });
+
+  it('TS-F050-W01：ready 態保留「開啟 Stage 0 試算」連結（導向 F049）', async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    await addCompleteCaseyear();
+    await waitFor(() =>
+      expect(screen.getByTestId('stage0-preview-banner')).toBeInTheDocument(),
+    );
+    const link = within(
+      screen.getByTestId('stage0-preview-banner'),
+    ).getByText('開啟 Stage 0 試算');
+    expect(link.getAttribute('href')).toBe('/assignment/estimate');
+  });
+
+  it('section_chief：隱藏估算區（不呼叫 §6.3，不顯示 403）', async () => {
+    mockedGetBusinessRole.mockReturnValue('section_chief');
+    mockedGetEffectiveIdentity.mockReturnValue('section_chief');
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByTestId('btn-add-condition')).toBeInTheDocument(),
+    );
+    await addCompleteCaseyear();
+    // 等待可能的 debounce 窗
+    await new Promise((r) => setTimeout(r, 350));
+    expect(mockedPreviewHitCount).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('stage0-preview-banner')).toBeNull();
+    expect(screen.queryByTestId('hit-estimate-loading')).toBeNull();
+    expect(screen.queryByTestId('hit-estimate-error')).toBeNull();
+  });
+});
+
+// TS-F050-W02：迴歸守門 — 靜態掃描確認假公式（12500 遞減）已移除
+describe('ListCreateDraftPage — 假公式移除迴歸守門（TS-F050-W02）', () => {
+  it('list-create-draft-page.tsx 不得殘留 12500 / 0.85 假公式', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const src = fs.readFileSync(
+      path.resolve(__dirname, '../list-create-draft-page.tsx'),
+      'utf-8',
+    );
+    expect(src).not.toMatch(/12500/);
+    expect(src).not.toMatch(/0\.85/);
   });
 });
