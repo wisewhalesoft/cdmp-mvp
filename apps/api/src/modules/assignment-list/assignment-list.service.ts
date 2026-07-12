@@ -19,12 +19,23 @@ import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
 import { User } from '@/database/entities/user.entity';
+import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { PooldataFieldWhitelist } from '@/database/entities/pooldata-field-whitelist.entity';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
 // F095 / AD-E07-26 §26.5：與 F091 月名單分派共用同一 trigger pure utility（read-time 推導，無新 DB 欄位）
 import { deriveAppliedSpecialRules } from '@/modules/assignment/stage1/special-rules';
+// F050 v2.4 / US-176 / AD-E07-45：草稿命中筆數抽樣估算（欄位篩選子步驟 + customer_core 條件式 JOIN）。
+import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
+import { buildCustomerCoreClause } from '@/modules/assignment/stage1/stage1-customer-core-clause';
+import { buildCustomerCoreClauseMssql } from '@/modules/assignment/stage1/stage1-customer-core-clause-mssql';
+import {
+  buildPoolDataSampleFrom,
+  getPoolDataTotalCount,
+  scaleEstimate,
+  type SamplingDialect,
+} from '@/modules/assignment/stage1/sampling-estimator';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import { isUuid } from '@/common/uuid.util';
 import type { CreateListDto } from './dto/create-list.dto';
@@ -98,6 +109,9 @@ export class AssignmentListService {
     private readonly approvalRepo: Repository<AssignmentApproval>,
     @InjectRepository(User)
     private readonly userRepo: Repository<User>,
+    // F050 v2.4 / US-176：草稿命中筆數抽樣估算需對 ob_pool_data 抽樣 COUNT（已於 module forFeature 註冊）。
+    @InjectRepository(ObPoolData)
+    private readonly poolDataRepo: Repository<ObPoolData>,
     private readonly assignmentRunGuard: AssignmentRunGuardService,
     private readonly scopeService: SectionChiefScopeService,
   ) {}
@@ -247,6 +261,157 @@ export class AssignmentListService {
     // 含 index signature；entity ObListDefinitionConditionPayload 無），回寫 dto.conditionPayload
     // 才不會型別不相容（TS2322）。
     return { ...payload, conditions } as T;
+  }
+
+  // -------------------------------------------------------------------------
+  // F050 v2.4 / US-176 / §6.3 / BR-15 / AD-E07-45：草稿命中筆數抽樣估算
+  // -------------------------------------------------------------------------
+
+  /** 抽樣方言判定（以 ob_pool_data 連線方言分派；非 mssql → 'postgres'）。 */
+  private resolveSamplingDialect(): SamplingDialect {
+    return this.poolDataRepo.manager.connection.options?.type === 'mssql'
+      ? 'mssql'
+      : 'postgres';
+  }
+
+  /**
+   * §6.3 預覽端點之 condition_payload 校驗：reserved（400）> 同名重複（422）> whitelist（422）。
+   *
+   * **不**強制 AC-10 最低條件數（TS-F050-S07；最低門檻為儲存時規則，預覽端點放行 conditions=[]）。
+   */
+  private async validateConditionsForPreview(
+    payload: ObListDefinitionConditionPayload | null | undefined,
+  ): Promise<void> {
+    if (!payload || !Array.isArray(payload.conditions)) return;
+    const conditions = payload.conditions as ObListDefinitionConditionItem[];
+
+    // 1. reserved 一級保留欄位（400 優先，§5.4 / BR-8）
+    const reservedHit = conditions
+      .map((c) => c.columnName)
+      .filter((n) => RESERVED_CONDITION_FIELDS.includes(n));
+    if (reservedHit.length > 0) {
+      throw new BadRequestException({
+        error: ERROR_CODES.RESERVED_FIELD_IN_CONDITIONS,
+        message: ERROR_MESSAGES.RESERVED_FIELD_IN_CONDITIONS,
+        details: { reservedFields: Array.from(new Set(reservedHit)) },
+      });
+    }
+
+    // 2. 同 columnName 重複（422 VALIDATION_ERROR）
+    const allNames = conditions.map((c) => c.columnName);
+    if (new Set(allNames).size < allNames.length) {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.VALIDATION_ERROR,
+        message: '篩選條件不可重複出現相同欄位（columnName）',
+      });
+    }
+
+    // 3. whitelist active check（422 CONDITION_COLUMN_NOT_IN_WHITELIST）
+    if (conditions.length > 0) {
+      const activeRows = await this.whitelistRepo.find({ where: { is_active: true } });
+      const activeSet = new Set(activeRows.map((r) => r.column_name));
+      for (const cond of conditions) {
+        if (!activeSet.has(cond.columnName)) {
+          throw new UnprocessableEntityException({
+            error: ERROR_CODES.CONDITION_COLUMN_NOT_IN_WHITELIST,
+            message: ERROR_MESSAGES.CONDITION_COLUMN_NOT_IN_WHITELIST,
+            details: { columnName: cond.columnName },
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * F050 v2.4 §6.3：草稿階段（尚未儲存，無 listNo）依 condition_payload 抽樣估算命中筆數。
+   *
+   * 對 ob_pool_data 固定樣本套用**欄位篩選子步驟**（buildStage1WhereConditions，`ob_pool_data` 欄位）
+   * **＋ F109 customer_core 條件式 LEFT JOIN**（buildCustomerCoreClause(Mssql)，客戶欄位，
+   * I-SAMPLE-CC-INCLUDE-01）→ COUNT → 放大推算（scaleEstimate）。**不含** MONTH_CNT / 去重 / 特殊 DELETE
+   * （D2；此三者為 F049 精確試算 executeStage1Chain 專屬，本方法絕不呼叫之）。讀鎖豁免（不攔截月跑鎖）。
+   *
+   * @param conditionPayload 使用者送入之草稿 payload（未注入 best_case）
+   * @param workdt           AGE 衍生欄位基準日（target_work_ym 首日；由 controller 帶入）
+   */
+  async previewHitCount(
+    conditionPayload: ObListDefinitionConditionPayload | null | undefined,
+    workdt: Date,
+  ): Promise<{
+    estimatedHitCount: number;
+    isEstimate: true;
+    sampleSize: number;
+    totalCount: number;
+  }> {
+    // 1. 校驗（reserved 400 > 同名重複 422 > whitelist 422；不強制最低條件數）
+    await this.validateConditionsForPreview(conditionPayload);
+
+    // 2. BR-14：注入系統固定條件（best_case → ['Y']）於估算之前（與 createList 同步驟）。
+    const systemFixedFields = await this.loadSystemFixedFields();
+    const basePayload: ObListDefinitionConditionPayload =
+      conditionPayload && Array.isArray(conditionPayload.conditions)
+        ? conditionPayload
+        : ({ conditions: [], logic: 'AND' } as ObListDefinitionConditionPayload);
+    const normalized = this.injectSystemFixedConditions(basePayload, systemFixedFields);
+
+    // 3. 欄位篩選子步驟（既有 composer；customer_core 條件由 composer 靜默 skip，改由下方 clause 產生）。
+    const fieldFragment = buildStage1WhereConditions({
+      condition_payload: normalized,
+    } as any);
+
+    // 4. F109 customer_core 條件式 LEFT JOIN + WHERE fragments（baseAlias 固定 'o'，掛在抽樣後之 o 之上）。
+    const dialect = this.resolveSamplingDialect();
+    const ccConditions = (normalized.conditions ??
+      []) as ObListDefinitionConditionItem[];
+    const warnings: unknown[] = [...(fieldFragment.warnings ?? [])];
+    const customerCoreClause =
+      dialect === 'mssql'
+        ? buildCustomerCoreClauseMssql(ccConditions, workdt, 'o', warnings as any)
+        : buildCustomerCoreClause(ccConditions, workdt, 'o', warnings as any);
+
+    // 5. 抽樣核心（AD-E07-45）：totalCount 即時查詢（絕不快取）+ TABLESAMPLE / 小母體 fallback。
+    const totalCount = await getPoolDataTotalCount(this.poolDataRepo as any);
+    const { ctePrefix, fromClause, effectiveSampleSize } = buildPoolDataSampleFrom(
+      totalCount,
+      dialect,
+    );
+
+    // 6. 組 COUNT 查詢：抽樣後之 o + 條件式 customer_core JOIN + 欄位/客戶 WHERE fragments。
+    const whereClauses: string[] = [];
+    if (fieldFragment.where) whereClauses.push(`(${fieldFragment.where})`);
+    for (const f of customerCoreClause.whereFragments) whereClauses.push(f);
+    const whereSql =
+      whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    const joinSql = customerCoreClause.join ? `${customerCoreClause.join} ` : '';
+
+    const countSql = `${ctePrefix}SELECT COUNT(*) AS cnt FROM ${fromClause} ${joinSql}${whereSql}`;
+
+    // 命名參數（fieldFragment.params + customerCoreClause.params，前綴互斥 AD-E07-37 I-CC-PARAM-NS-01）
+    //   → positional，由 driver 轉譯（與月名單分派 stage1-sql-executor 同機制）。
+    const params = { ...fieldFragment.params, ...customerCoreClause.params };
+    const [escaped, parameters] =
+      this.poolDataRepo.manager.connection.driver.escapeQueryWithParameters(
+        countSql,
+        params,
+        {},
+      );
+
+    const rows: Array<{ cnt: number | string }> = await this.poolDataRepo.query(
+      escaped,
+      parameters,
+    );
+    const sampleMatchCount = Number(rows?.[0]?.cnt ?? 0);
+
+    const estimatedHitCount = scaleEstimate(
+      sampleMatchCount,
+      effectiveSampleSize,
+      totalCount,
+    );
+    return {
+      estimatedHitCount,
+      isEstimate: true,
+      sampleSize: effectiveSampleSize,
+      totalCount,
+    };
   }
 
   // -------------------------------------------------------------------------

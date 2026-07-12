@@ -37,6 +37,7 @@ import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
 import { User } from '@/database/entities/user.entity';
+import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 
 const YM = '202605';
@@ -64,7 +65,7 @@ async function buildModule(): Promise<{
           AssignmentAuditLog,
           AssignmentRun,
           PooldataFieldOption,
-          PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User,
+          PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User, ObPoolData,
         ],
         synchronize: true,
       }),
@@ -73,7 +74,7 @@ async function buildModule(): Promise<{
         AssignmentAuditLog,
         AssignmentRun,
         PooldataFieldOption,
-        PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User,
+        PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User, ObPoolData,
       ]),
     ],
     providers: [

@@ -1,7 +1,9 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
+  Post,
   Query,
   Request,
   UseGuards,
@@ -14,6 +16,8 @@ import {
   RequireDirectorOrSectionChief,
 } from '@/common/decorators/business-role.decorator';
 import { SystemService } from '@/modules/system/system.service';
+import { AssignmentListService } from './assignment-list.service';
+import { PreviewHitCountDto } from './dto/preview-hit-count.dto';
 import {
   Stage0EstimateService,
   type ActorLike,
@@ -39,6 +43,8 @@ export class Stage0EstimateController {
     private readonly service: Stage0EstimateService,
     // F097 / AD-E07-27 §27.3：current_work_ym 計算收斂至 SystemService
     private readonly systemService: SystemService,
+    // F050 v2.4 / US-176 §6.3：草稿命中筆數抽樣估算（同 module，複用既有 preview-hit-count 服務）
+    private readonly listService: AssignmentListService,
   ) {}
 
   @Get('stage0/daily-estimate')
@@ -93,5 +99,27 @@ export class Stage0EstimateController {
   @Get('list-definitions/:listNo/estimate')
   async estimateListCount(@Param('listNo') listNo: string) {
     return this.service.estimateListCount(listNo);
+  }
+
+  /**
+   * F050 v2.4 §6.3 POST /api/v1/assignment/list-definitions/preview-hit-count（US-176 / AD-E07-45）
+   *
+   * 草稿階段（尚未儲存，無 listNo）依 condition_payload 抽樣估算命中筆數。
+   * 權限：DirectorGuard + @RequireDirector()（部長 / Admin；建立草稿頁僅此二角色可達，
+   *   與 F055/F056 preview 之 DirectorOrSectionChief **不同**，處長 → 403）。
+   * 讀鎖豁免：不攔截 ASSIGNMENT_RUN_ALREADY_RUNNING（service 層本就不呼叫月跑鎖，AD-E07-45 §6）。
+   */
+  @Post('list-definitions/preview-hit-count')
+  @RequireDirector()
+  async previewHitCount(@Body() dto: PreviewHitCountDto) {
+    // AGE 衍生欄位基準日 = target_work_ym 首日（沿用系統既有 AssignmentWorkYm context）。
+    const ym = this.systemService.getDefaultTargetWorkYm();
+    const workdt = new Date(
+      Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(4, 6)) - 1, 1),
+    );
+    return this.listService.previewHitCount(
+      dto.conditionPayload as any,
+      workdt,
+    );
   }
 }

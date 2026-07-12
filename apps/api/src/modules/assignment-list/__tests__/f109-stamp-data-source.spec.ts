@@ -27,6 +27,7 @@ import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
 import { User } from '@/database/entities/user.entity';
+import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 
 const YM = '202607';
 const ACTOR = { userId: 'dir-001', ipAddress: '127.0.0.1' };
@@ -56,10 +57,10 @@ beforeAll(async () => {
       TypeOrmModule.forRoot({
         type: 'better-sqlite3',
         database: ':memory:',
-        entities: [ObListDefinition, AssignmentAuditLog, AssignmentRun, PooldataFieldOption, PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User],
+        entities: [ObListDefinition, AssignmentAuditLog, AssignmentRun, PooldataFieldOption, PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User, ObPoolData],
         synchronize: true,
       }),
-      TypeOrmModule.forFeature([ObListDefinition, AssignmentAuditLog, AssignmentRun, PooldataFieldOption, PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User]),
+      TypeOrmModule.forFeature([ObListDefinition, AssignmentAuditLog, AssignmentRun, PooldataFieldOption, PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User, ObPoolData]),
     ],
     providers: [
       AssignmentListService,

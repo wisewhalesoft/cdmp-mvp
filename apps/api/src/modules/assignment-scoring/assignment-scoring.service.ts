@@ -36,6 +36,13 @@ import { buildStage2ScoreExpr } from '@/modules/assignment/stage1/stage2to4-sql-
 //   （AD-E07-42 P3b；已與 PG 版逐列等價，供 previewCardLevels MSSQL 分支重用，非另造公式）。
 import { buildStage2ScoreExprMssql } from '@/modules/assignment/stage1/stage2to4-sql-builder-mssql';
 import { fetchPoolDataColumnsMssql } from '@/modules/assignment/stage1/stage2to4-sql-executor-mssql';
+// F055 v1.7 / F056 v1.6 / AD-E07-45：抽樣估算共用核心（固定樣本 50000 + 可重現種子 42 + 放大推算）。
+import {
+  buildPoolDataSampleFrom,
+  getPoolDataTotalCount,
+  scaleEstimate,
+  type SamplingDialect,
+} from '@/modules/assignment/stage1/sampling-estimator';
 
 /**
  * F053 / F054 / F055 / F056：E07 計分卡設定 Service
@@ -272,6 +279,42 @@ export interface PreviewCardLevelsInput {
 
 export interface PreviewCardLevelsResult {
   distribution: Record<string, number>;
+  /**
+   * AD-E07-45 v1.2（team-lead 效能決策）：抽樣後之原始分數 histogram（分桶前，每列＝一相異整數
+   * score 及其樣本列數）。前端可對同一 cardType fetch 一次，於 client 端自行分桶為各等級 / 各 TIER，
+   * 免每次改門檻重打 server。`score`＝整數分數值；`count`＝該分數之樣本列數（非放大值）。
+   * 早期返回（空 levels / 無 active 版本）為空陣列。
+   */
+  histogram: Array<{ score: number; count: number }>;
+  /** AD-E07-45 §3.5：恆為 true（含小母體 fallback），供前端渲染估算標示 */
+  isEstimate: boolean;
+  /** 本次實際使用之樣本筆數（大母體=50000；小母體 fallback=totalCount） */
+  sampleSize: number;
+  /** 母體 ob_pool_data 總筆數（每次請求即時查詢，絕不快取） */
+  totalCount: number;
+}
+
+// =========================
+// F056 §5.5 — 各 TIER 分布抽樣估算（AD-E07-45 §5.2）
+// =========================
+export interface PreviewTierMappingInput {
+  cardType: string;
+}
+
+export interface PreviewTierMappingDistributionItem {
+  tierLevel: string;
+  count: number;
+  ratio: number;
+}
+
+export interface PreviewTierMappingResult {
+  cardType: string;
+  hasMapping: boolean;
+  ruleType: 'standard' | 'fallback' | 'none';
+  isEstimate: boolean;
+  sampleSize: number;
+  totalCount: number;
+  distribution: PreviewTierMappingDistributionItem[];
 }
 
 // F055 §5.3 DELETE
@@ -399,23 +442,6 @@ export class AssignmentScoringService {
     @Optional()
     private readonly dataSource?: DataSource,
   ) {}
-
-  // =========================
-  // F055 — previewCardLevels 之 BR-2 應用層快取
-  // =========================
-  //
-  // AC-3 / BR-2：preview 允許最多 60 秒應用層快取。等級調整（level band 編輯）時前端會 debounce
-  //   逐 keystroke 重打 preview，每個不同的 levels 都會觸發一次全表即時計分掃描（ob_pool_data ~168 萬列，
-  //   ~80s），使頁面不可用。關鍵洞察：**每列分數只取決於 (cardType, cardVersion)**——levels 僅是把這些
-  //   分數「分桶」而已。故只需快取「分數 histogram」（level 無關），之後每次改門檻皆為純記憶體重新分桶（即時）。
-  //
-  //   快取鍵＝`${cardType}:${cardVersion}`；值＝該 (cardType,cardVersion) 之分數 histogram（各不同 score
-  //   的列數）+ 逾時時間戳。命中且未逾時 → 完全略過 DB（columnRepo/scoreRepo/histogram 掃描全免）。
-  private static readonly CARD_LEVEL_HISTOGRAM_TTL_MS = 60_000;
-  private readonly cardLevelHistogramCache = new Map<
-    string,
-    { histogram: Array<{ score: number; cnt: number }>; expiresAt: number }
-  >();
 
   // =========================
   // F053 — GET /scoring
@@ -968,25 +994,21 @@ export class AssignmentScoringService {
       });
     }
 
-    // F055 §5.2 / AC-3：preview 以「現行 ob_pool_data 套用該 cardType active 計分設定即時計分」
-    //   後，再依前端傳入的新門檻分桶試算分佈（非重呼 fn_calc_tier_level、非讀月名單分派 snapshot）。
+    // F055 §5.2 / AC-3 / v1.7（US-174 / AD-E07-45）：preview 改為「ob_pool_data 固定樣本套用該
+    //   cardType active 計分設定即時計分 → 依前端傳入新門檻分桶 → 放大推算至母體」。取代 v1.6 之
+    //   全表即時計分（生產 CARD_TYPE=E 實測 224.6s 逾時）+ 60s 應用層快取（快取已移除，AD §3.4）。
     //
-    // ⚠️ F094 死欄修正（本次）：舊實作分桶 `ob_pool_data_list.score IS NOT NULL`，但自 F094 起
-    //   月名單分派計分結果改寫入 `ob_monthly_run_result.score`，`ob_pool_data_list.score` 恆為 NULL
-    //   → preview 各等級永遠回 0（bug）。且舊實作無 cardType 維度（等級碼／分數區間本為 per-card_type，
-    //   須以該 cardType 的計分卡設定算分才有意義）。改為重用月名單分派 Stage 2 計分下推
-    //   （buildStage2ScoreExpr；F104 已對齊 legacy SP，維持單一真源，避免重造公式導致靜默偏差），
-    //   對每列 ob_pool_data 以該 cardType active version 之 active 計分維度即時算分。
-    //
-    // ⚠️ 效能鐵則（2026-06-02 OOM 事故）：ob_pool_data 生產 ~780 萬列 / ~14GB，嚴禁 `.find()`
-    //   全表 hydrate 進 Node（heap OOM → 進程崩潰 → 整頁 API 500，違反 CLAUDE.md 巨量資料鐵則）。
-    //   一律 SQL 下推：單一 GROUP BY 聚合僅回各等級 COUNT，記憶體佔用與資料量脫鉤。
-    //
-    // ⚠️ DB_TYPE：計分下推（LATERAL / customer_core LEFT JOIN / to_jsonb）為 PG 專用，與月名單分派
-    //   Stage 2（runStage2and3Sql）同源；SQLite e2e 不具代表性（沿用既有 PG-only 認定）。
-    //
-    // BR-2 快取（本次新增）：改快取「分數 histogram」（level 無關），之後每次改門檻皆純記憶體重新分桶。
-    //   histogram 每列＝一個相異 score 及其列數（cnt）；分桶僅在記憶體進行（見下方 in-memory 分桶）。
+    // ⚠️ F094 死欄修正：分桶對象為 ob_pool_data 即時算分（非死欄 ob_pool_data_list.score）。
+    // ⚠️ 效能鐵則：一律 SQL 下推 GROUP BY 聚合 + TABLESAMPLE 頁級抽樣，記憶體佔用與資料量脫鉤，禁 .find() 全表 hydrate。
+    // ⚠️ 抽樣核心 sampling-estimator（AD-E07-45）：totalCount 每次即時查詢絕不快取；效能靠抽樣（非快取）。
+    const dialect = this.resolveSamplingDialect();
+    const totalCount = await getPoolDataTotalCount(this.poolDataListRepo as any);
+    // 早期返回（空 levels / 無 active 版本）之 sampleSize 亦以抽樣核心決定（與主路徑一致）。
+    const { effectiveSampleSize: fallbackSampleSize } = buildPoolDataSampleFrom(
+      totalCount,
+      dialect,
+    );
+
     const distribution: Record<string, number> = {};
     for (const l of parsedLevels) {
       distribution[l.cardLevel] = 0;
@@ -994,7 +1016,13 @@ export class AssignmentScoringService {
 
     // 無等級可分桶時直接回傳（避免組出非法的空 CASE 子句）
     if (parsedLevels.length === 0) {
-      return { distribution };
+      return {
+        distribution,
+        histogram: [], // 早期返回未掃 histogram（保留既有「空 levels / 無版本不掃 SQL」行為）
+        isEstimate: true,
+        sampleSize: fallbackSampleSize,
+        totalCount,
+      };
     }
 
     // 取該 cardType 之 active 計分版本（對齊 createCardLevel / 月名單分派 pipeline：status='active'）。
@@ -1004,145 +1032,307 @@ export class AssignmentScoringService {
     const cardVersion = version?.card_version ?? null;
 
     // 無 active 計分版本 → 無從計分 → 回全 0（優雅降級；同「無等級 → 全 0」慣例）。
-    //   preview 為 debounce 唯讀試算，缺版本時不拋 404 干擾前端即時更新（correctness：全 0 非誤導，
-    //   因確實無設定可套用）。
     if (cardVersion === null) {
-      return { distribution };
+      return {
+        distribution,
+        histogram: [], // 早期返回未掃 histogram（保留既有「空 levels / 無版本不掃 SQL」行為）
+        isEstimate: true,
+        sampleSize: fallbackSampleSize,
+        totalCount,
+      };
     }
 
-    // ── BR-2 應用層快取查表 ──────────────────────────────────────────────────
-    //   histogram 只取決於 (cardType, cardVersion)（分數為此二者之函數，與 levels 無關）；
-    //   同一 (cardType,cardVersion) 於 TTL 內命中 → 完全略過 DB（含 columnRepo/scoreRepo/掃描）。
-    const cacheKey = `${input.cardType}:${cardVersion}`;
-    const nowMs = Date.now();
-    const cached = this.cardLevelHistogramCache.get(cacheKey);
+    // 該 version 之 active 計分維度 + score 區間（buildStage2ScoreExpr 內部再依 column_name 過濾 scoreRows）。
+    const activeColumns = await this.columnRepo.find({
+      where: {
+        card_type: input.cardType as any,
+        card_version: cardVersion as any,
+        status: 'active' as any,
+      },
+    });
+    const scoreRows = await this.scoreRepo.find({
+      where: {
+        card_type: input.cardType as any,
+        card_version: cardVersion as any,
+      },
+    });
 
-    let histogram: Array<{ score: number; cnt: number }>;
-    if (cached && cached.expiresAt > nowMs) {
-      // 快取命中且未逾時 → 純記憶體重新分桶，不下任何 SQL（level band 編輯即時）。
-      histogram = cached.histogram;
-    } else {
-      // 快取未命中／已逾時 → 掃描一次算出 histogram，入快取（TTL=60s）。
-      //
-      // 該 version 之 active 計分維度 + score 區間（buildStage2ScoreExpr 內部再依 column_name 過濾 scoreRows）。
-      const activeColumns = await this.columnRepo.find({
-        where: {
-          card_type: input.cardType as any,
-          card_version: cardVersion as any,
-          status: 'active' as any,
-        },
-      });
-      const scoreRows = await this.scoreRepo.find({
-        where: {
-          card_type: input.cardType as any,
-          card_version: cardVersion as any,
-        },
-      });
+    // 共用私有 histogram 查詢（F055 / F056 共用；每 request 僅一次，AD §5.2「不重掃」）。
+    const { histogram, effectiveSampleSize } = await this.computeScoreHistogram(
+      input.cardType,
+      cardVersion,
+      activeColumns,
+      scoreRows,
+      totalCount,
+      dialect,
+    );
 
-      // 重用月名單分派 Stage 2 計分下推（單一真源；回傳 score 純量表達式 + 命名參數 :sc_*）。
-      //
-      // GAP 1（MSSQL 遷移）：本 preview 原僅 PG（LATERAL / ::int / to_jsonb / POSIX regex），對 MSSQL
-      //   執行即 500。改依「執行本查詢之連線方言」分派——PG 沿用 buildStage2ScoreExpr（SQL byte-identical
-      //   不動）；MSSQL 重用月名單分派 Stage 2 MSSQL 下推 buildStage2ScoreExprMssql（AD-E07-42 P3b，已與 PG
-      //   逐列等價：`~ '^[0-9]+$'` → `NOT LIKE '%[^0-9]%'` + TRY_CAST、to_jsonb 動態 fallback → 生成前查
-      //   INFORMATION_SCHEMA.COLUMNS 之 schema 檢查）。非 pg/mssql（sqlite 單元測試）沿用 PG 分支
-      //   （此 SQL 從不對 sqlite 執行；與月名單分派 stage2to4-sql-executor 之 PG-only 認定一致）。
-      const isMssql =
-        this.poolDataListRepo.manager.connection.options?.type === 'mssql';
-
-      const { scoreExpr, needsCustomerCore, needsArCapital, params: scoreParams } =
-        isMssql
-          ? buildStage2ScoreExprMssql(
-              input.cardType,
-              cardVersion,
-              activeColumns,
-              scoreRows,
-              'sc',
-              await fetchPoolDataColumnsMssql(this.poolDataListRepo.manager),
-            )
-          : buildStage2ScoreExpr(
-              input.cardType,
-              cardVersion,
-              activeColumns,
-              scoreRows,
-              'sc',
-            );
-
-      // cardVersion 非 null 時 scoreExpr 必非 null（'0' 或 SUM(CASE…)）；防禦性 fallback（不入快取）。
-      if (scoreExpr === null) {
-        return { distribution };
-      }
-
-      // customer_core / ob_arreturndf_min_cap LEFT JOIN 僅在對應維度 active 時注入（與 runStage2and3Sql 同）。
-      const customerCoreJoin = needsCustomerCore
-        ? 'LEFT JOIN customer_core cc ON cc.source_customer_no = o.custo_no'
-        : '';
-      const arCapitalJoin = needsArCapital
-        ? 'LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no'
-        : '';
-
-      // histogram 查詢：對每列即時計分（cast INT，與月名單分派同式），依 score 聚合 COUNT（level 無關）。
-      //   NULL 分數（該列無從計分）以 `WHERE s.score IS NOT NULL` 排除——語意等同舊實作之
-      //   `WHERE bucket IS NOT NULL`（NULL score → 所有 WHEN UNKNOWN → 不計入任何桶）；亦避免
-      //   in-memory `Number(null)===0` 誤落入含 0 之桶。
-      //   方言差異（GAP 1）：PG `CROSS JOIN LATERAL` + `(expr)::int` + `COUNT(*)::int`；
-      //   MSSQL `CROSS APPLY` + `CAST((expr) AS INT)` + `COUNT(*)`（與 stage2to4-sql-executor-mssql 之
-      //   CROSSAPPLY-001 / DECIMAL-SCOREINT-001 同式）。分桶已移至記憶體 → SQL 不再含 :lvl_* 參數。
-      const countExpr = isMssql ? 'COUNT(*)' : 'COUNT(*)::int';
-      const scoreApply = isMssql
-        ? `CROSS APPLY (SELECT CAST((${scoreExpr}) AS INT) AS score) s `
-        : `CROSS JOIN LATERAL (SELECT (${scoreExpr})::int AS score) s `;
-
-      const sql =
-        `SELECT s.score AS score, ${countExpr} AS cnt ` +
-        `FROM ob_pool_data o ` +
-        `${customerCoreJoin} ` +
-        `${arCapitalJoin} ` +
-        `${scoreApply}` +
-        `WHERE s.score IS NOT NULL ` +
-        `GROUP BY s.score`;
-
-      // 命名參數（僅 :sc_*，分桶已移至記憶體）→ positional（PG $n）；由 driver 轉譯（SQLG-003 同機制）。
-      const [escaped, parameters] =
-        this.poolDataListRepo.manager.connection.driver.escapeQueryWithParameters(
-          sql,
-          scoreParams,
-          {},
-        );
-
-      const histogramRows: Array<{ score: number | string; cnt: number | string }> =
-        await this.poolDataListRepo.query(escaped, parameters);
-
-      histogram = histogramRows.map((r) => ({
-        score: Number(r.score),
-        cnt: Number(r.cnt),
-      }));
-
-      // 🔴 TTL 自「查詢完成之當下」起算，非查詢前捕捉的 nowMs——histogram 掃描本身可達數十秒，
-      //   若用 nowMs 則 expiresAt≈查詢剛結束即到期，快取形同 dead-on-arrival（下一次預覽仍重掃）。
-      this.cardLevelHistogramCache.set(cacheKey, {
-        histogram,
-        expiresAt:
-          Date.now() + AssignmentScoringService.CARD_LEVEL_HISTOGRAM_TTL_MS,
-      });
-    }
-
-    // ── in-memory 分桶（與舊 SQL CASE 語意逐一等價）─────────────────────────────
-    //   first-match-wins：對每個 score 依 parsedLevels 順序找「第一個」包含它的區間即 break
-    //   （等級區間不重疊由 BR-1 保證，但 first-match-then-break 確保與舊 CASE 完全等價）。
-    //   inclusive：scoreS <= score <= scoreE（含兩端，與舊 `>= :lo AND <= :hi` 同）。
-    //   NULL：已於 histogram WHERE 排除，此處 histogram 不含 NULL score。
-    //   distribution 各等級預設 0（上方已初始化），命中累加（histogram 每列代表多列 → 用 += 累加）。
+    // ── in-memory 分桶（first-match-wins / inclusive；NULL score 已於 SQL WHERE 排除）→ 放大推算 ──
+    const bucketed: Record<string, number> = {};
+    for (const l of parsedLevels) bucketed[l.cardLevel] = 0;
     for (const row of histogram) {
       for (const l of parsedLevels) {
         if (row.score >= l.scoreS && row.score <= l.scoreE) {
-          distribution[l.cardLevel] += row.cnt;
+          bucketed[l.cardLevel] += row.cnt;
+          break;
+        }
+      }
+    }
+    // AD §3.5：分母恆為 effectiveSampleSize（不因 NULL-score 列縮小），Math.round 四捨五入。
+    for (const l of parsedLevels) {
+      distribution[l.cardLevel] = scaleEstimate(
+        bucketed[l.cardLevel],
+        effectiveSampleSize,
+        totalCount,
+      );
+    }
+
+    return {
+      distribution,
+      // AD-E07-45 v1.2：暴露分桶前之原始 histogram（cnt→count），供前端 client-side 分桶各等級/各 TIER。
+      histogram: histogram.map((r) => ({ score: r.score, count: r.cnt })),
+      isEstimate: true,
+      sampleSize: effectiveSampleSize,
+      totalCount,
+    };
+  }
+
+  /**
+   * 抽樣方言判定（AD-E07-45）：以執行 preview 查詢之連線方言分派。
+   * 非 mssql（pg / sqlite 單元測試）一律走 'postgres' 分支——小母體 fallback 無 TABLESAMPLE，
+   * 該 SQL 從不對 sqlite 執行真實 TABLESAMPLE（沿用既有 buildStage2ScoreExpr 之 PG-only 認定）。
+   */
+  private resolveSamplingDialect(): SamplingDialect {
+    return this.poolDataListRepo.manager.connection.options?.type === 'mssql'
+      ? 'mssql'
+      : 'postgres';
+  }
+
+  /**
+   * 抽出既有 previewCardLevels 之 histogram 查詢邏輯，供 F055 / F056 共用（AD-E07-45 §5.2）。
+   *
+   * 對 ob_pool_data 固定樣本（buildPoolDataSampleFrom；FROM 換成抽樣 CTE 或小母體全表）每列即時計分
+   * （buildStage2ScoreExpr(Mssql) 單一真源，FROM 目標換成別名 o 之抽樣來源，計分表達式零修改），
+   * 依 score 聚合 COUNT（level 無關）→ histogram。每 request 僅呼叫一次（TS-F056-061「不重掃」）。
+   */
+  private async computeScoreHistogram(
+    cardType: string,
+    cardVersion: number,
+    activeColumns: ObLevelcardColumn[],
+    scoreRows: ObLevelcardScore[],
+    totalCount: number,
+    dialect: SamplingDialect,
+  ): Promise<{
+    histogram: Array<{ score: number; cnt: number }>;
+    effectiveSampleSize: number;
+    totalCount: number;
+  }> {
+    const { ctePrefix, fromClause, effectiveSampleSize } = buildPoolDataSampleFrom(
+      totalCount,
+      dialect,
+    );
+    const isMssql = dialect === 'mssql';
+
+    const { scoreExpr, needsCustomerCore, needsArCapital, params: scoreParams } =
+      isMssql
+        ? buildStage2ScoreExprMssql(
+            cardType,
+            cardVersion,
+            activeColumns,
+            scoreRows,
+            'sc',
+            await fetchPoolDataColumnsMssql(this.poolDataListRepo.manager),
+          )
+        : buildStage2ScoreExpr(cardType, cardVersion, activeColumns, scoreRows, 'sc');
+
+    // cardVersion 非 null 時 scoreExpr 必非 null（'0' 或 SUM(CASE…)）；防禦性 fallback。
+    if (scoreExpr === null) {
+      return { histogram: [], effectiveSampleSize, totalCount };
+    }
+
+    // customer_core / ob_arreturndf_min_cap LEFT JOIN 僅在對應維度 active 時注入（掛在抽樣後之 o 之上）。
+    const customerCoreJoin = needsCustomerCore
+      ? 'LEFT JOIN customer_core cc ON cc.source_customer_no = o.custo_no'
+      : '';
+    const arCapitalJoin = needsArCapital
+      ? 'LEFT JOIN ob_arreturndf_min_cap ar ON ar.appl_no = o.appl_no'
+      : '';
+
+    const countExpr = isMssql ? 'COUNT(*)' : 'COUNT(*)::int';
+    const scoreApply = isMssql
+      ? `CROSS APPLY (SELECT CAST((${scoreExpr}) AS INT) AS score) s `
+      : `CROSS JOIN LATERAL (SELECT (${scoreExpr})::int AS score) s `;
+
+    // I-SAMPLE-SINGLE-REF-01：sampled_pool CTE 於本查詢僅被引用一次（CROSS APPLY 為 lateral，非二次引用）。
+    const sql =
+      `${ctePrefix}SELECT s.score AS score, ${countExpr} AS cnt ` +
+      `FROM ${fromClause} ` +
+      `${customerCoreJoin} ` +
+      `${arCapitalJoin} ` +
+      `${scoreApply}` +
+      `WHERE s.score IS NOT NULL ` +
+      `GROUP BY s.score`;
+
+    const [escaped, parameters] =
+      this.poolDataListRepo.manager.connection.driver.escapeQueryWithParameters(
+        sql,
+        scoreParams,
+        {},
+      );
+
+    const histogramRows: Array<{ score: number | string; cnt: number | string }> =
+      await this.poolDataListRepo.query(escaped, parameters);
+
+    const histogram = histogramRows.map((r) => ({
+      score: Number(r.score),
+      cnt: Number(r.cnt),
+    }));
+
+    return { histogram, effectiveSampleSize, totalCount };
+  }
+
+  /** T{n} 之數值序（避免字典序 T10 排在 T2 之前，AD-E07-45 §5.2 point 8）。 */
+  private tierNumericOrder(tierLevel: string): number {
+    const m = /^T(\d+)/.exec(tierLevel);
+    return m ? parseInt(m[1], 10) : Number.MAX_SAFE_INTEGER;
+  }
+
+  // =========================
+  // F056 §5.5 — GET /scoring/tier-mapping/preview（各 TIER 分布抽樣估算，AD-E07-45 §5.2）
+  // =========================
+
+  async previewTierMapping(
+    input: PreviewTierMappingInput,
+  ): Promise<PreviewTierMappingResult> {
+    // AC-9 / BR-3：cardType 範圍鎖（不存在 active → 404 CARD_TYPE_NOT_FOUND）。
+    await assertCardTypeActive(this.cardTypeRepo, input.cardType);
+
+    const dialect = this.resolveSamplingDialect();
+    const totalCount = await getPoolDataTotalCount(this.poolDataListRepo as any);
+    const { effectiveSampleSize: fallbackSampleSize } = buildPoolDataSampleFrom(
+      totalCount,
+      dialect,
+    );
+
+    const noMapping = (): PreviewTierMappingResult => ({
+      cardType: input.cardType,
+      hasMapping: false,
+      ruleType: 'none',
+      isEstimate: true,
+      sampleSize: fallbackSampleSize,
+      totalCount,
+      distribution: [],
+    });
+
+    // 無 active 計分版本 → 同「無對應規則」優雅降級（AC-12，不特判、不拋 404）。
+    const version = await this.versionRepo.findOne({
+      where: { card_type: input.cardType as any, status: 'active' as any },
+    });
+    const cardVersion = version?.card_version ?? null;
+    if (cardVersion === null) return noMapping();
+
+    // AC-12：該 CARD_TYPE 於 ob_tier 無任何對應規則 → hasMapping=false（不報錯）。
+    const tierRows = await this.tierRepo.find({
+      where: { card_type: input.cardType as any },
+    });
+    if (tierRows.length === 0) return noMapping();
+
+    const activeColumns = await this.columnRepo.find({
+      where: {
+        card_type: input.cardType as any,
+        card_version: cardVersion as any,
+        status: 'active' as any,
+      },
+    });
+    const scoreRows = await this.scoreRepo.find({
+      where: {
+        card_type: input.cardType as any,
+        card_version: cardVersion as any,
+      },
+    });
+
+    const { histogram, effectiveSampleSize } = await this.computeScoreHistogram(
+      input.cardType,
+      cardVersion,
+      activeColumns,
+      scoreRows,
+      totalCount,
+      dialect,
+    );
+
+    const round4 = (n: number): number => Math.round(n * 10000) / 10000;
+
+    // Fallback 規則（card_level IS NULL）：全部可計分樣本歸屬單一 TIER（AC-11 / BR-13 互斥）。
+    const fallbackRow = tierRows.find((r) => r.card_level == null);
+    if (fallbackRow) {
+      // 🔴 AC-11 vs AD-E07-45 §3.5 措辭對齊：F056 spec 字面稱 Fallback 佔比「100%」，但 AD 精確定義
+      //   分母恆為 effectiveSampleSize（含不可計分 / NULL-score 列，非僅可計分列）。histogram 已於 SQL
+      //   WHERE 排除 NULL-score 列 → scoredSampleCount ≤ effectiveSampleSize：全部可計分時 ratio=1.0
+      //   （對齊字面「100%」意圖）；含不可計分列時 ratio<1.0（以 AD 精確規則為準）。Fallback→單一 TIER
+      //   之意圖（distribution 恆 1 筆）不受此影響。
+      const scoredSampleCount = histogram.reduce((a, r) => a + r.cnt, 0);
+      const count = scaleEstimate(scoredSampleCount, effectiveSampleSize, totalCount);
+      const ratio = totalCount > 0 ? round4(count / totalCount) : 0;
+      return {
+        cardType: input.cardType,
+        hasMapping: true,
+        ruleType: 'fallback',
+        isEstimate: true,
+        sampleSize: effectiveSampleSize,
+        totalCount,
+        distribution: [{ tierLevel: fallbackRow.tier_level, count, ratio }],
+      };
+    }
+
+    // Standard 規則：先套該 CARD_TYPE active CARD_LEVEL 門檻（AC-10：非草稿值）分級。
+    const levels = await this.levelRepo.find({
+      where: {
+        card_type: input.cardType as any,
+        card_version: cardVersion as any,
+      },
+    });
+    const sortedLevels = [...levels].sort((a, b) => b.score_s - a.score_s);
+
+    const bucketByLevel: Record<string, number> = {};
+    for (const row of histogram) {
+      for (const l of sortedLevels) {
+        if (row.score >= l.score_s && row.score <= l.score_e) {
+          bucketByLevel[l.card_level] = (bucketByLevel[l.card_level] ?? 0) + row.cnt;
           break;
         }
       }
     }
 
-    return { distribution };
+    // card_level → TIER 累加（多 CARD_LEVEL 對應同一 TIER 自然於累加階段合併，AC-10）。
+    const tierSampleMap = new Map<string, number>();
+    for (const t of tierRows) {
+      if (t.card_level == null) continue; // 互斥（BR-13）下 standard 分支不應有 null 列
+      const cnt = bucketByLevel[t.card_level] ?? 0;
+      tierSampleMap.set(
+        t.tier_level,
+        (tierSampleMap.get(t.tier_level) ?? 0) + cnt,
+      );
+    }
+
+    const distribution: PreviewTierMappingDistributionItem[] = Array.from(
+      tierSampleMap.entries(),
+    )
+      .map(([tierLevel, sampleCnt]) => {
+        const count = scaleEstimate(sampleCnt, effectiveSampleSize, totalCount);
+        const ratio = totalCount > 0 ? round4(count / totalCount) : 0;
+        return { tierLevel, count, ratio };
+      })
+      .sort((a, b) => this.tierNumericOrder(a.tierLevel) - this.tierNumericOrder(b.tierLevel));
+
+    return {
+      cardType: input.cardType,
+      hasMapping: true,
+      ruleType: 'standard',
+      isEstimate: true,
+      sampleSize: effectiveSampleSize,
+      totalCount,
+      distribution,
+    };
   }
 
   // =========================

@@ -38,6 +38,7 @@ import { ObEmplSet } from '@/database/entities/ob-empl-set.entity';
 import { ObEmphire } from '@/database/entities/ob-emphire.entity';
 import { AssignmentApproval } from '@/database/entities/assignment-approval.entity';
 import { User } from '@/database/entities/user.entity';
+import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ERROR_CODES } from '@/common/errors/error-codes';
 import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
 
@@ -63,13 +64,13 @@ async function buildEnv(): Promise<Env> {
         database: ':memory:',
         entities: [
           ObListDefinition, AssignmentAuditLog, AssignmentRun, PooldataFieldOption,
-          PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User,
+          PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User, ObPoolData,
         ],
         synchronize: true,
       }),
       TypeOrmModule.forFeature([
         ObListDefinition, AssignmentAuditLog, AssignmentRun, PooldataFieldOption,
-        PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User,
+        PooldataFieldWhitelist, ObDeptPct, ObEmplSet, ObEmphire, AssignmentApproval, User, ObPoolData,
       ]),
     ],
     providers: [

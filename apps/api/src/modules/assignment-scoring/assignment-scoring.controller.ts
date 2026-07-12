@@ -211,6 +211,17 @@ export class AssignmentScoringController {
     return this.service.getTierMapping({ cardType: query.cardType });
   }
 
+  /**
+   * F056 §5.5 GET /api/v1/assignment/scoring/tier-mapping/preview（v1.6 / US-175 / AD-E07-45）
+   *
+   * 各 TIER 分布抽樣估算（唯讀）。走 class 級 DirectorOrSectionChiefGuard（處長可讀，與 §5.1 GET 一致），
+   * 不加 @RequireDirector；讀鎖豁免（不呼叫 assertNotLocked，AD-E07-45 §6 / I-SAMPLE-LOCK-EXEMPT-01）。
+   */
+  @Get('tier-mapping/preview')
+  async previewTierMapping(@Query() query: GetTierMappingQueryDto) {
+    return this.service.previewTierMapping({ cardType: query.cardType });
+  }
+
   @Put('tier-mapping')
   @RequireDirector()
   @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
