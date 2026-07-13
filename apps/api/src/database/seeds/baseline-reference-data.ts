@@ -6,7 +6,7 @@
  *
  * ⚠️ **以 dev CDMP 為 ground truth**（PG 全面移除後，原 PG migration 已刪；whitelist/option 改由
  *    `seeds/data/pooldata-field-*.json`（dump 自 dev）重生，與 data-seed 保持同一份資料）。
- *    筆數：roles 2 / whitelist 20 / option 462（2026-07 已硬刪除 brand_no/list_type）。
+ *    筆數：roles 2 / whitelist 19 / option 454（2026-07 已硬刪除 brand_no/list_type/sta_code_na）。
  */
 
 export interface RoleSeed {
@@ -45,7 +45,7 @@ export const BASELINE_ROLES: RoleSeed[] = [
 export const BASELINE_WHITELIST: WhitelistSeed[] = [
   { column_name: "best_case", display_name: "優質案件", field_type: "categorical", is_active: true, created_at: "2026-05-20T02:52:42.363Z", updated_at: "2026-05-28T05:26:59.593Z", is_system_fixed: true, data_source: "ob_pool_data" },
   { column_name: "brand_name", display_name: "廠牌名稱", field_type: "categorical", is_active: true, created_at: "2026-05-18T21:12:19.926Z", updated_at: "2026-07-13T07:08:31.969Z", is_system_fixed: false, data_source: "ob_pool_data" },
-  { column_name: "case_status", display_name: "案件結清期別", field_type: "categorical", is_active: true, created_at: "2026-05-19T22:05:54.450Z", updated_at: "2026-05-19T22:05:54.450Z", is_system_fixed: false, data_source: "ob_pool_data" },
+  { column_name: "case_status", display_name: "案件狀態", field_type: "categorical", is_active: true, created_at: "2026-05-19T22:05:54.450Z", updated_at: "2026-07-13T08:11:11.884Z", is_system_fixed: false, data_source: "ob_pool_data" },
   { column_name: "caseyear", display_name: "案件年度", field_type: "categorical", is_active: true, created_at: "2026-05-19T01:28:26.610Z", updated_at: "2026-05-19T01:28:26.610Z", is_system_fixed: false, data_source: "ob_pool_data" },
   { column_name: "cpost_city", display_name: "居住城市", field_type: "categorical", is_active: true, created_at: "2026-07-01T19:38:11.413Z", updated_at: "2026-07-01T19:38:11.413Z", is_system_fixed: false, data_source: "customer_core" },
   { column_name: "customer_type_desc", display_name: "身分別", field_type: "categorical", is_active: true, created_at: "2026-07-01T19:38:11.413Z", updated_at: "2026-07-01T19:38:11.413Z", is_system_fixed: false, data_source: "customer_core" },
@@ -62,7 +62,6 @@ export const BASELINE_WHITELIST: WhitelistSeed[] = [
   { column_name: "prod_type_name", display_name: "產品分類", field_type: "categorical", is_active: true, created_at: "2026-07-13T07:11:13.519Z", updated_at: "2026-07-13T07:12:19.325Z", is_system_fixed: false, data_source: "ob_pool_data" },
   { column_name: "settle_src", display_name: "結清來源", field_type: "categorical", is_active: true, created_at: "2026-05-19T01:28:26.610Z", updated_at: "2026-05-19T01:28:26.610Z", is_system_fixed: false, data_source: "ob_pool_data" },
   { column_name: "spec_tp", display_name: "專案類別", field_type: "categorical", is_active: true, created_at: "2026-05-19T01:28:26.610Z", updated_at: "2026-05-19T22:46:26.340Z", is_system_fixed: false, data_source: "ob_pool_data" },
-  { column_name: "sta_code_na", display_name: "名單狀態", field_type: "categorical", is_active: true, created_at: "2026-07-13T07:18:19.494Z", updated_at: "2026-07-13T07:18:19.494Z", is_system_fixed: false, data_source: "ob_pool_data" },
 ];
 
 export const BASELINE_OPTIONS: OptionSeed[] = [
@@ -520,12 +519,4 @@ export const BASELINE_OPTIONS: OptionSeed[] = [
   { column_name: "spec_tp", option_value: "51", option_label: "生活居家", is_active: true, deactivation_reason: null, created_at: "2026-05-21T00:27:59.653Z", updated_at: "2026-05-21T00:27:59.653Z" },
   { column_name: "spec_tp", option_value: "52", option_label: "娛樂收藏", is_active: true, deactivation_reason: null, created_at: "2026-05-21T00:27:59.653Z", updated_at: "2026-05-21T00:27:59.653Z" },
   { column_name: "spec_tp", option_value: "99", option_label: "其他", is_active: true, deactivation_reason: null, created_at: "2026-05-21T00:27:59.653Z", updated_at: "2026-05-21T00:27:59.653Z" },
-  { column_name: "sta_code_na", option_value: "企金通路代償", option_label: "企金通路代償", is_active: true, deactivation_reason: null, created_at: "2026-07-13T07:18:19.728Z", updated_at: "2026-07-13T07:18:19.728Z" },
-  { column_name: "sta_code_na", option_value: "信管結清", option_label: "信管結清", is_active: true, deactivation_reason: null, created_at: "2026-07-13T07:18:19.728Z", updated_at: "2026-07-13T07:18:19.728Z" },
-  { column_name: "sta_code_na", option_value: "回件佣金", option_label: "回件佣金", is_active: true, deactivation_reason: null, created_at: "2026-07-13T07:18:19.728Z", updated_at: "2026-07-13T07:18:19.728Z" },
-  { column_name: "sta_code_na", option_value: "客服結清", option_label: "客服結清", is_active: true, deactivation_reason: null, created_at: "2026-07-13T07:18:19.728Z", updated_at: "2026-07-13T07:18:19.728Z" },
-  { column_name: "sta_code_na", option_value: "滿期", option_label: "滿期", is_active: true, deactivation_reason: null, created_at: "2026-07-13T07:18:19.728Z", updated_at: "2026-07-13T07:18:19.728Z" },
-  { column_name: "sta_code_na", option_value: "策盟商代償", option_label: "策盟商代償", is_active: true, deactivation_reason: null, created_at: "2026-07-13T07:18:19.728Z", updated_at: "2026-07-13T07:18:19.728Z" },
-  { column_name: "sta_code_na", option_value: "結清不足", option_label: "結清不足", is_active: true, deactivation_reason: null, created_at: "2026-07-13T07:18:19.728Z", updated_at: "2026-07-13T07:18:19.728Z" },
-  { column_name: "sta_code_na", option_value: "財務撥款", option_label: "財務撥款", is_active: true, deactivation_reason: null, created_at: "2026-07-13T07:18:19.728Z", updated_at: "2026-07-13T07:18:19.728Z" },
 ];

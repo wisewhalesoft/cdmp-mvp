@@ -21,13 +21,13 @@
   },
   {
     "column_name": "case_status",
-    "display_name": "案件結清期別",
+    "display_name": "案件狀態",
     "field_type": "categorical",
     "is_active": true,
     "data_source": "ob_pool_data",
     "is_system_fixed": false,
     "created_at": "2026-05-19T22:05:54.450Z",
-    "updated_at": "2026-05-19T22:05:54.450Z"
+    "updated_at": "2026-07-13T08:11:11.884Z"
   },
   {
     "column_name": "caseyear",
@@ -188,15 +188,5 @@
     "is_system_fixed": false,
     "created_at": "2026-05-19T01:28:26.610Z",
     "updated_at": "2026-05-19T22:46:26.340Z"
-  },
-  {
-    "column_name": "sta_code_na",
-    "display_name": "名單狀態",
-    "field_type": "categorical",
-    "is_active": true,
-    "data_source": "ob_pool_data",
-    "is_system_fixed": false,
-    "created_at": "2026-07-13T07:18:19.494Z",
-    "updated_at": "2026-07-13T07:18:19.494Z"
   }
 ]

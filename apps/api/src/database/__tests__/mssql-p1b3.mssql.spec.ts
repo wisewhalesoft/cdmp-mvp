@@ -6,7 +6,7 @@
  *   SITE（12）    — 逐站點語法轉換行為驗證（$n→? / LIMIT→TOP / NOW()→Date / RETURNING→顯式 uuid /
  *                   ::text 移除 / IS NOT DISTINCT FROM→可攜 NULL-safe / 裸 true→綁定 / UPDATE alias→表名限定）
  *   BOOT（5）     — bootstrap 全流程 E2E（帳號可登入 / datasource 空殼 / FK 完整）
- *   COUNT（12）   — 參考/種子表筆數（roles 2 / whitelist 20 / option 462；以 dev CDMP 為準、已移除 brand_no/list_type，P1b3 移植後 🔴 必過）
+ *   COUNT（12）   — 參考/種子表筆數（roles 2 / whitelist 19 / option 454；以 dev CDMP 為準、已移除 brand_no/list_type/sta_code_na，P1b3 移植後 🔴 必過）
  *   IDEM（5）     — 冪等（重跑不重複，尤其 ob_levelcard_score 212 筆 level1=NULL 之 NULL-safe reconcile）
  *   PROBE（2）    — mssql UPDATE `qr.query()` 回傳形狀（log-only，不阻擋）+ 決策關卡彙整
  *   STATIC（3）   — 三支腳本零殘留 PG-only 語法 / 零 type:'postgres' / 站點清單文件存在
@@ -494,12 +494,12 @@ describe('AD-E07-39 P1b3 COUNT', () => {
     expect(await tableCount('roles')).toBe(2);
   });
 
-  it('TS-MSSQL-P1B3-COUNT-012（🔴 P1b3 移植後必過）：pooldata_field_whitelist = 20、pooldata_field_option = 462（以 dev CDMP 為 ground truth，已移除 brand_no/list_type）', async (ctx) => {
+  it('TS-MSSQL-P1B3-COUNT-012（🔴 P1b3 移植後必過）：pooldata_field_whitelist = 19、pooldata_field_option = 454（以 dev CDMP 為 ground truth，已移除 brand_no/list_type/sta_code_na）', async (ctx) => {
     ensureMssql(ctx);
-    expect(BASELINE_WHITELIST.length).toBe(20);
-    expect(BASELINE_OPTIONS.length).toBe(462);
-    expect(await tableCount('pooldata_field_whitelist')).toBe(20);
-    expect(await tableCount('pooldata_field_option')).toBe(462);
+    expect(BASELINE_WHITELIST.length).toBe(19);
+    expect(BASELINE_OPTIONS.length).toBe(454);
+    expect(await tableCount('pooldata_field_whitelist')).toBe(19);
+    expect(await tableCount('pooldata_field_option')).toBe(454);
   });
 });
 
@@ -621,8 +621,8 @@ describe('AD-E07-39 P1b3 PROBE', () => {
     // 原測試設計 COUNT-011/012 為「SCOPE GAP 決策關卡」（預期 0）；P1b3 已移植 MssqlBaselineReferenceData →
     // 三表皆有值，SCOPE GAP 已關閉。此處彙整確認結論陳述成立。
     expect(await tableCount('roles')).toBe(2);
-    expect(await tableCount('pooldata_field_whitelist')).toBe(20);
-    expect(await tableCount('pooldata_field_option')).toBe(462);
+    expect(await tableCount('pooldata_field_whitelist')).toBe(19);
+    expect(await tableCount('pooldata_field_option')).toBe(454);
   });
 });
 
@@ -695,7 +695,7 @@ describe('AD-E07-39 P1b3 ALIAS（破壞性，末端執行）', () => {
     expect(await tableCount('datasources')).toBe(9);
     expect(await tableCount('ob_levelcard_score')).toBe(SEED.score.length);
     expect(await tableCount('roles')).toBe(2);
-    expect(await tableCount('pooldata_field_option')).toBe(462);
+    expect(await tableCount('pooldata_field_option')).toBe(454);
     expect(await tableCount('typeorm_migrations')).toBe(3);
   });
 
