@@ -117,6 +117,7 @@ describe('CreateAccountModal', () => {
         is_sales_manager: false,
 
         business_role: null,
+        employee_no: null,
         status: 'active',
         created_at: '2026-01-01T00:00:00Z',
       });
@@ -142,6 +143,7 @@ describe('CreateAccountModal', () => {
         is_sales_manager: false,
 
         business_role: null,
+        employee_no: null,
         status: 'active',
         created_at: '2026-01-01T00:00:00Z',
       });
@@ -246,6 +248,7 @@ describe('CreateAccountModal', () => {
         is_sales_manager: true,
 
         business_role: 'director',
+        employee_no: null,
         status: 'active',
         created_at: '2026-01-01T00:00:00Z',
       });
@@ -281,6 +284,7 @@ describe('CreateAccountModal', () => {
         is_sales_manager: false,
 
         business_role: null,
+        employee_no: null,
         status: 'active',
         created_at: '2026-01-01T00:00:00Z',
       });
@@ -298,6 +302,112 @@ describe('CreateAccountModal', () => {
           }),
         );
       });
+    });
+  });
+
+  // ===== F113 / US-179：員工編號（選填登入識別碼）FE-CREATE =====
+  describe('F113 員工編號（FE-CREATE）', () => {
+    // TS-F113-FE-CREATE-001：選填輸入框存在、非必填
+    it('渲染「員工編號」選填輸入框（無 required 星號）', () => {
+      renderModal();
+      expect(screen.getByLabelText('員工編號')).toBeInTheDocument();
+      expect(
+        screen.getByText('選填；可作為登入帳號（英數、-、_，最多 32 字，不含 @）'),
+      ).toBeInTheDocument();
+    });
+
+    // TS-F113-FE-CREATE-002：輸入合法值 → payload 含 employeeNo
+    it('輸入合法員工編號送出 → payload 含 employeeNo', async () => {
+      const user = userEvent.setup();
+      mockedCreateAccount.mockResolvedValue({
+        id: 'new-id',
+        name: 'Emp User',
+        email: 'emp@test.com',
+        role: 'user',
+        is_sales_manager: false,
+        business_role: null,
+        employee_no: 'E20001',
+        status: 'active',
+        created_at: '2026-01-01T00:00:00Z',
+      });
+      renderModal();
+
+      await user.type(screen.getByLabelText('姓名'), 'Emp User');
+      await user.type(screen.getByLabelText('Email'), 'emp@test.com');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.type(screen.getByLabelText('員工編號'), 'E20001');
+      await user.click(screen.getByRole('button', { name: '建立' }));
+
+      await waitFor(() => {
+        expect(mockedCreateAccount).toHaveBeenCalledWith(
+          expect.objectContaining({ employeeNo: 'E20001' }),
+        );
+      });
+    });
+
+    // TS-F113-FE-CREATE-003：留空 → payload 不含 employeeNo，建立仍成功
+    it('留空員工編號送出 → payload 不含 employeeNo（或 undefined），成功', async () => {
+      const user = userEvent.setup();
+      mockedCreateAccount.mockResolvedValue({
+        id: 'new-id',
+        name: 'No Emp',
+        email: 'noemp@test.com',
+        role: 'user',
+        is_sales_manager: false,
+        business_role: null,
+        employee_no: null,
+        status: 'active',
+        created_at: '2026-01-01T00:00:00Z',
+      });
+      const { onSuccess } = renderModal();
+
+      await user.type(screen.getByLabelText('姓名'), 'No Emp');
+      await user.type(screen.getByLabelText('Email'), 'noemp@test.com');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.click(screen.getByRole('button', { name: '建立' }));
+
+      await waitFor(() => {
+        expect(onSuccess).toHaveBeenCalled();
+      });
+      const sentBody = mockedCreateAccount.mock.calls[0][0];
+      expect(sentBody.employeeNo).toBeUndefined();
+    });
+
+    // TS-F113-FE-CREATE-004：409 ACCOUNT_EMPLOYEE_NO_EXISTS → inline 錯誤
+    it('409 ACCOUNT_EMPLOYEE_NO_EXISTS → 顯示「此員工編號已被使用」於員工編號欄', async () => {
+      const user = userEvent.setup();
+      mockedCreateAccount.mockRejectedValue({
+        response: {
+          status: 409,
+          data: { error: 'ACCOUNT_EMPLOYEE_NO_EXISTS', message: '此員工編號已被使用' },
+        },
+      });
+      renderModal();
+
+      await user.type(screen.getByLabelText('姓名'), 'Dup Emp');
+      await user.type(screen.getByLabelText('Email'), 'dupemp@test.com');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.type(screen.getByLabelText('員工編號'), 'E12345');
+      await user.click(screen.getByRole('button', { name: '建立' }));
+
+      expect(await screen.findByText('此員工編號已被使用')).toBeInTheDocument();
+    });
+
+    // TS-F113-FE-CREATE-005：格式錯誤即時驗證（含 @）→ inline 錯誤、阻擋送出
+    it('格式錯誤（含 @）→ inline 格式錯誤訊息、不呼叫 API', async () => {
+      const user = userEvent.setup();
+      renderModal();
+
+      await user.type(screen.getByLabelText('姓名'), 'Bad Emp');
+      await user.type(screen.getByLabelText('Email'), 'bademp@test.com');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.type(screen.getByLabelText('員工編號'), 'A0001@x');
+      await user.click(screen.getByRole('button', { name: '建立' }));
+
+      expect(
+        await screen.findByText('員工編號格式不符（限英數、-、_，最多 32 字，不含 @）'),
+      ).toBeInTheDocument();
+      expect(mockedCreateAccount).not.toHaveBeenCalled();
     });
   });
 

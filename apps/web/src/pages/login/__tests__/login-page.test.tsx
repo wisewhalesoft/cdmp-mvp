@@ -31,7 +31,7 @@ describe('LoginPage', () => {
   describe('渲染測試', () => {
     it('渲染 Email 輸入欄', () => {
       renderLoginPage();
-      expect(screen.getByLabelText('Email')).toBeInTheDocument();
+      expect(screen.getByLabelText('Email / 員工編號')).toBeInTheDocument();
     });
 
     it('渲染密碼輸入欄', () => {
@@ -56,27 +56,98 @@ describe('LoginPage', () => {
   });
 
   describe('前端欄位驗證', () => {
-    it('Email 空白提交顯示錯誤訊息', async () => {
+    it('識別碼空白提交顯示錯誤訊息', async () => {
       const user = userEvent.setup();
       renderLoginPage();
       await user.click(screen.getByRole('button', { name: '登入' }));
-      expect(await screen.findByText('請輸入有效的 Email 地址')).toBeInTheDocument();
+      expect(await screen.findByText('請輸入 Email 或員工編號')).toBeInTheDocument();
     });
 
-    it('Email 格式錯誤顯示錯誤訊息', async () => {
+    // TS-F113-FE-LOGIN-003：前端 schema 不再要求 Email 格式，非 Email 字串（'A0001'）通過驗證
+    it('非 Email 字串（員工編號）通過前端驗證、不顯示格式錯誤', async () => {
       const user = userEvent.setup();
+      mockedLogin.mockImplementation(() => new Promise(() => {})); // never resolves
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'not-an-email');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'A0001');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
       await user.click(screen.getByRole('button', { name: '登入' }));
-      expect(await screen.findByText('請輸入有效的 Email 地址')).toBeInTheDocument();
+      // 不應出現任何格式錯誤；且應進入送出（呼叫 login）
+      expect(screen.queryByText('請輸入 Email 或員工編號')).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(mockedLogin).toHaveBeenCalled();
+      });
     });
 
     it('密碼空白提交顯示錯誤訊息', async () => {
       const user = userEvent.setup();
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'admin@example.com');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'admin@example.com');
       await user.click(screen.getByRole('button', { name: '登入' }));
       expect(await screen.findByText('請輸入密碼')).toBeInTheDocument();
+    });
+  });
+
+  // ===== F113 / US-179：員工編號作為登入識別碼（FE-LOGIN）=====
+  describe('F113 員工編號登入（FE-LOGIN）', () => {
+    // TS-F113-FE-LOGIN-001
+    it('識別碼欄位 label 顯示為「Email / 員工編號」', () => {
+      renderLoginPage();
+      expect(screen.getByLabelText('Email / 員工編號')).toBeInTheDocument();
+      expect(screen.getByText('可使用 Email 或員工編號登入')).toBeInTheDocument();
+    });
+
+    // TS-F113-FE-LOGIN-002
+    it('輸入框 type="text"（非 type="email"）', () => {
+      renderLoginPage();
+      expect(screen.getByLabelText('Email / 員工編號')).toHaveAttribute('type', 'text');
+    });
+
+    // TS-F113-FE-LOGIN-004
+    it('送出 payload 欄位名固定為 email（內容為員工編號時亦然）', async () => {
+      const user = userEvent.setup();
+      mockedLogin.mockResolvedValue({
+        token: 't',
+        user: { id: 'a1', name: 'Admin', email: 'admin@test.com', role: 'admin' },
+      });
+      renderLoginPage();
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'A0001');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.click(screen.getByRole('button', { name: '登入' }));
+      await waitFor(() => {
+        expect(mockedLogin).toHaveBeenCalledWith(
+          expect.objectContaining({ email: 'A0001', password: 'password123' }),
+        );
+      });
+    });
+
+    // TS-F113-FE-LOGIN-005：員工編號錯誤與密碼錯誤顯示相同通用文案
+    it('401 時顯示通用文案「帳號或密碼錯誤」（不區分失敗原因）', async () => {
+      const user = userEvent.setup();
+      mockedLogin.mockRejectedValue({ response: { status: 401 } });
+      renderLoginPage();
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'E99999');
+      await user.type(screen.getByLabelText('密碼'), 'whatever1');
+      await user.click(screen.getByRole('button', { name: '登入' }));
+      expect(await screen.findByText('帳號或密碼錯誤')).toBeInTheDocument();
+    });
+
+    // TS-F113-FE-LOGIN-006：合法 Email 登入既有流程不受影響
+    it('regression — 合法 Email 登入仍走既有成功流程與導向', async () => {
+      const user = userEvent.setup();
+      mockedLogin.mockResolvedValue({
+        token: 'admin-token',
+        user: { id: 'a1', name: 'Admin', email: 'admin@test.com', role: 'admin' },
+      });
+      renderLoginPage();
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'admin@test.com');
+      await user.type(screen.getByLabelText('密碼'), 'password123');
+      await user.click(screen.getByRole('button', { name: '登入' }));
+      await waitFor(() => {
+        expect(mockedLogin).toHaveBeenCalledWith(
+          expect.objectContaining({ email: 'admin@test.com' }),
+        );
+        expect(mockNavigate).toHaveBeenCalledWith('/');
+      });
     });
   });
 
@@ -87,7 +158,7 @@ describe('LoginPage', () => {
         () => new Promise(() => {}), // never resolves
       );
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'admin@example.com');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'admin@example.com');
       await user.type(screen.getByLabelText('密碼'), 'password123');
       await user.click(screen.getByRole('button', { name: '登入' }));
       await waitFor(() => {
@@ -102,10 +173,10 @@ describe('LoginPage', () => {
         response: { status: 401 },
       });
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'admin@example.com');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'admin@example.com');
       await user.type(screen.getByLabelText('密碼'), 'wrongpass');
       await user.click(screen.getByRole('button', { name: '登入' }));
-      expect(await screen.findByText('Email 或密碼錯誤')).toBeInTheDocument();
+      expect(await screen.findByText('帳號或密碼錯誤')).toBeInTheDocument();
       expect(screen.getByLabelText('密碼')).toHaveValue('');
     });
 
@@ -115,7 +186,7 @@ describe('LoginPage', () => {
         response: { status: 403 },
       });
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'admin@example.com');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'admin@example.com');
       await user.type(screen.getByLabelText('密碼'), 'password123');
       await user.click(screen.getByRole('button', { name: '登入' }));
       expect(await screen.findByText('您的帳號已被停用，請聯絡管理員。')).toBeInTheDocument();
@@ -127,7 +198,7 @@ describe('LoginPage', () => {
         response: { status: 429 },
       });
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'admin@example.com');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'admin@example.com');
       await user.type(screen.getByLabelText('密碼'), 'password123');
       await user.click(screen.getByRole('button', { name: '登入' }));
       expect(await screen.findByText('登入嘗試過於頻繁，請稍後再試。')).toBeInTheDocument();
@@ -162,7 +233,7 @@ describe('LoginPage', () => {
         },
       });
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'user@test.com');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'user@test.com');
       await user.type(screen.getByLabelText('密碼'), 'password123');
       await user.click(screen.getByRole('button', { name: '登入' }));
       await waitFor(() => {
@@ -184,7 +255,7 @@ describe('LoginPage', () => {
         },
       });
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'manager@cdmp.test');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'manager@cdmp.test');
       await user.type(screen.getByLabelText('密碼'), 'P@ssw0rd123');
       await user.click(screen.getByRole('button', { name: '登入' }));
       await waitFor(() => {
@@ -205,7 +276,7 @@ describe('LoginPage', () => {
         },
       });
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'admin@test.com');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'admin@test.com');
       await user.type(screen.getByLabelText('密碼'), 'password123');
       await user.click(screen.getByRole('button', { name: '登入' }));
       await waitFor(() => {
@@ -227,7 +298,7 @@ describe('LoginPage', () => {
         },
       });
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'director@cdmp.test');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'director@cdmp.test');
       await user.type(screen.getByLabelText('密碼'), 'P@ssw0rd123');
       await user.click(screen.getByRole('button', { name: '登入' }));
       await waitFor(() => {
@@ -249,7 +320,7 @@ describe('LoginPage', () => {
         },
       });
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'chief@cdmp.test');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'chief@cdmp.test');
       await user.type(screen.getByLabelText('密碼'), 'P@ssw0rd123');
       await user.click(screen.getByRole('button', { name: '登入' }));
       await waitFor(() => {
@@ -265,7 +336,7 @@ describe('LoginPage', () => {
         user: { id: 'u9', name: 'Legacy', email: 'legacy@test.com', role: 'user' },
       });
       renderLoginPage();
-      await user.type(screen.getByLabelText('Email'), 'legacy@test.com');
+      await user.type(screen.getByLabelText('Email / 員工編號'), 'legacy@test.com');
       await user.type(screen.getByLabelText('密碼'), 'password123');
       await user.click(screen.getByRole('button', { name: '登入' }));
       await waitFor(() => {

@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ShieldCheck } from 'lucide-react';
 import { createAccountSchema, type CreateAccountFormData } from './create-account-schema';
 import { createAccount } from '@/api/accounts';
+import type { CreateAccountRequest } from '@cdmp/shared';
 import { Input } from '@/components/ui/input';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Select } from '@/components/ui/select';
@@ -62,9 +63,15 @@ export function CreateAccountModal({ open, onClose, onSuccess }: CreateAccountMo
     setIsSubmitting(true);
     try {
       // F004 BR-9: admin 角色時 isSalesManager 強制為 false（前後端雙重保險）
-      const payload: CreateAccountFormData = {
-        ...data,
-        isSalesManager: data.role === 'user' ? data.isSalesManager : false,
+      // F113 / US-179: 員工編號選填——留空（trim 後為空）時不送出該欄位。
+      const empNo = data.employeeNo?.trim();
+      const payload: CreateAccountRequest = {
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        role: data.role,
+        isSalesManager: data.role === 'user' ? (data.isSalesManager ?? false) : false,
+        ...(empNo ? { employeeNo: empNo } : {}),
       };
       await createAccount(payload);
       reset();
@@ -73,7 +80,12 @@ export function CreateAccountModal({ open, onClose, onSuccess }: CreateAccountMo
       const error = err as { response?: { status?: number; data?: { error?: string; message?: string } } };
       const status = error.response?.status;
       if (status === 409) {
-        setError('email', { message: '此 Email 已有帳號存在' });
+        // F113: 依錯誤碼區分 Email 重複 vs 員工編號重複
+        if (error.response?.data?.error === 'ACCOUNT_EMPLOYEE_NO_EXISTS') {
+          setError('employeeNo', { message: '此員工編號已被使用' });
+        } else {
+          setError('email', { message: '此 Email 已有帳號存在' });
+        }
       } else if (status === 422) {
         setApiError(error.response?.data?.message || '欄位驗證失敗');
       } else {
@@ -121,6 +133,21 @@ export function CreateAccountModal({ open, onClose, onSuccess }: CreateAccountMo
                 error={errors.name?.message}
                 {...register('name')}
               />
+
+              {/* F113 / US-179: 員工編號（選填，可作為登入帳號；無必填星號） */}
+              <div>
+                <Input
+                  label="員工編號"
+                  type="text"
+                  maxLength={32}
+                  placeholder="請輸入員工編號（選填）"
+                  error={errors.employeeNo?.message}
+                  {...register('employeeNo')}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  選填；可作為登入帳號（英數、-、_，最多 32 字，不含 @）
+                </p>
+              </div>
 
               <Input
                 label="Email"

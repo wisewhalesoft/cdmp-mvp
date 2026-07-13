@@ -51,7 +51,8 @@ export function LoginPage() {
       const status = error.response?.status;
       if (status === 401) {
         setValue('password', '');
-        setApiError('Email 或密碼錯誤');
+        // F113 / US-179：泛用文案，涵蓋 Email 或員工編號（不洩漏帳號是否存在）
+        setApiError('帳號或密碼錯誤');
       } else if (status === 403) {
         setApiError('您的帳號已被停用，請聯絡管理員。');
       } else if (status === 429) {
@@ -77,13 +78,18 @@ export function LoginPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
           <div className="space-y-4">
-            <Input
-              label="Email"
-              type="email"
-              autoComplete="email"
-              error={errors.email?.message}
-              {...register('email')}
-            />
+            {/* F113 / US-179：識別碼欄位可用 Email 或員工編號登入。
+                type 必須為 text（非 email），否則瀏覽器原生格式驗證會擋下員工編號。 */}
+            <div>
+              <Input
+                label="Email / 員工編號"
+                type="text"
+                autoComplete="username"
+                error={errors.email?.message}
+                {...register('email')}
+              />
+              <p className="mt-1.5 text-xs text-gray-400">可使用 Email 或員工編號登入</p>
+            </div>
 
             <PasswordInput
               label="密碼"

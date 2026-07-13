@@ -34,6 +34,7 @@ const mockAccountsResponse: AccountListResponse = {
       is_sales_manager: false,
 
       business_role: null,
+      employee_no: 'A0001',
       status: 'active',
       created_at: '2025-03-01T00:00:00.000Z',
     },
@@ -45,6 +46,7 @@ const mockAccountsResponse: AccountListResponse = {
       is_sales_manager: false,
 
       business_role: null,
+      employee_no: null,
       status: 'active',
       created_at: '2025-02-15T00:00:00.000Z',
     },
@@ -56,6 +58,7 @@ const mockAccountsResponse: AccountListResponse = {
       is_sales_manager: false,
 
       business_role: null,
+      employee_no: null,
       status: 'disabled',
       created_at: '2025-01-10T00:00:00.000Z',
     },
@@ -118,7 +121,7 @@ describe('AccountListPage', () => {
   describe('渲染測試', () => {
     it('顯示搜尋框', async () => {
       await renderAndLoad();
-      expect(screen.getByPlaceholderText('搜尋姓名或 Email')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('搜尋姓名、Email 或員工編號')).toBeInTheDocument();
     });
 
     it('顯示角色篩選下拉', async () => {
@@ -134,6 +137,36 @@ describe('AccountListPage', () => {
     it('顯示建立帳號按鈕', async () => {
       await renderAndLoad();
       expect(screen.getByText('建立帳號')).toBeInTheDocument();
+    });
+  });
+
+  // ===== F113 / US-179：員工編號欄與搜尋（FE-LIST）=====
+  describe('F113 員工編號（FE-LIST）', () => {
+    // TS-F113-FE-LIST-001：清單新增「員工編號」欄
+    it('表格新增「員工編號」欄標題與資料值', async () => {
+      await renderAndLoad();
+      expect(screen.getByRole('columnheader', { name: '員工編號' })).toBeInTheDocument();
+      expect(screen.getByText('A0001')).toBeInTheDocument();
+    });
+
+    // TS-F113-FE-LIST-002：未設定 → 顯示「—」
+    it('未設定員工編號之帳號該欄顯示「—」', async () => {
+      await renderAndLoad();
+      // 2 個帳號 employee_no 為 null → 兩個佔位符「—」
+      expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+    });
+
+    // TS-F113-FE-LIST-003：搜尋員工編號關鍵字 → 觸發 API
+    it('既有搜尋框輸入員工編號 → 觸發 getAccounts 含 search', async () => {
+      await renderAndLoad();
+      const searchInput = screen.getByPlaceholderText('搜尋姓名、Email 或員工編號');
+      fireEvent.change(searchInput, { target: { value: 'A0001' } });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+      expect(mockedGetAccounts).toHaveBeenCalledWith(
+        expect.objectContaining({ search: 'A0001', page: 1 }),
+      );
     });
   });
 
@@ -174,7 +207,7 @@ describe('AccountListPage', () => {
     it('輸入搜尋後觸發 API 呼叫含 search 參數', async () => {
       await renderAndLoad();
 
-      const searchInput = screen.getByPlaceholderText('搜尋姓名或 Email');
+      const searchInput = screen.getByPlaceholderText('搜尋姓名、Email 或員工編號');
       // Use fireEvent instead of userEvent to avoid fake timer conflicts
       fireEvent.change(searchInput, { target: { value: 'admin' } });
 
@@ -308,6 +341,7 @@ describe('AccountListPage', () => {
         is_sales_manager: false,
 
         business_role: null,
+        employee_no: null,
         status: 'active',
         created_at: '2025-04-01T00:00:00.000Z',
       });
@@ -657,6 +691,7 @@ describe('AccountListPage', () => {
         is_sales_manager: false,
 
         business_role: null,
+        employee_no: null,
         status: 'active',
         created_at: '2025-03-01T00:00:00.000Z',
         updated_at: '2025-06-01T00:00:00.000Z',

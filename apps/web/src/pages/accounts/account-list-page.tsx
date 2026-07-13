@@ -305,7 +305,7 @@ export function AccountListPage() {
               />
               <input
                 type="text"
-                placeholder="搜尋姓名或 Email"
+                placeholder="搜尋姓名、Email 或員工編號"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
@@ -349,6 +349,8 @@ export function AccountListPage() {
                   <thead>
                     <tr className="border-b border-gray-200 bg-gray-50/60">
                       <th className="text-left px-5 py-3 font-semibold text-gray-600">姓名</th>
+                      {/* F113 / US-179: 員工編號欄（選填，可作為登入帳號） */}
+                      <th className="text-left px-5 py-3 font-semibold text-gray-600">員工編號</th>
                       <th className="text-left px-5 py-3 font-semibold text-gray-600">Email</th>
                       <th className="text-left px-5 py-3 font-semibold text-gray-600">
                         <span className="inline-flex items-center gap-1">
@@ -373,6 +375,14 @@ export function AccountListPage() {
                         className="border-b border-gray-200 hover:bg-gray-50/50"
                       >
                         <td className="px-5 py-3 font-medium text-gray-900">{account.name}</td>
+                        {/* F113 / US-179: 員工編號（monospace；未設定顯示佔位符「—」） */}
+                        <td className="px-5 py-3">
+                          {account.employee_no ? (
+                            <span className="font-mono text-gray-600">{account.employee_no}</span>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
                         <td className="px-5 py-3 text-gray-600">{account.email}</td>
                         <td className="px-5 py-3">
                           <RoleBadge

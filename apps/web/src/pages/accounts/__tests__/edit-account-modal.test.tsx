@@ -17,6 +17,7 @@ const mockAccount: AccountListItem = {
   is_sales_manager: false,
 
   business_role: null,
+  employee_no: null,
   status: 'active',
   created_at: '2025-01-01T00:00:00.000Z',
 };
@@ -123,6 +124,7 @@ describe('EditAccountModal', () => {
         is_sales_manager: false,
 
         business_role: null,
+        employee_no: null,
         status: 'active',
         created_at: '2025-01-01T00:00:00.000Z',
         updated_at: '2025-06-01T00:00:00.000Z',
@@ -149,6 +151,7 @@ describe('EditAccountModal', () => {
         is_sales_manager: false,
 
         business_role: null,
+        employee_no: null,
         status: 'active',
         created_at: '2025-01-01T00:00:00.000Z',
         updated_at: '2025-06-01T00:00:00.000Z',
@@ -164,11 +167,113 @@ describe('EditAccountModal', () => {
       await user.click(screen.getByRole('button', { name: '儲存' }));
 
       await waitFor(() => {
+        // F113：payload 額外攜帶 employeeNo（此帳號原值為 null → 欄位預填 ''，未更動即送 ''）
         expect(mockedUpdateAccount).toHaveBeenCalledWith('user-uuid-1', {
           name: 'New Name',
           email: 'new@cdmp.test',
+          employeeNo: '',
         });
       });
+    });
+  });
+
+  // ===== F113 / US-179：員工編號（選填登入識別碼）FE-EDIT =====
+  describe('F113 員工編號（FE-EDIT）', () => {
+    const okResponse = {
+      id: 'user-uuid-1',
+      name: 'Test User',
+      email: 'test@cdmp.test',
+      role: 'user' as const,
+      is_sales_manager: false,
+      business_role: null,
+      employee_no: null,
+      status: 'active' as const,
+      created_at: '2025-01-01T00:00:00.000Z',
+      updated_at: '2025-06-01T00:00:00.000Z',
+    };
+
+    // TS-F113-FE-EDIT-001：預填既有值
+    it('開啟時員工編號欄位預填既有值', () => {
+      renderModal({ account: { ...mockAccount, employee_no: 'E10001' } });
+      expect(screen.getByLabelText('員工編號')).toHaveValue('E10001');
+    });
+
+    // TS-F113-FE-EDIT-001（null）：null → 欄位為空
+    it('既有值為 null → 欄位為空', () => {
+      renderModal({ account: { ...mockAccount, employee_no: null } });
+      expect(screen.getByLabelText('員工編號')).toHaveValue('');
+    });
+
+    // TS-F113-FE-EDIT-002：變更為新值 → payload 含新值
+    it('變更為新值送出 → payload 含新員工編號', async () => {
+      const user = userEvent.setup();
+      mockedUpdateAccount.mockResolvedValue({ ...okResponse, employee_no: 'E30001' });
+      renderModal({ account: { ...mockAccount, employee_no: null } });
+
+      await user.type(screen.getByLabelText('員工編號'), 'E30001');
+      await user.click(screen.getByRole('button', { name: '儲存' }));
+
+      await waitFor(() => {
+        expect(mockedUpdateAccount).toHaveBeenCalledWith(
+          'user-uuid-1',
+          expect.objectContaining({ employeeNo: 'E30001' }),
+        );
+      });
+    });
+
+    // TS-F113-FE-EDIT-003：清空欄位 → 送出空字串（移除）
+    it('清空既有值送出 → payload employeeNo 為空字串', async () => {
+      const user = userEvent.setup();
+      mockedUpdateAccount.mockResolvedValue(okResponse);
+      renderModal({ account: { ...mockAccount, employee_no: 'E10001' } });
+
+      const empInput = screen.getByLabelText('員工編號');
+      await user.clear(empInput);
+      await user.click(screen.getByRole('button', { name: '儲存' }));
+
+      await waitFor(() => {
+        expect(mockedUpdateAccount).toHaveBeenCalledWith(
+          'user-uuid-1',
+          expect.objectContaining({ employeeNo: '' }),
+        );
+      });
+    });
+
+    // TS-F113-FE-EDIT-004：保留原值、僅改其他欄位 → 成功、不觸發 409
+    it('保留原員工編號、僅改姓名 → 成功送出原值', async () => {
+      const user = userEvent.setup();
+      mockedUpdateAccount.mockResolvedValue({ ...okResponse, employee_no: 'E12345' });
+      renderModal({ account: { ...mockAccount, employee_no: 'E12345' } });
+
+      const nameInput = screen.getByLabelText('姓名');
+      await user.clear(nameInput);
+      await user.type(nameInput, '新姓名');
+      await user.click(screen.getByRole('button', { name: '儲存' }));
+
+      await waitFor(() => {
+        expect(mockedUpdateAccount).toHaveBeenCalledWith(
+          'user-uuid-1',
+          expect.objectContaining({ name: '新姓名', employeeNo: 'E12345' }),
+        );
+      });
+    });
+
+    // TS-F113-FE-EDIT-005：變更為他人已用值 → 409 inline
+    it('409 ACCOUNT_EMPLOYEE_NO_EXISTS → inline「此員工編號已被使用」，Modal 不關閉', async () => {
+      const user = userEvent.setup();
+      mockedUpdateAccount.mockRejectedValue({
+        response: {
+          status: 409,
+          data: { error: 'ACCOUNT_EMPLOYEE_NO_EXISTS', message: '此員工編號已被使用' },
+        },
+      });
+      const { onSuccess } = renderModal({ account: { ...mockAccount, employee_no: null } });
+
+      await user.type(screen.getByLabelText('員工編號'), 'E12345');
+      await user.click(screen.getByRole('button', { name: '儲存' }));
+
+      expect(await screen.findByText('此員工編號已被使用')).toBeInTheDocument();
+      expect(onSuccess).not.toHaveBeenCalled();
     });
   });
 
@@ -293,6 +398,7 @@ describe('EditAccountModal', () => {
         role: 'user',
         is_sales_manager: true,
         business_role: 'director',
+        employee_no: null,
         status: 'active',
         created_at: '2025-01-01T00:00:00.000Z',
         updated_at: '2025-06-01T00:00:00.000Z',

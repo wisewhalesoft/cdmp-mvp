@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
 import { RoleBadge } from '@/components/e07/RoleBadge';
-import { type AccountListItem, deriveEffectiveIdentity } from '@cdmp/shared';
+import { type AccountListItem, type UpdateAccountRequest, deriveEffectiveIdentity } from '@cdmp/shared';
 
 interface EditAccountModalProps {
   open: boolean;
@@ -32,6 +32,7 @@ export function EditAccountModal({ open, account, onClose, onSuccess }: EditAcco
     defaultValues: {
       name: '',
       email: '',
+      employeeNo: '',
     },
   });
 
@@ -41,6 +42,8 @@ export function EditAccountModal({ open, account, onClose, onSuccess }: EditAcco
       reset({
         name: account.name,
         email: account.email,
+        // F113 / US-179: 預填既有員工編號（null → 空字串；清空即移除）
+        employeeNo: account.employee_no ?? '',
       });
     }
     setApiError(null);
@@ -57,14 +60,25 @@ export function EditAccountModal({ open, account, onClose, onSuccess }: EditAcco
     setApiError(null);
     setIsSubmitting(true);
     try {
-      // F006 BR-6: 僅送出 name 與 email，不含 isSalesManager
-      await updateAccount(account.id, data);
+      // F006 BR-6 / F113: 送出 name、email 與員工編號（不含 isSalesManager / 角色）。
+      // employeeNo 一律送出——空字串代表清空移除（後端正規化為 null）。
+      const payload: UpdateAccountRequest = {
+        name: data.name,
+        email: data.email,
+        employeeNo: data.employeeNo ?? '',
+      };
+      await updateAccount(account.id, payload);
       onSuccess();
     } catch (err: unknown) {
       const error = err as { response?: { status?: number; data?: { error?: string; message?: string } } };
       const status = error.response?.status;
       if (status === 409) {
-        setError('email', { message: '此 Email 已被使用' });
+        // F113: 依錯誤碼區分 Email 重複 vs 員工編號重複
+        if (error.response?.data?.error === 'ACCOUNT_EMPLOYEE_NO_EXISTS') {
+          setError('employeeNo', { message: '此員工編號已被使用' });
+        } else {
+          setError('email', { message: '此 Email 已被使用' });
+        }
       } else if (status === 404) {
         setApiError('找不到指定的帳號');
       } else if (status === 422) {
@@ -119,6 +133,21 @@ export function EditAccountModal({ open, account, onClose, onSuccess }: EditAcco
                 error={errors.name?.message}
                 {...register('name')}
               />
+
+              {/* F113 / US-179: 員工編號（選填，可作為登入帳號；清空即移除） */}
+              <div>
+                <Input
+                  label="員工編號"
+                  type="text"
+                  maxLength={32}
+                  placeholder="請輸入員工編號（選填）"
+                  error={errors.employeeNo?.message}
+                  {...register('employeeNo')}
+                />
+                <p className="text-xs text-gray-400 mt-1">
+                  選填；可作為登入帳號（英數、-、_，最多 32 字，不含 @）。清空即移除。
+                </p>
+              </div>
 
               <Input
                 label="Email"
