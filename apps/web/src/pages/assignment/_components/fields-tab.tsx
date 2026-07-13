@@ -16,6 +16,7 @@ import {
   Lock,
   Folder,
   Contact,
+  Wallet,
   Sparkles,
   AlertTriangle,
   ArrowRight,
@@ -102,21 +103,24 @@ function FieldTypeBadge({ type }: { type: FieldType }) {
  *   customer_core → 綠色「客戶資料」；ob_pool_data → 灰色「案件資料」。依 dataSource 旗標渲染。
  */
 const DATA_SOURCE_CONFIG: Record<
-  'ob_pool_data' | 'customer_core',
+  'ob_pool_data' | 'customer_core' | 'customer_financial',
   { label: string; icon: typeof Folder; bg: string; text: string }
 > = {
   ob_pool_data: { label: '案件資料', icon: Folder, bg: 'bg-slate-100', text: 'text-slate-600' },
   customer_core: { label: '客戶資料', icon: Contact, bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  // F114：交易資料（customer_financial）
+  customer_financial: { label: '交易資料', icon: Wallet, bg: 'bg-amber-100', text: 'text-amber-700' },
 };
 
 function DataSourceBadge({
   source,
   columnName,
 }: {
-  source: 'ob_pool_data' | 'customer_core';
+  source: 'ob_pool_data' | 'customer_core' | 'customer_financial';
   columnName: string;
 }) {
-  const cfg = DATA_SOURCE_CONFIG[source];
+  // 防呆 fallback：未知來源退回案件資料 badge，避免整頁 render 崩潰（F114 前空白畫面根因）
+  const cfg = DATA_SOURCE_CONFIG[source] ?? DATA_SOURCE_CONFIG.ob_pool_data;
   const Icon = cfg.icon;
   return (
     <span
@@ -185,7 +189,7 @@ export function FieldsTab() {
   const [typeFilter, setTypeFilter] = useState<'all' | FieldType>('all');
   // F109 / US-172：資料來源篩選（案件資料 / 客戶資料）
   const [sourceFilter, setSourceFilter] = useState<
-    'all' | 'ob_pool_data' | 'customer_core'
+    'all' | 'ob_pool_data' | 'customer_core' | 'customer_financial'
   >('all');
 
   // Create modal state
@@ -724,6 +728,7 @@ export function FieldsTab() {
             <option value="all">來源：全部</option>
             <option value="ob_pool_data">案件資料</option>
             <option value="customer_core">客戶資料</option>
+            <option value="customer_financial">交易資料</option>
           </select>
           <select
             data-testid="filter-active"

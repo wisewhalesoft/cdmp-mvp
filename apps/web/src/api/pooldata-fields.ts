@@ -35,7 +35,7 @@ export interface PooldataField {
    * 驅動 M06 列表「資料來源」欄 badge + 工具列來源篩選 + F050/F051「新增條件」選單分組
    * （依 dataSource 旗標渲染，不 hardcode 欄位字串）。後端舊回應未含此欄位時前端應視為 'ob_pool_data'。
    */
-  dataSource?: 'ob_pool_data' | 'customer_core';
+  dataSource?: 'ob_pool_data' | 'customer_core' | 'customer_financial';
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
@@ -278,7 +278,7 @@ export interface DistinctValueItem {
 
 export interface DistinctValuesResponse {
   columnName: string;
-  dataSource: 'ob_pool_data' | 'customer_core';
+  dataSource: 'ob_pool_data' | 'customer_core' | 'customer_financial';
   values: DistinctValueItem[];
   totalReturned: number;
   truncated: boolean;

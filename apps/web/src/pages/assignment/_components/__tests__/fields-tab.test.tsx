@@ -94,6 +94,26 @@ describe('FieldsTab — Phase 5d 波 4', () => {
     expect(screen.getByRole('columnheader', { name: '欄位類型' })).toBeInTheDocument();
   });
 
+  it('fields-tab-4b（F114 regression）：customer_financial 欄位渲染「交易資料」badge 不 blank screen', async () => {
+    mockedListFields.mockResolvedValue({
+      fields: [
+        {
+          columnName: 'has_guarantor',
+          displayName: '有無保人',
+          fieldType: 'categorical',
+          isActive: true,
+          dataSource: 'customer_financial',
+          createdAt: '2026-07-13T00:00:00Z',
+          updatedAt: '2026-07-13T00:00:00Z',
+        },
+      ],
+    });
+    renderTab();
+    // 曾因 DATA_SOURCE_CONFIG 無 customer_financial → cfg undefined → 整頁 render 崩潰（空白畫面）
+    expect(await screen.findByText('有無保人')).toBeInTheDocument();
+    expect(screen.getByTestId('data-source-badge-has_guarantor')).toHaveTextContent('交易資料');
+  });
+
   it('fields-tab-5：不再顯示 F075 scope 提示 banner', async () => {
     renderTab();
     await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
