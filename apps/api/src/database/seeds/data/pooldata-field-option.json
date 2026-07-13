@@ -7,7 +7,7 @@
     "is_active": true,
     "deactivation_reason": null,
     "created_at": "2026-05-28T05:27:28.560Z",
-    "updated_at": "2026-07-10T10:17:40.421Z"
+    "updated_at": "2026-07-10T10:17:40.420Z"
   },
   {
     "column_name": "best_case",
@@ -20,24 +20,1524 @@
     "updated_at": "2026-07-10T10:17:40.421Z"
   },
   {
-    "column_name": "brand_no",
-    "option_value": "01",
-    "option_label": "TOYOTA",
+    "column_name": "brand_name",
+    "option_value": "3C通訊行",
+    "option_label": "3C通訊行",
     "display_order": 0,
     "is_active": true,
     "deactivation_reason": null,
-    "created_at": "2026-05-19T22:53:26.120Z",
-    "updated_at": "2026-05-19T22:53:26.120Z"
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
   },
   {
-    "column_name": "brand_no",
-    "option_value": "02",
-    "option_label": "LEXUS",
-    "display_order": 0,
+    "column_name": "brand_name",
+    "option_value": "ABARTH",
+    "option_label": "ABARTH",
+    "display_order": 1,
     "is_active": true,
     "deactivation_reason": null,
-    "created_at": "2026-05-19T22:53:46.970Z",
-    "updated_at": "2026-05-19T22:53:46.970Z"
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "ACURA",
+    "option_label": "ACURA",
+    "display_order": 2,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "ALFA ROMEO",
+    "option_label": "ALFA ROMEO",
+    "display_order": 3,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "ALPINA",
+    "option_label": "ALPINA",
+    "display_order": 4,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "APRILIA",
+    "option_label": "APRILIA",
+    "display_order": 5,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "ASTON MARTIN",
+    "option_label": "ASTON MARTIN",
+    "display_order": 6,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "AUDI",
+    "option_label": "AUDI",
+    "display_order": 7,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "B專案專用",
+    "option_label": "B專案專用",
+    "display_order": 8,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "BENELLI",
+    "option_label": "BENELLI",
+    "display_order": 9,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "BENTLEY",
+    "option_label": "BENTLEY",
+    "display_order": 10,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "BIMOTA",
+    "option_label": "BIMOTA",
+    "display_order": 11,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "BMW",
+    "option_label": "BMW",
+    "display_order": 12,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "BRABUS",
+    "option_label": "BRABUS",
+    "display_order": 13,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "BRIXTON",
+    "option_label": "BRIXTON",
+    "display_order": 14,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "BUICK",
+    "option_label": "BUICK",
+    "display_order": 15,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "CADILLAC",
+    "option_label": "CADILLAC",
+    "display_order": 16,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "CAN-AM",
+    "option_label": "CAN-AM",
+    "display_order": 17,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "CATERHAM",
+    "option_label": "CATERHAM",
+    "display_order": 18,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "CFMOTO",
+    "option_label": "CFMOTO",
+    "display_order": 19,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "CHERY",
+    "option_label": "CHERY",
+    "display_order": 20,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "CHEVROLET",
+    "option_label": "CHEVROLET",
+    "display_order": 21,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "CHRYSLER",
+    "option_label": "CHRYSLER",
+    "display_order": 22,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "CITROEN",
+    "option_label": "CITROEN",
+    "display_order": 23,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "CMC中華",
+    "option_label": "CMC中華",
+    "display_order": 24,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "CPI",
+    "option_label": "CPI",
+    "display_order": 25,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "DAF",
+    "option_label": "DAF",
+    "display_order": 26,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "DAIHATSU",
+    "option_label": "DAIHATSU",
+    "display_order": 27,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "DODGE",
+    "option_label": "DODGE",
+    "display_order": 28,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "DUCATI",
+    "option_label": "DUCATI",
+    "display_order": 29,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "Energica",
+    "option_label": "Energica",
+    "display_order": 30,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "FERRARI",
+    "option_label": "FERRARI",
+    "display_order": 31,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "FIAT",
+    "option_label": "FIAT",
+    "display_order": 32,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "FORD",
+    "option_label": "FORD",
+    "display_order": 33,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "FORMOSA",
+    "option_label": "FORMOSA",
+    "display_order": 34,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "FOTON",
+    "option_label": "FOTON",
+    "display_order": 35,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "FOXTRON",
+    "option_label": "FOXTRON",
+    "display_order": 36,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "FUSO",
+    "option_label": "FUSO",
+    "display_order": 37,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "GASGAS",
+    "option_label": "GASGAS",
+    "display_order": 38,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "GILERA",
+    "option_label": "GILERA",
+    "display_order": 39,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "GMC",
+    "option_label": "GMC",
+    "display_order": 40,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "GOGORO",
+    "option_label": "GOGORO",
+    "display_order": 41,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "GPX",
+    "option_label": "GPX",
+    "display_order": 42,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "HARLEY DAVIDSON",
+    "option_label": "HARLEY DAVIDSON",
+    "display_order": 43,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "HARTFORD",
+    "option_label": "HARTFORD",
+    "display_order": 44,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "HINO",
+    "option_label": "HINO",
+    "display_order": 45,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "HONDA",
+    "option_label": "HONDA",
+    "display_order": 46,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "HUMMER",
+    "option_label": "HUMMER",
+    "display_order": 47,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "HUSABERG",
+    "option_label": "HUSABERG",
+    "display_order": 48,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "HUSQVARNA",
+    "option_label": "HUSQVARNA",
+    "display_order": 49,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "HYUNDAI",
+    "option_label": "HYUNDAI",
+    "display_order": 50,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "INDIAN",
+    "option_label": "INDIAN",
+    "display_order": 51,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "INEOS",
+    "option_label": "INEOS",
+    "display_order": 52,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "INFINITI",
+    "option_label": "INFINITI",
+    "display_order": 53,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "ISUZU",
+    "option_label": "ISUZU",
+    "display_order": 54,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "ITALJET",
+    "option_label": "ITALJET",
+    "display_order": 55,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "IVECO",
+    "option_label": "IVECO",
+    "display_order": 56,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "JAGUAR",
+    "option_label": "JAGUAR",
+    "display_order": 57,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "JAWA",
+    "option_label": "JAWA",
+    "display_order": 58,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "JEEP",
+    "option_label": "JEEP",
+    "display_order": 59,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "KAWASAKI",
+    "option_label": "KAWASAKI",
+    "display_order": 60,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "KIA",
+    "option_label": "KIA",
+    "display_order": 61,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "KTM",
+    "option_label": "KTM",
+    "display_order": 62,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "LAMBORGHINI",
+    "option_label": "LAMBORGHINI",
+    "display_order": 63,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "LAMBORGINI",
+    "option_label": "LAMBORGINI",
+    "display_order": 64,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "LAMBRETTA",
+    "option_label": "LAMBRETTA",
+    "display_order": 65,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "LANCIA",
+    "option_label": "LANCIA",
+    "display_order": 66,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "LAND ROVER",
+    "option_label": "LAND ROVER",
+    "display_order": 67,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "LEXUS",
+    "option_label": "LEXUS",
+    "display_order": 68,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "LINCOLN",
+    "option_label": "LINCOLN",
+    "display_order": 69,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "LOTUS",
+    "option_label": "LOTUS",
+    "display_order": 70,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "LUXGEN",
+    "option_label": "LUXGEN",
+    "display_order": 71,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "M-BENZ",
+    "option_label": "M-BENZ",
+    "display_order": 72,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "MAHINDRA",
+    "option_label": "MAHINDRA",
+    "display_order": 73,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "MAN",
+    "option_label": "MAN",
+    "display_order": 74,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "MASERATI",
+    "option_label": "MASERATI",
+    "display_order": 75,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "MAZDA",
+    "option_label": "MAZDA",
+    "display_order": 76,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "MCLAREN",
+    "option_label": "MCLAREN",
+    "display_order": 77,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "MG",
+    "option_label": "MG",
+    "display_order": 78,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "MINI",
+    "option_label": "MINI",
+    "display_order": 79,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "MITSUBISHI",
+    "option_label": "MITSUBISHI",
+    "display_order": 80,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "MOTO GUZZI",
+    "option_label": "MOTO GUZZI",
+    "display_order": 81,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "MV",
+    "option_label": "MV",
+    "display_order": 82,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "NISSAN",
+    "option_label": "NISSAN",
+    "display_order": 83,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "OPEL",
+    "option_label": "OPEL",
+    "display_order": 84,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "PEUGEOT",
+    "option_label": "PEUGEOT",
+    "display_order": 85,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "PGO",
+    "option_label": "PGO",
+    "display_order": 86,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "PORSCHE",
+    "option_label": "PORSCHE",
+    "display_order": 87,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "PROTON",
+    "option_label": "PROTON",
+    "display_order": 88,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "RAM",
+    "option_label": "RAM",
+    "display_order": 89,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "RENAULT",
+    "option_label": "RENAULT",
+    "display_order": 90,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "ROLLS-ROYCE",
+    "option_label": "ROLLS-ROYCE",
+    "display_order": 91,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "ROYAL ENFIELD",
+    "option_label": "ROYAL ENFIELD",
+    "display_order": 92,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SAAB",
+    "option_label": "SAAB",
+    "display_order": 93,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SATURN",
+    "option_label": "SATURN",
+    "display_order": 94,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SCANIA",
+    "option_label": "SCANIA",
+    "display_order": 95,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SCION",
+    "option_label": "SCION",
+    "display_order": 96,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SHELBY",
+    "option_label": "SHELBY",
+    "display_order": 97,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SKODA",
+    "option_label": "SKODA",
+    "display_order": 98,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SMART",
+    "option_label": "SMART",
+    "display_order": 99,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SSANGYONG",
+    "option_label": "SSANGYONG",
+    "display_order": 100,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SUBARU",
+    "option_label": "SUBARU",
+    "display_order": 101,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SUPER SOCO",
+    "option_label": "SUPER SOCO",
+    "display_order": 102,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "SUZUKI",
+    "option_label": "SUZUKI",
+    "display_order": 103,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "Super Soco",
+    "option_label": "Super Soco",
+    "display_order": 104,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "TESLA",
+    "option_label": "TESLA",
+    "display_order": 105,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "TOBE",
+    "option_label": "TOBE",
+    "display_order": 106,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "TOYOTA",
+    "option_label": "TOYOTA",
+    "display_order": 107,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "TRIUMPH",
+    "option_label": "TRIUMPH",
+    "display_order": 108,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "TVS",
+    "option_label": "TVS",
+    "display_order": 109,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "VESPA",
+    "option_label": "VESPA",
+    "display_order": 110,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "VICTORY",
+    "option_label": "VICTORY",
+    "display_order": 111,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "VOLKSWAGEN",
+    "option_label": "VOLKSWAGEN",
+    "display_order": 112,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "VOLVO",
+    "option_label": "VOLVO",
+    "display_order": 113,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "XX-重車",
+    "option_label": "XX-重車",
+    "display_order": 114,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "ZERO",
+    "option_label": "ZERO",
+    "display_order": 115,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "一般分期",
+    "option_label": "一般分期",
+    "display_order": 116,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "一般商品",
+    "option_label": "一般商品",
+    "display_order": 117,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "三陽",
+    "option_label": "三陽",
+    "display_order": 118,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "中華凱旋",
+    "option_label": "中華凱旋",
+    "display_order": 119,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "二十一世紀",
+    "option_label": "二十一世紀",
+    "display_order": 120,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "亞帝發",
+    "option_label": "亞帝發",
+    "display_order": 121,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "亞太",
+    "option_label": "亞太",
+    "display_order": 122,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "健益",
+    "option_label": "健益",
+    "display_order": 123,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "光陽",
+    "option_label": "光陽",
+    "display_order": 124,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "可樂旅遊",
+    "option_label": "可樂旅遊",
+    "display_order": 125,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "台灣才將",
+    "option_label": "台灣才將",
+    "display_order": 126,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "合信數位",
+    "option_label": "合信數位",
+    "display_order": 127,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "媚登峰",
+    "option_label": "媚登峰",
+    "display_order": 128,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "宏佳騰",
+    "option_label": "宏佳騰",
+    "display_order": 129,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "家居用品",
+    "option_label": "家居用品",
+    "display_order": 130,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "家電行",
+    "option_label": "家電行",
+    "display_order": 131,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "山葉",
+    "option_label": "山葉",
+    "display_order": 132,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "微型電動二輪車",
+    "option_label": "微型電動二輪車",
+    "display_order": 133,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "教育及健身課程",
+    "option_label": "教育及健身課程",
+    "display_order": 134,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "春風動力",
+    "option_label": "春風動力",
+    "display_order": 135,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "東風",
+    "option_label": "東風",
+    "display_order": 136,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "機器設備",
+    "option_label": "機器設備",
+    "display_order": 137,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "汽車保修廠",
+    "option_label": "汽車保修廠",
+    "display_order": 138,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "無",
+    "option_label": "無",
+    "display_order": 139,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "第一國際",
+    "option_label": "第一國際",
+    "display_order": 140,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "第一資融",
+    "option_label": "第一資融",
+    "display_order": 141,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "精品服飾配件",
+    "option_label": "精品服飾配件",
+    "display_order": 142,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "裝修及品牌加盟",
+    "option_label": "裝修及品牌加盟",
+    "display_order": 143,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "護膚美容美髮SPA",
+    "option_label": "護膚美容美髮SPA",
+    "display_order": 144,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "賽德卡",
+    "option_label": "賽德卡",
+    "display_order": 145,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "輕重機裝修",
+    "option_label": "輕重機裝修",
+    "display_order": 146,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "遠信",
+    "option_label": "遠信",
+    "display_order": 147,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "醫藥療程及用品",
+    "option_label": "醫藥療程及用品",
+    "display_order": 148,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "附擔保專用",
+    "option_label": "附擔保專用",
+    "display_order": 149,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "食品保健生技",
+    "option_label": "食品保健生技",
+    "display_order": 150,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
+  },
+  {
+    "column_name": "brand_name",
+    "option_value": "鼎力",
+    "option_label": "鼎力",
+    "display_order": 151,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:09:01.322Z",
+    "updated_at": "2026-07-13T07:09:01.322Z"
   },
   {
     "column_name": "case_status",
@@ -568,36 +2068,6 @@
     "deactivation_reason": null,
     "created_at": "2026-07-01T19:38:11.420Z",
     "updated_at": "2026-07-01T19:38:11.420Z"
-  },
-  {
-    "column_name": "list_type",
-    "option_value": "01",
-    "option_label": "期中",
-    "display_order": 0,
-    "is_active": true,
-    "deactivation_reason": null,
-    "created_at": "2026-05-19T01:28:26.610Z",
-    "updated_at": "2026-05-19T01:28:26.610Z"
-  },
-  {
-    "column_name": "list_type",
-    "option_value": "02",
-    "option_label": "中結",
-    "display_order": 0,
-    "is_active": true,
-    "deactivation_reason": null,
-    "created_at": "2026-05-19T01:28:26.610Z",
-    "updated_at": "2026-05-19T01:28:26.610Z"
-  },
-  {
-    "column_name": "list_type",
-    "option_value": "03",
-    "option_label": "滿期",
-    "display_order": 0,
-    "is_active": true,
-    "deactivation_reason": null,
-    "created_at": "2026-05-19T01:28:26.610Z",
-    "updated_at": "2026-05-19T01:28:26.610Z"
   },
   {
     "column_name": "marital_status_desc",
@@ -1290,6 +2760,906 @@
     "updated_at": "2026-07-01T19:38:11.426Z"
   },
   {
+    "column_name": "payt_num",
+    "option_value": "0",
+    "option_label": "0",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "1",
+    "option_label": "1",
+    "display_order": 1,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "2",
+    "option_label": "2",
+    "display_order": 2,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "3",
+    "option_label": "3",
+    "display_order": 3,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "4",
+    "option_label": "4",
+    "display_order": 4,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "5",
+    "option_label": "5",
+    "display_order": 5,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "6",
+    "option_label": "6",
+    "display_order": 6,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "7",
+    "option_label": "7",
+    "display_order": 7,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "8",
+    "option_label": "8",
+    "display_order": 8,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "9",
+    "option_label": "9",
+    "display_order": 9,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "10",
+    "option_label": "10",
+    "display_order": 10,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "11",
+    "option_label": "11",
+    "display_order": 11,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "12",
+    "option_label": "12",
+    "display_order": 12,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "13",
+    "option_label": "13",
+    "display_order": 13,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "14",
+    "option_label": "14",
+    "display_order": 14,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "15",
+    "option_label": "15",
+    "display_order": 15,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "16",
+    "option_label": "16",
+    "display_order": 16,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "17",
+    "option_label": "17",
+    "display_order": 17,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "18",
+    "option_label": "18",
+    "display_order": 18,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "19",
+    "option_label": "19",
+    "display_order": 19,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "20",
+    "option_label": "20",
+    "display_order": 20,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "21",
+    "option_label": "21",
+    "display_order": 21,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "22",
+    "option_label": "22",
+    "display_order": 22,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "23",
+    "option_label": "23",
+    "display_order": 23,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "24",
+    "option_label": "24",
+    "display_order": 24,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "25",
+    "option_label": "25",
+    "display_order": 25,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "26",
+    "option_label": "26",
+    "display_order": 26,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "27",
+    "option_label": "27",
+    "display_order": 27,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "28",
+    "option_label": "28",
+    "display_order": 28,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "29",
+    "option_label": "29",
+    "display_order": 29,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "30",
+    "option_label": "30",
+    "display_order": 30,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "31",
+    "option_label": "31",
+    "display_order": 31,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "32",
+    "option_label": "32",
+    "display_order": 32,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "33",
+    "option_label": "33",
+    "display_order": 33,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "34",
+    "option_label": "34",
+    "display_order": 34,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "35",
+    "option_label": "35",
+    "display_order": 35,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "36",
+    "option_label": "36",
+    "display_order": 36,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "37",
+    "option_label": "37",
+    "display_order": 37,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "38",
+    "option_label": "38",
+    "display_order": 38,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "39",
+    "option_label": "39",
+    "display_order": 39,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "40",
+    "option_label": "40",
+    "display_order": 40,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "41",
+    "option_label": "41",
+    "display_order": 41,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "42",
+    "option_label": "42",
+    "display_order": 42,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "43",
+    "option_label": "43",
+    "display_order": 43,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "44",
+    "option_label": "44",
+    "display_order": 44,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "45",
+    "option_label": "45",
+    "display_order": 45,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "46",
+    "option_label": "46",
+    "display_order": 46,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "47",
+    "option_label": "47",
+    "display_order": 47,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "48",
+    "option_label": "48",
+    "display_order": 48,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "49",
+    "option_label": "49",
+    "display_order": 49,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "50",
+    "option_label": "50",
+    "display_order": 50,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "51",
+    "option_label": "51",
+    "display_order": 51,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "52",
+    "option_label": "52",
+    "display_order": 52,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "53",
+    "option_label": "53",
+    "display_order": 53,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "54",
+    "option_label": "54",
+    "display_order": 54,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "55",
+    "option_label": "55",
+    "display_order": 55,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "56",
+    "option_label": "56",
+    "display_order": 56,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "57",
+    "option_label": "57",
+    "display_order": 57,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "58",
+    "option_label": "58",
+    "display_order": 58,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "59",
+    "option_label": "59",
+    "display_order": 59,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "60",
+    "option_label": "60",
+    "display_order": 60,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "61",
+    "option_label": "61",
+    "display_order": 61,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "62",
+    "option_label": "62",
+    "display_order": 62,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "63",
+    "option_label": "63",
+    "display_order": 63,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "64",
+    "option_label": "64",
+    "display_order": 64,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "65",
+    "option_label": "65",
+    "display_order": 65,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "66",
+    "option_label": "66",
+    "display_order": 66,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "67",
+    "option_label": "67",
+    "display_order": 67,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "68",
+    "option_label": "68",
+    "display_order": 68,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "69",
+    "option_label": "69",
+    "display_order": 69,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "70",
+    "option_label": "70",
+    "display_order": 70,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "71",
+    "option_label": "71",
+    "display_order": 71,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "72",
+    "option_label": "72",
+    "display_order": 72,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "73",
+    "option_label": "73",
+    "display_order": 73,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "74",
+    "option_label": "74",
+    "display_order": 74,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "75",
+    "option_label": "75",
+    "display_order": 75,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "76",
+    "option_label": "76",
+    "display_order": 76,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "77",
+    "option_label": "77",
+    "display_order": 77,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "78",
+    "option_label": "78",
+    "display_order": 78,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "79",
+    "option_label": "79",
+    "display_order": 79,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "80",
+    "option_label": "80",
+    "display_order": 80,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "81",
+    "option_label": "81",
+    "display_order": 81,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "82",
+    "option_label": "82",
+    "display_order": 82,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "83",
+    "option_label": "83",
+    "display_order": 83,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "84",
+    "option_label": "84",
+    "display_order": 84,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "96",
+    "option_label": "96",
+    "display_order": 85,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "99",
+    "option_label": "99",
+    "display_order": 86,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "100",
+    "option_label": "100",
+    "display_order": 87,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "108",
+    "option_label": "108",
+    "display_order": 88,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
+    "column_name": "payt_num",
+    "option_value": "120",
+    "option_label": "120",
+    "display_order": 89,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:16:53.908Z",
+    "updated_at": "2026-07-13T07:16:53.908Z"
+  },
+  {
     "column_name": "prod_kind",
     "option_value": "01",
     "option_label": "汽車",
@@ -1318,6 +3688,316 @@
     "deactivation_reason": null,
     "created_at": "2026-05-19T01:28:26.610Z",
     "updated_at": "2026-05-27T00:08:56.730Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "3C商品",
+    "option_label": "3C商品",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "B專案",
+    "option_label": "B專案",
+    "display_order": 1,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "一般分期",
+    "option_label": "一般分期",
+    "display_order": 2,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "中古車",
+    "option_label": "中古車",
+    "display_order": 3,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "二十一專案A",
+    "option_label": "二十一專案A",
+    "display_order": 4,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "亞太A",
+    "option_label": "亞太A",
+    "display_order": 5,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "亞太B",
+    "option_label": "亞太B",
+    "display_order": 6,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "原融",
+    "option_label": "原融",
+    "display_order": 7,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "原融代償",
+    "option_label": "原融代償",
+    "display_order": 8,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "台灣才將專案A",
+    "option_label": "台灣才將專案A",
+    "display_order": 9,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "台灣才將專案B",
+    "option_label": "台灣才將專案B",
+    "display_order": 10,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "合信專案",
+    "option_label": "合信專案",
+    "display_order": 11,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "商品分期",
+    "option_label": "商品分期",
+    "display_order": 12,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "在庫融資",
+    "option_label": "在庫融資",
+    "display_order": 13,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "娛樂收藏",
+    "option_label": "娛樂收藏",
+    "display_order": 14,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "新車",
+    "option_label": "新車",
+    "display_order": 15,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "機器設備",
+    "option_label": "機器設備",
+    "display_order": 16,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "機車原融",
+    "option_label": "機車原融",
+    "display_order": 17,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "機車原融代償",
+    "option_label": "機車原融代償",
+    "display_order": 18,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "機車自承",
+    "option_label": "機車自承",
+    "display_order": 19,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "汽機車保修及用品",
+    "option_label": "汽機車保修及用品",
+    "display_order": 20,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "營業用設備及器材",
+    "option_label": "營業用設備及器材",
+    "display_order": 21,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "生活居家",
+    "option_label": "生活居家",
+    "display_order": 22,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "第一專案A",
+    "option_label": "第一專案A",
+    "display_order": 23,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "第一專案B",
+    "option_label": "第一專案B",
+    "display_order": 24,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "遠信圖書",
+    "option_label": "遠信圖書",
+    "display_order": 25,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "遠信機車",
+    "option_label": "遠信機車",
+    "display_order": 26,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "遠信綜合",
+    "option_label": "遠信綜合",
+    "display_order": 27,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "重車_中古車",
+    "option_label": "重車_中古車",
+    "display_order": 28,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "重車_原融",
+    "option_label": "重車_原融",
+    "display_order": 29,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "option_value": "重車_新車",
+    "option_label": "重車_新車",
+    "display_order": 30,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:11:14.318Z",
+    "updated_at": "2026-07-13T07:11:14.318Z"
   },
   {
     "column_name": "settle_src",
@@ -1858,5 +4538,85 @@
     "deactivation_reason": null,
     "created_at": "2026-05-21T00:27:59.653Z",
     "updated_at": "2026-05-21T00:27:59.653Z"
+  },
+  {
+    "column_name": "sta_code_na",
+    "option_value": "企金通路代償",
+    "option_label": "企金通路代償",
+    "display_order": 0,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:18:19.728Z",
+    "updated_at": "2026-07-13T07:18:19.728Z"
+  },
+  {
+    "column_name": "sta_code_na",
+    "option_value": "信管結清",
+    "option_label": "信管結清",
+    "display_order": 1,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:18:19.728Z",
+    "updated_at": "2026-07-13T07:18:19.728Z"
+  },
+  {
+    "column_name": "sta_code_na",
+    "option_value": "回件佣金",
+    "option_label": "回件佣金",
+    "display_order": 2,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:18:19.728Z",
+    "updated_at": "2026-07-13T07:18:19.728Z"
+  },
+  {
+    "column_name": "sta_code_na",
+    "option_value": "客服結清",
+    "option_label": "客服結清",
+    "display_order": 3,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:18:19.728Z",
+    "updated_at": "2026-07-13T07:18:19.728Z"
+  },
+  {
+    "column_name": "sta_code_na",
+    "option_value": "滿期",
+    "option_label": "滿期",
+    "display_order": 4,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:18:19.728Z",
+    "updated_at": "2026-07-13T07:18:19.728Z"
+  },
+  {
+    "column_name": "sta_code_na",
+    "option_value": "策盟商代償",
+    "option_label": "策盟商代償",
+    "display_order": 5,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:18:19.728Z",
+    "updated_at": "2026-07-13T07:18:19.728Z"
+  },
+  {
+    "column_name": "sta_code_na",
+    "option_value": "結清不足",
+    "option_label": "結清不足",
+    "display_order": 6,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:18:19.728Z",
+    "updated_at": "2026-07-13T07:18:19.728Z"
+  },
+  {
+    "column_name": "sta_code_na",
+    "option_value": "財務撥款",
+    "option_label": "財務撥款",
+    "display_order": 7,
+    "is_active": true,
+    "deactivation_reason": null,
+    "created_at": "2026-07-13T07:18:19.728Z",
+    "updated_at": "2026-07-13T07:18:19.728Z"
   }
 ]

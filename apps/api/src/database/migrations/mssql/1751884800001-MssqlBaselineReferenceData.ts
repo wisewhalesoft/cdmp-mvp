@@ -17,7 +17,9 @@ import {
  *   - 冪等：roles 逐筆 `IF NOT EXISTS`；whitelist / option 僅於空表時插入（比照 PG 版語意）
  *
  * 排序：檔名 timestamp 1751884800001 > schema baseline 1751884800000 → migration:run 於建表後才灌資料。
- * 灌入後筆數：roles 2 / pooldata_field_whitelist 17 / pooldata_field_option 186（與 PG 版一致）。
+ * 灌入後筆數：roles 2 / pooldata_field_whitelist 20 / pooldata_field_option 462
+ *   （以 dev CDMP 為 ground truth；2026-07 已硬刪除 brand_no/list_type 兩欄。baseline 與 data-seed 之
+ *    pooldata-field-*.json 保持同一份 dev 現況，兩者筆數一致）。
  */
 export class MssqlBaselineReferenceData1751884800001 implements MigrationInterface {
   name = 'MssqlBaselineReferenceData1751884800001';

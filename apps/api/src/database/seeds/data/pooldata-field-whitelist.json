@@ -13,21 +13,11 @@
     "column_name": "brand_name",
     "display_name": "廠牌名稱",
     "field_type": "categorical",
-    "is_active": false,
+    "is_active": true,
     "data_source": "ob_pool_data",
     "is_system_fixed": false,
     "created_at": "2026-05-18T21:12:19.926Z",
-    "updated_at": "2026-05-19T22:52:54.110Z"
-  },
-  {
-    "column_name": "brand_no",
-    "display_name": "廠牌",
-    "field_type": "categorical",
-    "is_active": false,
-    "data_source": "ob_pool_data",
-    "is_system_fixed": false,
-    "created_at": "2026-05-19T22:53:15.696Z",
-    "updated_at": "2026-07-10T10:24:20.105Z"
+    "updated_at": "2026-07-13T07:08:31.969Z"
   },
   {
     "column_name": "case_status",
@@ -100,14 +90,24 @@
     "updated_at": "2026-07-01T19:38:11.413Z"
   },
   {
-    "column_name": "list_type",
-    "display_name": "名單類型",
-    "field_type": "categorical",
-    "is_active": false,
+    "column_name": "loan_capital",
+    "display_name": "承作金額",
+    "field_type": "numeric",
+    "is_active": true,
     "data_source": "ob_pool_data",
     "is_system_fixed": false,
-    "created_at": "2026-05-19T01:28:26.610Z",
-    "updated_at": "2026-07-10T10:24:31.019Z"
+    "created_at": "2026-07-13T07:15:39.109Z",
+    "updated_at": "2026-07-13T07:15:39.109Z"
+  },
+  {
+    "column_name": "loan_rate",
+    "display_name": "貸款成數",
+    "field_type": "numeric",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-07-13T07:15:53.982Z",
+    "updated_at": "2026-07-13T07:15:53.982Z"
   },
   {
     "column_name": "marital_status_desc",
@@ -140,6 +140,16 @@
     "updated_at": "2026-07-01T19:38:11.413Z"
   },
   {
+    "column_name": "payt_num",
+    "display_name": "已繳期數",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-07-13T07:16:53.698Z",
+    "updated_at": "2026-07-13T07:16:53.698Z"
+  },
+  {
     "column_name": "prod_kind",
     "display_name": "產品類別",
     "field_type": "categorical",
@@ -148,6 +158,16 @@
     "is_system_fixed": false,
     "created_at": "2026-05-19T01:28:26.610Z",
     "updated_at": "2026-05-19T01:28:26.610Z"
+  },
+  {
+    "column_name": "prod_type_name",
+    "display_name": "產品分類",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-07-13T07:11:13.519Z",
+    "updated_at": "2026-07-13T07:12:19.325Z"
   },
   {
     "column_name": "settle_src",
@@ -168,5 +188,15 @@
     "is_system_fixed": false,
     "created_at": "2026-05-19T01:28:26.610Z",
     "updated_at": "2026-05-19T22:46:26.340Z"
+  },
+  {
+    "column_name": "sta_code_na",
+    "display_name": "名單狀態",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-07-13T07:18:19.494Z",
+    "updated_at": "2026-07-13T07:18:19.494Z"
   }
 ]

@@ -450,7 +450,7 @@ export async function seedUsers(qr: QueryRunner): Promise<void> {
       await pquery(
         qr,
         `UPDATE users SET email = ?, name = ?, role = ?, business_role = ?,
-           is_sales_manager = ?, status = ?, password_hash = ?, updated_at = ?
+           is_sales_manager = ?, status = ?, password_hash = ?, employee_no = ?, updated_at = ?
          WHERE id = ?`,
         [
           u.email,
@@ -460,6 +460,7 @@ export async function seedUsers(qr: QueryRunner): Promise<void> {
           u.is_sales_manager ?? false,
           u.status,
           u.password_hash,
+          u.employee_no ?? null,
           coerceSeedValue(u.updated_at) ?? new Date(),
           u.id,
         ],

@@ -267,10 +267,14 @@ describe('新增 seed 資料檔（帳號 / 篩選欄位 / 202607 名單）', () 
     }
   });
 
-  it('篩選欄位：whitelist 17 + option 186（option 含 display_order 排序）', () => {
-    expect(loadJson<any>('pooldata-field-whitelist.json')).toHaveLength(17);
+  it('篩選欄位：whitelist 20 + option 462（以 dev CDMP 為 ground truth；已移除 brand_no/list_type）', () => {
+    const wl = loadJson<any>('pooldata-field-whitelist.json');
+    expect(wl).toHaveLength(20);
+    // 已硬刪除的兩欄不得再出現
+    expect(wl.some((w) => w.column_name === 'brand_no' || w.column_name === 'list_type')).toBe(false);
     const opts = loadJson<any>('pooldata-field-option.json');
-    expect(opts).toHaveLength(186);
+    expect(opts).toHaveLength(462);
+    expect(opts.some((o) => o.column_name === 'brand_no' || o.column_name === 'list_type')).toBe(false);
     for (const o of opts) {
       expect(o.column_name).toBeTruthy();
       expect(typeof o.display_order).toBe('number');

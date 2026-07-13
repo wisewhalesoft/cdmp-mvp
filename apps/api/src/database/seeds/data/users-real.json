@@ -7,10 +7,11 @@
     "role": "user",
     "status": "active",
     "created_at": "2026-07-09T10:37:57.550Z",
-    "updated_at": "2026-07-10T17:09:14.460Z",
+    "updated_at": "2026-07-13T13:03:59.110Z",
     "password_changed_at": "2026-07-10T09:09:15.345Z",
     "is_sales_manager": true,
-    "business_role": "director"
+    "business_role": "director",
+    "employee_no": "20117"
   },
   {
     "id": "1939AF12-3F7C-F111-80A2-00155DC92813",
@@ -20,10 +21,11 @@
     "role": "user",
     "status": "active",
     "created_at": "2026-07-10T17:09:37.343Z",
-    "updated_at": "2026-07-10T17:09:42.390Z",
+    "updated_at": "2026-07-13T13:04:23.800Z",
     "password_changed_at": "2026-07-10T09:09:43.268Z",
     "is_sales_manager": false,
-    "business_role": "section_chief"
+    "business_role": "section_chief",
+    "employee_no": "20190"
   },
   {
     "id": "551AEF29-3F7C-F111-80A2-00155DC92813",
@@ -33,10 +35,11 @@
     "role": "user",
     "status": "active",
     "created_at": "2026-07-10T17:10:16.350Z",
-    "updated_at": "2026-07-10T17:10:21.400Z",
+    "updated_at": "2026-07-13T13:05:13.266Z",
     "password_changed_at": "2026-07-10T09:10:22.288Z",
     "is_sales_manager": false,
-    "business_role": "section_chief"
+    "business_role": "section_chief",
+    "employee_no": "20501"
   },
   {
     "id": "08B28B44-3F7C-F111-80A2-00155DC92813",
@@ -46,10 +49,11 @@
     "role": "user",
     "status": "active",
     "created_at": "2026-07-10T17:11:00.993Z",
-    "updated_at": "2026-07-10T17:11:07.023Z",
+    "updated_at": "2026-07-13T13:04:53.683Z",
     "password_changed_at": "2026-07-10T09:11:07.933Z",
     "is_sales_manager": false,
-    "business_role": "section_chief"
+    "business_role": "section_chief",
+    "employee_no": "20442"
   },
   {
     "id": "9D64A160-3F7C-F111-80A2-00155DC92813",
@@ -59,9 +63,10 @@
     "role": "user",
     "status": "active",
     "created_at": "2026-07-10T17:11:48.116Z",
-    "updated_at": "2026-07-10T17:11:53.320Z",
+    "updated_at": "2026-07-13T13:05:25.323Z",
     "password_changed_at": "2026-07-10T09:11:54.211Z",
     "is_sales_manager": false,
-    "business_role": "section_chief"
+    "business_role": "section_chief",
+    "employee_no": "22978"
   }
 ]
