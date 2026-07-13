@@ -600,12 +600,31 @@ describe('PooldataFieldWhitelistService', () => {
         expect(await callInfer('unknown_type_xyz')).toBe('categorical');
       });
 
-      // Decimal 邊界備忘（RISK-F075-002 / spec §5.5 文件與生產實際不一致）
-      it("TS-F075-BE-024：'decimal' → 'categorical'（Decimal 邊界備忘）", async () => {
-        // PostgreSQL information_schema.columns.data_type 對 DECIMAL 實際回傳 'numeric'（不會回傳 'decimal'）
-        // 此 case 驗證即使傳入 'decimal' 字串，保守 fallback 行為正確（不誤判為 numeric）
-        // 對應 service inline NOTE comment
-        expect(await callInfer('decimal')).toBe('categorical');
+      // Decimal：MSSQL 遷移後 INFORMATION_SCHEMA 對 decimal 欄位回傳 'decimal' → 應判為 numeric
+      // （PG 對 DECIMAL 回傳 'numeric'、已涵蓋；MSSQL 回傳 'decimal'、亦須涵蓋）
+      it("TS-F075-BE-024：'decimal' → 'numeric'（MSSQL 生產回傳值）", async () => {
+        expect(await callInfer('decimal')).toBe('numeric');
+      });
+
+      // ── MSSQL 方言型別（全面 PG→MSSQL 遷移後 INFORMATION_SCHEMA 之實際回傳值）──
+      it("TS-F075-BE-025：'datetime2' → 'date'（dateColumnType 於 MSSQL；acc_date / first_pay_dt 修正）", async () => {
+        expect(await callInfer('datetime2')).toBe('date');
+      });
+
+      it("TS-F075-BE-026：'datetime' → 'date'（MSSQL）", async () => {
+        expect(await callInfer('datetime')).toBe('date');
+      });
+
+      it("TS-F075-BE-027：'int' → 'numeric'（MSSQL；TypeORM type:'integer' 落 'int'）", async () => {
+        expect(await callInfer('int')).toBe('numeric');
+      });
+
+      it("TS-F075-BE-028：'DATETIME2' → 'date'（大小寫正規化）", async () => {
+        expect(await callInfer('DATETIME2')).toBe('date');
+      });
+
+      it("TS-F075-BE-029：'bit' → 'categorical'（MSSQL boolean 保守 fallback）", async () => {
+        expect(await callInfer('bit')).toBe('categorical');
       });
     });
   });

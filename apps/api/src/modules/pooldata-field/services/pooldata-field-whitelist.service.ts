@@ -111,23 +111,42 @@ export interface DistinctValuesResult {
 
 // F075 v1.4 / _inferSuggestedFieldType 推斷規則（spec §5.5 / BR-12）
 //
-// NOTE: PostgreSQL DECIMAL 在 information_schema.columns.data_type 實際回傳 'numeric'（已涵蓋於 NUMERIC_SET）；
-//       'decimal' 字串不會出現在生產 information_schema 結果
+// ⚠️ 全面 PG→MSSQL 遷移後（見 memory project_mssql_full_migration）：INFORMATION_SCHEMA.COLUMNS.DATA_TYPE
+//    改回傳 MSSQL 原生型別名（皆小寫），與 PostgreSQL 不同。故 NUMERIC_SET / DATE_SET 須同時涵蓋
+//    「PG 生產回傳值」與「MSSQL 生產回傳值」，否則 datetime2 / int 等 MSSQL 欄位會落入 categorical
+//    保守 fallback（曾釀「結清日 acc_date / 第一次繳款日 first_pay_dt 被誤判為類別」bug）。
+//    比對前一律 toLowerCase() 正規化（見 _inferSuggestedFieldType）。
 const NUMERIC_SET = new Set<string>([
+  // PostgreSQL information_schema 回傳值
   'numeric',
   'integer',
   'bigint',
   'double precision',
   'real',
+  // MSSQL INFORMATION_SCHEMA 回傳值（TypeORM type:'integer'→'int'、type:'numeric'→'numeric'、
+  //   dev/legacy 亦可能出現 decimal/float/money 等）
+  'int',
+  'smallint',
+  'tinyint',
+  'decimal',
+  'float',
+  'money',
+  'smallmoney',
 ]);
 
-// DATE_SET：PostgreSQL information_schema 對應日期 / 時間型別之實際回傳值（含完整名稱）
+// DATE_SET：日期 / 時間型別之生產回傳值（PostgreSQL + MSSQL 兩方言）
 const DATE_SET = new Set<string>([
+  // PostgreSQL information_schema 回傳值
   'date',
   'timestamp',
   'timestamp without time zone',
   'timestamp with time zone',
   'timestamptz',
+  // MSSQL INFORMATION_SCHEMA 回傳值（dateColumnType 於 MSSQL = datetime2）
+  'datetime',
+  'datetime2',
+  'smalldatetime',
+  'datetimeoffset',
 ]);
 
 @Injectable()
@@ -479,19 +498,20 @@ export class PooldataFieldWhitelistService {
   }
 
   /**
-   * 推斷 PostgreSQL information_schema `data_type` 對應之 `suggestedFieldType`（AC-12 / BR-12）。
+   * 推斷 information_schema `data_type` 對應之 `suggestedFieldType`（AC-12 / BR-12）。
    *
-   * NOTE: PostgreSQL DECIMAL 在 information_schema.columns.data_type 實際回傳 'numeric'（已涵蓋於 NUMERIC_SET）；
-   *       'decimal' 字串不會出現在生產 information_schema 結果。若日後需特殊映射 'decimal' → 'numeric'，
-   *       須同步更新 spec §5.5 並調整 NUMERIC_SET。
+   * 同時支援 PostgreSQL 與 MSSQL 兩方言之回傳值（見 NUMERIC_SET / DATE_SET 註解）；
+   * 比對前以 toLowerCase() 正規化，避免大小寫差異（MSSQL 內建型別名固定小寫，PG 亦然，
+   * 但正規化可防禦任何 driver / collation 差異）。
    */
   private _inferSuggestedFieldType(
     dataType: string | null | undefined,
   ): 'numeric' | 'categorical' | 'date' {
     if (dataType === null || dataType === undefined) return 'categorical';
-    if (NUMERIC_SET.has(dataType)) return 'numeric';
-    if (DATE_SET.has(dataType)) return 'date';
-    return 'categorical'; // 保守原則：字串型 / 未識別 / boolean / 其他 → categorical
+    const normalized = dataType.toLowerCase();
+    if (NUMERIC_SET.has(normalized)) return 'numeric';
+    if (DATE_SET.has(normalized)) return 'date';
+    return 'categorical'; // 保守原則：字串型 / 未識別 / boolean / bit / 其他 → categorical
   }
 
   // ============================================================
