@@ -51,4 +51,14 @@ export class User {
   // 變更入口唯一：F006a PATCH /api/v1/accounts/:id/business-role（Admin only）
   @Column({ type: 'varchar', length: 20, nullable: true, default: null })
   business_role: 'director' | 'section_chief' | null;
+
+  // F113 / US-179 / AD-E02-5：員工編號（登入識別碼二選一，選填、有值時唯一）。
+  // 唯一性雙軌：本欄位為 plain column（不宣告 unique）——MSSQL 之 plain UNIQUE 僅允許
+  // 單一 NULL，與「多個未設定員工編號的帳號需並存」需求衝突（不同於 email，email 為
+  // NOT NULL 必填，plain unique 不受此限）。真正的 filtered unique index 僅存在於手寫
+  // migration（AD-E02-5 §3.2，比照 AD-E07-40 queue_job 兩軌策略），dev/sqlite synchronize
+  // 僅產生欄位本身，不產生該 filtered index（I-EMPNO-TWO-TRACK-01）。
+  // Migration: 1751884800004-MssqlAddUsersEmployeeNo.ts
+  @Column({ type: 'varchar', length: 32, nullable: true, default: null })
+  employee_no: string | null;
 }

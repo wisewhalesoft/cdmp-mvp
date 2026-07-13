@@ -21,6 +21,8 @@ export interface CreateAccountResult {
   role: UserRole;
   is_sales_manager: boolean;
   business_role: BusinessRole;
+  // F113 / AD-E02-5 §3.4：員工編號回應曝露（有值時唯一，nullable）
+  employee_no: string | null;
   status: 'active' | 'disabled';
   created_at: Date;
 }
@@ -32,6 +34,8 @@ export interface UpdateAccountResult {
   role: UserRole;
   is_sales_manager: boolean;
   business_role: BusinessRole;
+  // F113 / AD-E02-5 §3.4：員工編號回應曝露
+  employee_no: string | null;
   status: 'active' | 'disabled';
   created_at: Date;
   updated_at: Date;
@@ -44,6 +48,8 @@ export interface AccountListItem {
   role: UserRole;
   is_sales_manager: boolean;
   business_role: BusinessRole;
+  // F113 / AD-E02-5 §3.4 / AC-14：員工編號清單顯示欄
+  employee_no: string | null;
   status: 'active' | 'disabled';
   created_at: Date;
 }
@@ -138,12 +144,17 @@ export class AccountsService {
         'user.is_sales_manager',
         // F006a / AD-E07 v3.0：4 角色 column 顯示依據
         'user.business_role',
+        // F113 AC-14：員工編號清單顯示欄
+        'user.employee_no',
       ]);
 
     if (query.search) {
       const searchTerm = `%${query.search.toLowerCase()}%`;
       qb.andWhere(
-        '(LOWER(user.name) LIKE :search OR LOWER(user.email) LIKE :search)',
+        // F113 AC-15：LOWER(...) 兩側皆先轉小寫，達成大小寫不敏感、部分匹配——與 collation
+        // 無關（LOWER() 之行為不受欄位定序影響），與登入之精確比對為刻意不同的獨立機制。
+        // NULL employee_no 於 LOWER(NULL) LIKE 恆為假，自然不匹配，無需額外守門。
+        '(LOWER(user.name) LIKE :search OR LOWER(user.email) LIKE :search OR LOWER(user.employee_no) LIKE :search)',
         { search: searchTerm },
       );
     }
@@ -170,6 +181,7 @@ export class AccountsService {
         role: user.role,
         is_sales_manager: user.is_sales_manager ?? false,
         business_role: toBusinessRole(user.business_role),
+        employee_no: user.employee_no ?? null,
         status: user.status,
         created_at: user.created_at,
       })),
@@ -191,6 +203,21 @@ export class AccountsService {
       });
     }
 
+    // F113 §7.1 / 軌道 A：email 唯一性檢查之後、儲存之前，新增 employee_no 重複檢查（僅值非 null 時）。
+    // Transform 已將空字串/純空白正規化為 undefined → 此處 ?? null 統一收斂為 null。
+    const employeeNo = dto.employeeNo ?? null;
+    if (employeeNo !== null) {
+      const existingEmployeeNo = await this.userRepository.findOne({
+        where: { employee_no: employeeNo },
+      });
+      if (existingEmployeeNo) {
+        throw new ConflictException({
+          error: ERROR_CODES.ACCOUNT_EMPLOYEE_NO_EXISTS,
+          message: ERROR_MESSAGES.ACCOUNT_EMPLOYEE_NO_EXISTS,
+        });
+      }
+    }
+
     // Hash password
     const passwordHash = await HashUtil.hash(dto.password);
 
@@ -206,6 +233,7 @@ export class AccountsService {
       role: dto.role,
       status: 'active',
       is_sales_manager: isSalesManager,
+      employee_no: employeeNo,
     });
 
     const saved = await this.userRepository.save(user);
@@ -217,6 +245,7 @@ export class AccountsService {
       role: saved.role,
       is_sales_manager: saved.is_sales_manager ?? false,
       business_role: toBusinessRole(saved.business_role),
+      employee_no: saved.employee_no ?? null,
       status: saved.status,
       created_at: saved.created_at,
     };
@@ -243,11 +272,27 @@ export class AccountsService {
       });
     }
 
-    // Update fields (F006 BR-1: 只能編輯姓名與 Email)
+    // F113 §7.2 / 軌道 A：email 唯一性檢查後，新增 employee_no 唯一性檢查（排除自身，BR-3 同構）。
+    const employeeNo = dto.employeeNo ?? null;
+    if (employeeNo !== null) {
+      const existingEmployeeNo = await this.userRepository.findOne({
+        where: { employee_no: employeeNo },
+      });
+      if (existingEmployeeNo && existingEmployeeNo.id !== id) {
+        throw new ConflictException({
+          error: ERROR_CODES.ACCOUNT_EMPLOYEE_NO_EXISTS,
+          message: ERROR_MESSAGES.ACCOUNT_EMPLOYEE_NO_EXISTS,
+        });
+      }
+    }
+
+    // Update fields (F006 BR-1 擴充：姓名、Email 與員工編號)
     // F006 BR-6: is_sales_manager 不在此功能範圍，DTO 已透過 whitelist 阻擋；
-    // service 也僅更新 name/email，is_sales_manager 不動。
+    // service 也僅更新 name/email/employee_no，is_sales_manager 不動。
     user.name = dto.name;
     user.email = email;
+    // F113 AC-4 / FMT-6：可設值/變更/清空為 null（PUT 全量替換語意）
+    user.employee_no = employeeNo;
 
     const saved = await this.userRepository.save(user);
 
@@ -258,6 +303,7 @@ export class AccountsService {
       role: saved.role,
       is_sales_manager: saved.is_sales_manager ?? false,
       business_role: toBusinessRole(saved.business_role),
+      employee_no: saved.employee_no ?? null,
       status: saved.status,
       created_at: saved.created_at,
       updated_at: saved.updated_at,

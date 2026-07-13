@@ -145,6 +145,8 @@ export const ERROR_CODES = {
   LEGACY_LIST_NOT_COPYABLE: 'LEGACY_LIST_NOT_COPYABLE',
   /** @deprecated v2.1（2026-05-20）— 使用 CONDITION_COLUMN_NOT_IN_WHITELIST 取代；本碼保留供舊 service 過渡 */
   LIST_FILTER_FIELD_NOT_IN_WHITELIST: 'LIST_FILTER_FIELD_NOT_IN_WHITELIST',
+  // F113 / AD-E02-5 §3.6：員工編號作為登入識別碼（有值時唯一，重複時 409）
+  ACCOUNT_EMPLOYEE_NO_EXISTS: 'ACCOUNT_EMPLOYEE_NO_EXISTS',
 } as const;
 
 export const ERROR_MESSAGES = {
@@ -289,4 +291,6 @@ export const ERROR_MESSAGES = {
   LEGACY_LIST_NOT_COPYABLE: '來源名單使用舊格式儲存，不可作為複製來源；請先等待系統完成資料轉換',
   /** @deprecated v2.1 — 改用 CONDITION_COLUMN_NOT_IN_WHITELIST */
   LIST_FILTER_FIELD_NOT_IN_WHITELIST: '篩選條件欄位不在 POOLDATA 白名單或已停用',
+  // F113 / AD-E02-5 §3.6
+  ACCOUNT_EMPLOYEE_NO_EXISTS: '此員工編號已被使用',
 } as const;

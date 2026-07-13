@@ -91,6 +91,9 @@ export interface UserInfo {
   // F002 v2.0 / AD-E07 v3.0：業務角色（'director' / 'section_chief' / null）。
   // legacy JWT 未含此欄位時為 undefined，FE 應降級視為 null。
   businessRole?: BusinessRole;
+  // F113 / AD-E02-5 §3.8：員工編號（登入識別碼二選一，nullable）。
+  // 舊 JWT/舊 token 場景可能為 undefined（optional），比照 businessRole 慣例。
+  employee_no?: string | null;
 }
 
 export interface ApiError {
@@ -109,6 +112,8 @@ export interface CreateAccountRequest {
   role: UserRole;
   // F004 AC-6 / BR-9: 選填，僅在 role='user' 時有效，role='admin' 時後端忽略
   isSalesManager?: boolean;
+  // F113 / AD-E02-5 §3.8：選填員工編號（camelCase 請求體慣例）
+  employeeNo?: string;
 }
 
 export interface CreateAccountResponse {
@@ -120,6 +125,8 @@ export interface CreateAccountResponse {
   is_sales_manager: boolean;
   // F006a v1.0 / AD-E07 v3.0 (2026-05-16)：業務角色（'director' / 'section_chief' / null）。
   business_role: BusinessRole;
+  // F113 / AD-E02-5 §3.8：員工編號（snake_case 回應體慣例，nullable）
+  employee_no: string | null;
   status: 'active';
   created_at: string;
 }
@@ -128,6 +135,8 @@ export interface CreateAccountResponse {
 export interface UpdateAccountRequest {
   name: string;
   email: string;
+  // F113 / AD-E02-5 §3.8：選填員工編號（設值 / 變更 / 清空為 null）
+  employeeNo?: string;
 }
 
 export interface UpdateAccountResponse {
@@ -138,6 +147,8 @@ export interface UpdateAccountResponse {
   // ⚠️ DEPRECATED — 由 business_role 取代。
   is_sales_manager: boolean;
   business_role: BusinessRole;
+  // F113 / AD-E02-5 §3.8：員工編號（nullable）
+  employee_no: string | null;
   status: 'active' | 'disabled';
   created_at: string;
   updated_at: string;
@@ -232,6 +243,8 @@ export interface AccountListItem {
   is_sales_manager: boolean;
   // F006a v1.0 / AD-E07 v3.0：4 角色 column 顯示依據（admin / director / section_chief / user）。
   business_role: BusinessRole;
+  // F113 / AD-E02-5 §3.8 / AC-14：員工編號清單顯示欄（nullable）
+  employee_no: string | null;
   status: 'active' | 'disabled';
   created_at: string;
 }

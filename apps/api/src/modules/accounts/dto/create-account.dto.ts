@@ -1,5 +1,7 @@
-import { IsBoolean, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { VALID_ROLES, type UserRole } from '@/common/constants/roles';
+import { EMPLOYEE_NO_RE, employeeNoErrorMessage, normalizeEmployeeNo } from './employee-no.validator';
 
 export class CreateAccountDto {
   @IsString({ message: '姓名必須為字串' })
@@ -24,4 +26,11 @@ export class CreateAccountDto {
   @IsOptional()
   @IsBoolean({ message: 'isSalesManager 必須為布林值' })
   isSalesManager?: boolean;
+
+  // F113 AC-1/AC-2/AC-7/AC-8：選填員工編號。
+  // 裝飾器順序（@IsOptional → @Transform → @Matches）比照 delete-card-type-query.dto.ts 範本。
+  @IsOptional()
+  @Transform(({ value }) => normalizeEmployeeNo(value))
+  @Matches(EMPLOYEE_NO_RE, { message: employeeNoErrorMessage })
+  employeeNo?: string;
 }

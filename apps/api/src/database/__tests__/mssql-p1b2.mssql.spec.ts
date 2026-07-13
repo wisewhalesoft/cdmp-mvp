@@ -230,6 +230,14 @@ async function countTables(schema: string): Promise<number> {
 //   其物理存在與結構正確性由本檔 CUSTOMER-CORE 群組獨立正向驗證。
 const EXCLUDED_TABLES = "('typeorm_migrations', 'queue_job', 'customer_core')";
 
+// F113 / AD-E02-5 §3.2.4：users.employee_no 之 filtered unique index（uq_users_employee_no）為
+//   刻意的、僅存在於 Path B（1751884800004 migration）的兩軌分歧——entity 無 @Index，Path A
+//   synchronize 不產生。**不可**整表排除 users（會誤傷其既有 PK / email unique index 的 parity
+//   覆蓋，見 P1B2-006），改以「索引層級」白名單自 countFiltered() 與 fetchIndexRows() 兩處讀取端
+//   排除此**單一具名索引**（同一份謂詞，避免兩處白名單漂移）。
+const KNOWN_FILTERED_INDEX_EXCLUSION =
+  "AND NOT (t.name = 'users' AND i.name = 'uq_users_employee_no')";
+
 async function fetchColumns(schema: string): Promise<ColumnRow[]> {
   return ds!.query(
     `SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name, DATA_TYPE,
@@ -252,6 +260,7 @@ async function fetchIndexRows(schema: string): Promise<IndexColumnRow[]> {
      JOIN sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id AND ic.is_included_column = 0
      JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
      WHERE s.name = @0 AND i.index_id > 0 AND t.name NOT IN ${EXCLUDED_TABLES}
+       ${KNOWN_FILTERED_INDEX_EXCLUSION}
      ORDER BY t.name, i.name, ic.key_ordinal`,
     [schema],
   );
@@ -343,12 +352,13 @@ describe('AD-E07-39 P1b2 BASELINE', () => {
     expect(rows.length).toBe(ds!.entityMetadatas.length);
   });
 
-  it('TS-MSSQL-P1B2-BASELINE-003：typeorm_migrations 恰 3 筆（schema + reference-data + queue_job baseline），第二次 migration:run 為 no-op', async (ctx) => {
+  it('TS-MSSQL-P1B2-BASELINE-003：typeorm_migrations 恰 4 筆（schema + reference-data + queue_job + users employee_no baseline），第二次 migration:run 為 no-op', async (ctx) => {
     ensureMssql(ctx);
     // AD-E07-39 P1b3 新增 MssqlBaselineReferenceData（*1751884800001*）→ 由 1 支變 2 支；
-    // AD-E07-40 P2a 再新增 MssqlQueueJobSchema（*1751884800002*）→ 2 支變 3 支（皆 migrations/mssql/* glob 自動載入）。
+    // AD-E07-40 P2a 再新增 MssqlQueueJobSchema（*1751884800002*）→ 2 支變 3 支；
+    // F113 / AD-E02-5 再新增 MssqlAddUsersEmployeeNo（*1751884800004*）→ 3 支變 4 支（皆 migrations/mssql/* glob 自動載入）。
     const before = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
-    expect(Number(before[0].n)).toBe(3);
+    expect(Number(before[0].n)).toBe(4);
 
     const second = runTypeormCli('migration:run');
     expect(second.status, `stderr=${second.stderr}`).toBe(0);
@@ -356,7 +366,7 @@ describe('AD-E07-39 P1b2 BASELINE', () => {
     expect(out).toMatch(/No migrations are pending/i);
 
     const after = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
-    expect(Number(after[0].n)).toBe(3);
+    expect(Number(after[0].n)).toBe(4);
   });
 
   it('TS-MSSQL-P1B2-BASELINE-004：CLI datasource synchronize=false 且以 NODE_ENV=production 執行（無 synchronize 混淆）', (ctx) => {
@@ -438,6 +448,21 @@ describe('AD-E07-39 P1b2 PARITY', () => {
     const b = buildIndexRecords(await fetchIndexRows(DBO));
     const cmp = diffIndexSets(a, b);
     expect(cmp.setDiffs).toEqual([]);
+  });
+
+  // F113 / AD-E02-5 §3.2.4：索引層級白名單未誤傷 users 既有索引之 parity 覆蓋。
+  it('TS-MSSQL-P1B2-PARITY-006（F113 regression guard）：白名單機制僅排除 uq_users_employee_no，users 既有 PK / email unique index 仍計入', async (ctx) => {
+    ensureMssql(ctx);
+    const rows = await fetchIndexRows(DBO);
+    const usersRows = rows.filter((r) => r.table_name === 'users');
+    // users 表仍出現於 parity 讀取端（非整表消失 → 證明非整表排除）。
+    expect(usersRows.length).toBeGreaterThan(0);
+    // 既有 PK（id）仍計入。
+    expect(usersRows.some((r) => r.is_primary_key)).toBe(true);
+    // 既有 email unique index 仍計入。
+    expect(usersRows.some((r) => r.is_unique && !r.is_primary_key && r.column_name === 'email')).toBe(true);
+    // 唯獨 uq_users_employee_no 被排除。
+    expect(usersRows.some((r) => r.index_name === 'uq_users_employee_no')).toBe(false);
   });
 
   it('TS-MSSQL-P1B2-PARITY-006：sys.check_constraints 兩路徑皆恰為 0 筆', async (ctx) => {
@@ -546,17 +571,20 @@ describe('AD-E07-39 P1b2 FILTER', () => {
   const countFiltered = async (schema: string) => {
     // AD-E07-40 P2a：排除 queue_job——其 baseline migration 刻意含 filtered index（claim/sweep 熱路徑），
     //   非 36 表業務 baseline 之 F-2「無 filtered index」範疇（由 P2a SCHEMA-012 獨立驗證）。
+    // F113 / AD-E02-5 §3.2.4：另以索引層級白名單排除 users.uq_users_employee_no（刻意的 filtered
+    //   unique index，僅 Path B）——維持「業務 baseline 無非預期 filtered index」語意，計數仍為 0。
     const r = await ds!.query(
       `SELECT COUNT(*) AS n FROM sys.indexes i
        JOIN sys.tables t ON i.object_id = t.object_id
        JOIN sys.schemas s ON t.schema_id = s.schema_id
-       WHERE s.name = @0 AND i.has_filter = 1 AND t.name NOT IN ${EXCLUDED_TABLES}`,
+       WHERE s.name = @0 AND i.has_filter = 1 AND t.name NOT IN ${EXCLUDED_TABLES}
+         ${KNOWN_FILTERED_INDEX_EXCLUSION}`,
       [schema],
     );
     return Number(r[0].n);
   };
 
-  it('TS-MSSQL-P1B2-FILTER-001：Path B（dbo）filtered index 計數為 0', async (ctx) => {
+  it('TS-MSSQL-P1B2-FILTER-001：Path B（dbo）filtered index 計數為 0（uq_users_employee_no 經索引層級白名單排除）', async (ctx) => {
     ensureMssql(ctx);
     expect(await countFiltered(DBO)).toBe(0);
   });
@@ -872,17 +900,21 @@ describe('AD-E07-39 P1b2 STATIC', () => {
     expect(dsSrc).toMatch(/'migrations',\s*'mssql'/);
   });
 
-  it('TS-MSSQL-P1B2-STATIC-004（建議項）：migration:revert 逐一逆轉三支 baseline 後 dbo 全表與 migration 紀錄乾淨移除', async (ctx) => {
+  it('TS-MSSQL-P1B2-STATIC-004（建議項）：migration:revert 逐一逆轉四支 baseline 後 dbo 全表與 migration 紀錄乾淨移除', async (ctx) => {
     ensureMssql(ctx);
-    // P1b3 起 mssql 有 2 支 baseline；AD-E07-40 P2a 再加 queue_job → 3 支 → 需 revert 三次（TypeORM 由新到舊逆轉）：
-    //   #1 逆轉 queue_job（DROP queue_job）；#2 逆轉 reference-data（down 為 no-op，僅移除紀錄）；#3 逆轉 schema（DROP 全 36 表）。
-    for (let i = 1; i <= 3; i++) {
+    // P1b3 起 mssql 有 2 支 baseline；AD-E07-40 P2a 再加 queue_job → 3 支；F113 / AD-E02-5 再加
+    //   users employee_no（1751884800004）→ 4 支 → 需 revert 四次（TypeORM 由新到舊逆轉）：
+    //   #1 逆轉 users employee_no（DROP INDEX uq_users_employee_no + DROP COLUMN employee_no，時間戳最新故第 1）；
+    //   #2 逆轉 queue_job（DROP queue_job）；#3 逆轉 reference-data（down 為 no-op，僅移除紀錄）；
+    //   #4 逆轉 schema（DROP 全 36 表）。
+    for (let i = 1; i <= 4; i++) {
       const revert = runTypeormCli('migration:revert');
       expect(revert.status, `#${i} stderr=${revert.stderr}`).toBe(0);
       const out = `${revert.stdout ?? ''}${revert.stderr ?? ''}`;
       expect(out).not.toMatch(/QueryFailedError|17750|Could not load the DLL/i);
     }
-    // 三支 baseline 皆逆轉：36 業務表 + queue_job 移除、typeorm_migrations 紀錄歸 0（typeorm_migrations 表本身仍在）。
+    // 四支 baseline 皆逆轉：36 業務表 + queue_job 移除、users.employee_no 欄/索引移除、
+    //   typeorm_migrations 紀錄歸 0（typeorm_migrations 表本身仍在）。
     const business = await countTables(DBO); // 含 typeorm_migrations
     const migRows = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
     expect(Number(migRows[0].n)).toBe(0);

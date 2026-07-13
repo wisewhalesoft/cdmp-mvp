@@ -4,6 +4,8 @@ import { User } from '../entities/user.entity';
 import { ObAssignConfig } from '../entities/ob-assign-config.entity';
 import { seedConnectionOptions, isMssql } from './seed-connection';
 
+// F113 / AD-E02-5 §3.9：為 admin / user 種子帳號設定 employee_no，供手動驗證
+// 「以員工編號登入」與清單顯示／搜尋；另留 1~2 個帳號 null 以覆蓋「未設定」情境。
 const SEED_ACCOUNTS = [
   {
     id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
@@ -13,6 +15,7 @@ const SEED_ACCOUNTS = [
     role: 'admin' as const,
     status: 'active' as const,
     is_sales_manager: false,
+    employee_no: 'A0001' as string | null,
   },
   {
     id: 'b2c3d4e5-f6a7-8901-bcde-f12345678901',
@@ -22,6 +25,7 @@ const SEED_ACCOUNTS = [
     role: 'admin' as const,
     status: 'disabled' as const,
     is_sales_manager: false,
+    employee_no: null as string | null,
   },
   {
     id: 'c3d4e5f6-a7b8-9012-cdef-123456789012',
@@ -31,6 +35,7 @@ const SEED_ACCOUNTS = [
     role: 'user' as const,
     status: 'active' as const,
     is_sales_manager: false,
+    employee_no: 'E1001' as string | null,
   },
   // E07 業務主管 fixture（AD-E02-1）：role=user + is_sales_manager=true，
   // 用於 SalesManagerGuard 行為驗證與 F058 / F059 等 feature 本機測試
@@ -42,6 +47,7 @@ const SEED_ACCOUNTS = [
     role: 'user' as const,
     status: 'active' as const,
     is_sales_manager: true,
+    employee_no: null as string | null,
   },
 ];
 
@@ -79,14 +85,16 @@ async function seed() {
       const drifted =
         existing.role !== account.role ||
         existing.status !== account.status ||
-        existing.is_sales_manager !== account.is_sales_manager;
+        existing.is_sales_manager !== account.is_sales_manager ||
+        existing.employee_no !== account.employee_no;
       if (drifted) {
         existing.role = account.role;
         existing.status = account.status;
         existing.is_sales_manager = account.is_sales_manager;
+        existing.employee_no = account.employee_no;
         await userRepo.save(existing);
         console.log(
-          `  Updated: ${account.email} (role=${account.role}, status=${account.status}, is_sales_manager=${account.is_sales_manager})`,
+          `  Updated: ${account.email} (role=${account.role}, status=${account.status}, is_sales_manager=${account.is_sales_manager}, employee_no=${account.employee_no})`,
         );
       } else {
         console.log(`  Skip: ${account.email} (already correct)`);
@@ -103,10 +111,11 @@ async function seed() {
       role: account.role,
       status: account.status,
       is_sales_manager: account.is_sales_manager,
+      employee_no: account.employee_no,
     });
     await userRepo.save(user);
     console.log(
-      `  Created: ${account.email} (${account.role}, ${account.status}, is_sales_manager=${account.is_sales_manager})`,
+      `  Created: ${account.email} (${account.role}, ${account.status}, is_sales_manager=${account.is_sales_manager}, employee_no=${account.employee_no})`,
     );
   }
 

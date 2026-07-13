@@ -342,9 +342,10 @@ describe('AuthService', () => {
       }),
     ).rejects.toThrow(UnauthorizedException);
 
-    // Verify TypeORM findOne was called with the raw string (parameterized)
+    // F113 REGX-001：注入字串不含 '@' → 路由至 employee_no 分支（不轉小寫、精確比對）。
+    // 驗證要旨不變（注入字串經參數化查詢安全處理、不拼接 SQL），僅比對分支與欄位隨本次變更調整。
     expect(mockUserRepository.findOne).toHaveBeenCalledWith({
-      where: { email: sqlInjectionEmail.toLowerCase() },
+      where: { employee_no: sqlInjectionEmail },
     });
   });
 

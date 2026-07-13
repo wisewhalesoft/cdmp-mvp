@@ -28,6 +28,8 @@ export interface LoginResult {
     isSalesManager: boolean;
     // F002 v2.0 §4.6：登入回應含 businessRole（director / section_chief / null）
     businessRole: 'director' | 'section_chief' | null;
+    // F113 / AD-E02-5 §3.4：登入回應含 employee_no（string | null）
+    employee_no: string | null;
   };
 }
 
@@ -50,15 +52,20 @@ export class AuthService {
   ) {}
 
   async login(dto: LoginDto): Promise<LoginResult> {
-    // BR: Email 查詢前轉小寫
-    const email = dto.email.toLowerCase();
+    // F113 §5.3 / I-EMPNO-LOGIN-EXACT-NO-TRIM-01：identifier 不 trim、不預先小寫化。
+    // 僅於判定為 Email 分支（含 '@'）時才 toLowerCase()；員工編號分支精確比對原始提交值
+    // （不轉小寫、不 trim）。使用者輸入含首尾空白或大小寫不符 → user 查無 → 統一 401
+    // （不洩漏，屬 spec §5.3 明文之預期行為，非 bug）。TypeORM 參數化查詢確保 SQL 注入安全。
+    const identifier = dto.email;
+    const user = identifier.includes('@')
+      ? await this.userRepository.findOne({
+          where: { email: identifier.toLowerCase() },
+        })
+      : await this.userRepository.findOne({
+          where: { employee_no: identifier },
+        });
 
-    // Find user by email (TypeORM parameterized query for SQL injection safety)
-    const user = await this.userRepository.findOne({
-      where: { email },
-    });
-
-    // BR-002: 不存在的 email 回傳統一錯誤訊息
+    // BR-002: 不存在的識別碼回傳統一錯誤訊息（不因識別碼類型而分歧）
     if (!user) {
       throw new UnauthorizedException({
         error: ERROR_CODES.INVALID_CREDENTIALS,
@@ -112,6 +119,8 @@ export class AuthService {
         role: user.role,
         isSalesManager,
         businessRole,
+        // F113 §3.4 回應曝露
+        employee_no: user.employee_no ?? null,
       },
     };
   }
