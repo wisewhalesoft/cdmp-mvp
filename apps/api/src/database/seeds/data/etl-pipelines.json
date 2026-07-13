@@ -57,7 +57,9 @@
             "label": "載入 customer_financial",
             "subtitle": "customer_financial",
             "targetTable": "customer_financial",
-            "fullMode": true
+            "loadMode": "partition_replace",
+            "partitionColumn": "data_source",
+            "partitionValue": "etl_load"
           }
         }
       ],
