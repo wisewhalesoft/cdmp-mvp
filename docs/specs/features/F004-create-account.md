@@ -5,14 +5,16 @@ feature-id: F004
 source-story: US-010
 epic: E02
 priority: P0-MVP
-version: "3.1"
-date: 2026-04-24
+version: "3.2"
+date: 2026-07-13
 status: Draft
 ---
 
 # F004: 建立帳號
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-04-24
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-07-13
+
+> **v3.2（2026-07-13 / 新增選填員工編號欄位，ref US-179 / [F113](F113-employee-no-login-identifier.md)）**：`CreateAccountDto` 新增選填 `employeeNo?: string`（格式 `^[A-Za-z0-9_-]{1,32}$`、不含 `@`、trim、原樣儲存不轉大小寫；空值正規化為 NULL）；service 於 Email 唯一性檢查後新增 `employee_no` **有值時唯一**檢查（重複 → HTTP 409 `ACCOUNT_EMPLOYEE_NO_EXISTS`「此員工編號已被使用」，比照既有 `ACCOUNT_EMAIL_EXISTS` 模式）；建立結果 Response 新增 `employee_no`（nullable）。因全域 `ValidationPipe` whitelist，`employeeNo` **必須**加入 DTO 否則被 strip。唯一性採雙軌設計（service 檢查 + MSSQL filtered unique index），欄位契約與格式規範之權威來源為 [F113](F113-employee-no-login-identifier.md)。
 
 ## 功能摘要
 
@@ -88,7 +90,8 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
   "email": "string (必填，有效 Email 格式，RFC 5322 基礎規範)",
   "password": "string (必填，最少 8 字元)",
   "role": "string (必填，enum: 'admin' | 'user')",
-  "isSalesManager": "boolean (選填，預設 false，僅在 role='user' 時有效；role='admin' 時忽略)"
+  "isSalesManager": "boolean (選填，預設 false，僅在 role='user' 時有效；role='admin' 時忽略)",
+  "employeeNo": "string | null (選填 / F113；員工編號，格式 ^[A-Za-z0-9_-]{1,32}$、不含 @、trim；缺省或空值 → null；有值時唯一)"
 }
 ```
 
@@ -101,6 +104,7 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
   "email": "string (已轉為小寫)",
   "role": "string",
   "is_sales_manager": "boolean (role='user' 時回傳；role='admin' 時固定為 false 或省略)",
+  "employee_no": "string | null (F113；員工編號，未設定為 null)",
   "status": "active",
   "created_at": "string (ISO 8601)"
 }
@@ -123,8 +127,17 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
 
 ```json
 {
-  "error": "DUPLICATE_EMAIL",
+  "error": "ACCOUNT_EMAIL_EXISTS",
   "message": "此 Email 已有帳號存在"
+}
+```
+
+**Response - 409 Conflict (員工編號重複 / F113):**
+
+```json
+{
+  "error": "ACCOUNT_EMPLOYEE_NO_EXISTS",
+  "message": "此員工編號已被使用"
 }
 ```
 
@@ -161,6 +174,7 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
 | BR-8 | 姓名為必填欄位，長度 1-100 字元 |
 | BR-9 | `isSalesManager` 為選填布林欄位，預設 `false`；僅在 `role = "user"` 時有效，若 `role = "admin"` 則後端忽略此參數（不回傳驗證錯誤，寫入值固定為 `false`） |
 | BR-10 | `users.is_sales_manager` 欄位為 `BOOLEAN NOT NULL DEFAULT FALSE`（參考 AD-E02-1 與 data-model.md） |
+| BR-11 | `employeeNo` 為選填欄位（F113）：格式 `^[A-Za-z0-9_-]{1,32}$`、不含 `@`、trim 首尾空白、原樣儲存（不轉大小寫）；空字串／純空白正規化為 NULL。**有值時唯一**——service 於儲存前檢查 `employee_no` 重複，重複拋 409 `ACCOUNT_EMPLOYEE_NO_EXISTS`（比照 Email 唯一性檢查）。唯一性雙軌設計（service 檢查 + MSSQL filtered unique index）與完整格式規範見 [F113 §3](F113-employee-no-login-identifier.md#3-欄位契約employee_no)。 |
 
 ## UI/UX 需求
 
@@ -208,6 +222,7 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
 | password_hash | string | 是 | bcrypt 雜湊後的密碼 |
 | role | string (FK -> roles.role_code) | 是 | 使用者角色：admin / user |
 | is_sales_manager | boolean | 是 | 業務主管旗標，NOT NULL DEFAULT FALSE；僅在 role='user' 時具業務意義 |
+| employee_no | string (VARCHAR(32)) | 否 | 員工編號（F113），nullable、有值時唯一（filtered unique index，見 data-model.md）；作為替代登入識別碼 |
 | status | enum (active, disabled) | 是 | 帳號狀態，預設 active |
 | created_at | timestamp | 是 | 建立時間 |
 | updated_at | timestamp | 是 | 最後更新時間 |
@@ -234,4 +249,4 @@ Admin 可在 CDMP 平台內建立新的使用者帳號，指定姓名、Email、
 - NFR：[NFR-001 安全性需求](../../stories/non-functional/NFR-001-security.md)
 - 資料模型：[data-model.md](../data-model.md)
 - 錯誤處理：[error-handling.md](../error-handling.md)
-- 相關功能：F005、F006、F007、F008、F009、F010、F045
+- 相關功能：F005、F006、F007、F008、F009、F010、F045、[F113](F113-employee-no-login-identifier.md)（員工編號欄位契約權威來源）

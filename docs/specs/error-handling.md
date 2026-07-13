@@ -116,6 +116,7 @@ status: Draft
 |--------|------------|------|------|----------|
 | ACCOUNT_EMAIL_EXISTS | 409 | 此 Email 已有帳號存在 | 建立帳號時 Email 重複（大小寫不敏感） | F004 |
 | ACCOUNT_EMAIL_IN_USE | 409 | 此 Email 已被使用 | 編輯帳號時 Email 與其他帳號重複 | F006 |
+| ACCOUNT_EMPLOYEE_NO_EXISTS | 409 | 此員工編號已被使用 | **v1.x / 2026-07-13 新增（F113 / US-179）**：建立或編輯帳號時 `employee_no` 與其他帳號重複（有值時唯一；大小寫敏感、精確比對；編輯時排除自身）。建立與編輯共用同一錯誤碼與訊息（不同於 Email 分 `EXISTS`/`IN_USE` 兩碼，因 US-179 AC-5/AC-6 指定相同訊息） | F004, F006, [F113](features/F113-employee-no-login-identifier.md) |
 | ACCOUNT_NOT_FOUND | 404 | 找不到指定的帳號 | 帳號 ID 不存在 | F006, F007, F008, F010 |
 | ACCOUNT_SELF_DISABLE | 422 | 您無法停用自己的帳號 | Admin 嘗試停用自己 | F007 |
 | ACCOUNT_LAST_ADMIN | 422 | 無法移除最後一位 Admin，系統必須至少保留一個 Admin 帳號。 | 嘗試降級唯一的 Admin | F008 |

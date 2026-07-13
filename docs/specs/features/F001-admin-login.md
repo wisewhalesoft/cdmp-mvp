@@ -5,14 +5,16 @@ feature-id: F001
 source-story: US-001
 epic: E01 — 驗證與登入
 priority: P0-MVP
-version: "1.1"
-date: 2026-04-24
+version: "1.2"
+date: 2026-07-13
 status: Draft
 ---
 
 # F001: Admin 登入
 
-**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-04-24
+**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-07-13
+
+> **v1.2（2026-07-13 / 登入識別碼擴充，ref US-179 / [F113](F113-employee-no-login-identifier.md)）**：登入識別碼欄位語意擴充——**維持既有欄位名 `email`**（不改名為 `identifier`），但該欄位可承載 **Email 或員工編號（`employee_no`）擇一**。後端 `LoginDto` 之驗證由 `@IsEmail()` 放寬為 `@IsNotEmpty() @IsString()`；`auth.service.login()` 依輸入值是否含 `@` 分支：含 `@` → 以 Email 邏輯（小寫化）比對；否則 → 以 `employee_no` **精確、大小寫敏感**比對（不轉小寫）。識別碼不存在或密碼錯誤一律回既有通用 `AUTH_INVALID_CREDENTIALS`「Email 或密碼錯誤」（不新增登入錯誤碼、不洩漏資訊）；停用帳號處理不變。成功 Response 之 `user` 物件新增 `employee_no`（nullable）。分支邏輯、欄位契約、唯一性設計之權威來源為 [F113](F113-employee-no-login-identifier.md)。忘記密碼（若適用）維持 email-only、不支援員工編號。
 
 ---
 
@@ -72,7 +74,7 @@ status: Draft
 
 ```json
 {
-  "email": "string (required, email format)",
+  "email": "string (required, non-empty; 承載 Email 或員工編號擇一。含 '@' 視為 Email，否則視為 employee_no。v1.2 起後端 DTO 由 @IsEmail 放寬為 @IsNotEmpty + @IsString)",
   "password": "string (required, non-empty)",
   "rememberMe": "boolean (optional, default: false)"
 }
@@ -82,8 +84,10 @@ status: Draft
 
 | 欄位 | 規則 | 錯誤訊息 |
 |------|------|---------|
-| email | 必填、合法 Email 格式 | 「請輸入有效的 Email 地址」 |
+| email | 必填、不可為空（承載 Email 或員工編號；v1.2 起前端不再強制 Email 格式，以支援員工編號登入，見 [F113](F113-employee-no-login-identifier.md)） | 「請輸入 Email 或員工編號」 |
 | password | 必填、不可為空 | 「請輸入密碼」 |
+
+> **識別碼分支（v1.2 / F113）**：後端 `auth.service.login()` 依 `email` 欄位值是否含 `@` 分支——含 `@` → `findOne({ where: { email: value.toLowerCase() } })`；否則 → `findOne({ where: { employee_no: value } })`（精確、大小寫敏感、不轉小寫）。後續 bcrypt 密碼比對、停用檢查、Token 發行、角色導向皆不變。完整規格見 [F113 §5](F113-employee-no-login-identifier.md#5-登入識別碼分支邏輯f001--f002)。
 
 ### Response — 成功（HTTP 200）
 
@@ -94,6 +98,7 @@ status: Draft
     "id": "string (UUID)",
     "name": "string",
     "email": "string",
+    "employee_no": "string | null (v1.2 / F113：員工編號，未設定為 null)",
     "role": "admin"
   }
 }
@@ -267,7 +272,7 @@ status: Draft
 |------|------|
 | 來源 Story | [US-001-admin-login.md](../stories/epics/E01-auth-and-login/US-001-admin-login.md) |
 | Epic Brief | [E01 epic-brief.md](../stories/epics/E01-auth-and-login/epic-brief.md) |
-| 相關 Feature | [F002-user-login.md](F002-user-login.md)、[F003-logout.md](F003-logout.md) |
+| 相關 Feature | [F002-user-login.md](F002-user-login.md)、[F003-logout.md](F003-logout.md)、[F113-employee-no-login-identifier.md](F113-employee-no-login-identifier.md)（員工編號登入識別碼，登入分支權威來源） |
 | 安全性 NFR | [NFR-001-security.md](../stories/non-functional/NFR-001-security.md) |
 | 效能 NFR | [NFR-002-performance.md](../stories/non-functional/NFR-002-performance.md) |
 | 流程圖 | [diagrams/F001-admin-login.mmd](../diagrams/F001-admin-login.mmd) |

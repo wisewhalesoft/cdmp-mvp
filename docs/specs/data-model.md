@@ -46,6 +46,7 @@ status: Draft
 | email | 電子郵件 | 必填，唯一，最大長度 255 字元 | 儲存前強制轉為小寫（`toLowerCase()`），確保大小寫不敏感的唯一性 |
 | password_hash | 密碼雜湊值 | 必填 | bcrypt 雜湊，cost factor >= 10。明文密碼絕不儲存 |
 | role | 角色 | 必填，列舉值：`admin` / `user` | 系統角色：admin、user（詳見 US-017） |
+| employee_no | 員工編號 | **選填、可為 NULL**，`VARCHAR(32)`，**有值時唯一** | **F113 / US-179 新增**：替代登入識別碼；格式 `^[A-Za-z0-9_-]{1,32}$`、不含 `@`、trim、原樣儲存（不轉大小寫，與 Email 相反）。唯一性採**雙軌**：service 層重複檢查（dev/sqlite/測試之主要守衛）+ MSSQL **filtered unique index** `ux_users_employee_no ON users(employee_no) WHERE employee_no IS NOT NULL`。**Entity 維持 plain `@Column({ nullable: true })`（不宣告 unique）**，filtered index 僅存在於手寫 MSSQL migration，不由 `synchronize` 產生（比照 `queue_job` 兩軌策略）。詳見 [F113 §3](features/F113-employee-no-login-identifier.md#3-欄位契約employee_no) |
 | status | 帳號狀態 | 必填，列舉值：`active` / `disabled` | 預設值：`active` |
 | created_at | 建立時間 | 必填，系統自動設定 | UTC 時間戳記 |
 | updated_at | 最後更新時間 | 必填，系統自動更新 | UTC 時間戳記 |
@@ -54,13 +55,14 @@ status: Draft
 
 - Email 唯一性比對為大小寫不敏感（儲存時強制小寫）
 - Email 格式須符合 RFC 5322 基礎規範
+- `employee_no`（F113）選填、可為 NULL；**有值時唯一**（雙軌：service 檢查排除自身 + MSSQL filtered unique index）；**大小寫敏感、原樣儲存**（不轉小寫）；登入時以 `@` 判斷識別碼——含 `@` 走 Email（小寫化比對），否則走 `employee_no`（精確、大小寫敏感比對）。帳號清單搜尋則以大小寫不敏感、部分匹配比對 `employee_no`（與登入刻意不同，OQ-179-02）。`employee_no` 為獨立自由格式登入識別碼，**與 `ob_emphire` / EMPHIRE `emplid` 無關聯**（OQ-179-04）
 - 密碼最短 8 個字元（驗證發生在雜湊之前）
 - 系統必須至少保留一個 `role = admin` 且 `status = active` 的帳號
 - 停用帳號（`status = disabled`）無法登入，嘗試登入時顯示停用訊息
 - `role` 欄位僅可使用 2 種預設值（admin、user）；不支援自訂角色（US-017 AC-2）
 - 2 種角色為系統預設，不提供 API 新增或刪除（Seed Data 策略）
 
-**相關功能**：[F004](features/F004-create-account.md), [F005](features/F005-view-account-list.md), [F006](features/F006-edit-account.md), [F007](features/F007-disable-enable-account.md), [F008](features/F008-assign-change-role.md), [F045](features/F045-business-role-definitions.md)
+**相關功能**：[F004](features/F004-create-account.md), [F005](features/F005-view-account-list.md), [F006](features/F006-edit-account.md), [F007](features/F007-disable-enable-account.md), [F008](features/F008-assign-change-role.md), [F045](features/F045-business-role-definitions.md), [F001](features/F001-admin-login.md), [F002](features/F002-user-login.md), [F113](features/F113-employee-no-login-identifier.md)（`employee_no` 欄位契約 + 登入分支權威來源）
 
 ---
 

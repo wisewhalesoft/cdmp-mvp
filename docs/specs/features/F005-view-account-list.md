@@ -5,10 +5,12 @@ feature-id: F005
 source-story: US-011
 epic: E02
 priority: P0-MVP
-version: "3.2"
-date: 2026-05-16
+version: "3.3"
+date: 2026-07-13
 status: Draft
 ---
+
+> **v3.3（2026-07-13 / 帳號清單新增員工編號欄 + 搜尋納入，ref US-179 / [F113](F113-employee-no-login-identifier.md)）**：清單新增「員工編號」欄（`employee_no`，nullable，未設定顯示空白）；QueryBuilder `.select([...])` 新增 `user.employee_no`、`AccountListItem` 回應新增 `employee_no`。既有 `search` 搜尋範圍由「姓名 OR Email」擴充為「姓名 OR Email OR 員工編號」，皆 `LOWER(...) LIKE`（**大小寫不敏感、部分匹配**）。**注意：清單搜尋之員工編號比對為大小寫不敏感、部分匹配，與登入（F001/F002）之精確、大小寫敏感比對刻意不同**（OQ-179-02，見 [F113 §4](F113-employee-no-login-identifier.md#4-識別碼比對規則對照email-vs-員工編號)）。欄位契約權威來源＝[F113](F113-employee-no-login-identifier.md)。
 
 > **v3.2 / 2026-05-16 變更（E07 合併重構 AD-E07 v3.0）**：API response 與資料讀取欄位由 `is_sales_manager`（v3.1 boolean）改為 `business_role`（VARCHAR enum: `'director'` / `'section_chief'` / `null`）；UI 清單欄位由「業務主管 badge」改為「業務角色 badge」（部長 / 處長 / 不顯示）；操作選單「角色變更」改為「變更業務角色」並指向 [F006a](F006a-update-business-role.md)；F008 標 DEPRECATED。本 v3.2 banner 為精簡補修；完整重寫請以本 banner 與 [F006a](F006a-update-business-role.md) / [F002 v2.0 §4.5](F002-user-login.md#45-登入後導向與可用功能rbac--實質身份矩陣) 為唯一權威來源（response body 中 `is_sales_manager` 欄位請替換為 `business_role` 字串 enum）。
 
@@ -67,7 +69,7 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 |------|------|------|--------|------|
 | page | integer | 否 | 1 | 頁碼，最小值 1 |
 | limit | integer | 否 | 20 | 每頁筆數，範圍 1-100 |
-| search | string | 否 | - | 搜尋關鍵字，比對姓名與 Email（大小寫不敏感） |
+| search | string | 否 | - | 搜尋關鍵字，比對姓名、Email 與**員工編號**（大小寫不敏感、部分匹配；v3.3 / F113） |
 | role | string | 否 | - | 篩選角色：`admin` 或 `user` |
 | status | string | 否 | - | 篩選狀態：`active` 或 `disabled` |
 
@@ -85,6 +87,7 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
         "displayName": "string"
       },
       "business_role": "string | null (enum: 'director' | 'section_chief' | null；Admin 帳號邏輯上不適用此欄位，可能為 null 或原值，前端不顯示)",
+      "employee_no": "string | null (F113；員工編號，未設定為 null)",
       "status": "string",
       "created_at": "string (ISO 8601)"
     }
@@ -120,7 +123,7 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 | BR-1 | 預設排序為 created_at DESC（最新建立的帳號在前） |
 | BR-2 | 預設每頁顯示 20 筆 |
 | BR-3 | 搜尋為大小寫不敏感，SQL 層使用 `ILIKE` 或 `LOWER()` 比對 |
-| BR-4 | 搜尋範圍包含姓名與 Email 兩個欄位 |
+| BR-4 | 搜尋範圍包含姓名、Email 與**員工編號**三個欄位（v3.3 / F113；`(LOWER(user.name) LIKE :search OR LOWER(user.email) LIKE :search OR LOWER(user.employee_no) LIKE :search)`，NULL `employee_no` 自然不匹配）；此員工編號比對為大小寫不敏感、部分匹配，與登入之精確、大小寫敏感比對刻意不同（OQ-179-02） |
 | BR-5 | 篩選條件可組合使用（search + role + status） |
 | BR-6 | 僅 Admin 角色可存取帳號清單 |
 | BR-7 | 回傳的帳號資料不包含 password_hash 欄位 |
@@ -131,7 +134,7 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 
 | 項目 | 說明 |
 |------|------|
-| 清單欄位 | 姓名、Email、角色（中文顯示名稱依 BR-9 4 角色 label）、業務角色 badge（`role='user'` 且 `business_role='director'` 顯示「業務部長」；`'section_chief'` 顯示「業務處長」；`null` 不顯示；admin 不顯示）、狀態、建立日期、操作（編輯／停用／**變更業務角色**（指向 [F006a](F006a-update-business-role.md)）／重設密碼） |
+| 清單欄位 | 姓名、Email、**員工編號**（`employee_no`，未設定顯示空白；v3.3 / F113）、角色（中文顯示名稱依 BR-9 4 角色 label）、業務角色 badge（`role='user'` 且 `business_role='director'` 顯示「業務部長」；`'section_chief'` 顯示「業務處長」；`null` 不顯示；admin 不顯示）、狀態、建立日期、操作（編輯／停用／**變更業務角色**（指向 [F006a](F006a-update-business-role.md)）／重設密碼） |
 | 搜尋 | 搜尋框位於清單上方，支援即時搜尋或按鍵搜尋 |
 | 篩選 | 角色篩選（全部/管理者/使用者）與狀態篩選（全部/啟用/停用），角色篩選選項由 `GET /api/roles` 動態載入 |
 | 分頁 | 清單下方顯示分頁控制項，包含當前頁碼、總頁數、每頁筆數選擇 |
@@ -161,7 +164,7 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 ## 資料需求
 
 此功能讀取 Account Entity 的以下欄位：
-- id, name, email, role, business_role, status, created_at
+- id, name, email, employee_no, role, business_role, status, created_at
 
 不回傳 password_hash 或其他敏感欄位。
 
@@ -186,4 +189,4 @@ Admin 可查看所有使用者帳號的分頁清單，包含搜尋與篩選功�
 - NFR：[NFR-002 效能需求](../../stories/non-functional/NFR-002-performance.md)
 - 資料模型：[data-model.md](../data-model.md)
 - 錯誤處理：[error-handling.md](../error-handling.md)
-- 相關功能：F004、F006、F007、F008、F010、F045
+- 相關功能：F004、F006、F007、F008、F010、F045、[F113](F113-employee-no-login-identifier.md)（員工編號欄位契約權威來源）

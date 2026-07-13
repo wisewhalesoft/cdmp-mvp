@@ -5,14 +5,16 @@ feature-id: F002
 source-story: US-002
 epic: E01 — 驗證與登入
 priority: P0-MVP
-version: "2.1.0"
-date: 2026-07-12
+version: "2.1.1"
+date: 2026-07-13
 status: Draft
 ---
 
 # F002: User 登入
 
-**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-07-12
+**Priority:** P0-MVP | **Status:** Draft | **Last Updated:** 2026-07-13
+
+> **v2.1.1（2026-07-13 / 登入識別碼擴充：Email 或員工編號，ref US-179 / [F113](F113-employee-no-login-identifier.md)）**：登入端點（與 F001 共用）之識別碼欄位語意擴充——**維持既有欄位名 `email`**（不改名為 `identifier`），可承載 **Email 或員工編號（`employee_no`）擇一**。後端 `LoginDto` 由 `@IsEmail()` 放寬為 `@IsNotEmpty() @IsString()`；`auth.service.login()` 依輸入值是否含 `@` 分支：含 `@` → Email 邏輯（小寫化）；否則 → `employee_no` **精確、大小寫敏感**比對（不轉小寫）。失敗一律回既有通用 `AUTH_INVALID_CREDENTIALS`（不新增登入錯誤碼、不洩漏）；停用帳號、Token 發行、角色導向（§4.5 / §4.6 矩陣）皆**不變**。成功 Response 之 `user` 物件新增 `employee_no`（nullable）。**忘記密碼（F009）維持 email-only、不支援員工編號**（[F113 §9](F113-employee-no-login-identifier.md#9-忘記密碼行為維持不變--oq-179-01)）。分支邏輯與欄位契約權威來源為 [F113](F113-employee-no-login-identifier.md)；本次不影響 RBAC / 導向。
 
 > **v2.1.0（2026-07-12 / 業務角色移除 Customer 360 + 預設導向改分派總覽，ref US-177 / F111）**：**業務部長**（`business_role='director'`）與**業務處長**（`business_role='section_chief'`）不再具備 Customer 360（E06）存取權——sidebar 不顯示 Customer 360 群組、前端路由守衛攔截 `/c360/**`；且登入後預設導向由 `/c360/customers` 改為 `/assignment/overview`（分派總覽儀表板，客戶名單分派模組 landing，見 [F111](F111-assignment-overview-dashboard.md)）。**一般使用者**（`business_role IS NULL`）與**系統管理者**（`admin`）不受影響：一般使用者仍導向 `/c360/customers`、admin 仍導向 `/`，且兩者保有 Customer 360。本次強制為**純前端 RBAC**（sidebar 可見性 + 路由守衛 + 角色感知導向）；後端 Customer 360（E06）端點維持 `authenticated`，**不新增 Guard**。影響章節：§1 / §4 / §4.5 / AC-1 / AC-5 / AC-5b / AC-6 / §6 / §7 / §8 / BR-Redirect。
 
@@ -109,7 +111,7 @@ status: Draft
 
 ### 差異說明
 
-- Request / Response 結構與 F001 完全相同
+- Request / Response 結構與 F001 完全相同（含 v1.2/v2.1.1 之識別碼欄位語意擴充：`email` 欄位承載 Email 或員工編號，依 `@` 分支；DTO 放寬；`user` 物件新增 `employee_no`，見 [F113](F113-employee-no-login-identifier.md)）
 - 成功 Response 中 `user.role` 值為 `"user"`（而非 `"admin"`）
 - JWT Payload 中 `businessRole` 欄位反映該 User 的業務角色（`"director"` / `"section_chief"` / `null`）
 - 前端根據 `role` + `businessRole` 組合決定導向目標與 sidebar 內容（完整規則見 §4.5 與 §4.6）
@@ -437,7 +439,7 @@ F002 特有的安全性要求：
 |------|------|
 | 來源 Story | [US-002-user-login.md](../stories/epics/E01-auth-and-login/US-002-user-login.md) |
 | Epic Brief | [E01 epic-brief.md](../stories/epics/E01-auth-and-login/epic-brief.md) |
-| 相關 Feature | [F001-admin-login.md](F001-admin-login.md)、[F003-logout.md](F003-logout.md)、[F006a-update-business-role.md](F006a-update-business-role.md)、[F010-admin-reset-password.md](F010-admin-reset-password.md)、~~[F008-assign-change-role.md](F008-assign-change-role.md)~~（DEPRECATED v3.0）、[F045-business-role-definitions.md](F045-business-role-definitions.md)、[F073-define-director-role.md](F073-define-director-role.md)、[F074-define-section-chief-role.md](F074-define-section-chief-role.md) |
+| 相關 Feature | [F001-admin-login.md](F001-admin-login.md)、[F003-logout.md](F003-logout.md)、[F006a-update-business-role.md](F006a-update-business-role.md)、[F010-admin-reset-password.md](F010-admin-reset-password.md)、[F113-employee-no-login-identifier.md](F113-employee-no-login-identifier.md)（員工編號登入識別碼，登入分支權威來源）、~~[F008-assign-change-role.md](F008-assign-change-role.md)~~（DEPRECATED v3.0）、[F045-business-role-definitions.md](F045-business-role-definitions.md)、[F073-define-director-role.md](F073-define-director-role.md)、[F074-define-section-chief-role.md](F074-define-section-chief-role.md) |
 | 架構決策 | architecture-spec.md AD-E07 v3.0（`users.business_role` 單欄位 + Guard 體系） |
 | 安全性 NFR | [NFR-001-security.md](../stories/non-functional/NFR-001-security.md) |
 | 效能 NFR | [NFR-002-performance.md](../stories/non-functional/NFR-002-performance.md) |
@@ -451,6 +453,7 @@ F002 特有的安全性要求：
 
 | 版本 | 日期 | 變更摘要 |
 |------|------|---------|
+| **v2.1.1** | **2026-07-13** | **【登入識別碼擴充：Email 或員工編號，ref US-179 / F113】** 登入端點（與 F001 共用）識別碼欄位維持名 `email`，語意擴充為承載 Email 或員工編號擇一；後端 DTO 由 `@IsEmail` 放寬為 `@IsNotEmpty + @IsString`；`auth.service.login()` 依 `@` 分支（含 `@` → Email 小寫化；否則 → `employee_no` 精確、大小寫敏感）；失敗一律回既有 `AUTH_INVALID_CREDENTIALS`；`user` 物件新增 `employee_no`（nullable）。忘記密碼維持 email-only、不支援員工編號。RBAC / 導向不受影響。影響章節：頂部 banner、§4 差異說明、§13 交叉參考。分支與欄位契約權威來源＝[F113](F113-employee-no-login-identifier.md)。 |
 | v1.0 | 2026-04-02 | 初版（與 F001 拆分） |
 | v1.1 | 2026-04-24 | 補 `is_sales_manager` 旗標說明與 JWT payload 差異 |
 | v1.2 | 2026-05-13 | 彙整 RBAC 矩陣與登入導向邏輯（解決 `manager@cdmp.test` 登入後被導向無 sidebar 的 `/user-info`、無法導覽至 Customer 360 的 bug）：新增 §4.5「登入後導向與可用功能」實質身份矩陣作為唯一權威來源；修訂 AC-1（一般使用者導向 `/c360/customers`）；新增 AC-5（業務主管導向）、AC-6（sidebar 動態渲染）；新增 BR-RBAC、BR-Redirect；補強 §6 UI/UX 章節（sidebar 為共用元件、`/user-info` 改為極端 fallback）；§7 補 JWT `is_sales_manager` 解析失敗保守降級規則；新增 T-008~T-013 測試案例 |

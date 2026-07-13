@@ -136,7 +136,8 @@
           </button>
           <div class="relative flex-1 max-w-xs">
             <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-            <input type="text" placeholder="搜尋姓名或 Email" class="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
+<!-- F113 / US-179：搜尋新增員工編號 -->
+            <input type="text" placeholder="搜尋姓名、Email 或員工編號" class="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
           </div>
           <!-- 角色 filter（v3.0 單一維度，4 選 1） -->
           <select id="roleFilter" onchange="applyRoleFilter(this.value)" class="px-3 py-2 text-sm border border-border rounded-lg bg-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
@@ -160,6 +161,8 @@
               <thead>
                 <tr class="border-b border-border bg-gray-50/60">
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">姓名</th>
+                  <!-- F113 / US-179：員工編號欄（選填，可作為登入帳號）-->
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">員工編號</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">Email</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">
                     <span class="inline-flex items-center gap-1">角色
@@ -177,13 +180,14 @@
                 <!-- Row 1: 系統管理者（self）— role=admin -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors" data-role="admin">
                   <td class="px-5 py-3 font-medium text-gray-900">王小明</td>
+                  <td class="px-5 py-3"><span class="font-mono text-gray-600">A00123</span></td>
                   <td class="px-5 py-3 text-gray-600">admin@example.com</td>
                   <td class="px-5 py-3"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full role-badge-admin"><i data-lucide="crown" class="w-3 h-3"></i>系統管理者</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-01-15</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('王小明','admin@example.com','admin')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('王小明','admin@example.com','admin','A00123')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button disabled class="text-xs text-gray-300 cursor-not-allowed font-medium" title="無法停用自己的帳號">停用</button>
                       <button disabled class="text-xs text-gray-300 cursor-not-allowed font-medium" title="無法變更自己的角色">變更角色</button>
                       <button onclick="openResetPasswordModal('王小明')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
@@ -193,13 +197,14 @@
                 <!-- Row 2: 系統管理者 — role=admin -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors" data-role="admin">
                   <td class="px-5 py-3 font-medium text-gray-900">陳美玲</td>
+                  <td class="px-5 py-3 text-gray-400">—</td>
                   <td class="px-5 py-3 text-gray-600">admin2@example.com</td>
                   <td class="px-5 py-3"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full role-badge-admin"><i data-lucide="crown" class="w-3 h-3"></i>系統管理者</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-03-05</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('陳美玲','admin2@example.com','admin')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('陳美玲','admin2@example.com','admin','')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('陳美玲')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
                       <button onclick="openChangeRoleModal('陳美玲','admin')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('陳美玲')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
@@ -209,13 +214,14 @@
                 <!-- Row 3: 業務部長 — role=user + business_role=director -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors" data-role="director">
                   <td class="px-5 py-3 font-medium text-gray-900">張部長</td>
+                  <td class="px-5 py-3"><span class="font-mono text-gray-600">EMP-1001</span></td>
                   <td class="px-5 py-3 text-gray-600">director1@example.com</td>
                   <td class="px-5 py-3"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full role-badge-director"><i data-lucide="briefcase" class="w-3 h-3"></i>業務部長</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-04-01</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('張部長','director1@example.com','director')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('張部長','director1@example.com','director','EMP-1001')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('張部長')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
                       <button onclick="openChangeRoleModal('張部長','director')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('張部長')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
@@ -225,13 +231,14 @@
                 <!-- Row 4: 業務處長 — role=user + business_role=section_chief -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors" data-role="section_chief">
                   <td class="px-5 py-3 font-medium text-gray-900">李處長</td>
+                  <td class="px-5 py-3"><span class="font-mono text-gray-600">EMP-2087</span></td>
                   <td class="px-5 py-3 text-gray-600">chief1@example.com</td>
                   <td class="px-5 py-3"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full role-badge-section_chief"><i data-lucide="user-cog" class="w-3 h-3"></i>業務處長</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-04-10</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('李處長','chief1@example.com','section_chief')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('李處長','chief1@example.com','section_chief','EMP-2087')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('李處長')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
                       <button onclick="openChangeRoleModal('李處長','section_chief')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('李處長')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
@@ -241,13 +248,14 @@
                 <!-- Row 5: 業務處長 — role=user + business_role=section_chief（任務 mock 第三個處長） -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors" data-role="section_chief">
                   <td class="px-5 py-3 font-medium text-gray-900">王處長</td>
+                  <td class="px-5 py-3 text-gray-400">—</td>
                   <td class="px-5 py-3 text-gray-600">chief2@example.com</td>
                   <td class="px-5 py-3"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full role-badge-section_chief"><i data-lucide="user-cog" class="w-3 h-3"></i>業務處長</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-04-12</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('王處長','chief2@example.com','section_chief')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('王處長','chief2@example.com','section_chief','')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('王處長')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
                       <button onclick="openChangeRoleModal('王處長','section_chief')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('王處長')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
@@ -257,13 +265,14 @@
                 <!-- Row 6: 一般使用者 — role=user + business_role=NULL -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors" data-role="user">
                   <td class="px-5 py-3 font-medium text-gray-900">陳業務</td>
+                  <td class="px-5 py-3"><span class="font-mono text-gray-600">S30012</span></td>
                   <td class="px-5 py-3 text-gray-600">sales1@example.com</td>
                   <td class="px-5 py-3"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full role-badge-user"><i data-lucide="user" class="w-3 h-3"></i>一般使用者</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-02-20</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('陳業務','sales1@example.com','user')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('陳業務','sales1@example.com','user','S30012')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('陳業務')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
                       <button onclick="openChangeRoleModal('陳業務','user')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('陳業務')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
@@ -273,13 +282,14 @@
                 <!-- Row 7: 一般使用者 — role=user + business_role=NULL -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors" data-role="user">
                   <td class="px-5 py-3 font-medium text-gray-900">黃業務</td>
+                  <td class="px-5 py-3"><span class="font-mono text-gray-600">S30045</span></td>
                   <td class="px-5 py-3 text-gray-600">sales2@example.com</td>
                   <td class="px-5 py-3"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full role-badge-user"><i data-lucide="user" class="w-3 h-3"></i>一般使用者</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-green-100 text-green-700">啟用中</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-05-08</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('黃業務','sales2@example.com','user')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('黃業務','sales2@example.com','user','S30045')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openDisableModal('黃業務')" class="text-xs text-warning hover:text-amber-600 font-medium transition-colors">停用</button>
                       <button onclick="openChangeRoleModal('黃業務','user')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('黃業務')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
@@ -289,13 +299,14 @@
                 <!-- Row 8: 一般使用者（已停用）— role=user + business_role=NULL -->
                 <tr class="border-b border-border hover:bg-gray-50/50 transition-colors" data-role="user">
                   <td class="px-5 py-3 font-medium text-gray-900">林志豪</td>
+                  <td class="px-5 py-3 text-gray-400">—</td>
                   <td class="px-5 py-3 text-gray-600">user3@example.com</td>
                   <td class="px-5 py-3"><span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full role-badge-user"><i data-lucide="user" class="w-3 h-3"></i>一般使用者</span></td>
                   <td class="px-5 py-3"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">已停用</span></td>
                   <td class="px-5 py-3 text-gray-500">2025-02-10</td>
                   <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
-                      <button onclick="openEditModal('林志豪','user3@example.com','user')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
+                      <button onclick="openEditModal('林志豪','user3@example.com','user','')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">編輯</button>
                       <button onclick="openEnableModal('林志豪')" class="text-xs text-success hover:text-green-600 font-medium transition-colors">啟用</button>
                       <button onclick="openChangeRoleModal('林志豪','user')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">變更角色</button>
                       <button onclick="openResetPasswordModal('林志豪')" class="text-xs text-primary hover:text-blue-700 font-medium transition-colors">重設密碼</button>
@@ -323,6 +334,8 @@
               <thead>
                 <tr class="border-b border-border bg-gray-50/60">
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">姓名</th>
+                  <!-- F113 / US-179：員工編號欄 -->
+                  <th class="text-left px-5 py-3 font-semibold text-gray-600">員工編號</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">Email</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">角色</th>
                   <th class="text-left px-5 py-3 font-semibold text-gray-600">狀態</th>
@@ -331,9 +344,9 @@
                 </tr>
               </thead>
               <tbody>
-                <tr class="border-b border-border"><td class="px-5 py-3.5" colspan="6"><div class="flex gap-8"><div class="h-4 w-16 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-40 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-24 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-14 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-24 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-48 bg-gray-200 rounded skeleton-pulse"></div></div></td></tr>
-                <tr class="border-b border-border"><td class="px-5 py-3.5" colspan="6"><div class="flex gap-8"><div class="h-4 w-20 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-36 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-20 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-16 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-24 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-44 bg-gray-200 rounded skeleton-pulse"></div></div></td></tr>
-                <tr><td class="px-5 py-3.5" colspan="6"><div class="flex gap-8"><div class="h-4 w-14 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-44 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-24 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-14 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-24 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-40 bg-gray-200 rounded skeleton-pulse"></div></div></td></tr>
+                <tr class="border-b border-border"><td class="px-5 py-3.5" colspan="7"><div class="flex gap-8"><div class="h-4 w-16 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-20 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-40 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-24 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-14 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-24 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-48 bg-gray-200 rounded skeleton-pulse"></div></div></td></tr>
+                <tr class="border-b border-border"><td class="px-5 py-3.5" colspan="7"><div class="flex gap-8"><div class="h-4 w-20 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-16 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-36 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-20 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-16 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-24 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-44 bg-gray-200 rounded skeleton-pulse"></div></div></td></tr>
+                <tr><td class="px-5 py-3.5" colspan="7"><div class="flex gap-8"><div class="h-4 w-14 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-20 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-44 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-24 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-14 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-24 bg-gray-200 rounded skeleton-pulse"></div><div class="h-4 w-40 bg-gray-200 rounded skeleton-pulse"></div></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -359,8 +372,8 @@
             <button onclick="showState('loading')" class="px-3 py-1.5 text-xs font-medium border border-border rounded-md hover:bg-gray-50 transition-colors text-gray-600">Loading Skeleton</button>
             <span class="w-px h-6 bg-border self-center mx-1"></span>
             <button onclick="openModal('createModal')" class="px-3 py-1.5 text-xs font-medium border border-blue-200 rounded-md hover:bg-blue-50 transition-colors text-primary">建立帳號 Modal</button>
-            <button onclick="openEditModal('陳業務','sales1@example.com','user')" class="px-3 py-1.5 text-xs font-medium border border-blue-200 rounded-md hover:bg-blue-50 transition-colors text-primary">編輯帳號（一般使用者）</button>
-            <button onclick="openEditModal('張部長','director1@example.com','director')" class="px-3 py-1.5 text-xs font-medium border border-blue-200 rounded-md hover:bg-blue-50 transition-colors text-primary">編輯帳號（業務部長）</button>
+            <button onclick="openEditModal('陳業務','sales1@example.com','user','S30012')" class="px-3 py-1.5 text-xs font-medium border border-blue-200 rounded-md hover:bg-blue-50 transition-colors text-primary">編輯帳號（一般使用者）</button>
+            <button onclick="openEditModal('張部長','director1@example.com','director','EMP-1001')" class="px-3 py-1.5 text-xs font-medium border border-blue-200 rounded-md hover:bg-blue-50 transition-colors text-primary">編輯帳號（業務部長）</button>
             <button onclick="openDisableModal('陳業務')" class="px-3 py-1.5 text-xs font-medium border border-amber-200 rounded-md hover:bg-amber-50 transition-colors text-amber-600">停用帳號 Modal</button>
             <button onclick="openEnableModal('林志豪')" class="px-3 py-1.5 text-xs font-medium border border-green-200 rounded-md hover:bg-green-50 transition-colors text-green-600">啟用帳號 Modal</button>
             <span class="w-px h-6 bg-border self-center mx-1"></span>
@@ -398,6 +411,14 @@
             <label class="block text-sm font-medium text-gray-700 mb-1.5">姓名 <span class="text-danger">*</span></label>
             <input id="createName" type="text" maxlength="100" placeholder="請輸入姓名" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
             <p id="createNameError" class="text-xs text-danger mt-1 hidden">請輸入姓名（1-100 個字元）</p>
+          </div>
+          <!-- 員工編號（F113 / US-179：選填，可作為登入帳號；無紅色星號）-->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">員工編號</label>
+            <input id="createEmployeeNo" type="text" maxlength="32" placeholder="請輸入員工編號（選填）" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
+            <p class="text-xs text-gray-400 mt-1">選填；可作為登入帳號（英數、-、_，最多 32 字，不含 @）</p>
+            <p id="createEmployeeNoError" class="text-xs text-danger mt-1 hidden">員工編號格式不符（限英數、-、_，最多 32 字，不含 @）</p>
+            <p id="createEmployeeNoDupError" class="text-xs text-danger mt-1 hidden">此員工編號已被使用</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Email <span class="text-danger">*</span></label>
@@ -469,6 +490,14 @@
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">姓名 <span class="text-danger">*</span></label>
             <input id="editName" type="text" maxlength="100" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
+          </div>
+          <!-- 員工編號（F113 / US-179：選填，可作為登入帳號；清空即移除）-->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">員工編號</label>
+            <input id="editEmployeeNo" type="text" maxlength="32" placeholder="請輸入員工編號（選填）" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors">
+            <p class="text-xs text-gray-400 mt-1">選填；可作為登入帳號（英數、-、_，最多 32 字，不含 @）。清空即移除。</p>
+            <p id="editEmployeeNoError" class="text-xs text-danger mt-1 hidden">員工編號格式不符（限英數、-、_，最多 32 字，不含 @）</p>
+            <p id="editEmployeeNoDupError" class="text-xs text-danger mt-1 hidden">此員工編號已被使用</p>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">Email <span class="text-danger">*</span></label>
@@ -706,6 +735,13 @@
       return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full ${meta.klass}"><i data-lucide="${meta.icon}" class="w-3 h-3"></i>${meta.label}</span>`;
     }
 
+    // ===== F113 / US-179：員工編號（選填，可作為登入帳號）=====
+    // 格式：英數、-、_，1-32 字，不含 @（避免與 Email 混淆）
+    const EMPLOYEE_NO_REGEX = /^[A-Za-z0-9_-]{1,32}$/;
+    // mock：目前已被占用的員工編號（對應表格列），用於示範「此員工編號已被使用」重複錯誤
+    const TAKEN_EMPLOYEE_NOS = ['A00123', 'EMP-1001', 'EMP-2087', 'S30012', 'S30045'];
+    let editingOriginalEmpNo = ''; // 編輯時的原員工編號（重複檢查時排除自身）
+
     // ===== Modal Management =====
     function openModal(modalId) {
       const modal = document.getElementById(modalId);
@@ -729,9 +765,14 @@
     });
 
     // ===== Edit Modal =====
-    function openEditModal(name, email, role) {
+    function openEditModal(name, email, role, empNo) {
       document.getElementById('editName').value = name;
       document.getElementById('editEmail').value = email;
+      // F113 / US-179：員工編號預填（可清空以移除）
+      editingOriginalEmpNo = empNo || '';
+      document.getElementById('editEmployeeNo').value = empNo || '';
+      document.getElementById('editEmployeeNoError').classList.add('hidden');
+      document.getElementById('editEmployeeNoDupError').classList.add('hidden');
       const badge = document.getElementById('editRoleBadge');
       badge.outerHTML = `<span id="editRoleBadge">${renderRoleBadgeHTML(role)}</span>`;
       openModal('editModal');
@@ -744,8 +785,20 @@
         showToast('error', '錯誤', '請填寫所有必填欄位');
         return;
       }
+      // F113 / US-179：員工編號選填，有值才驗格式 + 重複（排除自身原值；清空＝移除）
+      const empNo = document.getElementById('editEmployeeNo').value.trim();
+      const editEmpErr = document.getElementById('editEmployeeNoError');
+      const editEmpDup = document.getElementById('editEmployeeNoDupError');
+      editEmpErr.classList.add('hidden');
+      editEmpDup.classList.add('hidden');
+      if (empNo) {
+        if (!EMPLOYEE_NO_REGEX.test(empNo)) { editEmpErr.classList.remove('hidden'); return; }
+        const takenByOthers = TAKEN_EMPLOYEE_NOS.filter(x => x.toLowerCase() !== editingOriginalEmpNo.toLowerCase());
+        if (takenByOthers.map(x => x.toLowerCase()).includes(empNo.toLowerCase())) { editEmpDup.classList.remove('hidden'); return; }
+      }
       closeModal('editModal');
-      showToast('success', '帳號已更新', `${name} 的帳號資訊已成功更新。`);
+      const empMsg = empNo ? `（員工編號：${empNo}）` : '（未設定員工編號）';
+      showToast('success', '帳號已更新', `${name} 的帳號資訊已成功更新${empMsg}。`);
     }
 
     // ===== Disable / Enable Modal =====
@@ -862,12 +915,13 @@
 
     // ===== Create Account =====
     function resetCreateForm() {
-      ['createName', 'createEmail', 'createPassword'].forEach(id => {
+      // F113 / US-179：一併清空 createEmployeeNo
+      ['createName', 'createEmail', 'createPassword', 'createEmployeeNo'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.value = '';
       });
       document.querySelectorAll('input[name="createRole"]').forEach(r => r.checked = (r.value === 'user'));
-      ['createNameError', 'createEmailError', 'createPasswordError'].forEach(id => {
+      ['createNameError', 'createEmailError', 'createPasswordError', 'createEmployeeNoError', 'createEmployeeNoDupError'].forEach(id => {
         document.getElementById(id)?.classList.add('hidden');
       });
     }
@@ -883,6 +937,16 @@
       else { document.getElementById('createEmailError').classList.add('hidden'); }
       if (password.length < 8) { document.getElementById('createPasswordError').classList.remove('hidden'); valid = false; }
       else { document.getElementById('createPasswordError').classList.add('hidden'); }
+      // F113 / US-179：員工編號選填，有值才驗格式 + 重複
+      const empNo = document.getElementById('createEmployeeNo').value.trim();
+      const createEmpErr = document.getElementById('createEmployeeNoError');
+      const createEmpDup = document.getElementById('createEmployeeNoDupError');
+      createEmpErr.classList.add('hidden');
+      createEmpDup.classList.add('hidden');
+      if (empNo) {
+        if (!EMPLOYEE_NO_REGEX.test(empNo)) { createEmpErr.classList.remove('hidden'); valid = false; }
+        else if (TAKEN_EMPLOYEE_NOS.map(x => x.toLowerCase()).includes(empNo.toLowerCase())) { createEmpDup.classList.remove('hidden'); valid = false; }
+      }
       if (!valid) return;
       const roleEl = document.querySelector('input[name="createRole"]:checked');
       const roleValue = roleEl ? roleEl.value : 'user';

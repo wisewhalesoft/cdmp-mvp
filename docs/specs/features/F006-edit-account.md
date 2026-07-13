@@ -5,20 +5,22 @@ feature-id: F006
 source-story: US-012
 epic: E02
 priority: P0-MVP
-version: "2.3"
-date: 2026-05-16
+version: "2.4"
+date: 2026-07-13
 status: Draft
 ---
 
 # F006: 編輯帳號
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-05-16
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-07-13
+
+> **v2.4（2026-07-13 / 可編輯欄位擴充：新增員工編號，ref US-179 / [F113](F113-employee-no-login-identifier.md)）**：可編輯欄位由「姓名與 Email」**擴充為「姓名、Email 與員工編號（`employeeNo`）」**（更新 BR-1）。`UpdateAccountDto` 新增選填 `employeeNo?: string`（格式 `^[A-Za-z0-9_-]{1,32}$`、不含 `@`、trim、原樣儲存；空值 → NULL 以清除既有值）；service 於 Email 唯一性檢查後新增 `employee_no` **有值時唯一（排除自身 `existing.id !== id`）** 檢查，重複 → HTTP 409 `ACCOUNT_EMPLOYEE_NO_EXISTS`「此員工編號已被使用」。因全域 `ValidationPipe` whitelist，`employeeNo` 必須加入 DTO。**注意：此與 `business_role`（走 F006a 專用端點、PUT body 忽略）不同——員工編號改由本 PUT 端點正常編輯。** GET / PUT Response 新增 `employee_no`（nullable）。欄位契約權威來源為 [F113](F113-employee-no-login-identifier.md)。
 
 > **v2.3 / 2026-05-16 變更（E07 合併重構 AD-E07 v3.0）**：v1.x `is_sales_manager` 欄位與 v1.4 短期過渡 `e07_role` 欄位均已於 m14 migration DROP，整合為單一欄位 `users.business_role VARCHAR(20) NULL`，唯一寫入入口為 [F006a](F006a-update-business-role.md) PATCH `/api/v1/accounts/:id/business-role`。本端點 PUT body **不**包含 `business_role` 欄位（若帶入應忽略，沿用敏感欄位獨立端點設計慣例）；GET response 可包含 `business_role` 唯讀欄位供前端顯示。
 
 ## 功能摘要
 
-Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限基本資料的修改，**不**包含：
+Admin 可編輯現有使用者帳號的姓名、Email 與**員工編號（`employeeNo`，v2.4 / F113）**。此功能範圍僅限基本資料的修改，**不**包含：
 
 - 密碼變更（由 F010 處理）
 - 系統角色變更（`role`：admin / user，由 F008 v3.x DEPRECATED 之 PATCH `/role` 處理；如需重啟動請另起 spec）
@@ -73,7 +75,8 @@ Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限�
 ```json
 {
   "name": "string (必填，1-100 字元)",
-  "email": "string (必填，有效 Email 格式)"
+  "email": "string (必填，有效 Email 格式)",
+  "employeeNo": "string | null (選填 / F113；設值 / 變更 / 清空為 null；格式 ^[A-Za-z0-9_-]{1,32}$、不含 @、trim；有值時唯一，排除自身)"
 }
 ```
 
@@ -85,6 +88,7 @@ Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限�
   "name": "string",
   "email": "string (已轉為小寫)",
   "role": "string",
+  "employee_no": "string | null (F113；員工編號，未設定為 null)",
   "status": "string",
   "created_at": "string (ISO 8601)",
   "updated_at": "string (ISO 8601)"
@@ -107,8 +111,17 @@ Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限�
 
 ```json
 {
-  "error": "DUPLICATE_EMAIL",
+  "error": "ACCOUNT_EMAIL_IN_USE",
   "message": "此 Email 已被使用"
+}
+```
+
+**Response - 409 Conflict (員工編號重複 / F113):**
+
+```json
+{
+  "error": "ACCOUNT_EMPLOYEE_NO_EXISTS",
+  "message": "此員工編號已被使用"
 }
 ```
 
@@ -136,7 +149,7 @@ Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限�
 
 | 編號 | 規則 |
 |------|------|
-| BR-1 | 可編輯欄位僅限姓名與 Email |
+| BR-1 | 可編輯欄位為姓名、Email 與**員工編號**（`employeeNo`，v2.4 / F113）；密碼、系統角色、業務角色仍不在此範圍（見 BR-4/BR-5/BR-9） |
 | BR-2 | Email 在儲存前一律以 `toLowerCase()` 轉為小寫，與 F004 一致 |
 | BR-3 | Email 唯一性檢查須排除自身帳號（同一帳號的 Email 未變更時不應觸發重複錯誤） |
 | BR-4 | 密碼變更不在此功能範圍（由 F010 處理） |
@@ -145,13 +158,14 @@ Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限�
 | BR-7 | 僅 Admin 角色可編輯帳號 |
 | BR-8 | 建議使用 Optimistic Locking 防止並發編輯衝突 |
 | BR-9 | **業務角色（`business_role`）變更不在此功能範圍（v2.3 / E07 合併重構 AD-E07 v3.0）**：`users.business_role` 欄位之**唯一**寫入入口為 PATCH `/api/v1/accounts/:id/business-role`（[F006a](F006a-update-business-role.md) Admin only；同 transaction 觸發 token revoke）；本端點 PUT body 即使含 `business_role` 欄位亦應**忽略**（不寫入、不報錯）。GET response 可包含 `business_role` 唯讀欄位供前端顯示。 |
+| BR-10 | **員工編號（`employeeNo`）在此功能範圍內可編輯（v2.4 / F113，與 `business_role` 不同）**：service 依提交值設定 `user.employee_no`（含設為 NULL 以清除；空字串／純空白正規化為 NULL）；格式 `^[A-Za-z0-9_-]{1,32}$`、不含 `@`、trim、原樣儲存不轉大小寫。**有值時唯一，唯一性檢查排除自身**（`existing.id !== id`）；重複拋 409 `ACCOUNT_EMPLOYEE_NO_EXISTS`。`employeeNo` 必須加入 `UpdateAccountDto`（否則被 whitelist strip）。完整規範見 [F113 §3 / §7.2](F113-employee-no-login-identifier.md#3-欄位契約employee_no)。 |
 
 ## UI/UX 需求
 
 | 項目 | 說明 |
 |------|------|
 | 入口 | 帳號清單中每筆帳號的「編輯」操作按鈕 |
-| 表單 | 編輯表單或對話框，預填現有姓名與 Email；系統角色以中文名稱唯讀顯示（「管理者」或「使用者」）；若帳號持有 `business_role`，額外以唯讀方式顯示對應 label（「業務部長」/「業務處長」/「未指派」），變更入口導向 [F006a](F006a-update-business-role.md) |
+| 表單 | 編輯表單或對話框，預填現有姓名、Email 與**員工編號**（`employeeNo`，可編輯文字輸入，選填、可清空；v2.4 / F113）；系統角色以中文名稱唯讀顯示（「管理者」或「使用者」）；若帳號持有 `business_role`，額外以唯讀方式顯示對應 label（「業務部長」/「業務處長」/「未指派」），變更入口導向 [F006a](F006a-update-business-role.md) |
 | 欄位驗證 | 每個欄位在失焦或提交時顯示即時驗證訊息 |
 | 成功回饋 | 顯示成功訊息，變更立即反映於帳號清單或詳細頁面 |
 | 錯誤回饋 | 每個欄位下方顯示對應的驗證錯誤訊息；重複 Email 錯誤顯示於 Email 欄位下方 |
@@ -181,9 +195,9 @@ Admin 可編輯現有使用者帳號的姓名與 Email。此功能範圍僅限�
 ## 資料需求
 
 此功能更新 Account Entity 的以下欄位：
-- name, email, updated_at
+- name, email, employee_no, updated_at
 
-Email 唯一性由資料庫層級的 unique constraint 保障。
+Email 唯一性由資料庫層級的 unique constraint 保障。員工編號（`employee_no`）之「有值時唯一」由 service 層檢查（排除自身）+ MSSQL filtered unique index 雙軌保障（見 [F113 §3.3](F113-employee-no-login-identifier.md#33-唯一性雙軌設計two-track-uniqueness) 與 data-model.md）。
 
 參考：[data-model.md](../data-model.md) 取得完整資料模型定義。
 
@@ -200,7 +214,7 @@ Email 唯一性由資料庫層級的 unique constraint 保障。
 - Epic Brief：[E02 Epic Brief](../stories/epics/E02-account-role-management/epic-brief.md)
 - 資料模型：[data-model.md](../data-model.md)
 - 錯誤處理：[error-handling.md](../error-handling.md)
-- 相關功能：F004、F005、[F006a](F006a-update-business-role.md)（業務角色變更**唯一寫入入口**）、~~F008（DEPRECATED v3.x）~~、F010（密碼重設）、F045（角色定義）、[F073 v2.0](F073-define-director-role.md)、[F074 v2.0](F074-define-section-chief-role.md)
+- 相關功能：F004、F005、[F006a](F006a-update-business-role.md)（業務角色變更**唯一寫入入口**）、[F113](F113-employee-no-login-identifier.md)（員工編號欄位契約權威來源）、~~F008（DEPRECATED v3.x）~~、F010（密碼重設）、F045（角色定義）、[F073 v2.0](F073-define-director-role.md)、[F074 v2.0](F074-define-section-chief-role.md)
 
 ## 更新紀錄
 
@@ -208,3 +222,4 @@ Email 唯一性由資料庫層級的 unique constraint 保障。
 |---|---|---|
 | v2.1 | 2026-04-24 | E02 `is_sales_manager` 旗標同步：唯讀顯示 + 變更入口導向 F008 |
 | **v2.3** | **2026-05-16** | **【E07 合併重構 AD-E07 v3.0】**：廢除 v2.1/v2.2 之 `is_sales_manager` / `e07_role` 欄位設計，整合為單一欄位 `users.business_role`；功能摘要、BR-5/BR-6/BR-9、UI/UX 表單欄位、交叉參考全面改寫為引用 [F006a](F006a-update-business-role.md) 之 PATCH `/business-role` 端點；F008 標 DEPRECATED |
+| **v2.4** | **2026-07-13** | **【可編輯欄位擴充：新增員工編號，ref US-179 / F113】**：可編輯欄位由「姓名與 Email」擴充為「姓名、Email 與員工編號」；BR-1 更新、新增 BR-10（員工編號可編輯 + 有值時唯一排除自身 + 空值清除）；Request/Response 新增 `employeeNo`/`employee_no`；新增 409 `ACCOUNT_EMPLOYEE_NO_EXISTS` 回應；功能摘要、UI/UX、資料需求、交叉參考同步。員工編號與 `business_role`（走 F006a、PUT body 忽略）不同——改由本 PUT 端點正常編輯。欄位契約權威來源＝[F113](F113-employee-no-login-identifier.md) |

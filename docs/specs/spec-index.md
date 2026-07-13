@@ -1,13 +1,20 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.34"
-date: 2026-07-11
+version: "3.35"
+date: 2026-07-13
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
 
+> **v3.35 / 2026-07-13 / F113 新增員工編號作為登入識別碼（US-179）**：依已核可 US-179 **新建 F113**（E02 帳號與角色管理，跨 E01 登入）。本輪變更檔案：
+> - **新建 v1.0**：[F113-employee-no-login-identifier.md](features/F113-employee-no-login-identifier.md)（選填 nullable `users.employee_no` VARCHAR(32)；Admin 於建立 F004 / 編輯 F006 設定；登入識別碼欄位維持名 `email`、可承載 Email 或員工編號、依 `@` 分支〔含 `@`→Email 小寫化；否則→`employee_no` 精確、大小寫敏感〕；`LoginDto` 由 `@IsEmail` 放寬為 `@IsNotEmpty+@IsString`；**有值時唯一之雙軌設計**〔service 檢查 + MSSQL filtered unique index，entity 保持 plain column〕；格式 `^[A-Za-z0-9_-]{1,32}$`、不含 `@`、trim、原樣儲存；新增錯誤碼 `ACCOUNT_EMPLOYEE_NO_EXISTS`〔409〕、登入失敗重用 `AUTH_INVALID_CREDENTIALS`；清單搜尋大小寫不敏感部分匹配〔OQ-179-02〕；forgot-password 維持 email-only〔OQ-179-01〕；通知 out of scope〔OQ-179-03〕；與 EMPHIRE 無關〔OQ-179-04〕。此為欄位契約 + 登入分支權威來源）
+> - **既有 spec surgical 更新**：[F001](features/F001-admin-login.md) v1.1→**v1.2**（登入識別碼分支 + DTO 放寬 + user 回應加 `employee_no`）、[F002](features/F002-user-login.md) v2.1.0→**v2.1.1**（同上，共用端點 + 忘記密碼維持 email-only）、[F004](features/F004-create-account.md) v3.1→**v3.2**（`CreateAccountDto` 加 `employeeNo` + 唯一性 409）、[F005](features/F005-view-account-list.md) v3.2→**v3.3**（清單新增員工編號欄 + 搜尋納入）、[F006](features/F006-edit-account.md) v2.3→**v2.4**（可編輯欄位擴充含 `employeeNo` + 更新 BR-1 + 排除自身唯一性）
+> - **支援文件更新**：`data-model.md`（User 實體新增 `employee_no` 欄位 + 業務規則 + filtered unique index 說明）、`error-handling.md`（#account-errors 新增 `ACCOUNT_EMPLOYEE_NO_EXISTS` 409）
+> - **刻意未動（邊界，交 system-architect / 其他 agent）**：filtered unique index migration 檔名/編號 + MSSQL `Chinese_Taiwan_Stroke_BIN` collation 下 `employee_no` 比較大小寫敏感語意須與 JS 精確比對一致 + 既有列 backfill 去重（F113 OQ-F113-01）；`@cdmp/shared`〔web〕與 api-local 型別副本同步機制（OQ-F113-03）；forgot-password `@IsEmail` 現況 400 vs AC-13 字面 200 之取捨（OQ-F113-02）；code / test / prototype / seed（tdd-implementation / test-designer / ui-ux / DevOps 範疇）
+> - **本輪殘留使用者待裁 open question**：無（US-179 4 個 OQ 已依使用者確認之預設全數裁定落規格；F113 OQ-F113-01~03 均屬架構師 HOW，附建議預設）
+>
 > **v3.34 / 2026-07-11 / M01·M02 抽樣估算三改（US-174 / US-175 / US-176）**：三處「預估 / 命中筆數」預覽統一改為 `ob_pool_data` **固定樣本 + 可重現種子 + 放大推算 + 估算標示 + 次秒級** 之抽樣估算（共用產品邏輯 D1；抽樣機制交 system-architect 撰寫之 **AD-E07-45 抽樣估算**，本輪 spec 僅定義行為契約，不規範 SQL / 樣本大小 / 種子 / 放大公式）。根因：`GET .../card-levels/preview` 現行對全表 1,679,489 列即時 Stage 2 計分（CARD_TYPE=E 實測 224.6 秒逾時），前端 `catch { setPreview(null) }` 靜默吞噬 → 面板空白。本輪變更檔案：
 > - **升 v1.7**：[F055-edit-card-level-thresholds.md](features/F055-edit-card-level-thresholds.md)（AC-3 改抽樣估算 + 新增 AC-8 估算失敗三態錯誤重試（修 `catch { setPreview(null) }` 靜默吞噬）+ §5.2 response 補 `isEstimate` / `sampleSize` / `totalCount` + BR-2 改寫 + BR-8 抽樣估算行為契約；US-174）
 > - **升 v1.6**：[F056-edit-tier-mapping.md](features/F056-edit-tier-mapping.md)（新增 AC-10~AC-13「預估各 TIER 分布」唯讀面板 + §5.5 `GET .../tier-mapping/preview` 端點（`hasMapping`/`ruleType`/`distribution[]`、不回 409、執行中可讀）+ BR-14；面板為全新 UI（D3），prototype 28 Tab 5 mock 交 ui-ux-designer；US-175）
@@ -270,6 +277,7 @@ status: Draft
 | F009 | [F009-self-service-password-reset.md](features/F009-self-service-password-reset.md) | 自助式密碼重設 | US-015 | P0-MVP |
 | F010 | [F010-admin-reset-password.md](features/F010-admin-reset-password.md) | Admin 重設使用者密碼 | US-016 | P0-MVP |
 | F045 | [F045-business-role-definitions.md](features/F045-business-role-definitions.md) | 系統角色定義（系統預設角色 admin / user） | US-017 | P0-MVP |
+| **F113** | [**F113-employee-no-login-identifier.md**](features/F113-employee-no-login-identifier.md) | **員工編號作為登入識別碼（選填 nullable `users.employee_no`；Admin 於建立/編輯設定；登入可用 Email 或員工編號擇一，依 `@` 分支；有值時唯一雙軌設計）** | US-179 | **P1（Should Have，v1.0 新建 / 2026-07-13）** |
 
 ### E03 — 資料來源管理
 
