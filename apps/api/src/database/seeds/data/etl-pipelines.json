@@ -32,7 +32,7 @@
           "data": {
             "nodeType": "field_mapping",
             "label": "來源欄位 → customer_financial",
-            "fieldMappings": [
+            "mappings": [
               { "sourceColumn": "CUSTO_NO", "targetColumn": "source_customer_no", "defaultValue": null },
               { "sourceColumn": "has_guarantor", "targetColumn": "has_guarantor", "defaultValue": null },
               { "sourceColumn": "guarantor_count", "targetColumn": "guarantor_count", "defaultValue": null },
