@@ -41,8 +41,8 @@ const APYHFC16_DATASOURCE_ID = 'af5f69a7-c3e4-41fe-b1e5-16b23f9509f8';
 describe('data/extraction-tasks.json', () => {
   const tasks = loadJson<ExtractionTaskSeed>('extraction-tasks.json');
 
-  it('涵蓋 5 個 E07 核心 + 14 個客戶來源 = 19 個 extraction task', () => {
-    expect(tasks).toHaveLength(19);
+  it('涵蓋 5 個 E07 核心 + 15 個客戶/交易來源 = 20 個 extraction task', () => {
+    expect(tasks).toHaveLength(20);
     const names = tasks.map((t) => t.name);
     for (const n of [
       'E07-OBARRETURNDF_MIN_CAP-Extract',
@@ -53,8 +53,8 @@ describe('data/extraction-tasks.json', () => {
     ]) {
       expect(names, `缺少核心 ${n}`).toContain(n);
     }
-    // 客戶來源 task（非 E07-，和勁/和潤/興業 × 代碼/客戶/產業別/重車/郵遞區號）= 14
-    expect(names.filter((n) => !n.startsWith('E07-'))).toHaveLength(14);
+    // 客戶/交易來源 task（非 E07-，和勁/和潤/興業 × 代碼/客戶/產業別/重車/郵遞區號 + F114 交易彙總）= 15
+    expect(names.filter((n) => !n.startsWith('E07-'))).toHaveLength(15);
   });
 
   it('每個 task 的 id / source_table / raw_table_name / schedule 與 dev DB API 建立者等價', () => {
@@ -171,11 +171,11 @@ describe('seedExtractionTasks', () => {
    *   - INSERT → 回 []
    */
   function createMockQr(opts: {
-    existingTaskNames?: string[];
+    existingTaskIds?: string[];
     datasourceId?: string | null;
     userId?: string;
   } = {}) {
-    const { existingTaskNames = [], datasourceId = APYHFC16_DATASOURCE_ID, userId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' } = opts;
+    const { existingTaskIds = [], datasourceId = APYHFC16_DATASOURCE_ID, userId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' } = opts;
     const calls: { sql: string; params?: any[] }[] = [];
 
     const query = vi.fn(async (sql: string, params?: any[]) => {
@@ -189,10 +189,10 @@ describe('seedExtractionTasks', () => {
       if (sql.includes('FROM users')) {
         return [{ id: userId }];
       }
-      // existence check by name
-      if (sql.includes('FROM extraction_tasks') && (sql.includes('WHERE name') || sql.includes('name ='))) {
-        const name = params?.[0];
-        return existingTaskNames.includes(name) ? [{ id: 'existing-' + name }] : [];
+      // existence check by id（seed 改以穩定 id 判存在，rename-safe；見 feedback_etl_pipeline_identify_by_target_table）
+      if (sql.includes('FROM extraction_tasks') && sql.includes('WHERE id')) {
+        const id = params?.[0];
+        return existingTaskIds.includes(id) ? [{ id }] : [];
       }
       // INSERT
       return [];
@@ -205,12 +205,12 @@ describe('seedExtractionTasks', () => {
     return qr.calls.filter((c: any) => /INSERT\s+INTO\s+extraction_tasks/i.test(c.sql));
   }
 
-  it('全部不存在 → INSERT 全部 19 筆，核心 5 筆含固定 id + 衍生 raw_table_name', async () => {
-    const qr = createMockQr({ existingTaskNames: [] });
+  it('全部不存在 → INSERT 全部 20 筆，核心 5 筆含固定 id + 衍生 raw_table_name', async () => {
+    const qr = createMockQr({ existingTaskIds: [] });
     await seedExtractionTasks(qr);
 
     const inserts = insertCalls(qr);
-    expect(inserts).toHaveLength(19);
+    expect(inserts).toHaveLength(20);
 
     // 驗證核心 5 筆 INSERT 帶正確 id 與 raw_table_name
     for (const expected of DEV_DB_TASKS) {
@@ -222,17 +222,17 @@ describe('seedExtractionTasks', () => {
   });
 
   it('全部已存在 → 0 INSERT（冪等 SKIP，不洗 production）', async () => {
-    const allNames = loadJson<ExtractionTaskSeed>('extraction-tasks.json').map((t) => t.name);
-    const qr = createMockQr({ existingTaskNames: allNames });
+    const allIds = loadJson<ExtractionTaskSeed>('extraction-tasks.json').map((t) => t.id);
+    const qr = createMockQr({ existingTaskIds: allIds });
     await seedExtractionTasks(qr);
     expect(insertCalls(qr)).toHaveLength(0);
   });
 
-  it('部分已存在 → 只 INSERT 缺少者（19 - 2 = 17）', async () => {
-    const qr = createMockQr({ existingTaskNames: ['E07-OBPOOLDATA-Extract', 'E07-OBEMPHIRE-Extract'] });
+  it('部分已存在 → 只 INSERT 缺少者（20 - 2 = 18）', async () => {
+    const qr = createMockQr({ existingTaskIds: ['6d58393b-9a21-486a-a971-012160d25a32', 'e1e951d7-45e2-40c2-931e-93158ca253b6'] });
     await seedExtractionTasks(qr);
     const inserts = insertCalls(qr);
-    expect(inserts).toHaveLength(17);
+    expect(inserts).toHaveLength(18);
     // 已存在的不應被 INSERT
     expect(inserts.find((c: any) => c.params?.includes('6d58393b-9a21-486a-a971-012160d25a32'))).toBeUndefined();
     // 缺少的應 INSERT
@@ -240,7 +240,7 @@ describe('seedExtractionTasks', () => {
   });
 
   it('每筆 INSERT 帶其 datasourceName 逐一解析出的 datasource_id（per-task 解析）', async () => {
-    const qr = createMockQr({ existingTaskNames: [], datasourceId: APYHFC16_DATASOURCE_ID });
+    const qr = createMockQr({ existingTaskIds: [], datasourceId: APYHFC16_DATASOURCE_ID });
     await seedExtractionTasks(qr);
     for (const call of insertCalls(qr)) {
       expect(call.params).toContain(APYHFC16_DATASOURCE_ID);
@@ -248,7 +248,7 @@ describe('seedExtractionTasks', () => {
   });
 
   it('task 引用的 datasource 不存在 → 拋錯且不 INSERT（fail-fast，避免建立懸空 FK）', async () => {
-    const qr = createMockQr({ existingTaskNames: [], datasourceId: null });
+    const qr = createMockQr({ existingTaskIds: [], datasourceId: null });
     await expect(seedExtractionTasks(qr)).rejects.toThrow(/datasource/);
     expect(insertCalls(qr)).toHaveLength(0);
   });
@@ -269,7 +269,7 @@ describe('新增 seed 資料檔（帳號 / 篩選欄位 / 202607 名單）', () 
 
   it('篩選欄位：whitelist 19 + option 454（以 dev CDMP 為 ground truth；已移除 brand_no/list_type/sta_code_na）', () => {
     const wl = loadJson<any>('pooldata-field-whitelist.json');
-    expect(wl).toHaveLength(19);
+    expect(wl).toHaveLength(29);
     // 已硬刪除的欄位不得再出現
     const removed = ['brand_no', 'list_type', 'sta_code_na'];
     expect(wl.some((w) => removed.includes(w.column_name))).toBe(false);

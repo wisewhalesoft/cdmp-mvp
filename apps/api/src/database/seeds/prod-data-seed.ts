@@ -762,10 +762,13 @@ export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
   // 先檢查是否有任何 task 需 INSERT（避免無需 datasource/user 也觸發 lookup）
   let needInsert = false;
   for (const t of rows) {
+    // 以穩定 id 判存在（非 name）：name 為使用者可改之顯示名，改名後 name-check 會漏掉既有列 →
+    //   重插同一固定 id → PK 衝突使整個 seed transaction rollback。見 memory
+    //   feedback_etl_pipeline_identify_by_target_table（定位一律用穩定鍵、禁用 name）。
     const exists = await pquery(
       qr,
-      `SELECT ${t1.prefix}id FROM extraction_tasks WHERE name = ? AND deleted_at IS NULL${t1.suffix}`,
-      [t.name],
+      `SELECT ${t1.prefix}id FROM extraction_tasks WHERE id = ?${t1.suffix}`,
+      [t.id],
     );
     if (exists.length === 0) {
       needInsert = true;
@@ -804,10 +807,11 @@ export async function seedExtractionTasks(qr: QueryRunner): Promise<void> {
   let inserted = 0;
   let skipped = 0;
   for (const t of rows) {
+    // 同上：以穩定 id 判存在（rename-safe），避免對已改名之既有 task 重插同 id 觸發 PK 衝突。
     const existing = await pquery(
       qr,
-      `SELECT ${t1.prefix}id FROM extraction_tasks WHERE name = ? AND deleted_at IS NULL${t1.suffix}`,
-      [t.name],
+      `SELECT ${t1.prefix}id FROM extraction_tasks WHERE id = ?${t1.suffix}`,
+      [t.id],
     );
     if (existing.length > 0) {
       skipped++;
