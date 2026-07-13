@@ -522,7 +522,7 @@ describe('PANEL — 各區塊特定行為', () => {
     );
     renderPage();
     await waitForContent();
-    expect(screen.getByTestId('stage-todo-all-ready').textContent).toContain('目前無未完成名單');
+    expect(screen.getByTestId('stage-todo-all-ready').textContent).toContain('目前名單皆已準備完成');
     expect(screen.queryByTestId('stage-todo-empty')).toBeNull();
   });
 

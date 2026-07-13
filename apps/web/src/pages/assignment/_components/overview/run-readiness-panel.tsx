@@ -55,10 +55,10 @@ const ETL_SOURCES: Array<{
   table: string;
   icon: LucideIcon;
 }> = [
-  { key: 'pooldata', label: '客戶名單池', table: 'ob_pool_data', icon: Database },
-  { key: 'emphire', label: '在職名單', table: 'ob_emphire', icon: UserCheck },
+  { key: 'pooldata', label: '案件名單池', table: 'ob_pool_data', icon: Database },
+  { key: 'emphire', label: '在職業務清單', table: 'ob_emphire', icon: UserCheck },
   { key: 'calendar', label: '工作日曆', table: 'ob_calendar', icon: CalendarDays },
-  { key: 'arreturndf', label: '最低回收上限', table: 'ob_arreturndf', icon: Shield },
+  { key: 'arreturndf', label: '案件未繳金額', table: 'ob_arreturndf', icon: Shield },
 ];
 
 function etlNote(st: EtlSourceStatus): string {

@@ -40,8 +40,8 @@ const STAGE_CARDS: Array<{
   ic: string;
 }> = [
   { key: 'draft', label: '草稿', icon: FileText, box: 'bg-gray-100', ic: 'text-gray-500' },
-  { key: 'dept_ratio', label: '待部門比例', icon: Building2, box: 'bg-blue-50', ic: 'text-blue-600' },
-  { key: 'personnel_ratio', label: '待個別比例', icon: Users, box: 'bg-indigo-50', ic: 'text-indigo-600' },
+  { key: 'dept_ratio', label: '部門比例設定中', icon: Building2, box: 'bg-blue-50', ic: 'text-blue-600' },
+  { key: 'personnel_ratio', label: '業務比例設定中', icon: Users, box: 'bg-indigo-50', ic: 'text-indigo-600' },
   { key: 'approval', label: '待簽核', icon: FileCheck, box: 'bg-amber-50', ic: 'text-amber-600' },
   { key: 'ready', label: '準備完成', icon: CheckCircle2, box: 'bg-emerald-50', ic: 'text-emerald-600' },
 ];
@@ -145,7 +145,7 @@ export function StageTodoPanel({ block, loading, onRetry }: StageTodoPanelProps)
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-green-900">
-                    目前無未完成名單
+                    目前名單皆已準備完成
                   </p>
                   <p className="text-xs text-green-700 mt-0.5">
                     本月所有名單皆已進入「準備完成」階段。
