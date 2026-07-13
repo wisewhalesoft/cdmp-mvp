@@ -25,6 +25,7 @@ import {
 } from './stage1-filter-chain';
 import { buildStage1WhereConditions } from './stage1-query-composer';
 import { buildCustomerCoreClauseMssql } from './stage1-customer-core-clause-mssql';
+import { buildCustomerFinancialClauseMssql } from './stage1-customer-financial-clause-mssql';
 import { matchesSpecialRule } from './special-rules';
 // 沿用 PG 版之輸出型別（結構與 dialect 無關）。
 import type { Stage1SqlCore } from './stage1-sql-builder';
@@ -81,8 +82,21 @@ export async function buildStage1SqlMssql(
     warnings,
   );
 
-  // 統一 EMPTY_CONDITIONS 判定（與 PG 版逐字相同）：composer 側與 customer_core 側皆無有效 fragment 才 skip。
-  if (fieldFragment.where === null && customerCoreClause.whereFragments.length === 0) {
+  // ①c F114：customer_financial 條件式 LEFT JOIN + cf.* fragments（方言無關，re-export PG 版）。
+  const customerFinancialClause = buildCustomerFinancialClauseMssql(
+    ccConditions,
+    workdt,
+    fromAlias,
+    warnings,
+  );
+
+  // 統一 EMPTY_CONDITIONS 判定（與 PG 版逐字相同）：composer 側、customer_core 側、customer_financial 側
+  //   皆無有效 fragment 才 skip。
+  if (
+    fieldFragment.where === null &&
+    customerCoreClause.whereFragments.length === 0 &&
+    customerFinancialClause.whereFragments.length === 0
+  ) {
     return {
       where: null,
       params: {},
@@ -91,6 +105,7 @@ export async function buildStage1SqlMssql(
       skipReason: 'EMPTY_CONDITIONS',
       warnings,
       customerCoreJoin: null,
+      customerFinancialJoin: null,
     };
   }
 
@@ -108,6 +123,12 @@ export async function buildStage1SqlMssql(
     clauses.push(f);
   }
   Object.assign(params, customerCoreClause.params);
+
+  // ①c customer_financial fragments（cf.* has_guarantor IN / 各件數 BETWEEN）。
+  for (const f of customerFinancialClause.whereFragments) {
+    clauses.push(f);
+  }
+  Object.assign(params, customerFinancialClause.params);
 
   // ② MONTH_CNT 期別過濾（沿用 buildMonthCntFragment，"month_cnt" IN (:...) 為 ANSI）
   const monthCntFragment = buildMonthCntFragment(list, warnings);
@@ -179,5 +200,6 @@ export async function buildStage1SqlMssql(
     skip: false,
     warnings,
     customerCoreJoin: customerCoreClause.join,
+    customerFinancialJoin: customerFinancialClause.join,
   };
 }

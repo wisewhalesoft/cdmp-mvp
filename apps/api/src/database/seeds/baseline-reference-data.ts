@@ -62,6 +62,17 @@ export const BASELINE_WHITELIST: WhitelistSeed[] = [
   { column_name: "prod_type_name", display_name: "產品分類", field_type: "categorical", is_active: true, created_at: "2026-07-13T07:11:13.519Z", updated_at: "2026-07-13T07:12:19.325Z", is_system_fixed: false, data_source: "ob_pool_data" },
   { column_name: "settle_src", display_name: "結清來源", field_type: "categorical", is_active: true, created_at: "2026-05-19T01:28:26.610Z", updated_at: "2026-05-19T01:28:26.610Z", is_system_fixed: false, data_source: "ob_pool_data" },
   { column_name: "spec_tp", display_name: "專案類別", field_type: "categorical", is_active: true, created_at: "2026-05-19T01:28:26.610Z", updated_at: "2026-05-19T22:46:26.340Z", is_system_fixed: false, data_source: "ob_pool_data" },
+  // F114：customer_financial（交易資料）以客戶為中心之案件往來彙總篩選欄位
+  { column_name: "has_guarantor", display_name: "有無保人", field_type: "categorical", is_active: true, created_at: "2026-07-13T00:00:00.000Z", updated_at: "2026-07-13T00:00:00.000Z", is_system_fixed: false, data_source: "customer_financial" },
+  { column_name: "guarantor_count", display_name: "保人數量", field_type: "numeric", is_active: true, created_at: "2026-07-13T00:00:00.000Z", updated_at: "2026-07-13T00:00:00.000Z", is_system_fixed: false, data_source: "customer_financial" },
+  { column_name: "phone_coll_case_cnt", display_name: "電催件數", field_type: "numeric", is_active: true, created_at: "2026-07-13T00:00:00.000Z", updated_at: "2026-07-13T00:00:00.000Z", is_system_fixed: false, data_source: "customer_financial" },
+  { column_name: "phone_coll_times", display_name: "電催次數", field_type: "numeric", is_active: true, created_at: "2026-07-13T00:00:00.000Z", updated_at: "2026-07-13T00:00:00.000Z", is_system_fixed: false, data_source: "customer_financial" },
+  { column_name: "legal_coll_case_cnt", display_name: "法催件數", field_type: "numeric", is_active: true, created_at: "2026-07-13T00:00:00.000Z", updated_at: "2026-07-13T00:00:00.000Z", is_system_fixed: false, data_source: "customer_financial" },
+  { column_name: "legal_coll_times", display_name: "法催次數", field_type: "numeric", is_active: true, created_at: "2026-07-13T00:00:00.000Z", updated_at: "2026-07-13T00:00:00.000Z", is_system_fixed: false, data_source: "customer_financial" },
+  { column_name: "midterm_case_cnt", display_name: "期中件數", field_type: "numeric", is_active: true, created_at: "2026-07-13T00:00:00.000Z", updated_at: "2026-07-13T00:00:00.000Z", is_system_fixed: false, data_source: "customer_financial" },
+  { column_name: "matured_case_cnt", display_name: "滿期件數", field_type: "numeric", is_active: true, created_at: "2026-07-13T00:00:00.000Z", updated_at: "2026-07-13T00:00:00.000Z", is_system_fixed: false, data_source: "customer_financial" },
+  { column_name: "settled_case_cnt", display_name: "中結件數", field_type: "numeric", is_active: true, created_at: "2026-07-13T00:00:00.000Z", updated_at: "2026-07-13T00:00:00.000Z", is_system_fixed: false, data_source: "customer_financial" },
+  { column_name: "void_case_cnt", display_name: "其他作廢件數", field_type: "numeric", is_active: true, created_at: "2026-07-13T00:00:00.000Z", updated_at: "2026-07-13T00:00:00.000Z", is_system_fixed: false, data_source: "customer_financial" },
 ];
 
 export const BASELINE_OPTIONS: OptionSeed[] = [

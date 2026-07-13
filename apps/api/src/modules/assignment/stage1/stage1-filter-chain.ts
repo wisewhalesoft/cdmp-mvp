@@ -39,6 +39,7 @@ import {
   type Stage1SkipReason,
 } from './stage1-query-composer';
 import { buildCustomerCoreClause } from './stage1-customer-core-clause';
+import { buildCustomerFinancialClause } from './stage1-customer-financial-clause';
 import { matchesSpecialRule, type SpecialRuleId } from './special-rules';
 
 // ---------------------------------------------------------------------------
@@ -384,10 +385,22 @@ export async function executeStage1Chain(
     warnings,
   );
 
-  // 統一 EMPTY_CONDITIONS 判定（AD §5.4）：composer 側與 customer_core 側**皆**無有效 fragment 才 skip。
-  //   僅含 customer_core 條件之名單（fieldFragment.where===null 但 customerCoreClause 有 fragment）
-  //   不得誤判整批 skip（JOIN-003 陷阱紅線）。無 customer_core 條件時退化為與 F109 前完全等價。
-  if (fieldFragment.where === null && customerCoreClause.whereFragments.length === 0) {
+  // ①c F114：customer_financial 條件式 LEFT JOIN + cf.* fragments（與 buildStage1Sql 共用同一函式）。
+  const customerFinancialClause = buildCustomerFinancialClause(
+    ccConditions,
+    workdt,
+    'ob_pool_data',
+    warnings,
+  );
+
+  // 統一 EMPTY_CONDITIONS 判定（AD §5.4）：composer 側、customer_core 側、customer_financial 側**皆**
+  //   無有效 fragment 才 skip。僅含客戶來源條件之名單（fieldFragment.where===null 但對應 clause 有 fragment）
+  //   不得誤判整批 skip（JOIN-003 陷阱紅線）。無客戶條件時退化為與 F109/F114 前完全等價。
+  if (
+    fieldFragment.where === null &&
+    customerCoreClause.whereFragments.length === 0 &&
+    customerFinancialClause.whereFragments.length === 0
+  ) {
     return {
       count: 0,
       cases: opts.dryRun ? undefined : [],
@@ -412,6 +425,11 @@ export async function executeStage1Chain(
     whereClauses.push(f);
   }
   Object.assign(params, customerCoreClause.params);
+  // ①c customer_financial fragments（cf.* has_guarantor IN / 各件數 BETWEEN）。
+  for (const f of customerFinancialClause.whereFragments) {
+    whereClauses.push(f);
+  }
+  Object.assign(params, customerFinancialClause.params);
   if (monthCntFragment) {
     whereClauses.push(`(${monthCntFragment.fragment})`);
     Object.assign(params, monthCntFragment.params);
@@ -426,6 +444,14 @@ export async function executeStage1Chain(
       'customer_core',
       'cc',
       'cc.source_customer_no = ob_pool_data.custo_no',
+    );
+  }
+  // F114：條件式注入 customer_financial LEFT JOIN（原始表名字串；customer_financial 無 entity）。
+  if (customerFinancialClause.join) {
+    qb.leftJoin(
+      'customer_financial',
+      'cf',
+      'cf.source_customer_no = ob_pool_data.custo_no',
     );
   }
   if (whereClauses.length > 0) {

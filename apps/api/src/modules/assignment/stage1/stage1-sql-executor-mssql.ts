@@ -85,6 +85,7 @@ export async function runStage1SqlInsertMssql(
     `CURRENT_TIMESTAMP, CURRENT_TIMESTAMP ` +
     `FROM ob_pool_data o ` +
     `${core.customerCoreJoin ? core.customerCoreJoin + ' ' : ''}` +
+    `${core.customerFinancialJoin ? core.customerFinancialJoin + ' ' : ''}` +
     `LEFT JOIN (SELECT TRIM(id_no) AS agent_ref, emp_id, emp_nm FROM ob_emphire ` +
     `WHERE resign_date IS NULL OR resign_date >= :crSysDate) cremp ` +
     `ON COALESCE(TRIM(o.agent_id), '') <> '' AND cremp.agent_ref = TRIM(o.agent_id) ` +
@@ -125,6 +126,7 @@ export async function estimateStage1SqlCountMssql(
   const countSql =
     `SELECT COUNT(*) AS cnt FROM ob_pool_data o ` +
     `${core.customerCoreJoin ? core.customerCoreJoin + ' ' : ''}` +
+    `${core.customerFinancialJoin ? core.customerFinancialJoin + ' ' : ''}` +
     `WHERE ${core.where}`;
   const [sql, parameters] = escape(manager, countSql, core.params);
 

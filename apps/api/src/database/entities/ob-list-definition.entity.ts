@@ -33,7 +33,7 @@ export interface ObListDefinitionConditionItem {
    *
    * F109 上線前既有 condition_payload 無此 key（fallback 天然覆蓋，不需 backfill migration）。
    */
-  dataSource?: 'ob_pool_data' | 'customer_core';
+  dataSource?: 'ob_pool_data' | 'customer_core' | 'customer_financial';
 }
 
 export interface ObListDefinitionConditionPayload {

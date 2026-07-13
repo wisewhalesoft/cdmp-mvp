@@ -80,6 +80,26 @@ export const CUSTOMER_CORE_COLUMN_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * F114：customer_financial 來源 10 個篩選欄名靜態集合（resolveConditionDataSource fallback）。
+ *
+ * 與 CUSTOMER_CORE_COLUMN_NAMES 同機制：固化值缺漏時的防禦性 fallback。F114 上線後
+ * 之 condition 皆由 stampConditionDataSource 蓋章 'customer_financial'，故 fallback 多為
+ * defense-in-depth。**不可**與 CUSTOMER_CORE_COLUMN_NAMES 交集（兩來源欄名互斥）。
+ */
+export const CUSTOMER_FINANCIAL_COLUMN_NAMES: ReadonlySet<string> = new Set([
+  'has_guarantor',
+  'guarantor_count',
+  'phone_coll_case_cnt',
+  'phone_coll_times',
+  'legal_coll_case_cnt',
+  'legal_coll_times',
+  'midterm_case_cnt',
+  'matured_case_cnt',
+  'settled_case_cnt',
+  'void_case_cnt',
+]);
+
+/**
  * 決定性解析單一 condition 之資料來源（AD-E07-37 §OQ-F109-01 雙層機制，I-CC-DATASOURCE-01）：
  *   1. 固化值優先：`cond.dataSource` 為合法值（'customer_core' / 'ob_pool_data'）→ 直接採用。
  *   2. 靜態 Set fallback：缺漏時比對 CUSTOMER_CORE_COLUMN_NAMES；命中 → 'customer_core'，否則 'ob_pool_data'。
@@ -89,14 +109,18 @@ export const CUSTOMER_CORE_COLUMN_NAMES: ReadonlySet<string> = new Set([
  */
 export function resolveConditionDataSource(cond: {
   columnName: string;
-  dataSource?: 'ob_pool_data' | 'customer_core';
-}): 'ob_pool_data' | 'customer_core' {
-  if (cond.dataSource === 'customer_core' || cond.dataSource === 'ob_pool_data') {
+  dataSource?: 'ob_pool_data' | 'customer_core' | 'customer_financial';
+}): 'ob_pool_data' | 'customer_core' | 'customer_financial' {
+  if (
+    cond.dataSource === 'customer_core' ||
+    cond.dataSource === 'ob_pool_data' ||
+    cond.dataSource === 'customer_financial'
+  ) {
     return cond.dataSource;
   }
-  return CUSTOMER_CORE_COLUMN_NAMES.has(cond.columnName)
-    ? 'customer_core'
-    : 'ob_pool_data';
+  if (CUSTOMER_CORE_COLUMN_NAMES.has(cond.columnName)) return 'customer_core';
+  if (CUSTOMER_FINANCIAL_COLUMN_NAMES.has(cond.columnName)) return 'customer_financial';
+  return 'ob_pool_data';
 }
 
 /**
@@ -184,11 +208,11 @@ function buildPathA(
   let paramIdx = 0;
 
   for (const cond of payload.conditions) {
-    // F109 / AD-E07-37 §5.1 / I-CC-COMPOSER-SCOPE-01：customer_core 來源條件委派
-    //   buildCustomerCoreClause（cc.* fragment + LEFT JOIN），composer 僅負責 ob_pool_data 側。
-    //   靜默 continue（不建 fragment、不發 warning）；避免對 ob_pool_data（無 gender 等欄）
-    //   建出 SQL 出錯的偽 fragment。
-    if (resolveConditionDataSource(cond) === 'customer_core') continue;
+    // F109 / F114 / I-CC-COMPOSER-SCOPE-01 / I-CF-COMPOSER-SCOPE-01：非 ob_pool_data 來源條件
+    //   （customer_core → buildCustomerCoreClause；customer_financial → buildCustomerFinancialClause）
+    //   一律委派對應 clause 建構器，composer 僅負責 ob_pool_data 側。靜默 continue（不建 fragment、
+    //   不發 warning）；避免對 ob_pool_data（無 gender / has_guarantor 等欄）建出 SQL 出錯的偽 fragment。
+    if (resolveConditionDataSource(cond) !== 'ob_pool_data') continue;
 
     if (cond.fieldType === 'categorical') {
       const built = buildCategoricalFragment(cond, paramIdx, warnings);

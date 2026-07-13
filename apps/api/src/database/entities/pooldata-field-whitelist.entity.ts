@@ -53,7 +53,7 @@ export class PooldataFieldWhitelist {
     length: 20,
     default: 'ob_pool_data',
   })
-  dataSource: 'ob_pool_data' | 'customer_core';
+  dataSource: 'ob_pool_data' | 'customer_core' | 'customer_financial';
 
   /**
    * US-144 / AD-E07-18 §18.12.3：系統固定篩選欄位旗標。

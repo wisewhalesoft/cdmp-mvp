@@ -494,11 +494,11 @@ describe('AD-E07-39 P1b3 COUNT', () => {
     expect(await tableCount('roles')).toBe(2);
   });
 
-  it('TS-MSSQL-P1B3-COUNT-012（🔴 P1b3 移植後必過）：pooldata_field_whitelist = 19、pooldata_field_option = 454（以 dev CDMP 為 ground truth，已移除 brand_no/list_type/sta_code_na）', async (ctx) => {
+  it('TS-MSSQL-P1B3-COUNT-012（🔴 P1b3 移植後必過）：pooldata_field_whitelist = 29（含 F114 customer_financial 10 欄）、pooldata_field_option = 454', async (ctx) => {
     ensureMssql(ctx);
-    expect(BASELINE_WHITELIST.length).toBe(19);
+    expect(BASELINE_WHITELIST.length).toBe(29);
     expect(BASELINE_OPTIONS.length).toBe(454);
-    expect(await tableCount('pooldata_field_whitelist')).toBe(19);
+    expect(await tableCount('pooldata_field_whitelist')).toBe(29);
     expect(await tableCount('pooldata_field_option')).toBe(454);
   });
 });
@@ -621,7 +621,7 @@ describe('AD-E07-39 P1b3 PROBE', () => {
     // 原測試設計 COUNT-011/012 為「SCOPE GAP 決策關卡」（預期 0）；P1b3 已移植 MssqlBaselineReferenceData →
     // 三表皆有值，SCOPE GAP 已關閉。此處彙整確認結論陳述成立。
     expect(await tableCount('roles')).toBe(2);
-    expect(await tableCount('pooldata_field_whitelist')).toBe(19);
+    expect(await tableCount('pooldata_field_whitelist')).toBe(29);
     expect(await tableCount('pooldata_field_option')).toBe(454);
   });
 });

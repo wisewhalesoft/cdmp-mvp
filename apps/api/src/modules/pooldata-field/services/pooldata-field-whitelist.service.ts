@@ -50,7 +50,7 @@ export interface PooldataFieldItem {
   // F075 v1.7 / US-144 AC-19：系統固定欄位旗標（best_case=true，其餘=false）
   isSystemFixed: boolean;
   // F109 / US-172 / AC-2：資料來源（'ob_pool_data' 案件資料 / 'customer_core' 客戶資料）
-  dataSource: 'ob_pool_data' | 'customer_core';
+  dataSource: 'ob_pool_data' | 'customer_core' | 'customer_financial';
   createdAt: string;
   updatedAt: string;
 }
@@ -102,7 +102,7 @@ export interface DistinctValueItem {
 
 export interface DistinctValuesResult {
   columnName: string;
-  dataSource: 'ob_pool_data' | 'customer_core';
+  dataSource: 'ob_pool_data' | 'customer_core' | 'customer_financial';
   values: DistinctValueItem[];
   totalReturned: number;
   truncated: boolean;
@@ -613,7 +613,7 @@ export class PooldataFieldWhitelistService {
    */
   private async _resolveDistinctValueSource(
     columnName: string,
-  ): Promise<{ table: 'ob_pool_data' | 'customer_core' }> {
+  ): Promise<{ table: 'ob_pool_data' | 'customer_core' | 'customer_financial' }> {
     const row = await this.fieldRepo.findOne({
       where: { column_name: columnName },
     });
@@ -633,11 +633,11 @@ export class PooldataFieldWhitelistService {
   /**
    * 確認來源表是否存在（AD §3.3；供 getAvailableColumns 與 getDistinctValues 共用，DRY 零行為變更）。
    *
-   * `tableName` 恆為程式碼常數（'ob_pool_data' | 'customer_core'），仍以值參數化傳遞保持一致風格。
+   * `tableName` 恆為程式碼常數（'ob_pool_data' | 'customer_core' | 'customer_financial'），仍以值參數化傳遞保持一致風格。
    * SQLite 測試環境無 information_schema → catch 降級為 false（未就緒）。
    */
   private async _checkTableExists(
-    tableName: 'ob_pool_data' | 'customer_core',
+    tableName: 'ob_pool_data' | 'customer_core' | 'customer_financial',
   ): Promise<boolean> {
     const isMssql = this.dataSource.options.type === 'mssql';
     const sql = isMssql
@@ -654,7 +654,7 @@ export class PooldataFieldWhitelistService {
    * 避免任何 SQL 文字插入。SQLite 無 information_schema → catch 降級為 false。
    */
   private async _checkColumnExists(
-    tableName: 'ob_pool_data' | 'customer_core',
+    tableName: 'ob_pool_data' | 'customer_core' | 'customer_financial',
     columnName: string,
   ): Promise<boolean> {
     const isMssql = this.dataSource.options.type === 'mssql';
@@ -676,7 +676,7 @@ export class PooldataFieldWhitelistService {
    * 殘留並於稍後對已 settle 之 promise 產生 unhandled rejection（較 AD §3.5 片段之硬化）。
    */
   private async _queryDistinctWithTimeout(
-    table: 'ob_pool_data' | 'customer_core',
+    table: 'ob_pool_data' | 'customer_core' | 'customer_financial',
     columnName: string,
     timeoutMs: number,
   ): Promise<unknown[]> {
@@ -727,7 +727,7 @@ export class PooldataFieldWhitelistService {
    * SQLite 無 information_schema 相關降級由上游檢查處理，此處查詢本體對兩方言皆有效。
    */
   private async _runDistinctQuery(
-    table: 'ob_pool_data' | 'customer_core',
+    table: 'ob_pool_data' | 'customer_core' | 'customer_financial',
     columnName: string,
   ): Promise<unknown[]> {
     const isMssql = this.dataSource.options.type === 'mssql';

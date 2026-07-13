@@ -438,7 +438,7 @@ export class AssignmentListService {
     const activeRows = await this.whitelistRepo.find({
       where: { is_active: true },
     });
-    const dataSourceMap = new Map<string, 'ob_pool_data' | 'customer_core'>(
+    const dataSourceMap = new Map<string, 'ob_pool_data' | 'customer_core' | 'customer_financial'>(
       activeRows.map((r) => [r.column_name, r.dataSource ?? 'ob_pool_data']),
     );
     const conditions: ObListDefinitionConditionItem[] = payload.conditions.map(
