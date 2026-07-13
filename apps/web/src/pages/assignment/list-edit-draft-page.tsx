@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   Folder,
   Contact,
+  Wallet,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
@@ -105,13 +106,15 @@ function isConditionComplete(c: BuilderCondition): boolean {
  * F109 / US-172 AC-3：「新增條件」選單依 dataSource 分組（prototype 27b，同 27a L647-676）。
  */
 const SOURCE_GROUPS: ReadonlyArray<{
-  key: 'ob_pool_data' | 'customer_core';
+  key: 'ob_pool_data' | 'customer_core' | 'customer_financial';
   label: string;
   table: string;
   Icon: typeof Folder;
 }> = [
   { key: 'ob_pool_data', label: '案件資料', table: 'ob_pool_data', Icon: Folder },
   { key: 'customer_core', label: '客戶資料', table: 'customer_core', Icon: Contact },
+  // F114：交易資料（customer_financial）— 以客戶為中心之案件往來彙總
+  { key: 'customer_financial', label: '交易資料', table: 'customer_financial', Icon: Wallet },
 ];
 
 export function ListEditDraftPage() {

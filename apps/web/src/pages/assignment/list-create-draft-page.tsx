@@ -21,6 +21,7 @@ import {
   Lock,
   Folder,
   Contact,
+  Wallet,
   Loader2,
   RefreshCw,
   Sparkles,
@@ -127,13 +128,15 @@ function isConditionComplete(c: BuilderCondition): boolean {
  *   兩群組「案件資料」(ob_pool_data) / 「客戶資料」(customer_core)，可跨群組選取並存。
  */
 const SOURCE_GROUPS: ReadonlyArray<{
-  key: 'ob_pool_data' | 'customer_core';
+  key: 'ob_pool_data' | 'customer_core' | 'customer_financial';
   label: string;
   table: string;
   Icon: typeof Folder;
 }> = [
   { key: 'ob_pool_data', label: '案件資料', table: 'ob_pool_data', Icon: Folder },
   { key: 'customer_core', label: '客戶資料', table: 'customer_core', Icon: Contact },
+  // F114：交易資料（customer_financial）— 以客戶為中心之案件往來彙總
+  { key: 'customer_financial', label: '交易資料', table: 'customer_financial', Icon: Wallet },
 ];
 
 export function ListCreateDraftPage() {

@@ -139,6 +139,7 @@
             <tr class="border-b border-border bg-red-50/60"><td class="px-5 py-2.5"><code class="text-xs font-mono text-gray-700">ob_calendar</code></td><td class="px-5 py-2.5 text-right"><span class="inline-flex items-center gap-1 font-semibold text-danger"><i data-lucide="alert-triangle" class="w-[13px] h-[13px]"></i>0 筆</span></td><td class="px-5 py-2.5 text-gray-600">2026-07-09 09:14 <span class="ml-1.5 text-xs text-green-600">(完成)</span></td><td class="px-5 py-2.5 text-gray-600">電銷人事行事曆 ETL</td></tr>
             <tr class="border-b border-border"><td class="px-5 py-2.5"><code class="text-xs font-mono text-gray-700">ob_emphire</code></td><td class="px-5 py-2.5 text-right"><span class="font-medium text-gray-800">317 筆</span></td><td class="px-5 py-2.5 text-gray-600">2026-07-09 10:39 <span class="ml-1.5 text-xs text-green-600">(完成)</span></td><td class="px-5 py-2.5 text-gray-600">電銷業務人員 ETL</td></tr>
             <tr class="border-b border-border"><td class="px-5 py-2.5"><code class="text-xs font-mono text-gray-700">ob_pool_data</code></td><td class="px-5 py-2.5 text-right"><span class="font-medium text-gray-800">1,679,489 筆</span></td><td class="px-5 py-2.5 text-gray-600">2026-07-10 02:07 <span class="ml-1.5 text-xs text-green-600">(完成)</span></td><td class="px-5 py-2.5 text-gray-600">電銷名單來源案件資料 ETL</td></tr>
+            <tr class="border-b border-border"><td class="px-5 py-2.5"><code class="text-xs font-mono text-gray-700">customer_financial</code></td><td class="px-5 py-2.5 text-right"><span class="inline-flex items-center gap-1 font-semibold text-gray-400">尚未載入</span></td><td class="px-5 py-2.5 text-gray-600">—</td><td class="px-5 py-2.5 text-gray-600">客戶交易彙總資料 ETL</td></tr>
           </tbody>
         </table>
       </div>
@@ -155,7 +156,7 @@
         <i data-lucide="info" class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"></i>
         <div>
           <p class="text-sm font-medium text-blue-800">Phase 擴展規劃</p>
-          <p class="text-xs text-blue-600 mt-1">Phase 1 MVP 包含 <strong>customer_core</strong> 1 個目標表（約 79 欄位）。Phase 2 將新增 customer_financial、customer_interaction，Phase 3 新增 customer_service。</p>
+          <p class="text-xs text-blue-600 mt-1">Phase 1 MVP 包含 <strong>customer_core</strong>（客戶資料，約 79 欄位）與 <strong>customer_financial</strong>（交易資料，F114，以客戶為中心之案件往來彙總）2 個目標表。Phase 2 將新增 customer_interaction，Phase 3 新增 customer_service。</p>
         </div>
       </div>
     </div>
@@ -406,22 +407,52 @@
       </div>
     </div>
 
+    <!-- Target Table Card: customer_financial (F114) -->
+    <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden mt-4">
+      <div class="w-full px-5 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">financial</span>
+          <div class="text-left">
+            <h3 class="text-base font-semibold text-gray-800">customer_financial</h3>
+            <p class="text-sm text-gray-500">Customer Financial（交易資料）- 以客戶為中心之案件往來彙總：保人、電催/法催件數與次數、案件狀態件數</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-sm text-gray-400">11 欄位</span>
+          <span class="text-xs text-gray-400">4 分類</span>
+        </div>
+      </div>
+      <div class="border-t border-border">
+        <div class="px-5 py-3 bg-gray-50 border-b border-border flex items-center gap-6 text-xs text-gray-500">
+          <span class="font-medium text-gray-600">來源資料表：</span>
+          <span class="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-border rounded"><i data-lucide="database" class="w-3 h-3 text-blue-500"></i>V_OB_CUST_CASE_SUMMARY（APYHFC16.ZZIPPROD view）</span>
+        </div>
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-border"><tr><th class="text-left px-4 py-2 font-medium text-gray-500 w-[60px]">分類</th><th class="text-left px-4 py-2 font-medium text-gray-500 w-[210px]">欄位名稱</th><th class="text-left px-4 py-2 font-medium text-gray-500 w-[110px]">型別</th><th class="text-center px-4 py-2 font-medium text-gray-500 w-[50px]">PK</th><th class="text-left px-4 py-2 font-medium text-gray-500">說明</th></tr></thead>
+          <tbody>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-blue-100 text-blue-700 text-xs font-bold">A</span></td><td class="px-4 py-2"><span class="text-danger">*</span> <code class="text-xs font-mono">source_customer_no</code></td><td class="px-4 py-2 text-gray-600">VARCHAR(20)</td><td class="px-4 py-2 text-center"><span class="text-danger font-bold">PK</span></td><td class="px-4 py-2 text-gray-600">來源客戶編號（=CUSTO_NO，對應 ob_pool_data.custo_no）</td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-green-100 text-green-700 text-xs font-bold">B</span></td><td class="px-4 py-2"><code class="text-xs font-mono">has_guarantor</code></td><td class="px-4 py-2 text-gray-600">VARCHAR(1)</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">有無保人（Y/N）</td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-green-100 text-green-700 text-xs font-bold">B</span></td><td class="px-4 py-2"><code class="text-xs font-mono">guarantor_count</code></td><td class="px-4 py-2 text-gray-600">INT</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">保人數量（經案件橋接之保人列數）</td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-100 text-amber-700 text-xs font-bold">C</span></td><td class="px-4 py-2"><code class="text-xs font-mono">phone_coll_case_cnt</code></td><td class="px-4 py-2 text-gray-600">INT</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">電催件數（曾發生電催之案件數）</td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-100 text-amber-700 text-xs font-bold">C</span></td><td class="px-4 py-2"><code class="text-xs font-mono">phone_coll_times</code></td><td class="px-4 py-2 text-gray-600">INT</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">電催次數（各期 DELAY_DAY 8–30 累計）</td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-100 text-amber-700 text-xs font-bold">C</span></td><td class="px-4 py-2"><code class="text-xs font-mono">legal_coll_case_cnt</code></td><td class="px-4 py-2 text-gray-600">INT</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">法催件數（曾發生法催之案件數）</td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-amber-100 text-amber-700 text-xs font-bold">C</span></td><td class="px-4 py-2"><code class="text-xs font-mono">legal_coll_times</code></td><td class="px-4 py-2 text-gray-600">INT</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">法催次數（各期 DELAY_DAY ≥31 累計）</td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-purple-100 text-purple-700 text-xs font-bold">D</span></td><td class="px-4 py-2"><code class="text-xs font-mono">midterm_case_cnt</code></td><td class="px-4 py-2 text-gray-600">INT</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">期中件數（STA_CODE 05–89）</td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-purple-100 text-purple-700 text-xs font-bold">D</span></td><td class="px-4 py-2"><code class="text-xs font-mono">matured_case_cnt</code></td><td class="px-4 py-2 text-gray-600">INT</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">滿期件數（STA_CODE 90）</td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-purple-100 text-purple-700 text-xs font-bold">D</span></td><td class="px-4 py-2"><code class="text-xs font-mono">settled_case_cnt</code></td><td class="px-4 py-2 text-gray-600">INT</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">中結件數（STA_CODE 91–98）</td></tr>
+            <tr class="border-b border-border"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-purple-100 text-purple-700 text-xs font-bold">D</span></td><td class="px-4 py-2"><code class="text-xs font-mono">void_case_cnt</code></td><td class="px-4 py-2 text-gray-600">INT</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-600">其他作廢件數（STA_CODE 99）</td></tr>
+            <tr class="border-b border-border etl-tracking"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-gray-200 text-gray-600 text-xs font-bold">H</span></td><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">data_source</code> <i data-lucide="lock" class="w-3 h-3 inline text-gray-400"></i></td><td class="px-4 py-2 text-gray-500">VARCHAR(50)</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">資料來源識別 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">自動填充</span></td></tr>
+            <tr class="border-b border-border etl-tracking"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-gray-200 text-gray-600 text-xs font-bold">H</span></td><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">_etl_loaded_at</code> <i data-lucide="lock" class="w-3 h-3 inline text-gray-400"></i></td><td class="px-4 py-2 text-gray-500">TIMESTAMP</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">ETL 載入時間 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">自動填充</span></td></tr>
+            <tr class="etl-tracking"><td class="px-4 py-2"><span class="inline-flex items-center justify-center w-5 h-5 rounded bg-gray-200 text-gray-600 text-xs font-bold">H</span></td><td class="px-4 py-2"><code class="text-xs font-mono text-gray-500">_etl_pipeline_id</code> <i data-lucide="lock" class="w-3 h-3 inline text-gray-400"></i></td><td class="px-4 py-2 text-gray-500">UUID</td><td class="px-4 py-2"></td><td class="px-4 py-2 text-gray-500">載入的 Pipeline ID <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-gray-200 text-gray-500 ml-1">自動填充</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- Phase 2/3 Placeholder Cards (greyed out) -->
     <div class="mt-6">
       <h3 class="text-sm font-medium text-gray-400 mb-3">Phase 2/3 規劃中</h3>
       <div class="space-y-3">
-        <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden opacity-50">
-          <div class="px-5 py-4 flex items-center justify-between">
-            <div class="flex items-center gap-4">
-              <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">financial</span>
-              <div class="text-left">
-                <h3 class="text-base font-semibold text-gray-500">customer_financial</h3>
-                <p class="text-sm text-gray-400">Customer Financial（交易/風控）- 待合約明細系統接入</p>
-              </div>
-            </div>
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-400">Phase 2</span>
-          </div>
-        </div>
         <div class="bg-white rounded-lg shadow-sm border border-border overflow-hidden opacity-50">
           <div class="px-5 py-4 flex items-center justify-between">
             <div class="flex items-center gap-4">
