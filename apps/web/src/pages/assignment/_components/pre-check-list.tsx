@@ -39,10 +39,10 @@ const ETL_SOURCE_LABELS: Record<
   'pooldata' | 'emphire' | 'calendar' | 'arreturndf',
   string
 > = {
-  pooldata: '客戶名單池',
-  emphire: '在職名單',
+  pooldata: '案件名單池',
+  emphire: '在職業務清單',
   calendar: '工作日曆',
-  arreturndf: '最低回收上限',
+  arreturndf: '案件未繳金額',
 };
 
 export function buildPreChecksFromReadiness(

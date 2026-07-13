@@ -303,10 +303,10 @@
                 </div>
                 <p class="text-xs text-gray-500 mt-0.5">本月來源資料已完成同步</p>
                 <div class="mt-2 grid grid-cols-2 gap-2 text-xs">
-                  <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>客戶名單池 <span class="font-mono text-gray-500 ml-auto">9,500 筆</span></div>
-                  <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>在職名單 <span class="font-mono text-gray-500 ml-auto">238 人</span></div>
+                  <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>案件名單池 <span class="font-mono text-gray-500 ml-auto">9,500 筆</span></div>
+                  <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>在職業務清單 <span class="font-mono text-gray-500 ml-auto">238 人</span></div>
                   <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>工作日曆 <span class="font-mono text-gray-500 ml-auto">2026 全年</span></div>
-                  <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>最低回收上限 <span class="font-mono text-gray-500 ml-auto">9,420 筆</span></div>
+                  <div class="flex items-center gap-1.5"><i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-success"></i>案件未繳金額 <span class="font-mono text-gray-500 ml-auto">9,420 筆</span></div>
                 </div>
               </div>
             </div>
@@ -673,7 +673,7 @@
         setCheckItemStatus(3, 'fail', '<span class="text-danger">名單 <code>OB202606004</code> × 部門 <code>XTC1</code> 人員比例加總 = 95.0%（缺 5%）</span>');
         setCheckItemStatus(4, 'pass', defaultDetails[4]);
         setCheckItemStatus(5, 'pass', defaultDetails[5]);
-        setCheckItemStatus(6, 'warn', '<span class="text-warning">最低回收上限上次同步時間為 2026-05-08 02:00，超過 24 小時建議重新同步</span>');
+        setCheckItemStatus(6, 'warn', '<span class="text-warning">案件未繳金額上次同步時間為 2026-05-08 02:00，超過 24 小時建議重新同步</span>');
         updatePreCheckSummary(3, 6);
         btn.innerHTML = '<i data-lucide="ban" class="w-5 h-5"></i> 無法啟動（前置失敗）';
       } else if (state === 'running') {
