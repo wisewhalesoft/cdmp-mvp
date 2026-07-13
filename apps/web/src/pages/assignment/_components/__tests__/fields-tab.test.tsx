@@ -181,47 +181,106 @@ describe('FieldsTab — Phase 5d 波 4', () => {
     );
   });
 
-  it('fields-tab-9：欄位無描述時顯示名稱留空、需手動輸入才能建立', async () => {
+  it('fields-tab-9：無 ETL 描述的欄位不出現在選擇下拉（僅提供有描述欄位）', async () => {
     const mockedListAvailable = vi.mocked(poolApi.listAvailableColumns);
-    const mockedCreate = vi.mocked(poolApi.createField);
-    // year_cnt 無 columnDescription（來源無 MS_Description）
+    // risk_level 有描述、year_cnt 無 columnDescription（來源無 MS_Description）
     mockedListAvailable.mockResolvedValue({
       availableColumns: [
+        {
+          columnName: 'risk_level',
+          dataType: 'varchar',
+          suggestedFieldType: 'categorical',
+          columnDescription: '風險等級',
+        },
         { columnName: 'year_cnt', dataType: 'int', suggestedFieldType: 'numeric' },
       ],
     });
-    mockedCreate.mockResolvedValue({
-      columnName: 'year_cnt',
-      displayName: '進件年數',
-      fieldType: 'numeric',
-      isActive: true,
-      createdAt: '2026-07-01T00:00:00Z',
-      updatedAt: '2026-07-01T00:00:00Z',
-    } as never);
 
     renderTab();
     await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
     fireEvent.click(screen.getByTestId('btn-create-field'));
     await waitFor(() => expect(mockedListAvailable).toHaveBeenCalled());
     fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
-    fireEvent.click(await screen.findByTestId('dropdown-option-year_cnt'));
 
-    // 無描述 → 顯示名稱留空、建立鈕 disabled
+    // 有描述的欄位可選；無描述的欄位被隱藏（不提供選擇）
+    expect(await screen.findByTestId('dropdown-option-risk_level')).toBeInTheDocument();
+    expect(screen.queryByTestId('dropdown-option-year_cnt')).not.toBeInTheDocument();
+  });
+
+  it('fields-tab-10：重選欄位時顯示名稱更新為新欄位描述（未手動改動時）', async () => {
+    const mockedListAvailable = vi.mocked(poolApi.listAvailableColumns);
+    mockedListAvailable.mockResolvedValue({
+      availableColumns: [
+        {
+          columnName: 'risk_level',
+          dataType: 'varchar',
+          suggestedFieldType: 'categorical',
+          columnDescription: '風險等級',
+        },
+        {
+          columnName: 'acc_date',
+          dataType: 'datetime2',
+          suggestedFieldType: 'date',
+          columnDescription: '結清日',
+        },
+      ],
+    });
+
+    renderTab();
+    await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('btn-create-field'));
+    await waitFor(() => expect(mockedListAvailable).toHaveBeenCalled());
+
+    // 先選 risk_level → 顯示名稱自動帶入「風險等級」
+    fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
+    fireEvent.click(await screen.findByTestId('dropdown-option-risk_level'));
     const input = screen.getByTestId('input-display-name') as HTMLInputElement;
-    expect(input.value).toBe('');
-    expect(
-      (screen.getByTestId('btn-submit-create-field') as HTMLButtonElement).disabled,
-    ).toBe(true);
+    expect(input.value).toBe('風險等級');
 
-    // 手動輸入顯示名稱後即可建立
-    fireEvent.change(input, { target: { value: '進件年數' } });
-    fireEvent.click(screen.getByTestId('btn-submit-create-field'));
-    await waitFor(() =>
-      expect(mockedCreate).toHaveBeenCalledWith({
-        columnName: 'year_cnt',
-        displayName: '進件年數',
-        fieldType: 'numeric',
-      }),
+    // 重選 acc_date（未手動改動）→ 顯示名稱應更新為「結清日」，且欄位類型帶入 date
+    fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
+    fireEvent.click(await screen.findByTestId('dropdown-option-acc_date'));
+    expect((screen.getByTestId('input-display-name') as HTMLInputElement).value).toBe('結清日');
+    expect(
+      (screen.getByTestId('field-type-radio-date') as HTMLInputElement).checked,
+    ).toBe(true);
+  });
+
+  it('fields-tab-11：使用者手動輸入顯示名稱後，重選欄位不覆寫', async () => {
+    const mockedListAvailable = vi.mocked(poolApi.listAvailableColumns);
+    mockedListAvailable.mockResolvedValue({
+      availableColumns: [
+        {
+          columnName: 'risk_level',
+          dataType: 'varchar',
+          suggestedFieldType: 'categorical',
+          columnDescription: '風險等級',
+        },
+        {
+          columnName: 'acc_date',
+          dataType: 'datetime2',
+          suggestedFieldType: 'date',
+          columnDescription: '結清日',
+        },
+      ],
+    });
+
+    renderTab();
+    await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('btn-create-field'));
+    await waitFor(() => expect(mockedListAvailable).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
+    fireEvent.click(await screen.findByTestId('dropdown-option-risk_level'));
+    const input = screen.getByTestId('input-display-name') as HTMLInputElement;
+    // 使用者手動改成自訂名稱
+    fireEvent.change(input, { target: { value: '我的自訂名稱' } });
+
+    // 重選 acc_date → 不覆寫使用者輸入
+    fireEvent.click(screen.getByTestId('dropdown-column-name-trigger'));
+    fireEvent.click(await screen.findByTestId('dropdown-option-acc_date'));
+    expect((screen.getByTestId('input-display-name') as HTMLInputElement).value).toBe(
+      '我的自訂名稱',
     );
   });
 });

@@ -217,15 +217,27 @@ export function FieldsTab() {
     col.columnDescription?.trim() || col.columnName;
 
   /**
-   * 選定欄位後自動帶入「顯示名稱」= 該欄位 ETL 描述（columnDescription）。
-   *   - 使用者已輸入則不覆寫
-   *   - 該欄位無描述 → 留空，供使用者自行輸入（對齊原自動帶出邏輯）
+   * 選定 / 重選欄位後自動帶入「顯示名稱」= 該欄位 ETL 描述（columnDescription）。
+   *   - 使用者「手動輸入」過則不覆寫（尊重使用者輸入）
+   *   - 先前為「自動帶入且未經修改」→ 重選欄位時更新為新欄位描述（修正：舊值殘留 bug）
+   *   - 該欄位無描述 → 清掉先前自動帶入值後留空，供使用者自行輸入
+   *
+   * 以 showAutofilledHint 區分「自動帶入未改」(true) 與「使用者手動輸入」(false，見輸入框 onChange)。
    */
   const autoFillDisplayNameFromColumn = (meta: AvailableColumn | null) => {
     if (!meta) return;
-    if (newDisplay.trim().length > 0) return;
+    // 使用者手動輸入過（非空且非自動帶入狀態）→ 不覆寫
+    const userTyped = newDisplay.trim().length > 0 && !showAutofilledHint;
+    if (userTyped) return;
     const desc = meta.columnDescription?.trim();
-    if (!desc) return;
+    if (!desc) {
+      // 新欄位無描述：清除先前自動帶入的舊欄位名稱，避免殘留
+      if (showAutofilledHint) {
+        setNewDisplay('');
+        setShowAutofilledHint(false);
+      }
+      return;
+    }
     setNewDisplay(desc);
     setShowAutofilledHint(true);
   };
@@ -324,7 +336,11 @@ export function FieldsTab() {
     setAvailableColumnsError(null);
     try {
       const res = await listAvailableColumns();
-      setAvailableColumns(res.availableColumns ?? []);
+      // 僅提供「有 ETL 欄位描述」的欄位供選擇：無描述者僅有原始欄位名、對業務無辨識度，予以隱藏
+      const described = (res.availableColumns ?? []).filter(
+        (c) => (c.columnDescription ?? '').trim().length > 0,
+      );
+      setAvailableColumns(described);
     } catch (err: unknown) {
       const e = err as {
         response?: { status?: number; data?: { error?: string; message?: string } };
