@@ -31,6 +31,8 @@ CREATE VIEW dbo.V_OB_CUST_CASE_SUMMARY AS
 WITH appl AS (          -- 分期申請主檔：一案一列、單一 STA_CODE
     SELECT APPL_NO, CUSTO_NO, STA_CODE
     FROM ZZIPPROD.dbo.ZZIP_APMAPPL_M WITH (NOLOCK)
+    -- 排除無客戶編號之孤兒案件（CUSTO_NO 為輸出 PK source_customer_no，NOT NULL）
+    WHERE CUSTO_NO IS NOT NULL AND LTRIM(RTRIM(CUSTO_NO)) <> ''
 ),
 status_cnt AS (         -- 案件狀態件數（互斥級距，每案只落一桶）
     SELECT CUSTO_NO,
