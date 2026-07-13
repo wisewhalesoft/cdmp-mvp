@@ -226,6 +226,10 @@
                 <input id="showInactiveOptToggle" type="checkbox" onchange="renderOptionValues()" class="rounded">
                 <span>顯示已停用值</span>
               </label>
+              <!-- F112 / US-178：進入點 2 — 從實際資料批次帶入可選值（案件資料 / 客戶資料皆適用） -->
+              <button data-write-action onclick="openBulkImport()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-primary border border-primary/40 text-xs font-medium rounded-md hover:bg-blue-50 shadow-sm">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>從實際資料帶入可選值
+              </button>
               <button data-write-action onclick="openCreateOptionModal()" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-medium rounded-md hover:bg-blue-700 shadow-sm">
                 <i data-lucide="plus" class="w-3.5 h-3.5"></i>新增可選值
               </button>
@@ -268,11 +272,11 @@
         <div class="px-6 py-5 space-y-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1.5">選擇欄位 <span class="text-danger">*</span></label>
-            <select onchange="onCreateFieldColumnPicked(this)" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+            <select id="cfColumnSelect" onchange="onCreateFieldColumnPicked(this)" class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
               <option value="">請選擇欄位…</option>
-              <option value="risk_level" data-desc="風險等級">風險等級（risk_level）· 類別</option>
-              <option value="month_cnt" data-desc="撈取月份計數">撈取月份計數（month_cnt）· 數值</option>
-              <option value="cust_birth" data-desc="">客戶生日（cust_birth）· 日期</option>
+              <option value="risk_level" data-desc="風險等級" data-ftype="categorical">風險等級（risk_level）· 類別</option>
+              <option value="month_cnt" data-desc="撈取月份計數" data-ftype="numeric">撈取月份計數（month_cnt）· 數值</option>
+              <option value="cust_birth" data-desc="" data-ftype="date">客戶生日（cust_birth）· 日期</option>
             </select>
           </div>
           <div>
@@ -286,15 +290,15 @@
             <label class="block text-sm font-medium text-gray-700 mb-2">欄位類型 <span class="text-danger">*</span></label>
             <div class="grid grid-cols-3 gap-2">
               <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition">
-                <input type="radio" name="newFieldType" value="categorical" class="mt-0.5" checked>
+                <input type="radio" name="newFieldType" value="categorical" class="mt-0.5" checked onchange="onCreateFieldTypeChange()">
                 <div><div class="text-sm font-medium text-gray-800">類別型</div><div class="text-[11px] text-gray-500 mt-0.5">多選列表</div></div>
               </label>
               <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition">
-                <input type="radio" name="newFieldType" value="numeric" class="mt-0.5">
+                <input type="radio" name="newFieldType" value="numeric" class="mt-0.5" onchange="onCreateFieldTypeChange()">
                 <div><div class="text-sm font-medium text-gray-800">數值型</div><div class="text-[11px] text-gray-500 mt-0.5">數值範圍</div></div>
               </label>
               <label class="flex items-start gap-2 px-3 py-2.5 border border-border rounded-lg cursor-pointer hover:border-primary hover:bg-blue-50/40 transition">
-                <input type="radio" name="newFieldType" value="date" class="mt-0.5">
+                <input type="radio" name="newFieldType" value="date" class="mt-0.5" onchange="onCreateFieldTypeChange()">
                 <div><div class="text-sm font-medium text-gray-800">日期型</div><div class="text-[11px] text-gray-500 mt-0.5">日期範圍</div></div>
               </label>
             </div>
@@ -305,10 +309,83 @@
               class="w-full px-3 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
             <p class="text-[11px] text-gray-400 mt-1">選欄位後自動帶入該欄位描述；若無描述請自行輸入</p>
           </div>
+
+          <!-- ================= F112 / US-178：進入點 1 — 從實際資料偵測可選值（僅類別型顯示） ================= -->
+          <div id="cfDistinctSection" class="hidden border border-border rounded-lg overflow-hidden">
+            <!-- 區塊標題 + 原型示範狀態切換 -->
+            <div class="px-3 py-2.5 bg-blue-50/60 border-b border-border flex items-center justify-between gap-2">
+              <span class="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+                <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>從實際資料偵測可選值
+              </span>
+              <div class="flex items-center gap-1">
+                <span class="text-[10px] text-gray-400 mr-0.5">示範</span>
+                <div id="cfDemoPills" class="flex items-center gap-1">
+                  <button type="button" data-demo="normal"    onclick="cfSetDemo('normal')"    class="px-2 py-0.5 rounded text-[11px] font-medium border bg-white text-gray-500 border-border">正常</button>
+                  <button type="button" data-demo="loading"   onclick="cfSetDemo('loading')"   class="px-2 py-0.5 rounded text-[11px] font-medium border bg-white text-gray-500 border-border">載入</button>
+                  <button type="button" data-demo="empty"     onclick="cfSetDemo('empty')"     class="px-2 py-0.5 rounded text-[11px] font-medium border bg-white text-gray-500 border-border">查無</button>
+                  <button type="button" data-demo="truncated" onclick="cfSetDemo('truncated')" class="px-2 py-0.5 rounded text-[11px] font-medium border bg-white text-gray-500 border-border">過多</button>
+                  <button type="button" data-demo="error"     onclick="cfSetDemo('error')"     class="px-2 py-0.5 rounded text-[11px] font-medium border bg-white text-gray-500 border-border">失敗</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 狀態：載入中（AC-1 偵測進行中） -->
+            <div id="cfDistinctLoading" class="px-4 py-5 flex flex-col items-center justify-center text-center gap-2">
+              <i data-lucide="loader-2" class="w-5 h-5 text-primary animate-spin"></i>
+              <p class="text-sm text-gray-500">正在讀取實際資料的可選值…</p>
+              <div class="w-full space-y-1.5 mt-1">
+                <div class="h-3 bg-gray-100 rounded animate-pulse"></div>
+                <div class="h-3 bg-gray-100 rounded animate-pulse w-4/5"></div>
+                <div class="h-3 bg-gray-100 rounded animate-pulse w-3/5"></div>
+              </div>
+            </div>
+
+            <!-- 狀態：清單就緒（含 truncated 警示，AC-3 / AC-11） -->
+            <div id="cfDistinctReady" class="hidden">
+              <div id="cfTruncWarn" class="hidden px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-start gap-2">
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-warning mt-0.5 shrink-0"></i>
+                <p class="text-[11px] text-amber-700 leading-relaxed">可選值過多，僅顯示前 <b>200</b> 筆。此欄位相異值數量偏高，可能不適合作為類別型欄位，請確認欄位選型是否正確。</p>
+              </div>
+              <p class="px-3 pt-2.5 pb-1 text-sm text-gray-700">偵測到 <b class="text-primary" id="cfHeadingCount">0</b> 個可選值，是否一併新增為此欄位的可選值？</p>
+              <div class="px-3 pb-1.5 flex items-center justify-between">
+                <div class="flex items-center gap-2 text-xs">
+                  <button type="button" onclick="cfSelectAll(true)" class="text-primary hover:underline">全選</button>
+                  <span class="text-gray-300">|</span>
+                  <button type="button" onclick="cfSelectAll(false)" class="text-gray-500 hover:underline">全部清除</button>
+                </div>
+                <span class="text-xs text-gray-500">已勾選 <span id="cfSelCount" class="font-semibold text-primary">0</span> / <span id="cfSelTotal">0</span></span>
+              </div>
+              <div id="cfDistinctList" class="max-h-48 overflow-y-auto border-t border-border"></div>
+              <div class="px-3 py-2 bg-gray-50/70 border-t border-border">
+                <p class="text-[11px] text-gray-400 leading-relaxed"><i data-lucide="info" class="w-3 h-3 inline -mt-0.5 mr-0.5"></i>帶入的可選值「欄位值」= 偵測到的實際值、「顯示名稱」預設同為該值，之後可於「可選值管理」重新命名。</p>
+              </div>
+            </div>
+
+            <!-- 狀態：查無資料（AC-14 空狀態，與錯誤明確區隔） -->
+            <div id="cfDistinctEmpty" class="hidden px-4 py-6 flex flex-col items-center text-center gap-1.5">
+              <i data-lucide="inbox" class="w-6 h-6 text-gray-300"></i>
+              <p class="text-sm text-gray-600">該欄位查無資料</p>
+              <p class="text-[11px] text-gray-400 max-w-xs">來源資料表此欄位無任何非空值，無法自動帶入。您仍可建立欄位，稍後於「可選值管理」手動新增可選值。</p>
+            </div>
+
+            <!-- 狀態：讀取失敗 / 逾時（AC-12 / AC-13，不可靜默空白） -->
+            <div id="cfDistinctError" class="hidden px-4 py-6 flex flex-col items-center text-center gap-2">
+              <i data-lucide="cloud-off" class="w-6 h-6 text-danger"></i>
+              <p class="text-sm text-gray-600">讀取可選值失敗，請稍後重試</p>
+              <button type="button" onclick="refreshCfDistinct()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary border border-primary/40 rounded-md hover:bg-blue-50">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>重試
+              </button>
+            </div>
+          </div>
+          <!-- ================= /F112 進入點 1 ================= -->
         </div>
-        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-gray-50/50">
-          <button onclick="closeModal('createFieldModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-white">取消</button>
-          <button onclick="submitCreateField()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700">儲存</button>
+        <div class="flex items-center justify-between gap-3 px-6 py-4 border-t border-border bg-gray-50/50">
+          <!-- F112 / US-178：儲存動作提示（依勾選數與欄位類型動態變化，AC-4 / AC-5） -->
+          <p id="cfSaveHint" class="text-[11px] text-gray-500 leading-snug flex-1 min-w-0"></p>
+          <div class="flex items-center gap-3 shrink-0">
+            <button onclick="closeModal('createFieldModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-white">取消</button>
+            <button onclick="submitCreateField()" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700">儲存</button>
+          </div>
         </div>
       </div>
     </div>
@@ -345,6 +422,95 @@
       </div>
     </div>
   </div>
+
+  <!-- ================= F112 / US-178：進入點 2 — 從實際資料帶入可選值（批次）Modal ================= -->
+  <div id="bulkImportModal" class="fixed inset-0 z-50 hidden">
+    <div class="modal-backdrop absolute inset-0" onclick="closeModal('bulkImportModal')"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-surface rounded-xl shadow-2xl w-full max-w-lg relative">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center gap-1.5"><i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>從實際資料帶入可選值</h3>
+            <p class="text-xs text-gray-500 mt-0.5">欄位：<span id="biColName" class="font-medium text-gray-700">職業別</span> <code id="biColCode" class="font-mono text-gray-400"></code> <span id="biSource" class="align-middle"></span></p>
+          </div>
+          <button onclick="closeModal('bulkImportModal')" class="p-1 hover:bg-gray-100 rounded-md"><i data-lucide="x" class="w-5 h-5 text-gray-400"></i></button>
+        </div>
+
+        <!-- 原型示範狀態切換（prototype-only） -->
+        <div class="px-6 py-2 border-b border-border bg-blue-50/40 flex items-center gap-1">
+          <span class="text-[10px] text-gray-400 mr-1">原型示範</span>
+          <div id="biDemoPills" class="flex items-center gap-1">
+            <button type="button" data-demo="normal"    onclick="biSetDemo('normal')"    class="px-2 py-0.5 rounded text-[11px] font-medium border bg-white text-gray-500 border-border">正常</button>
+            <button type="button" data-demo="loading"   onclick="biSetDemo('loading')"   class="px-2 py-0.5 rounded text-[11px] font-medium border bg-white text-gray-500 border-border">載入</button>
+            <button type="button" data-demo="empty"     onclick="biSetDemo('empty')"     class="px-2 py-0.5 rounded text-[11px] font-medium border bg-white text-gray-500 border-border">查無</button>
+            <button type="button" data-demo="truncated" onclick="biSetDemo('truncated')" class="px-2 py-0.5 rounded text-[11px] font-medium border bg-white text-gray-500 border-border">過多</button>
+            <button type="button" data-demo="error"     onclick="biSetDemo('error')"     class="px-2 py-0.5 rounded text-[11px] font-medium border bg-white text-gray-500 border-border">失敗</button>
+          </div>
+        </div>
+
+        <div class="px-6 py-5 min-h-[210px]">
+          <!-- 狀態：載入中 -->
+          <div id="biLoading" class="py-6 flex flex-col items-center justify-center text-center gap-2">
+            <i data-lucide="loader-2" class="w-5 h-5 text-primary animate-spin"></i>
+            <p class="text-sm text-gray-500">正在讀取實際資料的可選值…</p>
+            <div class="w-full space-y-1.5 mt-1">
+              <div class="h-3 bg-gray-100 rounded animate-pulse"></div>
+              <div class="h-3 bg-gray-100 rounded animate-pulse w-4/5"></div>
+              <div class="h-3 bg-gray-100 rounded animate-pulse w-3/5"></div>
+            </div>
+          </div>
+
+          <!-- 狀態：候選清單就緒（已去重，AC-7；含 truncated 警示 AC-11） -->
+          <div id="biReady" class="hidden">
+            <div id="biTruncWarn" class="hidden mb-2.5 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md flex items-start gap-2">
+              <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-warning mt-0.5 shrink-0"></i>
+              <p class="text-[11px] text-amber-700 leading-relaxed">來源相異值過多，僅顯示前 <b>200</b> 筆。此欄位相異值數量偏高，可能不適合作為類別型欄位。</p>
+            </div>
+            <p class="text-sm text-gray-700 mb-1">偵測到 <b class="text-primary" id="biHeadingCount">0</b> 個尚未建立的可選值（已排除 <span id="biExistNote" class="font-medium text-gray-600">0</span> 個既有值），是否一併新增？</p>
+            <div class="flex items-center justify-between mb-1.5">
+              <div class="flex items-center gap-2 text-xs">
+                <button type="button" onclick="biSelectAll(true)" class="text-primary hover:underline">全選</button>
+                <span class="text-gray-300">|</span>
+                <button type="button" onclick="biSelectAll(false)" class="text-gray-500 hover:underline">全部清除</button>
+              </div>
+              <span class="text-xs text-gray-500">已勾選 <span id="biSelCount" class="font-semibold text-primary">0</span> / <span id="biSelTotal">0</span></span>
+            </div>
+            <div id="biList" class="max-h-56 overflow-y-auto border border-border rounded-md"></div>
+            <p class="text-[11px] text-gray-400 leading-relaxed mt-2"><i data-lucide="info" class="w-3 h-3 inline -mt-0.5 mr-0.5"></i>「欄位值」= 偵測到的實際值、「顯示名稱」預設同為該值，之後可於清單重新命名。</p>
+          </div>
+
+          <!-- 狀態：無新可選值可帶入（全部已存在，AC-9） -->
+          <div id="biNoNew" class="hidden py-8 flex flex-col items-center text-center gap-1.5">
+            <div class="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center"><i data-lucide="check-check" class="w-6 h-6 text-success"></i></div>
+            <p class="text-sm font-medium text-gray-700">無新可選值可帶入</p>
+            <p class="text-[11px] text-gray-400 max-w-xs">此欄位既有的可選值已涵蓋來源資料的全部 <span id="biNoNewTotal" class="font-medium text-gray-600">0</span> 個相異值，沒有需要新增的候選值。</p>
+          </div>
+
+          <!-- 狀態：查無資料（AC-14） -->
+          <div id="biEmpty" class="hidden py-8 flex flex-col items-center text-center gap-1.5">
+            <i data-lucide="inbox" class="w-6 h-6 text-gray-300"></i>
+            <p class="text-sm text-gray-600">該欄位查無資料</p>
+            <p class="text-[11px] text-gray-400 max-w-xs">來源資料表此欄位無任何非空值，無可帶入之候選值。</p>
+          </div>
+
+          <!-- 狀態：讀取失敗 / 逾時（AC-12 / AC-13） -->
+          <div id="biError" class="hidden py-8 flex flex-col items-center text-center gap-2">
+            <i data-lucide="cloud-off" class="w-6 h-6 text-danger"></i>
+            <p class="text-sm text-gray-600">讀取可選值失敗，請稍後重試</p>
+            <button type="button" onclick="biRun()" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary border border-primary/40 rounded-md hover:bg-blue-50">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>重試
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-gray-50/50">
+          <button onclick="closeModal('bulkImportModal')" class="px-4 py-2 text-sm font-medium text-gray-700 border border-border rounded-lg hover:bg-white">取消</button>
+          <button id="biConfirmBtn" onclick="submitBulkImport()" disabled class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">確認帶入</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- ================= /F112 進入點 2 ================= -->
 
   <!-- Toast container -->
   <div id="toast-container" class="fixed top-20 right-4 z-[60] space-y-2"></div>
@@ -678,12 +844,46 @@
       const opt = sel.options[sel.selectedIndex];
       const col = sel.value;
       const desc = opt ? (opt.getAttribute('data-desc') || '') : '';
+      const ftype = opt ? (opt.getAttribute('data-ftype') || 'categorical') : 'categorical';
       document.getElementById('cfColName').textContent = col || '—';
       const disp = document.getElementById('cfDisplayName');
       if (disp && !disp.value.trim()) disp.value = desc;
+      // 選欄位後自動帶入該欄位之自然型別（使用者仍可手動改 radio）
+      if (col) {
+        const radio = document.querySelector('input[name="newFieldType"][value="' + ftype + '"]');
+        if (radio) radio.checked = true;
+      }
+      cfDemo = 'normal'; cfPaintDemo();
+      refreshCfDistinct();
     }
-    function openCreateFieldModal() { document.getElementById('createFieldModal').classList.remove('hidden'); }
-    function submitCreateField() { closeModal('createFieldModal'); showToast('success','新增欄位成功（demo）','實作時將 POST /api/v1/pooldata-fields 並重新整理列表'); }
+    // F112 / US-178：欄位類型切換 → 類別型才偵測 distinct（AC-2）
+    function onCreateFieldTypeChange() { refreshCfDistinct(); }
+    function openCreateFieldModal() {
+      // reset 表單與 F112 偵測區塊狀態
+      const sel = document.getElementById('cfColumnSelect'); if (sel) sel.value = '';
+      document.getElementById('cfColName').textContent = '—';
+      document.getElementById('cfDisplayName').value = '';
+      const catRadio = document.querySelector('input[name="newFieldType"][value="categorical"]');
+      if (catRadio) catRadio.checked = true;
+      cfDemo = 'normal'; cfPaintDemo();
+      document.getElementById('cfDistinctSection').classList.add('hidden');
+      updateCfSaveHint(0, 'categorical', '');
+      document.getElementById('createFieldModal').classList.remove('hidden');
+    }
+    function submitCreateField() {
+      const col = document.getElementById('cfColumnSelect').value;
+      const ft = (document.querySelector('input[name="newFieldType"]:checked') || {}).value || 'categorical';
+      // 僅類別型、且偵測區塊為就緒清單時，蒐集勾選之候選值（AC-4 / AC-5）
+      let picked = [];
+      const sectionVisible = !document.getElementById('cfDistinctSection').classList.contains('hidden');
+      if (ft === 'categorical' && sectionVisible) picked = cfGetChecked();
+      closeModal('createFieldModal');
+      if (ft === 'categorical' && picked.length > 0) {
+        showToast('success', '新增欄位成功（demo）', `已建立欄位「${col}」並一併帶入 ${picked.length} 筆可選值（實作時：先 POST /pooldata-fields 建立欄位，再 POST .../options/bulk 批次帶入）`);
+      } else {
+        showToast('success', '新增欄位成功（demo）', `已建立欄位「${col || '（未選）'}」，未帶入可選值（實作時 POST /api/v1/pooldata-fields；可稍後於「可選值管理」新增）`);
+      }
+    }
 
     // ============================================================
     // Tab 2：可選值管理
@@ -841,6 +1041,212 @@
     }
 
     // ============================================================
+    // F112 / US-178：類別型可選值自動建議（從實際資料批次帶入）
+    //   進入點 1 — 新增欄位 Modal 偵測 distinct（cf* 前綴）
+    //   進入點 2 — 可選值管理頁批次帶入 Modal（bi* 前綴）
+    //   本 prototype 以 mock 模擬 GET /pooldata-fields/:col/distinct-values；
+    //   兩端點與交易邊界之實作契約見 spec F112 §5。
+    // ============================================================
+    const DISTINCT_CAP = 200;
+
+    // 模擬各欄位來源表之實際 distinct 值（GET .../distinct-values 之回傳）。
+    // 案件資料（ob_pool_data）多為代碼；客戶資料（customer_core）_desc 欄位為中文值。
+    const MOCK_DISTINCT = {
+      // ── 進入點 1 候選欄位（尚未列入白名單之 ob_pool_data 欄位）──
+      risk_level:  ['01', '02', '03', '04', '05'],                 // 類別 → 顯示 checklist
+      // month_cnt / cust_birth 為數值 / 日期，不觸發偵測（無需 mock）
+      // ── 案件資料既有 categorical 欄位（進入點 2）──
+      prod_kind:   ['01', '02', '03', '04'],                       // 04 為來源新值（既有僅 01~03）
+      spec_tp:     ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14'], // 多筆新值
+      case_status: ['01', '02', '03', '04'],                       // 皆已存在 → 無新可帶入
+      settle_src:  ['Y', 'N'],                                     // 皆已存在 → 無新可帶入
+      caseyear:    ['0', '1', '2', '3', '4', '5', '6', '99'],      // 皆已存在 → 無新可帶入
+      // ── 客戶資料 customer_core categorical 欄位（進入點 2；中文值）──
+      gender:      ['1', '2', '3'],                                // 皆已存在 → 無新可帶入
+      occupation_desc: ['軍公教', '教師', '醫師', '護理人員', '工程師', '會計師', '律師', '服務業', '製造業', '自營商',
+        '公務員', '警察', '消防員', '軍人', '農林漁牧', '建築業', '營造業', '房仲業', '保險業', '金融業',
+        '銀行員', '證券業', '資訊業', '電子業', '半導體業', '餐飲業', '旅遊業', '運輸業', '物流業', '航空業',
+        '零售業', '批發業', '貿易業', '傳播媒體', '設計師', '藥師', '獸醫師', '牙醫師', '社工', '學生',
+        '家管', '退休', '待業中', '其他'],                          // 44 筆（既有 10 → 候選 34）
+      cpost_city:  ['臺北市', '新北市', '桃園市', '臺中市', '臺南市', '高雄市', '基隆市', '新竹市', '嘉義市', '新竹縣',
+        '苗栗縣', '彰化縣', '南投縣', '雲林縣', '嘉義縣', '屏東縣', '宜蘭縣', '花蓮縣', '臺東縣', '澎湖縣',
+        '金門縣', '連江縣'],                                        // 皆已存在 → 無新可帶入
+      monthly_income_desc: ['20,000以下', '20,001~30,000', '30,001~40,000', '40,001~50,000', '50,001~60,000',
+        '60,001~70,000', '70,001~80,000', '80,001以上', '未確定'],
+      education_desc: ['博士', '碩士', '大學', '專科', '高中職', '國中', '國小', '其他'],
+      marital_status_desc: ['未婚', '已婚', '離婚', '喪偶', '不詳'],
+      customer_type_desc: ['個人', '法人', '外籍人士', '虛擬車商編號']
+    };
+
+    function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+    // 模擬 distinct 查詢：回傳 { kind:'ok'|'empty'|'truncated'|'error', values:[...] }
+    function mockDistinct(col, demo) {
+      if (demo === 'error') return { kind: 'error' };
+      if (demo === 'empty') return { kind: 'empty', values: [] };
+      if (demo === 'truncated') {
+        const many = Array.from({ length: DISTINCT_CAP + 18 }, (_, i) => 'V' + String(i + 1).padStart(3, '0'));
+        return { kind: 'truncated', values: many.slice(0, DISTINCT_CAP) };
+      }
+      const vals = (MOCK_DISTINCT[col] || []).slice();
+      if (vals.length === 0) return { kind: 'empty', values: [] };
+      if (vals.length > DISTINCT_CAP) return { kind: 'truncated', values: vals.slice(0, DISTINCT_CAP) };
+      return { kind: 'ok', values: vals };
+    }
+
+    // ── checklist 共用 helper（欄位值 → 顯示名稱，兩者預設同值；AC-10）──
+    function distinctRowsHtml(values, onToggle) {
+      return values.map(v => `
+        <label class="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50/40 cursor-pointer border-b border-border/50 last:border-0">
+          <input type="checkbox" checked data-val="${esc(v)}" onchange="${onToggle}" class="rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/30">
+          <span class="font-mono text-[11px] text-gray-500 min-w-[3.5rem] shrink-0">${esc(v)}</span>
+          <i data-lucide="arrow-right" class="w-3 h-3 text-gray-300 shrink-0"></i>
+          <span class="text-sm text-gray-700 truncate">${esc(v)}</span>
+        </label>`).join('');
+    }
+    function checklistChecked(listId) {
+      return [...document.querySelectorAll('#' + listId + ' input[type=checkbox]')].filter(b => b.checked).map(b => b.getAttribute('data-val'));
+    }
+    function checklistCount(listId, countId, totalId) {
+      const boxes = document.querySelectorAll('#' + listId + ' input[type=checkbox]');
+      const checked = [...boxes].filter(b => b.checked).length;
+      document.getElementById(countId).textContent = checked;
+      if (totalId) document.getElementById(totalId).textContent = boxes.length;
+      return checked;
+    }
+    function checklistSetAll(listId, val) {
+      document.querySelectorAll('#' + listId + ' input[type=checkbox]').forEach(b => b.checked = val);
+    }
+    function paintDemoPills(wrapId, active) {
+      document.querySelectorAll('#' + wrapId + ' [data-demo]').forEach(b => {
+        const on = b.getAttribute('data-demo') === active;
+        b.className = 'px-2 py-0.5 rounded text-[11px] font-medium border transition ' +
+          (on ? 'bg-primary text-white border-primary' : 'bg-white text-gray-500 border-border hover:bg-gray-50');
+      });
+    }
+
+    // ============================================================
+    // 進入點 1（cf*）：新增欄位 Modal 之偵測清單
+    // ============================================================
+    let cfDemo = 'normal';
+    let cfTimer = null;
+    function cfPaintDemo() { paintDemoPills('cfDemoPills', cfDemo); }
+    function cfSetDemo(s) { cfDemo = s; cfPaintDemo(); refreshCfDistinct(); }
+    function cfShow(id) {
+      ['cfDistinctLoading', 'cfDistinctReady', 'cfDistinctEmpty', 'cfDistinctError']
+        .forEach(s => document.getElementById(s).classList.toggle('hidden', s !== id));
+    }
+    // 依目前欄位 + 類型決定是否偵測（AC-1 / AC-2）
+    function refreshCfDistinct() {
+      const col = (document.getElementById('cfColumnSelect') || {}).value || '';
+      const ft = (document.querySelector('input[name="newFieldType"]:checked') || {}).value || 'categorical';
+      const section = document.getElementById('cfDistinctSection');
+      if (!col || ft !== 'categorical') { section.classList.add('hidden'); updateCfSaveHint(0, ft, col); return; }
+      section.classList.remove('hidden');
+      cfShow('cfDistinctLoading');
+      updateCfSaveHint('loading', ft, col);
+      if (cfTimer) clearTimeout(cfTimer);
+      if (cfDemo === 'loading') return; // 停在載入中示範
+      cfTimer = setTimeout(() => cfApply(col), 750);
+    }
+    function cfApply(col) {
+      const res = mockDistinct(col, cfDemo);
+      if (res.kind === 'error') { cfShow('cfDistinctError'); updateCfSaveHint(0, 'categorical', col); lucide.createIcons(); return; }
+      if (res.kind === 'empty') { cfShow('cfDistinctEmpty'); updateCfSaveHint(0, 'categorical', col); lucide.createIcons(); return; }
+      document.getElementById('cfDistinctList').innerHTML = distinctRowsHtml(res.values, 'cfOnToggle()');
+      document.getElementById('cfTruncWarn').classList.toggle('hidden', res.kind !== 'truncated');
+      document.getElementById('cfHeadingCount').textContent = res.values.length;
+      cfShow('cfDistinctReady');
+      const n = checklistCount('cfDistinctList', 'cfSelCount', 'cfSelTotal');
+      updateCfSaveHint(n, 'categorical', col);
+      lucide.createIcons();
+    }
+    function cfOnToggle() {
+      const n = checklistCount('cfDistinctList', 'cfSelCount', 'cfSelTotal');
+      updateCfSaveHint(n, 'categorical', (document.getElementById('cfColumnSelect') || {}).value || '');
+    }
+    function cfSelectAll(v) { checklistSetAll('cfDistinctList', v); cfOnToggle(); }
+    function cfGetChecked() { return checklistChecked('cfDistinctList'); }
+    // 儲存動作提示（AC-4 / AC-5）
+    function updateCfSaveHint(n, ft, col) {
+      const el = document.getElementById('cfSaveHint');
+      if (!el) return;
+      if (!col) { el.textContent = ''; return; }
+      if (ft !== 'categorical') { el.innerHTML = '儲存後將建立此欄位（數值 / 日期型不含可選值）。'; return; }
+      if (n === 'loading') { el.innerHTML = '正在讀取可選值…'; return; }
+      if (n > 0) el.innerHTML = '儲存後將建立此欄位，並一併新增 <b class="text-primary">' + n + '</b> 筆已勾選的可選值。';
+      else el.innerHTML = '儲存後將僅建立此欄位（未勾選可選值，可稍後於「可選值管理」新增）。';
+    }
+
+    // ============================================================
+    // 進入點 2（bi*）：可選值管理頁批次帶入 Modal
+    // ============================================================
+    let biDemo = 'normal';
+    let biTimer = null;
+    let biCol = null;
+    function biPaintDemo() { paintDemoPills('biDemoPills', biDemo); }
+    function biSetDemo(s) { biDemo = s; biPaintDemo(); biRun(); }
+    function biShow(id) {
+      ['biLoading', 'biReady', 'biNoNew', 'biEmpty', 'biError']
+        .forEach(s => document.getElementById(s).classList.toggle('hidden', s !== id));
+    }
+    function openBulkImport() {
+      biCol = curOptionColumn;
+      const f = FIELDS.find(x => x.columnName === biCol);
+      document.getElementById('biColName').textContent = f ? f.displayName : biCol;
+      document.getElementById('biColCode').textContent = '（' + biCol + '）';
+      document.getElementById('biSource').innerHTML = f ? dataSourceBadge(f.dataSource || 'ob_pool_data') : '';
+      biDemo = 'normal'; biPaintDemo();
+      document.getElementById('bulkImportModal').classList.remove('hidden');
+      biRun();
+    }
+    function biRun() {
+      biShow('biLoading');
+      document.getElementById('biConfirmBtn').disabled = true;
+      if (biTimer) clearTimeout(biTimer);
+      if (biDemo === 'loading') return;
+      biTimer = setTimeout(biApply, 750);
+    }
+    function biApply() {
+      const res = mockDistinct(biCol, biDemo);
+      if (res.kind === 'error') { biShow('biError'); lucide.createIcons(); return; }
+      if (res.kind === 'empty') { biShow('biEmpty'); lucide.createIcons(); return; }
+      // 去重：排除該欄位已存在之可選值（含停用，AC-7）
+      const existing = new Set((OPTIONS[biCol] || []).map(o => o.v));
+      const candidates = res.values.filter(v => !existing.has(v));
+      if (candidates.length === 0) { // 全部已存在（AC-9）
+        document.getElementById('biNoNewTotal').textContent = res.values.length;
+        biShow('biNoNew'); lucide.createIcons(); return;
+      }
+      document.getElementById('biList').innerHTML = distinctRowsHtml(candidates, 'biOnToggle()');
+      document.getElementById('biTruncWarn').classList.toggle('hidden', res.kind !== 'truncated');
+      document.getElementById('biHeadingCount').textContent = candidates.length;
+      document.getElementById('biExistNote').textContent = existing.size;
+      biShow('biReady');
+      const n = checklistCount('biList', 'biSelCount', 'biSelTotal');
+      document.getElementById('biConfirmBtn').disabled = n === 0;
+      lucide.createIcons();
+    }
+    function biOnToggle() {
+      const n = checklistCount('biList', 'biSelCount', 'biSelTotal');
+      document.getElementById('biConfirmBtn').disabled = n === 0;
+    }
+    function biSelectAll(v) { checklistSetAll('biList', v); biOnToggle(); }
+    // 確認帶入 → mock append 至 OPTIONS[col]（value=label=distinct 值，AC-8 / AC-10）
+    function submitBulkImport() {
+      const picked = checklistChecked('biList');
+      if (picked.length === 0) { showToast('warning', '未勾選', '請至少勾選一筆可選值'); return; }
+      OPTIONS[biCol] = OPTIONS[biCol] || [];
+      let m = 0;
+      picked.forEach(v => { if (!OPTIONS[biCol].some(o => o.v === v)) { OPTIONS[biCol].push({ v, l: v, active: true, reason: null }); m++; } });
+      closeModal('bulkImportModal');
+      renderOptionValues();
+      renderOptionColumns();
+      const f = FIELDS.find(x => x.columnName === biCol);
+      showToast('success', '已帶入可選值', `已帶入 ${m} 筆可選值至「${f ? f.displayName : biCol}」（實作時 POST /pooldata-fields/${biCol}/options/bulk）`);
+    }
+
+    // ============================================================
     // 初始化
     // ============================================================
     document.addEventListener('DOMContentLoaded', function() {
@@ -852,6 +1258,9 @@
       document.getElementById('curColSource').innerHTML = defF ? dataSourceBadge(defF.dataSource || 'ob_pool_data') : '';
       renderOptionValues();
       applyInitialTab();
+      // F112：初始化兩個示範狀態 pills 樣式
+      cfPaintDemo();
+      biPaintDemo();
     });
   </script>
 </body>

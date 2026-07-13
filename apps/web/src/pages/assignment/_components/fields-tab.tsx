@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Plus,
   Search,
@@ -17,6 +17,10 @@ import {
   Folder,
   Contact,
   Sparkles,
+  AlertTriangle,
+  ArrowRight,
+  CloudOff,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -27,9 +31,12 @@ import {
   updateField,
   disableField as apiDisableField,
   getActiveOptionsCount,
+  getDistinctValues,
+  createOptionsBulk,
   type FieldType,
   type PooldataField,
   type AvailableColumn,
+  type DistinctValueItem,
 } from '@/api/pooldata-fields';
 import { CategorySwitchConfirmModal } from './category-switch-confirm-modal';
 import { EditFieldModal } from './edit-field-modal';
@@ -122,6 +129,49 @@ function DataSourceBadge({
   );
 }
 
+/**
+ * F112 / US-178：進入點 1 distinct 偵測之狀態機（AC-9/11/12/13/14，BR-11）。
+ * 五態各自獨立、互不混淆；error 依 kind 分流呈現（503 未就緒 / 500 逾時 / 一般）。
+ * 「禁止任何狀態以無提示空白清單呈現」（BR-11）。
+ */
+type DistinctErrorKind = 'not_ready' | 'timeout' | 'generic';
+
+type DistinctState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | {
+      status: 'ready';
+      values: DistinctValueItem[];
+      truncated: boolean;
+      cap: number;
+    }
+  | { status: 'empty' }
+  | { status: 'error'; kind: DistinctErrorKind; message: string };
+
+/**
+ * 依後端回傳之 `error` 代碼字串分流錯誤呈現（AD §6：非依 HTTP status 數值）。
+ *   - 503 OBPOOLDATA_NOT_READY / CUSTOMER_CORE_NOT_READY → 來源未就緒
+ *   - 500 DISTINCT_VALUES_QUERY_TIMEOUT → 逾時（文案與未就緒明確區隔，AC-13）
+ *   - 其餘 → 一般失敗
+ */
+function classifyDistinctError(err: unknown): {
+  kind: DistinctErrorKind;
+  message: string;
+} {
+  const e = err as { response?: { data?: { error?: string } } };
+  const code = e?.response?.data?.error;
+  if (code === 'OBPOOLDATA_NOT_READY' || code === 'CUSTOMER_CORE_NOT_READY') {
+    return {
+      kind: 'not_ready',
+      message: '來源資料尚未就緒，請稍後再試或聯繫系統管理員',
+    };
+  }
+  if (code === 'DISTINCT_VALUES_QUERY_TIMEOUT') {
+    return { kind: 'timeout', message: '讀取可選值逾時，請稍後重試' };
+  }
+  return { kind: 'generic', message: '讀取可選值失敗，請稍後重試' };
+}
+
 export function FieldsTab() {
   const { showToast } = useToast();
   const identity = getEffectiveIdentity();
@@ -179,6 +229,14 @@ export function FieldsTab() {
     setNewDisplay(desc);
     setShowAutofilledHint(true);
   };
+
+  // F112 / US-178 進入點 1：distinct 偵測狀態 + 勾選集合
+  const [distinctState, setDistinctState] = useState<DistinctState>({
+    status: 'idle',
+  });
+  const [selectedValues, setSelectedValues] = useState<Set<string>>(new Set());
+  // 防止 stale 回應覆寫（快速切換欄位 / 類型時，只有最後一次請求可寫入狀態）
+  const distinctReqId = useRef(0);
 
   const [disableTarget, setDisableTarget] = useState<PooldataField | null>(null);
   const [disableActiveCount, setDisableActiveCount] = useState<number | null>(null);
@@ -255,6 +313,10 @@ export function FieldsTab() {
     setAvailableColumnsError(null);
     setNewDisplay('');
     setShowAutofilledHint(false);
+    // F112：重置偵測區塊
+    distinctReqId.current += 1;
+    setDistinctState({ status: 'idle' });
+    setSelectedValues(new Set());
   };
 
   const loadAvailableColumns = async () => {
@@ -320,6 +382,80 @@ export function FieldsTab() {
     );
   }, [availableColumns, dropdownSearch]);
 
+  /**
+   * F112 進入點 1：呼叫 distinct-values 偵測（AC-1）。以 reqId 防止 stale 覆寫。
+   * 空值（values:[]）→ 空狀態（AC-14，與錯誤路徑明確區隔）；錯誤 → 依 kind 分流（BR-11）。
+   */
+  const fetchDistinct = useCallback(async (columnName: string) => {
+    const reqId = ++distinctReqId.current;
+    setDistinctState({ status: 'loading' });
+    setSelectedValues(new Set());
+    try {
+      const res = await getDistinctValues(columnName);
+      if (reqId !== distinctReqId.current) return; // stale，丟棄
+      if (!res.values || res.values.length === 0) {
+        setDistinctState({ status: 'empty' });
+        return;
+      }
+      setDistinctState({
+        status: 'ready',
+        values: res.values,
+        truncated: res.truncated,
+        cap: res.cap,
+      });
+      // 全部預設勾選（AC-1）
+      setSelectedValues(new Set(res.values.map((v) => v.value)));
+    } catch (err: unknown) {
+      if (reqId !== distinctReqId.current) return;
+      const { kind, message } = classifyDistinctError(err);
+      setDistinctState({ status: 'error', kind, message });
+    }
+  }, []);
+
+  // 選定欄位且類型為 categorical → 偵測 distinct；切為 numeric/date 或未選欄位 → 清除、不呼叫 API（AC-2）
+  useEffect(() => {
+    if (!showCreate) return;
+    const col = selectedColumnMeta?.columnName;
+    if (!col || newType !== 'categorical') {
+      distinctReqId.current += 1; // 使任何 in-flight 請求失效
+      setDistinctState({ status: 'idle' });
+      setSelectedValues(new Set());
+      return;
+    }
+    void fetchDistinct(col);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCreate, selectedColumnMeta?.columnName, newType]);
+
+  const toggleDistinctValue = (value: string) => {
+    setSelectedValues((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  };
+
+  const setAllDistinctSelected = (all: boolean) => {
+    if (distinctState.status !== 'ready') return;
+    setSelectedValues(
+      all ? new Set(distinctState.values.map((v) => v.value)) : new Set(),
+    );
+  };
+
+  // 儲存動作提示（AC-4 / AC-5）：依欄位類型 + 偵測狀態 + 勾選數動態呈現
+  const cfSaveHint = useMemo(() => {
+    if (!selectedColumnMeta) return '';
+    if (newType !== 'categorical') {
+      return '儲存後將建立此欄位（數值 / 日期型不含可選值）。';
+    }
+    if (distinctState.status === 'loading') return '正在讀取可選值…';
+    const n = distinctState.status === 'ready' ? selectedValues.size : 0;
+    if (n > 0) {
+      return `儲存後將建立此欄位，並一併新增 ${n} 筆已勾選的可選值。`;
+    }
+    return '儲存後將僅建立此欄位（未勾選可選值，可稍後於「可選值管理」新增）。';
+  }, [selectedColumnMeta, newType, distinctState, selectedValues.size]);
+
   const handleCreate = async () => {
     setCreateError(null);
     if (!selectedColumnMeta) {
@@ -333,13 +469,42 @@ export function FieldsTab() {
     }
     setCreating(true);
     try {
+      // 步驟 1：建立欄位（既有 F075 端點，§5.3）
       const result = await createField({
         columnName: selectedColumnMeta.columnName,
         displayName: dispTrim,
         fieldType: newType,
       });
       const displayForToast = result?.displayName ?? dispTrim;
-      showToast(`欄位『${displayForToast}』已新增`, 'success');
+
+      // 步驟 2（AC-5 / §5.3）：僅類別型、偵測就緒且有 ≥1 勾選值時，批次帶入勾選值。
+      //   optionValue = optionLabel = distinct 值本身（AC-10）；依偵測原始順序，非勾選插入順序。
+      let bulkFailed = false;
+      if (
+        newType === 'categorical' &&
+        distinctState.status === 'ready' &&
+        selectedValues.size > 0
+      ) {
+        const picked = distinctState.values
+          .filter((v) => selectedValues.has(v.value))
+          .map((v) => ({ optionValue: v.value, optionLabel: v.value }));
+        try {
+          await createOptionsBulk(selectedColumnMeta.columnName, picked);
+        } catch {
+          // 欄位建立成功、bulk 失敗 → 欄位保留為有效狀態（categorical 允許零可選值），
+          // 顯示非阻斷警告（AC-5 第 3 句 / BR-9），欄位建立仍視為成功。
+          bulkFailed = true;
+        }
+      }
+
+      if (bulkFailed) {
+        showToast(
+          '欄位已建立，但可選值帶入失敗，請至『可選值管理』重試',
+          'warning',
+        );
+      } else {
+        showToast(`欄位『${displayForToast}』已新增`, 'success');
+      }
       setShowCreate(false);
       resetCreateForm();
       void fetchFields();
@@ -942,24 +1107,180 @@ export function FieldsTab() {
                     </p>
                   )}
                 </div>
+
+                {/* ===== F112 / US-178 進入點 1：從實際資料偵測可選值（僅類別型 + 已選欄位顯示） ===== */}
+                {distinctState.status !== 'idle' && (
+                  <div
+                    data-testid="cf-distinct-section"
+                    className="border border-gray-200 rounded-lg overflow-hidden"
+                  >
+                    <div className="px-3 py-2.5 bg-blue-50/60 border-b border-gray-200 flex items-center gap-1.5 text-sm font-medium text-gray-700">
+                      <Sparkles className="w-4 h-4 text-primary" />
+                      從實際資料偵測可選值
+                    </div>
+
+                    {distinctState.status === 'loading' && (
+                      <div
+                        data-testid="cf-distinct-loading"
+                        className="px-4 py-5 flex flex-col items-center justify-center text-center gap-2"
+                      >
+                        <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                        <p className="text-sm text-gray-500">
+                          正在讀取實際資料的可選值…
+                        </p>
+                      </div>
+                    )}
+
+                    {distinctState.status === 'ready' && (
+                      <div data-testid="cf-distinct-ready">
+                        {distinctState.truncated && (
+                          <div
+                            data-testid="cf-distinct-truncated-warning"
+                            className="px-3 py-2 bg-amber-50 border-b border-amber-200 flex items-start gap-2"
+                          >
+                            <AlertTriangle className="w-3.5 h-3.5 text-warning mt-0.5 shrink-0" />
+                            <p className="text-[11px] text-amber-700 leading-relaxed">
+                              可選值過多，僅顯示前 {distinctState.cap} 筆。此欄位相異值數量偏高，可能不適合作為類別型欄位，請確認欄位選型是否正確。
+                            </p>
+                          </div>
+                        )}
+                        <p className="px-3 pt-2.5 pb-1 text-sm text-gray-700">
+                          偵測到{' '}
+                          <b className="text-primary" data-testid="cf-heading-count">
+                            {distinctState.values.length}
+                          </b>{' '}
+                          個可選值，是否一併新增為此欄位的可選值？
+                        </p>
+                        <div className="px-3 pb-1.5 flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-xs">
+                            <button
+                              type="button"
+                              data-testid="cf-select-all"
+                              onClick={() => setAllDistinctSelected(true)}
+                              className="text-primary hover:underline"
+                            >
+                              全選
+                            </button>
+                            <span className="text-gray-300">|</span>
+                            <button
+                              type="button"
+                              data-testid="cf-select-clear"
+                              onClick={() => setAllDistinctSelected(false)}
+                              className="text-gray-500 hover:underline"
+                            >
+                              全部清除
+                            </button>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            已勾選{' '}
+                            <span
+                              data-testid="cf-sel-count"
+                              className="font-semibold text-primary"
+                            >
+                              {selectedValues.size}
+                            </span>{' '}
+                            / <span data-testid="cf-sel-total">{distinctState.values.length}</span>
+                          </span>
+                        </div>
+                        <div
+                          data-testid="cf-distinct-list"
+                          className="max-h-48 overflow-y-auto border-t border-gray-200"
+                        >
+                          {distinctState.values.map((item) => (
+                            <label
+                              key={item.value}
+                              className="flex items-center gap-2.5 px-3 py-2 hover:bg-blue-50/40 cursor-pointer border-b border-gray-100 last:border-0"
+                            >
+                              <input
+                                type="checkbox"
+                                data-testid={`cf-distinct-check-${item.value}`}
+                                checked={selectedValues.has(item.value)}
+                                onChange={() => toggleDistinctValue(item.value)}
+                                className="rounded border-gray-300 text-primary focus:ring-2 focus:ring-primary/30"
+                              />
+                              <span className="font-mono text-[11px] text-gray-500 min-w-[3.5rem] shrink-0">
+                                {item.value}
+                              </span>
+                              <ArrowRight className="w-3 h-3 text-gray-300 shrink-0" />
+                              <span className="text-sm text-gray-700 truncate">
+                                {item.value}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        <div className="px-3 py-2 bg-gray-50/70 border-t border-gray-200">
+                          <p className="text-[11px] text-gray-400 leading-relaxed">
+                            帶入的可選值「欄位值」= 偵測到的實際值、「顯示名稱」預設同為該值，之後可於「可選值管理」重新命名。
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {distinctState.status === 'empty' && (
+                      <div
+                        data-testid="cf-distinct-empty"
+                        className="px-4 py-6 flex flex-col items-center text-center gap-1.5"
+                      >
+                        <Inbox className="w-6 h-6 text-gray-300" />
+                        <p className="text-sm text-gray-600">未偵測到任何可選值</p>
+                        <p className="text-[11px] text-gray-400 max-w-xs">
+                          來源資料表此欄位無任何非空值，無法自動帶入。您仍可建立欄位，稍後於「可選值管理」手動新增可選值。
+                        </p>
+                      </div>
+                    )}
+
+                    {distinctState.status === 'error' && (
+                      <div
+                        data-testid="cf-distinct-error"
+                        data-error-kind={distinctState.kind}
+                        className="px-4 py-6 flex flex-col items-center text-center gap-2"
+                      >
+                        <CloudOff className="w-6 h-6 text-danger" />
+                        <p className="text-sm text-gray-600">{distinctState.message}</p>
+                        <button
+                          type="button"
+                          data-testid="cf-distinct-retry"
+                          onClick={() => {
+                            if (selectedColumnMeta) {
+                              void fetchDistinct(selectedColumnMeta.columnName);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary border border-primary/40 rounded-md hover:bg-blue-50"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          重試
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* ===== /F112 進入點 1 ===== */}
               </div>
-              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => setShowCreate(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50"
+              <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-200">
+                <p
+                  data-testid="cf-save-hint"
+                  className="text-[11px] text-gray-500 leading-snug flex-1 min-w-0"
                 >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  data-testid="btn-submit-create-field"
-                  disabled={submitDisabled}
-                  onClick={handleCreate}
-                  className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {creating ? '建立中…' : '建立'}
-                </button>
+                  {cfSaveHint}
+                </p>
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreate(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50"
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="btn-submit-create-field"
+                    disabled={submitDisabled}
+                    onClick={handleCreate}
+                    className="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-blue-700 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {creating ? '建立中…' : '建立'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

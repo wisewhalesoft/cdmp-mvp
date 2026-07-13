@@ -256,3 +256,77 @@ export async function reorderOptions(
   );
   return response.data;
 }
+
+// =====================================================================
+// F112 / US-178 — 類別型可選值自動建議（distinct 偵測 + 批次帶入）
+//
+// AD-E07-47 §6：回應型別 LOCAL 定義於本檔（比照 PooldataField / ListFieldsResponse
+// 之 LOCAL 慣例），此 feature family 無 @cdmp/shared 型別，不新增共享型別。
+// 契約凍結（AD §3.4 / §3.7 / §5）：
+//   - GET  /pooldata-fields/:columnName/distinct-values → DistinctValuesResponse
+//   - POST /pooldata-fields/:columnName/options/bulk     → BulkCreateOptionsResponse
+// =====================================================================
+
+/**
+ * distinct 偵測之單一值項目。`alreadyOption` 標註該值是否已為此欄位既有可選值
+ * （含已停用；供進入點 2 去重，AC-7 / BR-2）。
+ */
+export interface DistinctValueItem {
+  value: string;
+  alreadyOption: boolean;
+}
+
+export interface DistinctValuesResponse {
+  columnName: string;
+  dataSource: 'ob_pool_data' | 'customer_core';
+  values: DistinctValueItem[];
+  totalReturned: number;
+  truncated: boolean;
+  cap: number;
+}
+
+/**
+ * 批次新增可選值回應（AD §3.7）。`options[]` 僅含本次「實際新增」之可選值（依 display_order 遞增）；
+ * 對已存在值冪等略過（不計入 `options`，計入 `skippedCount`）。
+ */
+export interface BulkCreateOptionsResponse {
+  columnName: string;
+  createdCount: number;
+  skippedCount: number;
+  options: Array<{ optionValue: string; optionLabel: string; isActive: true }>;
+}
+
+/**
+ * F112 §5.1：查詢某欄位來源表之實際 distinct 值（供兩進入點核取清單）。
+ * GET /api/v1/pooldata-fields/:columnName/distinct-values
+ *
+ * 錯誤（前端依 body `error` 代碼字串分流呈現，非依 HTTP status 數值）：
+ *   400 SOURCE_COLUMN_NAME_INVALID / 404 SOURCE_COLUMN_NOT_FOUND /
+ *   503 OBPOOLDATA_NOT_READY | CUSTOMER_CORE_NOT_READY | FEATURE_NOT_ENABLED /
+ *   500 DISTINCT_VALUES_QUERY_TIMEOUT（逾時或非預期例外，禁止靜默空清單，BR-11）
+ */
+export async function getDistinctValues(
+  columnName: string,
+): Promise<DistinctValuesResponse> {
+  const response = await apiClient.get<DistinctValuesResponse>(
+    `${BASE}/${columnName}/distinct-values`,
+  );
+  return response.data;
+}
+
+/**
+ * F112 §5.2：單一 transaction 批次新增可選值（兩進入點共用；對已存在值冪等略過，不回 409）。
+ * POST /api/v1/pooldata-fields/:columnName/options/bulk
+ *
+ * `options[].optionValue` / `optionLabel` 預設皆為 distinct 值本身（AC-10 / BR-4）。
+ */
+export async function createOptionsBulk(
+  columnName: string,
+  options: Array<{ optionValue: string; optionLabel: string }>,
+): Promise<BulkCreateOptionsResponse> {
+  const response = await apiClient.post<BulkCreateOptionsResponse>(
+    `${BASE}/${columnName}/options/bulk`,
+    { options },
+  );
+  return response.data;
+}

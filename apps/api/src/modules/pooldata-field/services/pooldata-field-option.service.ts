@@ -73,6 +73,14 @@ export interface ReactivatePooldataOptionResult {
   isActive: true;
 }
 
+// F112 / AD-E07-47 §3.7：批次新增可選值結果（LOCAL；不進 @cdmp/shared）
+export interface BulkCreateOptionsResult {
+  columnName: string;
+  createdCount: number;
+  skippedCount: number;
+  options: Array<{ optionValue: string; optionLabel: string; isActive: true }>;
+}
+
 @Injectable()
 export class PooldataFieldOptionService {
   constructor(
@@ -176,6 +184,101 @@ export class PooldataFieldOptionService {
       optionLabel: saved.option_label,
       displayOrder: saved.display_order,
       isActive: true,
+    };
+  }
+
+  // ============================================================
+  // F112 / AD-E07-47 §3.7 — POST /pooldata-fields/:columnName/options/bulk
+  // ============================================================
+
+  /**
+   * 單一 transaction 批次新增可選值（兩進入點共用）。
+   *
+   * 行為（AD §3.7 / spec §5.2 / BR-3；I-DVAL-BULK-TX-01）：
+   *   - 守門（tx 外，與 createOption 一致）：不存在 → 404；非 categorical → 400（reuse assertCategorical）
+   *   - 單一 tx 內：**一次** `manager.find` 同時推導既有 option_value 集合（含 inactive）與 maxOrder，
+   *     不對每個候選值各自查詢
+   *   - 依輸入順序：既有值（含 inactive）或批次內重複（首次為準）→ 略過（skippedCount++，不改動既有紀錄、
+   *     不回 409）；否則 INSERT（is_active=true、option_label=傳入值、display_order=++maxOrder）→ createdCount++
+   *   - 稽核：tx 外寫入**單一彙總紀錄**（`_writeBulkAudit`；I-DVAL-AUDIT-SUMMARY-01），失敗不 rollback
+   *
+   * 與單筆 `createOption` 之差異（刻意，非疏漏）：createOption 對重複值 409；bulk 冪等略過（AC-15/BR-3），
+   * 故不共用 createOption 之單筆邏輯。
+   */
+  async createOptionsBulk(
+    columnName: string,
+    options: Array<{ optionValue: string; optionLabel: string }>,
+    actor: ActorContext,
+  ): Promise<BulkCreateOptionsResult> {
+    await this.whitelistService.assertCategorical(columnName);
+
+    const created = await this.optionRepo.manager.transaction(
+      async (manager) => {
+        // I-DVAL-BULK-TX-01：既有值判定與 max display_order 推導共用同一次查詢結果
+        const existingRows = await manager.find(PooldataFieldOption, {
+          where: { column_name: columnName },
+        });
+        const existingValues = new Set(
+          existingRows.map((r) => r.option_value),
+        );
+        let maxOrder = existingRows.reduce(
+          (max, r) => Math.max(max, r.display_order),
+          -1,
+        );
+
+        const seenInBatch = new Set<string>();
+        const toInsert: PooldataFieldOption[] = [];
+        const now = new Date();
+
+        for (const opt of options) {
+          // 略過：DB 既有值（含 inactive）或批次內重複（首次為準）——BR-3
+          if (
+            existingValues.has(opt.optionValue) ||
+            seenInBatch.has(opt.optionValue)
+          ) {
+            continue;
+          }
+          seenInBatch.add(opt.optionValue);
+          maxOrder += 1;
+          toInsert.push(
+            manager.create(PooldataFieldOption, {
+              column_name: columnName,
+              option_value: opt.optionValue,
+              option_label: opt.optionLabel,
+              display_order: maxOrder,
+              is_active: true,
+              deactivation_reason: null,
+              created_at: now,
+              updated_at: now,
+            }),
+          );
+        }
+
+        // toInsert 為空（全數略過）時不呼叫 save（避免無謂 round-trip）
+        if (toInsert.length > 0) {
+          await manager.save(PooldataFieldOption, toInsert);
+        }
+        return toInsert;
+      },
+    );
+
+    // 稽核於 tx 外寫入（沿用「稽核失敗不 rollback」BR-7）
+    await this._writeBulkAudit(
+      actor,
+      columnName,
+      created,
+      options.length - created.length,
+    );
+
+    return {
+      columnName,
+      createdCount: created.length,
+      skippedCount: options.length - created.length,
+      options: created.map((r) => ({
+        optionValue: r.option_value,
+        optionLabel: r.option_label,
+        isActive: true as const,
+      })),
     };
   }
 
@@ -370,6 +473,42 @@ export class PooldataFieldOptionService {
       await this.auditRepo.save(log);
     } catch (_err) {
       // BR-7 / 沿用 F050 v2.0 BR-11：稽核失敗不 rollback
+    }
+  }
+
+  /**
+   * F112 / AD-E07-47 §3.8：bulk 批次新增之**單一彙總**稽核紀錄（I-DVAL-AUDIT-SUMMARY-01）。
+   *
+   * 與既有單筆 `_writeAudit`（`entity_id = ${columnName}.${optionValue}`）刻意不同：此處 `entity_id = columnName`
+   * （不含 `.optionValue` 後綴），且 spec §5.2/BR-13 之 `details` 對應至既有 `after_value` 欄位
+   * （`AssignmentAuditLog` entity 無獨立 `details` 欄）。不逐筆各寫一筆。稽核失敗不 rollback（BR-7）。
+   */
+  private async _writeBulkAudit(
+    actor: ActorContext,
+    columnName: string,
+    created: PooldataFieldOption[],
+    skippedCount: number,
+  ): Promise<void> {
+    try {
+      const actorName = await this._resolveActorName(actor.userId);
+      const log = this.auditRepo.create({
+        entity_type: 'pooldata_field_option',
+        entity_id: columnName, // 彙總一筆：entity_id = columnName（非 columnName.optionValue）
+        action: 'CREATE',
+        actor_id: actor.userId,
+        actor_name: actorName,
+        before_value: null,
+        after_value: {
+          createdValues: created.map((r) => r.option_value),
+          createdCount: created.length,
+          skippedCount,
+          source: 'bulk_auto_suggest',
+        },
+        ip_address: actor.ipAddress ?? null,
+      });
+      await this.auditRepo.save(log);
+    } catch (_err) {
+      // BR-7：稽核失敗不 rollback
     }
   }
 

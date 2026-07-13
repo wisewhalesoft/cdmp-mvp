@@ -88,6 +88,18 @@ export class PooldataFieldWhitelistController {
     return this.service.getInactiveCount(columnName);
   }
 
+  // ===== F112 §5.1 / AD-E07-47 §3.10 =====
+  //
+  // GET /:columnName/distinct-values — 查詢欄位來源表 distinct 值（供兩進入點核取清單）。
+  // 兩段式靜態字面量路徑（同 active-options-count 層級），不受單段動態路由遮蔽（AD §3.1）。
+  // 權限比照 available-columns（寫入流程驅動查詢）：class 級 guard + @RequireDirector() + FeatureFlag。
+  @Get(':columnName/distinct-values')
+  @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
+  async getDistinctValues(@Param('columnName') columnName: string) {
+    return this.service.getDistinctValues(columnName);
+  }
+
   // ===== F075 §5.2 =====
 
   @Post()
