@@ -29,9 +29,12 @@
 ───────────────────────────────────────────────────────────────────────────*/
 CREATE VIEW dbo.V_OB_CUST_CASE_SUMMARY AS
 WITH appl AS (          -- 分期申請主檔：一案一列、單一 STA_CODE
-    SELECT APPL_NO, CUSTO_NO, STA_CODE
+    -- CUSTO_NO 以 LTRIM/RTRIM 正規化：來源有前導/尾隨空白變體（如 ' 120778230' vs '120778230'），
+    --   Chinese_Taiwan_Stroke_BIN 逐位元比對視為相異 → 若不 TRIM，DISTINCT/GROUP BY 會各自成組，
+    --   載入時 handler 又 TRIM source_customer_no → 塌縮成同鍵 → PK 重複。先 TRIM 使同一客戶合併、
+    --   件數/次數正確加總。並排除無客戶編號之孤兒案件（source_customer_no 為 NOT NULL PK）。
+    SELECT APPL_NO, LTRIM(RTRIM(CUSTO_NO)) AS CUSTO_NO, STA_CODE
     FROM ZZIPPROD.dbo.ZZIP_APMAPPL_M WITH (NOLOCK)
-    -- 排除無客戶編號之孤兒案件（CUSTO_NO 為輸出 PK source_customer_no，NOT NULL）
     WHERE CUSTO_NO IS NOT NULL AND LTRIM(RTRIM(CUSTO_NO)) <> ''
 ),
 status_cnt AS (         -- 案件狀態件數（互斥級距，每案只落一桶）
