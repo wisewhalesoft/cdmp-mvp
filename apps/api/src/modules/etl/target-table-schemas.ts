@@ -160,4 +160,34 @@ export const TARGET_TABLE_SCHEMAS: TargetTableSchema[] = [
       ...ETL_TRACKING_COLUMNS,
     ],
   },
+  {
+    // F114：客戶交易/催收彙總（以客戶為中心，來源 view V_OB_CUST_CASE_SUMMARY @ APYHFC16.ZZIPPROD）
+    tableName: 'customer_financial',
+    displayName: 'Customer Financial（客戶交易彙總）',
+    domain: 'financial',
+    description: '以客戶為中心之案件往來彙總：保人、電催/法催件數與次數、案件狀態件數',
+    columns: [
+      // A. 識別 (1)
+      { name: 'source_customer_no', type: 'VARCHAR(20)', nullable: false, isPrimaryKey: true, isEtlTracking: false, category: 'A', description: '來源客戶編號（=CUSTO_NO，對應 ob_pool_data.custo_no）' },
+
+      // B. 保人 (2)
+      { name: 'has_guarantor', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'B', description: '有無保人（Y/N）' },
+      { name: 'guarantor_count', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'B', description: '保人數量（經案件橋接之保人列數）' },
+
+      // C. 催收 (4)
+      { name: 'phone_coll_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '電催件數（曾發生電催之案件數）' },
+      { name: 'phone_coll_times', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '電催次數（各期 DELAY_DAY 8–30 累計）' },
+      { name: 'legal_coll_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '法催件數（曾發生法催之案件數）' },
+      { name: 'legal_coll_times', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '法催次數（各期 DELAY_DAY ≥31 累計）' },
+
+      // D. 案件狀態件數 (4，互斥級距 STA_CODE)
+      { name: 'midterm_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'D', description: '期中件數（STA_CODE 05–89）' },
+      { name: 'matured_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'D', description: '滿期件數（STA_CODE 90）' },
+      { name: 'settled_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'D', description: '中結件數（STA_CODE 91–98）' },
+      { name: 'void_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'D', description: '其他作廢件數（STA_CODE 99）' },
+
+      // H. 稽核與 ETL 追蹤
+      ...ETL_TRACKING_COLUMNS,
+    ],
+  },
 ];

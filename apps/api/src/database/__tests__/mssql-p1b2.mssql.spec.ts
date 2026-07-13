@@ -228,7 +228,7 @@ async function countTables(schema: string): Promise<number> {
 //   天生不建，僅 baseline migration（Path B/dbo）建之——刻意的 migration-only 表。若納入 parity 會使兩軌表集合不相等
 //   （破壞 I-MSSQL-BASELINE-PARITY-01）而誤報，故比照 queue_job 之精神列為白名單例外，一律於 dbo 讀取端排除；
 //   其物理存在與結構正確性由本檔 CUSTOMER-CORE 群組獨立正向驗證。
-const EXCLUDED_TABLES = "('typeorm_migrations', 'queue_job', 'customer_core')";
+const EXCLUDED_TABLES = "('typeorm_migrations', 'queue_job', 'customer_core', 'customer_financial')";
 
 // F113 / AD-E02-5 §3.2.4：users.employee_no 之 filtered unique index（uq_users_employee_no）為
 //   刻意的、僅存在於 Path B（1751884800004 migration）的兩軌分歧——entity 無 @Index，Path A

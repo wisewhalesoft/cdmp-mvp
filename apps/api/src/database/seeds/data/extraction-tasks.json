@@ -1,5 +1,16 @@
 [
   {
+    "id": "2b00f90e-254b-421b-8984-c7e0ebb842f1",
+    "name": "[和潤]客戶案件往來彙總擷取",
+    "datasourceName": "APYHFC16.ZZIPPROD",
+    "mode": "full",
+    "sourceSchema": "dbo",
+    "sourceTable": "V_OB_CUST_CASE_SUMMARY",
+    "rawTableName": "raw_2b00f90e",
+    "schedule": "0 2 1 * *",
+    "description": "客戶案件往來彙總 view（保人/電催/法催/案件狀態）每月 1 號 02:00 全量抓取（F114）"
+  },
+  {
     "id": "6d58393b-9a21-486a-a971-012160d25a32",
     "name": "E07-OBPOOLDATA-Extract",
     "datasourceName": "APYHFC16.OB",

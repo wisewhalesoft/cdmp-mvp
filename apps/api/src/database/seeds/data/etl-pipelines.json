@@ -1,5 +1,73 @@
 [
   {
+    "name": "客戶交易彙總資料 ETL",
+    "description": "raw V_OB_CUST_CASE_SUMMARY → customer_financial（fullMode 全量替換；保人/電催/法催/案件狀態彙總，F114）",
+    "version": 1,
+    "step_count": 3,
+    "status": "active",
+    "schedule": "0 3 1 * *",
+    "enabled": false,
+    "version_status": "draft",
+    "definition": {
+      "nodes": [
+        {
+          "id": "e1",
+          "type": "pipelineNode",
+          "position": { "x": 0, "y": 50 },
+          "data": {
+            "nodeType": "raw_data_extract",
+            "label": "客戶案件往來彙總來源",
+            "rawTable": "raw_2b00f90e",
+            "subtitle": "APYHFC16.ZZIPPROD / raw_2b00f90e",
+            "extractionRef": {
+              "datasourceName": "APYHFC16.ZZIPPROD",
+              "sourceTable": "V_OB_CUST_CASE_SUMMARY"
+            }
+          }
+        },
+        {
+          "id": "fm1",
+          "type": "pipelineNode",
+          "position": { "x": 250, "y": 50 },
+          "data": {
+            "nodeType": "field_mapping",
+            "label": "來源欄位 → customer_financial",
+            "fieldMappings": [
+              { "sourceColumn": "CUSTO_NO", "targetColumn": "source_customer_no", "defaultValue": null },
+              { "sourceColumn": "has_guarantor", "targetColumn": "has_guarantor", "defaultValue": null },
+              { "sourceColumn": "guarantor_count", "targetColumn": "guarantor_count", "defaultValue": null },
+              { "sourceColumn": "phone_coll_case_cnt", "targetColumn": "phone_coll_case_cnt", "defaultValue": null },
+              { "sourceColumn": "phone_coll_times", "targetColumn": "phone_coll_times", "defaultValue": null },
+              { "sourceColumn": "legal_coll_case_cnt", "targetColumn": "legal_coll_case_cnt", "defaultValue": null },
+              { "sourceColumn": "legal_coll_times", "targetColumn": "legal_coll_times", "defaultValue": null },
+              { "sourceColumn": "midterm_case_cnt", "targetColumn": "midterm_case_cnt", "defaultValue": null },
+              { "sourceColumn": "matured_case_cnt", "targetColumn": "matured_case_cnt", "defaultValue": null },
+              { "sourceColumn": "settled_case_cnt", "targetColumn": "settled_case_cnt", "defaultValue": null },
+              { "sourceColumn": "void_case_cnt", "targetColumn": "void_case_cnt", "defaultValue": null }
+            ],
+            "dropUnmapped": true
+          }
+        },
+        {
+          "id": "tl1",
+          "type": "pipelineNode",
+          "position": { "x": 500, "y": 50 },
+          "data": {
+            "nodeType": "target_load",
+            "label": "載入 customer_financial",
+            "subtitle": "customer_financial",
+            "targetTable": "customer_financial",
+            "fullMode": true
+          }
+        }
+      ],
+      "edges": [
+        { "id": "e1-fm1", "source": "e1", "target": "fm1" },
+        { "id": "fm1-tl1", "source": "fm1", "target": "tl1" }
+      ]
+    }
+  },
+  {
     "name": "電銷案件財務撥款資料 ETL",
     "description": "raw OB_ARRETURNDF_MIN_CAP → ob_arreturndf_min_cap（fullMode 全量替換，AD-E07-12 / AD-E07-10 lookup 約定）",
     "version": 1,
