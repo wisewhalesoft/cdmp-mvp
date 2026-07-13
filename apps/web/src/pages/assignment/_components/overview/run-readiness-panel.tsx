@@ -58,7 +58,7 @@ const ETL_SOURCES: Array<{
   { key: 'pooldata', label: '案件名單池', table: 'ob_pool_data', icon: Database },
   { key: 'emphire', label: '在職業務清單', table: 'ob_emphire', icon: UserCheck },
   { key: 'calendar', label: '工作日曆', table: 'ob_calendar', icon: CalendarDays },
-  { key: 'arreturndf', label: '案件未繳金額', table: 'ob_arreturndf', icon: Shield },
+  { key: 'arreturndf', label: '案件未償本金', table: 'ob_arreturndf', icon: Shield },
 ];
 
 function etlNote(st: EtlSourceStatus): string {

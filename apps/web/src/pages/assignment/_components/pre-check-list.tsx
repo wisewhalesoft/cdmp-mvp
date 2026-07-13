@@ -42,7 +42,7 @@ const ETL_SOURCE_LABELS: Record<
   pooldata: '案件名單池',
   emphire: '在職業務清單',
   calendar: '工作日曆',
-  arreturndf: '案件未繳金額',
+  arreturndf: '案件未償本金',
 };
 
 export function buildPreChecksFromReadiness(
