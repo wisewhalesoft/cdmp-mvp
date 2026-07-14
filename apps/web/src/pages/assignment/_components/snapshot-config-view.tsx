@@ -1,4 +1,5 @@
-import { Layers, Building2, Users, FileText, Tag } from 'lucide-react';
+import { Layers, Building2, Users, ClipboardList, Tag, ChevronRight } from 'lucide-react';
+import { CardTypeBadge } from './card-type-badge';
 
 /**
  * F066 Snapshot 設定快照正規化 view（v1.3 使用者友善重構）
@@ -77,26 +78,29 @@ function Section({
   title,
   icon: Icon,
   testId,
-  count,
+  countLabel,
+  defaultOpen = false,
   children,
 }: {
   title: string;
   icon: typeof Layers;
   testId: string;
-  count: number;
+  countLabel: string;
+  defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <details
-      open
-      className="border border-gray-200 rounded-lg bg-gray-50/40 overflow-hidden"
+      open={defaultOpen}
+      className="group border border-gray-200 rounded-lg bg-gray-50/40 overflow-hidden"
     >
-      <summary className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer">
+      <summary className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition cursor-pointer list-none">
         <div className="flex items-center gap-2">
+          <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 transition-transform group-open:rotate-90" />
           <Icon className="w-4 h-4 text-primary" />
           <span className="text-sm font-semibold text-gray-800">{title}</span>
         </div>
-        <span className="text-xs text-gray-500">{count} 筆</span>
+        <span className="text-xs text-gray-500">{countLabel}</span>
       </summary>
       <div
         data-testid={testId}
@@ -130,14 +134,17 @@ export function SnapshotConfigView({ payload }: SnapshotConfigViewProps) {
   const tiers = payload.tiers ?? [];
   const depts = payload.deptPct ?? [];
   const emps = payload.emplSet ?? [];
+  const deptListCount = new Set(depts.map((d) => d.listNo)).size;
+  const deptDeptCount = new Set(depts.map((d) => d.deptId)).size;
 
   return (
     <div className="space-y-4">
       <Section
         title="名單定義"
-        icon={FileText}
+        icon={ClipboardList}
         testId="snapshot-config-list-defs"
-        count={lists.length}
+        countLabel={`${lists.length} 筆`}
+        defaultOpen
       >
         {lists.length === 0 ? (
           <EmptyHint />
@@ -157,7 +164,7 @@ export function SnapshotConfigView({ payload }: SnapshotConfigViewProps) {
                 <tr key={`${l.listNo ?? i}`}>
                   <td className="px-3 py-1.5"><Code value={l.listNo} /></td>
                   <td className="px-3 py-1.5">{l.listNm ?? '—'}</td>
-                  <td className="px-3 py-1.5"><Code value={l.cardType} /></td>
+                  <td className="px-3 py-1.5"><CardTypeBadge code={l.cardType} /></td>
                   <td className="px-3 py-1.5">
                     {l.crEnabled ? (
                       <span className="text-success">啟用</span>
@@ -177,7 +184,8 @@ export function SnapshotConfigView({ payload }: SnapshotConfigViewProps) {
         title="計分卡分數區間"
         icon={Layers}
         testId="snapshot-config-card-levels"
-        count={levels.length}
+        countLabel={`${levels.length} 筆`}
+        defaultOpen
       >
         {levels.length === 0 ? (
           <EmptyHint />
@@ -195,7 +203,7 @@ export function SnapshotConfigView({ payload }: SnapshotConfigViewProps) {
             <tbody className="divide-y divide-gray-100">
               {levels.map((l, i) => (
                 <tr key={`${l.cardType}-${l.cardLevel}-${i}`}>
-                  <td className="px-3 py-1.5"><Code value={l.cardType} /></td>
+                  <td className="px-3 py-1.5"><CardTypeBadge code={l.cardType} /></td>
                   <td className="px-3 py-1.5 text-right font-mono text-gray-600">{l.cardVersion ?? '—'}</td>
                   <td className="px-3 py-1.5 text-right font-mono text-gray-600">{l.scoreS ?? '—'}</td>
                   <td className="px-3 py-1.5 text-right font-mono text-gray-600">{l.scoreE ?? '—'}</td>
@@ -211,7 +219,7 @@ export function SnapshotConfigView({ payload }: SnapshotConfigViewProps) {
         title="分級（TIER）對應"
         icon={Tag}
         testId="snapshot-config-tiers"
-        count={tiers.length}
+        countLabel={`${tiers.length} 筆`}
       >
         {tiers.length === 0 ? (
           <EmptyHint />
@@ -227,7 +235,7 @@ export function SnapshotConfigView({ payload }: SnapshotConfigViewProps) {
             <tbody className="divide-y divide-gray-100">
               {tiers.map((t, i) => (
                 <tr key={`${t.cardType}-${t.cardLevel}-${i}`}>
-                  <td className="px-3 py-1.5"><Code value={t.cardType} /></td>
+                  <td className="px-3 py-1.5"><CardTypeBadge code={t.cardType} /></td>
                   <td className="px-3 py-1.5"><LevelBadge value={t.cardLevel} /></td>
                   <td className="px-3 py-1.5"><LevelBadge value={t.tierLevel} tone="green" /></td>
                 </tr>
@@ -241,7 +249,7 @@ export function SnapshotConfigView({ payload }: SnapshotConfigViewProps) {
         title="部門比例"
         icon={Building2}
         testId="snapshot-config-dept-pct"
-        count={depts.length}
+        countLabel={`${deptListCount} 名單 × ${deptDeptCount} 部門`}
       >
         {depts.length === 0 ? (
           <EmptyHint />
@@ -271,7 +279,7 @@ export function SnapshotConfigView({ payload }: SnapshotConfigViewProps) {
         title="人員比例"
         icon={Users}
         testId="snapshot-config-empl-set"
-        count={emps.length}
+        countLabel={`${emps.length} 人員`}
       >
         {emps.length === 0 ? (
           <EmptyHint />

@@ -3,6 +3,7 @@ import { Search, UploadCloud, AlertTriangle, Info, ChevronLeft, ChevronRight } f
 import {
   getResultPage,
   type ResultPageResponse,
+  type RunSummaryResponse,
 } from '@/api/assignment-run';
 import { getEffectiveIdentity } from '@/stores/auth-store';
 import { WritebackModal } from './writeback-modal';
@@ -46,7 +47,13 @@ function CellValue({ colKey, value }: { colKey: string; value: string }) {
   );
 }
 
-export function SnapshotResultTable({ runId }: { runId: string }) {
+export function SnapshotResultTable({
+  runId,
+  summary,
+}: {
+  runId: string;
+  summary?: RunSummaryResponse | null;
+}) {
   const [qInput, setQInput] = useState('');
   const [submittedQ, setSubmittedQ] = useState('');
   const [page, setPage] = useState(1);
@@ -95,8 +102,36 @@ export function SnapshotResultTable({ runId }: { runId: string }) {
   const columns = data?.columns ?? [];
   const rows = data?.rows ?? [];
 
+  const finalAssigned = summary?.stage4Count ?? (total || null);
+  const stat = (v: number | null | undefined, suffix = '') =>
+    v == null ? '—' : `${v.toLocaleString()}${suffix}`;
+
   return (
-    <div className="space-y-3" data-testid="snapshot-result-table">
+    <div className="space-y-4" data-testid="snapshot-result-table">
+      {/* 摘要卡（對齊 prototype） */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="rounded-lg border border-green-100 bg-green-50 p-4">
+          <div className="text-xs text-gray-500 mb-1">最終分派筆數</div>
+          <div className="text-2xl font-bold text-success tabular-nums">{stat(finalAssigned)}</div>
+        </div>
+        <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+          <div className="text-xs text-gray-500 mb-1">覆蓋率</div>
+          <div className="text-2xl font-bold text-primary tabular-nums">
+            {summary?.coverageRate != null ? `${(summary.coverageRate * 100).toFixed(1)}%` : '—'}
+          </div>
+        </div>
+        <div className="rounded-lg border border-purple-100 bg-purple-50 p-4">
+          <div className="text-xs text-gray-500 mb-1">分派部門數</div>
+          <div className="text-2xl font-bold text-purple-700 tabular-nums">
+            {stat(summary?.deptSummary?.length)}
+          </div>
+        </div>
+        <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
+          <div className="text-xs text-gray-500 mb-1">分派人員數</div>
+          <div className="text-2xl font-bold text-warning tabular-nums">{stat(summary?.emplCount)}</div>
+        </div>
+      </div>
+
       {/* Toolbar */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
@@ -135,7 +170,7 @@ export function SnapshotResultTable({ runId }: { runId: string }) {
               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition"
             >
               <UploadCloud className="w-3.5 h-3.5" />
-              回寫業務系統
+              回寫電銷系統
             </button>
           )}
         </div>

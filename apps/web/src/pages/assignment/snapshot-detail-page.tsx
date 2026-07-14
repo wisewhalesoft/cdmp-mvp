@@ -9,32 +9,35 @@ import {
   Download,
   GitCompare,
   CheckCircle2,
+  Info,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import {
   getSnapshotByType,
   getRun,
-  type SingleSnapshotResponse,
+  getRunSummary,
   type SnapshotType,
   type RunProgressResponse,
+  type RunSummaryResponse,
 } from '@/api/assignment-run';
 import {
   SnapshotConfigView,
   type SnapshotConfigPayload,
 } from './_components/snapshot-config-view';
-import { SnapshotArrayView } from './_components/snapshot-array-view';
+import { SnapshotInputSummary } from './_components/snapshot-input-summary';
 import { SnapshotResultTable } from './_components/snapshot-result-table';
 import { RunPageBreadcrumb } from './_components/run-page-breadcrumb';
 
 /**
- * F066 v1.3 — 月名單分派快照詳情頁（使用者友善重構）
+ * F066 v1.3 — 月名單分派快照詳情頁（對齊 prototype 35-snapshot-detail.html）
  *
- * 對應 prototype: prototypes/35-snapshot-detail.html
+ * 排版對齊「篩選欄位」/「計分卡設定」：標題+說明、run 資訊卡（含 tab 筆數 pill）、底線分頁。
+ *   - 設定快照：SnapshotConfigView（中文欄名 + decode badge）
+ *   - 輸入名單：SnapshotInputSummary（摘要卡 + 各名單明細 + 案號查詢）
+ *   - 分派結果：SnapshotResultTable（摘要卡 + 分頁端點 §5.3 對齊匯出 23 欄 + 後端搜尋）
  *
- * 排版對齊「篩選欄位」/「計分卡設定」：標題+說明、run 資訊卡、底線分頁、中文欄名、decode badge。
- *   - 設定快照：SnapshotConfigView（中文欄名 + badge）
- *   - 輸入名單：SnapshotArrayView（中文表頭 + 前端過濾）
- *   - 分派結果：SnapshotResultTable（分頁端點 §5.3，對齊匯出 23 欄 + 後端搜尋）
+ * 資料：getRun（meta）+ getRunSummary（摘要卡/pill）+ config 快照（mount，供設定 view 與輸入名稱 decode）
+ *      + input_list 快照（進入分頁時延後載入）。
  *
  * URL: /assignment/snapshots?runId=...&type=config|input_list|result
  * RBAC: DirectorOrSectionChiefRoute
@@ -68,16 +71,27 @@ function formatWorkYm(ym?: string | null): string {
   return ym ?? '—';
 }
 
-const STATUS_META: Record<string, { label: string; cls: string }> = {
-  completed: { label: '已完成', cls: 'bg-green-100 text-success' },
-  running: { label: '執行中', cls: 'bg-blue-100 text-blue-700' },
-  pending: { label: '等待中', cls: 'bg-gray-100 text-gray-600' },
-  failed: { label: '失敗', cls: 'bg-red-100 text-danger' },
+const STATUS_META: Record<string, { label: string; cls: string; text: string }> = {
+  completed: { label: '已完成', cls: 'bg-green-100 text-success', text: 'text-success' },
+  running: { label: '執行中', cls: 'bg-blue-100 text-blue-700', text: 'text-blue-700' },
+  pending: { label: '等待中', cls: 'bg-gray-100 text-gray-600', text: 'text-gray-700' },
+  failed: { label: '失敗', cls: 'bg-red-100 text-danger', text: 'text-danger' },
 };
 
 function formatDateTime(iso?: string | null): string {
   if (!iso) return '—';
   return iso.slice(0, 16).replace('T', ' ');
+}
+
+/** 觸發時間 + 3 年（快照保留期）→ 'YYYY-MM-DD'。 */
+function retentionDate(iso?: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setFullYear(d.getFullYear() + 3);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate(),
+  ).padStart(2, '0')}`;
 }
 
 export function SnapshotDetailPage() {
@@ -88,20 +102,59 @@ export function SnapshotDetailPage() {
 
   const [activeType, setActiveType] = useState<SnapshotType>(initialType);
   const [run, setRun] = useState<RunProgressResponse | null>(null);
-  const [data, setData] = useState<SingleSnapshotResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<RunSummaryResponse | null>(null);
 
-  // Run 資訊卡：F062 getRun 一次載入（與快照 payload 解耦，避免分派結果分頁載入巨量 payload）
+  const [configPayload, setConfigPayload] = useState<SnapshotConfigPayload | null>(null);
+  const [configLoading, setConfigLoading] = useState(true);
+  const [configError, setConfigError] = useState<string | null>(null);
+
+  const [inputPayload, setInputPayload] = useState<{ cases?: unknown[] } | null>(null);
+  const [inputLoading, setInputLoading] = useState(false);
+  const [inputError, setInputError] = useState<string | null>(null);
+
+  // mount：run meta + summary（摘要卡/pill）+ config 快照（設定 view + 輸入名稱 decode）
   useEffect(() => {
-    if (!runId) return;
+    if (!runId) {
+      setConfigError('網址缺少分派批次編號，請從執行歷史重新進入。');
+      setConfigLoading(false);
+      return;
+    }
     let aborted = false;
+    setInputPayload(null);
+    setInputError(null);
     void (async () => {
       try {
         const r = await getRun(runId);
         if (!aborted) setRun(r);
       } catch {
-        /* 資訊卡缺失不阻擋分頁內容 */
+        /* 資訊卡缺失不阻擋內容 */
+      }
+    })();
+    void (async () => {
+      try {
+        const s = await getRunSummary(runId);
+        if (!aborted) setSummary(s);
+      } catch {
+        /* 摘要缺失 → 卡片顯示 — */
+      }
+    })();
+    void (async () => {
+      setConfigLoading(true);
+      setConfigError(null);
+      try {
+        const res = await getSnapshotByType(runId, 'config');
+        if (!aborted) setConfigPayload(res.payload as SnapshotConfigPayload | null);
+      } catch (err: unknown) {
+        const e = err as { response?: { status?: number; data?: { message?: string } } };
+        if (!aborted) {
+          setConfigError(
+            e.response?.status === 404
+              ? '找不到此份快照（可能已逾保留期或尚未建立）。'
+              : e?.response?.data?.message ?? '載入快照失敗',
+          );
+        }
+      } finally {
+        if (!aborted) setConfigLoading(false);
       }
     })();
     return () => {
@@ -109,43 +162,33 @@ export function SnapshotDetailPage() {
     };
   }, [runId]);
 
-  // 設定快照 / 輸入名單 payload（分派結果分頁改用 SnapshotResultTable，不載 payload）
+  // 輸入名單 payload：進入該分頁時延後載入（避免非必要時載入巨量 cases）
   useEffect(() => {
-    if (!runId) {
-      setError('網址缺少分派批次編號，請從執行歷史重新進入。');
-      setLoading(false);
-      return;
-    }
-    if (activeType === 'result') {
-      setLoading(false);
-      setError(null);
-      setData(null);
-      return;
-    }
+    if (activeType !== 'input_list' || !runId || inputPayload) return;
     let aborted = false;
     void (async () => {
-      setLoading(true);
-      setError(null);
+      setInputLoading(true);
+      setInputError(null);
       try {
-        const result = await getSnapshotByType(runId, activeType);
-        if (!aborted) setData(result);
+        const res = await getSnapshotByType(runId, 'input_list');
+        if (!aborted) setInputPayload((res.payload as { cases?: unknown[] } | null) ?? { cases: [] });
       } catch (err: unknown) {
         const e = err as { response?: { status?: number; data?: { message?: string } } };
         if (!aborted) {
-          if (e.response?.status === 404) {
-            setError('找不到此份快照（可能已逾保留期或尚未建立）。');
-          } else {
-            setError(e?.response?.data?.message ?? '載入快照失敗');
-          }
+          setInputError(
+            e.response?.status === 404
+              ? '找不到此份快照（可能已逾保留期或尚未建立）。'
+              : e?.response?.data?.message ?? '載入快照失敗',
+          );
         }
       } finally {
-        if (!aborted) setLoading(false);
+        if (!aborted) setInputLoading(false);
       }
     })();
     return () => {
       aborted = true;
     };
-  }, [runId, activeType]);
+  }, [activeType, runId, inputPayload]);
 
   const selectTab = (type: SnapshotType) => {
     setActiveType(type);
@@ -154,9 +197,23 @@ export function SnapshotDetailPage() {
     setSearchParams(next, { replace: true });
   };
 
-  const payload = data?.payload ?? null;
   const status = run?.status ?? '';
-  const statusMeta = STATUS_META[status] ?? { label: status || '—', cls: 'bg-gray-100 text-gray-600' };
+  const statusMeta =
+    STATUS_META[status] ?? { label: status || '—', cls: 'bg-gray-100 text-gray-600', text: 'text-gray-700' };
+  const retainUntil = retentionDate(run?.triggeredAt);
+
+  const downloadPayload =
+    activeType === 'config' ? configPayload : activeType === 'input_list' ? inputPayload : null;
+
+  const tabCount = (t: SnapshotType): number | null => {
+    if (t === 'input_list') {
+      return summary?.stage1Count ?? (inputPayload?.cases?.length ?? null);
+    }
+    if (t === 'result') {
+      return run?.totalCases ?? summary?.stage4Count ?? null;
+    }
+    return null;
+  };
 
   return (
     <AppLayout headerLeft={<RunPageBreadcrumb leaf="快照詳情" />}>
@@ -196,8 +253,8 @@ export function SnapshotDetailPage() {
                   type="button"
                   data-testid="btn-download-snapshot"
                   onClick={() => {
-                    if (!payload) return;
-                    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+                    if (!downloadPayload) return;
+                    const blob = new Blob([JSON.stringify(downloadPayload, null, 2)], {
                       type: 'application/json',
                     });
                     const url = URL.createObjectURL(blob);
@@ -209,8 +266,8 @@ export function SnapshotDetailPage() {
                     document.body.removeChild(a);
                     URL.revokeObjectURL(url);
                   }}
-                  disabled={!payload}
-                  title={payload ? undefined : '分派結果請於「結果摘要」頁匯出 Excel'}
+                  disabled={!downloadPayload}
+                  title={downloadPayload ? undefined : '分派結果請於「結果摘要」頁匯出 Excel'}
                   className="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-primary border border-blue-200 rounded-md hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <Download className="w-3.5 h-3.5" />
@@ -234,7 +291,7 @@ export function SnapshotDetailPage() {
               </div>
               <div>
                 <div className="text-xs text-gray-500 mb-1">狀態</div>
-                <div className="text-sm font-medium text-gray-800">{statusMeta.label}</div>
+                <div className={`text-sm font-medium ${statusMeta.text}`}>{statusMeta.label}</div>
               </div>
               <div>
                 <div className="text-xs text-gray-500 mb-1">觸發者</div>
@@ -262,7 +319,7 @@ export function SnapshotDetailPage() {
               <code className="font-mono bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 text-gray-500">
                 {runId}
               </code>
-              <span>· 保留 3 年</span>
+              <span>· {retainUntil ? `保留至 ${retainUntil}（3 年）` : '保留 3 年'}</span>
             </div>
           </div>
         )}
@@ -277,6 +334,7 @@ export function SnapshotDetailPage() {
               const cfg = TAB_META[t];
               const Icon = cfg.icon;
               const isActive = activeType === t;
+              const count = tabCount(t);
               return (
                 <button
                   key={t}
@@ -291,6 +349,11 @@ export function SnapshotDetailPage() {
                 >
                   <Icon className="w-4 h-4" />
                   {cfg.label}
+                  {count != null && (
+                    <span className="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded-full tabular-nums">
+                      {count.toLocaleString()}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -299,35 +362,70 @@ export function SnapshotDetailPage() {
           <div className="p-5 space-y-4">
             <p className="text-xs text-gray-500">{TAB_META[activeType].description}</p>
 
-            {activeType !== 'result' && loading && (
-              <div className="p-12 text-center text-gray-400" data-testid="snapshot-loading">
-                載入中…
-              </div>
+            {/* 設定快照 */}
+            {activeType === 'config' && (
+              <>
+                {configLoading && (
+                  <div className="p-12 text-center text-gray-400" data-testid="snapshot-loading">
+                    載入中…
+                  </div>
+                )}
+                {configError && !configLoading && (
+                  <div
+                    data-testid="snapshot-error"
+                    className="rounded-lg p-3 bg-red-50 border border-red-200 flex items-start gap-2 text-sm"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
+                    <span className="text-red-800">{configError}</span>
+                  </div>
+                )}
+                {!configLoading && !configError && <SnapshotConfigView payload={configPayload} />}
+              </>
             )}
 
-            {activeType !== 'result' && error && (
-              <div
-                data-testid="snapshot-error"
-                className="rounded-lg p-3 bg-red-50 border border-red-200 flex items-start gap-2 text-sm"
-              >
-                <AlertTriangle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
-                <span className="text-red-800">{error}</span>
-              </div>
+            {/* 輸入名單 */}
+            {activeType === 'input_list' && (
+              <>
+                {inputLoading && (
+                  <div className="p-12 text-center text-gray-400" data-testid="snapshot-loading">
+                    載入中…
+                  </div>
+                )}
+                {inputError && !inputLoading && (
+                  <div
+                    data-testid="snapshot-error"
+                    className="rounded-lg p-3 bg-red-50 border border-red-200 flex items-start gap-2 text-sm"
+                  >
+                    <AlertTriangle className="w-4 h-4 text-danger mt-0.5 shrink-0" />
+                    <span className="text-red-800">{inputError}</span>
+                  </div>
+                )}
+                {!inputLoading && !inputError && (
+                  <SnapshotInputSummary
+                    payload={inputPayload}
+                    listDefs={configPayload?.listDefinitions}
+                    summary={summary}
+                    run={run}
+                  />
+                )}
+              </>
             )}
 
-            {activeType === 'config' && !loading && !error && (
-              <SnapshotConfigView payload={payload as SnapshotConfigPayload | null} />
+            {/* 分派結果 */}
+            {activeType === 'result' && (
+              <SnapshotResultTable runId={runId} summary={summary} />
             )}
+          </div>
+        </div>
 
-            {activeType === 'input_list' && !loading && !error && (
-              <SnapshotArrayView
-                payload={payload as Record<string, unknown> | null}
-                arrayKey="cases"
-                title="輸入名單"
-              />
-            )}
-
-            {activeType === 'result' && <SnapshotResultTable runId={runId} />}
+        {/* 說明 footer */}
+        <div className="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+          <Info className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium text-gray-700 mb-0.5">關於快照</p>
+            <p>
+              三份快照（設定 / 輸入名單 / 分派結果）為分派完成當下的唯讀紀錄，可作為稽核與問題排查依據，保留 3 年。需要完整資料可使用「下載快照檔」。
+            </p>
           </div>
         </div>
       </main>

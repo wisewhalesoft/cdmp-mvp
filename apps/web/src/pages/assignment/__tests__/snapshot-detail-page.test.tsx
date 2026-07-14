@@ -21,6 +21,7 @@ vi.mock('@/stores/auth-store', async () => {
 
 const mockedGetSnapshot = vi.mocked(runApi.getSnapshotByType);
 const mockedGetRun = vi.mocked(runApi.getRun);
+const mockedGetRunSummary = vi.mocked(runApi.getRunSummary);
 const mockedGetResultPage = vi.mocked(runApi.getResultPage);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
@@ -82,6 +83,21 @@ describe('SnapshotDetailPage (F066 v1.3)', () => {
     mockedGetBusinessRole.mockReturnValue('director');
     mockedGetEffectiveIdentity.mockReturnValue('director');
     mockedGetRun.mockResolvedValue(mkRun());
+    mockedGetRunSummary.mockResolvedValue({
+      runId: 'R001',
+      projectWorkym: '202607',
+      finishedAt: null,
+      durationMs: null,
+      totalCases: 115197,
+      stage1Count: 115197,
+      stage4Count: 115000,
+      coverageRate: 0.935,
+      emplCount: 138,
+      deptSummary: [{ deptId: 'D01' }, { deptId: 'D02' }] as never,
+      levelDistribution: [],
+      tierDistribution: [],
+      warnings: { summaryCode: null, skippedCases: null },
+    } as never);
     mockedGetResultPage.mockResolvedValue({
       runId: 'R001',
       columns: [
@@ -150,19 +166,25 @@ describe('SnapshotDetailPage (F066 v1.3)', () => {
     expect(screen.queryByText(/type\s*=/)).not.toBeInTheDocument();
   });
 
-  it('點輸入名單分頁 → 以中文表頭陣列 view 呈現', async () => {
+  it('點輸入名單分頁 → 以摘要卡 + 各名單明細呈現', async () => {
     mockedGetSnapshot.mockResolvedValue(snap('config', {}));
     renderPage();
     await waitFor(() => expect(screen.getByTestId('snapshot-tab-input_list')).toBeInTheDocument());
     mockedGetSnapshot.mockResolvedValue(
-      snap('input_list', { cases: [{ listNo: 'OB001', custoNo: 'C1' }] }),
+      snap('input_list', {
+        cases: [
+          { listNo: 'OB001', applNo: 'A1', orgno: '02', cardType: 'H' },
+          { listNo: 'OB001', applNo: 'A2', orgno: '02', cardType: 'H' },
+        ],
+      }),
     );
     fireEvent.click(screen.getByTestId('snapshot-tab-input_list'));
     await waitFor(() => expect(mockedGetSnapshot).toHaveBeenCalledWith('R001', 'input_list'));
-    await waitFor(() => expect(screen.getByTestId('snapshot-array-table')).toBeInTheDocument());
-    // 中文表頭
+    await waitFor(() => expect(screen.getByTestId('snapshot-input-summary')).toBeInTheDocument());
+    // 摘要卡 + 各名單明細（中文欄名）
+    expect(screen.getByText('候選客戶總筆數')).toBeInTheDocument();
+    expect(screen.getByText('各名單筆數明細')).toBeInTheDocument();
     expect(screen.getByText('名單編號')).toBeInTheDocument();
-    expect(screen.getByText('客戶編號')).toBeInTheDocument();
   });
 
   it('點分派結果分頁 → 以分頁端點（getResultPage）呈現 23 欄表格', async () => {
@@ -176,6 +198,9 @@ describe('SnapshotDetailPage (F066 v1.3)', () => {
     ));
     await waitFor(() => expect(screen.getByTestId('snapshot-result-table')).toBeInTheDocument());
     expect(screen.getByText('台北分處')).toBeInTheDocument();
+    // 摘要卡（來自 getRunSummary）
+    expect(screen.getByText('分派部門數')).toBeInTheDocument();
+    expect(screen.getByText('分派人員數')).toBeInTheDocument();
     // 分派結果分頁不呼叫快照 payload 端點（避免載入巨量 payload）
     expect(mockedGetSnapshot).not.toHaveBeenCalledWith('R001', 'result');
     // F115 回寫按鈕（部長角色）可用
