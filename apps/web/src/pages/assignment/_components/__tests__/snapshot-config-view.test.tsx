@@ -50,7 +50,8 @@ describe('SnapshotConfigView', () => {
     render(<SnapshotConfigView payload={PAYLOAD} />);
     expect(screen.getByTestId('snapshot-config-card-levels')).toBeInTheDocument();
     const table = screen.getByTestId('snapshot-config-card-levels');
-    expect(table.textContent).toContain('cardLevel');
+    // v1.3：欄名中文化（等級），值以 badge 呈現
+    expect(table.textContent).toContain('等級');
   });
 
   it('渲染 tiers table', () => {

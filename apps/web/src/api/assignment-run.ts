@@ -457,19 +457,40 @@ export interface SnapshotData {
   [key: string]: unknown;
 }
 
-export interface FullSnapshotResponse {
+/**
+ * 快照回應之 run 中繼資料 — 對齊後端 `AssignmentRunSnapshotService.RunMeta`（authoritative）。
+ */
+export interface SnapshotRunMeta {
   runId: string;
+  projectWorkym: string;
+  triggeredBy: string;
+  triggeredAt: string;
+  finishedAt: string | null;
+  status: string;
+  totalCases: number | null;
+}
+
+/**
+ * F066 快照回應 — 對齊後端 `AssignmentRunSnapshotService`（authoritative）。
+ *
+ * ⚠️ 2026-07-14：原前端型別（`runId` / `data`）與後端實際回傳（`runMeta` / `payload`）
+ * 完全不符，導致快照詳情頁 `data.data` 恆為 undefined → config 顯示「快照不存在」、
+ * input_list / result 全空，即使快照資料實際存在（run 0B3A5196… 三份快照皆有值）。
+ * 已重寫為後端真實 shape（runMeta / snapshots.* / payload）；比對前例見上方 F067 註記。
+ */
+export interface FullSnapshotResponse {
+  runMeta: SnapshotRunMeta;
   snapshots: {
-    config: SnapshotData;
-    inputList: SnapshotData;
-    result: SnapshotData;
+    config: SnapshotData | null;
+    inputList: SnapshotData | null;
+    result: SnapshotData | null;
   };
 }
 
 export interface SingleSnapshotResponse {
-  runId: string;
+  runMeta: SnapshotRunMeta;
   type: SnapshotType;
-  data: SnapshotData;
+  payload: SnapshotData | null;
 }
 
 export async function getFullSnapshot(runId: string): Promise<FullSnapshotResponse> {
@@ -485,6 +506,51 @@ export async function getSnapshotByType(
 ): Promise<SingleSnapshotResponse> {
   const response = await apiClient.get<SingleSnapshotResponse>(
     `/assignment/runs/${runId}/snapshot/${type}`,
+  );
+  return response.data;
+}
+
+// =====================================================================
+// F066 v1.3 — GET 分派結果友善分頁（對齊 F064 匯出 23 欄）
+// =====================================================================
+
+export interface ResultPageColumn {
+  key: string;
+  label: string;
+}
+
+export interface ResultPageResponse {
+  runId: string;
+  columns: ResultPageColumn[];
+  rows: Array<Record<string, string>>;
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface ResultPageParams {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+}
+
+/**
+ * F066 §5.3：分派結果分頁讀取。後端回傳與 F064 匯出一致的 23 欄（含部門/姓名/名單名稱等
+ * join decode），rows 以 columns[].key 為鍵。
+ */
+export async function getResultPage(
+  runId: string,
+  params: ResultPageParams = {},
+): Promise<ResultPageResponse> {
+  const response = await apiClient.get<ResultPageResponse>(
+    `/assignment/runs/${runId}/result`,
+    {
+      params: {
+        page: params.page,
+        pageSize: params.pageSize,
+        q: params.q?.trim() ? params.q.trim() : undefined,
+      },
+    },
   );
   return response.data;
 }

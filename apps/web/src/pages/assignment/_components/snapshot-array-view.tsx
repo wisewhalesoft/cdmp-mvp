@@ -19,6 +19,49 @@ export interface SnapshotArrayViewProps {
   maxRows?: number;
 }
 
+/**
+ * F066 v1.3：欄位 key → 中文表頭字典（使用者友善）。未收錄的 key 回退顯示原 key。
+ * 涵蓋輸入名單 / 分派結果快照常見欄位。
+ */
+const COLUMN_LABELS: Record<string, string> = {
+  listNo: '名單編號',
+  list_no: '名單編號',
+  listNm: '名單名稱',
+  custoNo: '客戶編號',
+  custo_no: '客戶編號',
+  applNo: '案號',
+  appl_no: '案號',
+  orgno: '機構',
+  cardType: '計分卡',
+  card_type: '計分卡',
+  cardLevel: '等級',
+  card_level: '等級',
+  tierLevel: '分級',
+  tier_level: '分級',
+  score: '分數',
+  deptId: '部門代號',
+  dept_id: '部門代號',
+  emplid: '員編',
+  emplidDeptid: '人員所屬部門',
+  emplid_deptid: '人員所屬部門',
+  staCode: '狀態碼',
+  sta_code: '狀態碼',
+  isCr: '是否分配CR',
+  is_cr: '是否分配CR',
+  crId: 'CR_ID',
+  cr_id: 'CR_ID',
+  crNm: 'CR_NM',
+  cr_nm: 'CR_NM',
+  assignday: '指派日',
+  status: '狀態',
+  settleSrc: '結清來源',
+  settle_src: '結清來源',
+};
+
+function columnLabel(key: string): string {
+  return COLUMN_LABELS[key] ?? key;
+}
+
 function formatCell(v: unknown): string {
   if (v === null || v === undefined) return '—';
   if (typeof v === 'boolean') return v ? '✓' : '—';
@@ -87,7 +130,7 @@ export function SnapshotArrayView({
                   key={c}
                   className="text-left px-3 py-2 font-semibold whitespace-nowrap"
                 >
-                  {c}
+                  {columnLabel(c)}
                 </th>
               ))}
             </tr>

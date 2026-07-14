@@ -46,8 +46,9 @@ describe('SnapshotArrayView', () => {
       />,
     );
     const table = screen.getByTestId('snapshot-array-table');
-    expect(table.textContent).toContain('listNo');
-    expect(table.textContent).toContain('applNo');
+    // v1.3：表頭中文化（key → 中文字典）
+    expect(table.textContent).toContain('名單編號');
+    expect(table.textContent).toContain('案號');
     expect(table.textContent).toContain('A1');
     expect(table.textContent).toContain('A2');
   });
