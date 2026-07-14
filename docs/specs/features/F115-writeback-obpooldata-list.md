@@ -6,20 +6,29 @@ source-story: US-180（待建）
 epic: E07 — 客戶名單分派
 module: M05 執行歷史 / 分派結果
 priority: P1
-version: "0.1"
+version: "0.2"
 date: 2026-07-14
-status: Design（設計中，本輪不實作）
+status: In Progress（實作中；execute 真實寫入待業務授權）
 ---
 
 # F115: 分派結果回寫 OBPOOLDATA_LIST
 
-Priority: P1 | Status: **Design-only（設計文件，尚未進入實作）** | Last Updated: 2026-07-14
+Priority: P1 | Status: **In Progress** | Last Updated: 2026-07-14
 
-> **本文件為設計/決策紀錄，不含實作碼。** 目的：在快照詳情頁「分派結果」分頁提供一個受控動作，將 CDMP 之月名單分派結果（`ob_monthly_run_result`）回寫至**外部 legacy 業務系統** `APYHFC16.OB.OBPOOLDATA_LIST`，取代 legacy 由一連串 SP（Stage1~4）就地寫入的流程。實作將於後續一輪以 TDD 進行。
+> **目的**：在快照詳情頁「分派結果」分頁提供受控動作，將 CDMP 月名單分派結果（`ob_monthly_run_result`）回寫至**外部 legacy 業務系統** `APYHFC16.OB.OBPOOLDATA_LIST`。
 >
-> **關鍵決策（經使用者 2026-07-14 拍板）**：
+> **關鍵決策（使用者 2026-07-14 拍板）**：
 > - 回寫目標 = **外部 `APYHFC16.OB.OBPOOLDATA_LIST`**（非 CDMP 自有 `ob_pool_data_list`）。
-> - 觸發 = **分派結果畫面之手動按鈕**（部長專屬）+ **預覽** + **二次確認**，且 **dry-run 先行**（先產生/預覽將寫入的內容，確認後才實際寫入）。
+> - 觸發 = 分派結果畫面手動按鈕（**部長專屬**）+ **預覽（dry-run）** + **二次確認**。
+> - 寫入語意 = **UPDATE-in-place 既有列**（9 分派欄）；目標列不存在 → 記 **not-matched**，不 INSERT（OQ-2/OQ-4 定案）。
+>
+> **v0.2 連線方案定案（Phase 0 調查）**：
+> - CDMP 與 `APYHFC16.OB` 為**不同 SQL Server**（OB=172.20.202.193；CDMP=172.20.202.212），無 linked server → 須**開獨立 mssql 連線**（不可 3-part 跨庫）。
+> - **重用既有 ETL 外部連線機制**：已 seed `datasources` 表之 `APYHFC16.OB` 列（host/db/user 齊，密碼 UI 填入、AES 加密），dev 已於「資料來源」驗證可連。回寫服務比照 `MSSQLExecutor.withConnection`（`new mssql.ConnectionPool` + `CryptoUtil.decrypt`）開連線；**新增寫入方法**（既有 executor 僅讀）。不新增 app 層 DataSource、不新增 env。
+> - **preview** 對外部做**唯讀 SELECT 探測** not-matched（安全、與既有讀取用途一致；連線不可用則 not-matched 回 null 優雅降級）。
+> - **execute** 真實寫入外部生產庫為不可逆動作；本實作輪完成程式 + 單元測試（mock 外部連線），**不於開發 session 觸發真實生產寫入**，待業務於 UI 二次確認後執行。
+>
+> **實作對照**：`docs/specs/features/F066-view-run-snapshot-detail.md`（回寫按鈕位於分派結果分頁）。
 
 ---
 
@@ -111,38 +120,39 @@ Legacy 無「一支回寫 SP」；`OBPOOLDATA_LIST`（`[OB].[dbo].[OBPOOLDATA_LI
   2. UI 顯示預覽摘要 + 明確警語（不可逆、寫入外部生產系統）→ 使用者二次確認 → 呼叫**執行端點**才實際寫入。
 - **稽核**：預覽與執行皆寫 `assignment_audit_log`（actor、run_id、影響列數、結果）。
 
-### 7.1 提議 API（實作輪定稿）
+### 7.1 API（v0.2 定稿）
 
-| 方法 | 路由 | 說明 |
-|---|---|---|
-| POST | `/api/v1/assignment/runs/:runId/writeback/preview` | dry-run；回 `{ totalToUpdate, byListNo[], sample[], notMatched }`，不寫入 |
-| POST | `/api/v1/assignment/runs/:runId/writeback` | 實際回寫（需 body 帶預覽產生之確認 token / checksum，防跳過預覽） |
+| 方法 | 路由 | 權限 | 說明 |
+|---|---|---|---|
+| POST | `/api/v1/assignment/runs/:runId/writeback/preview` | DirectorGuard | dry-run，**不寫入**。回 `{ runId, totalToWrite, byListNo:[{listNo,count}], sample:[…前 N 列…], notMatched, connectionAvailable }`。`notMatched` 由對外部**唯讀** SELECT 探測（連線不可用 → `null` + `connectionAvailable:false`）。 |
+| POST | `/api/v1/assignment/runs/:runId/writeback` | DirectorGuard | 實際回寫。body `{ confirm: true }`（缺/false → 422）。回 `{ runId, updated, notMatched, failed, byListNo }`。連線未設定 → 422 `WRITEBACK_CONNECTION_NOT_CONFIGURED`。 |
+
+**execute 演算法**：讀 CDMP `ob_monthly_run_result`（run 全列）→ 依 `list_no` 分批（預設 500/批）→ 每批於外部連線建 `#wb` 暫存表 + 多列 INSERT（參數化）→ `UPDATE t SET OB_DEPT/OB_EMPLID/EMPLID_DEPTID/ASSIGNDAY/CARD_LEVEL/TIER_LEVEL/IS_CR/CR_ID/CR_NM FROM OBPOOLDATA_LIST t INNER JOIN #wb s ON t.LIST_NO=s.list_no AND t.ORGNO=s.orgno AND t.APPL_NO=s.appl_no`（`rowsAffected`=matched）→ LEFT JOIN 反查 not-matched keys → 回填 CDMP `result_status`（matched=SUCCESS / not-matched=FAILED）→ 寫 `assignment_audit_log`（action=`WRITEBACK`）。整體以 dev「資料來源」已驗證之 `APYHFC16.OB` datasource（`CryptoUtil.decrypt` 密碼、`mssql.ConnectionPool`）連線。
 
 ---
 
-## 8. 外部連線架構（關鍵前置）
+## 8. 外部連線架構（v0.2 定案）
 
-- 目前 CDMP **沒有**到 `APYHFC16`（企業 legacy MSSQL）之任何連線 / linked server / OPENQUERY（已 grep 確認）。回寫**前置需求**：
-  - 於部署環境提供 legacy 連線（獨立 DataSource / 連線字串；帳密走 env，不入庫、不入前端）。
-  - 網路可達性（CDMP 容器 → APYHFC16）、寫入權限帳號、TLS。
-  - 決定連線方式：CDMP 直連 legacy DataSource（TypeORM 第二連線） vs 產生 UPDATE SQL 交由 DBA/排程套用（後者更保守；見 OQ-1）。
-- **本輪不建立此連線**；F115 實作輪的第一步即為連線可行性驗證（PoC）。
+- CDMP 與 `APYHFC16.OB` 為**不同 SQL Server**（OB=172.20.202.193 / CDMP=172.20.202.212），無 linked server → 開**獨立 mssql 連線**（不可 3-part 跨庫）。
+- **重用 ETL 外部連線機制**：`datasources` 表已 seed `APYHFC16.OB`（host/db/user 齊；密碼 UI 填、AES 加密）；**dev 已於「資料來源」測試可連**。回寫服務以 datasource `name='APYHFC16.OB'` 解析、`CryptoUtil.decrypt` 密碼、`new mssql.ConnectionPool`（比照 `MSSQLExecutor.withConnection`）開連線；**新增寫入方法**（既有 executor 僅讀）。不新增 app 層 DataSource、不新增 env。
+- **寫入權限（非程式）**：`APYHFC16.OB` 連線帳號（`CDMPT`）目前供唯讀擷取；DBA 須授予 `OB.dbo.OBPOOLDATA_LIST` 之 UPDATE 權限，execute 才能真正寫入。
+- **安全**：preview 對外部只做唯讀 SELECT（探測 not-matched）；execute 為真實生產寫入，須 UI 二次確認；開發 session **不觸發真實寫入**（僅單元測試 mock 外部連線）。
 
 ---
 
 ## 9. 風險與待決問題（Open Questions）
 
-| # | 問題 | 現況 / 傾向 |
+| # | 問題 | 現況 / 定案 |
 |---|---|---|
-| OQ-1 | 直連外部庫寫入 vs 產生 SQL 交 DBA 套用 | 直連較即時但風險高；保守方案為 dry-run 產生 SQL + 人工套用。實作輪 PoC 後定案 |
-| OQ-2 | 目標列不存在時 | 預設記 `FAILED`/未命中；是否 fallback INSERT（比照 legacy Stage1）待定（OQ-4） |
-| OQ-3 | 是否寫 `OBPOOLDATA_LIST.SCORE` | legacy 不維護；CDMP 有值。傾向不寫（對齊 legacy），待業務確認 |
-| OQ-4 | INSERT fallback | 若母列缺失是否補插整列（需完整欄位來源）；傾向否（回寫僅更新結果欄） |
-| OQ-5 | 重跑覆寫 `SUCCESS` 列 | 預設略過；是否提供「強制覆寫」 |
-| OQ-6 | `ASSIGNDAY` 型別/格式 | CDMP `varchar`，legacy `YYYYMMDD`；確認格式一致 |
-| OQ-7 | 分批交易大小 | 依 `list_no` 分批；每批列數上限待壓測 |
-| OQ-8 | 是否同時清空 legacy 當月舊分派 | legacy Stage2/3/4 會先清空；CDMP 回寫是否需比照，避免殘留舊結果 |
-| OQ-9 | 部分失敗處理 | per-batch 交易；失敗批標記 `FAILED` 並可重試，不整體 rollback |
+| OQ-1 | 直連 vs 產生 SQL 交 DBA | ✅**直連**：重用 `APYHFC16.OB` datasource + `mssql.ConnectionPool`（dev 已驗證可連）。 |
+| OQ-2 | 目標列不存在 | ✅**記 not-matched → CDMP `result_status=FAILED`，不 INSERT**。 |
+| OQ-3 | 是否寫 `SCORE` | 本實作**不寫 SCORE**（對齊 legacy；SCORE 於 legacy 存 OBLEVELCARD）。 |
+| OQ-4 | INSERT fallback | ✅**否**（僅 UPDATE 9 分派欄）。 |
+| OQ-5 | 重跑覆寫 `SUCCESS` | execute 對 run 全列冪等 UPDATE；「略過已 SUCCESS/強制覆寫」旗標為 follow-up。 |
+| OQ-6 | `ASSIGNDAY` 格式 | CDMP `assignday`（月跑 `YYYYMMDD`）原值直送外部 `ASSIGNDAY`。 |
+| OQ-7 | 分批大小 | 依 `list_no` 分批、每批預設 500 列（可調常數，未壓測）。 |
+| OQ-8 | 是否清空 legacy 當月舊分派 | 本實作**不清空**（純 UPDATE 覆寫既有列分派欄）；需比照 legacy 清空另議。 |
+| OQ-9 | 部分失敗 | per-batch 執行、不整體 rollback；連線未設定 → 422 早退。DBA 未授寫權 → execute 拋錯，preview 仍可（唯讀）。 |
 
 ---
 
