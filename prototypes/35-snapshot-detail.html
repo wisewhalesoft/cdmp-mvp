@@ -463,7 +463,7 @@
                 <!-- F115 回寫按鈕（設計預覽；實作為下一階段） -->
                 <button onclick="openWritebackModal()" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition">
                   <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i>
-                  回寫業務系統
+                  回寫電銷系統
                   <span class="ml-1 inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded-full bg-white/25">下一階段</span>
                 </button>
               </div>
@@ -511,14 +511,14 @@
       <div class="px-5 py-4 border-b border-border flex items-center justify-between">
         <div class="flex items-center gap-2">
           <i data-lucide="upload-cloud" class="w-5 h-5 text-primary"></i>
-          <h3 class="text-base font-semibold text-gray-800">回寫至業務系統（OBPOOLDATA_LIST）</h3>
+          <h3 class="text-base font-semibold text-gray-800">回寫至電銷系統</h3>
         </div>
         <button onclick="closeWritebackModal()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
       </div>
       <div class="px-5 py-4 space-y-4">
         <div class="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
           <i data-lucide="alert-triangle" class="w-4 h-4 mt-0.5 shrink-0"></i>
-          <span>此動作會將本次分派結果寫入外部 legacy 業務系統，供催收人員使用。寫入前請先確認預覽內容，寫入後不可自動復原。</span>
+          <span>此動作會將本次分派結果寫入電銷系統（派案作業使用）。寫入前請先確認預覽內容，寫入後不可自動復原。</span>
         </div>
         <div>
           <div class="text-xs font-semibold text-gray-600 mb-2">預覽（尚未寫入）</div>
@@ -539,7 +539,7 @@
           <p class="text-[11px] text-gray-400 mt-2">更新欄位：承辦部門、承辦人員、指派日、計分等級、分級、CR 相關欄。比對鍵：名單編號 + 機構 + 案號。</p>
         </div>
         <label class="flex items-center gap-2 text-xs text-gray-700">
-          <input type="checkbox" class="rounded border-gray-300"> 我已確認上述預覽內容無誤，同意寫入業務系統
+          <input type="checkbox" class="rounded border-gray-300"> 我已確認上述預覽內容無誤，同意寫入電銷系統
         </label>
       </div>
       <div class="px-5 py-3 border-t border-border flex items-center justify-between">

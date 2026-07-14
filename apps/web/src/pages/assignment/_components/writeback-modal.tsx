@@ -91,7 +91,7 @@ export function WritebackModal({
           <div className="flex items-center gap-2">
             <UploadCloud className="w-5 h-5 text-primary" />
             <h3 className="text-base font-semibold text-gray-800">
-              回寫至業務系統（OBPOOLDATA_LIST）
+              回寫至電銷系統
             </h3>
           </div>
           <button
@@ -134,7 +134,7 @@ export function WritebackModal({
               <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
                 <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>
-                  此動作會將本次分派結果寫入外部業務系統（催收作業使用）。寫入前請確認預覽內容，寫入後不可自動復原。
+                  此動作會將本次分派結果寫入電銷系統（派案作業使用）。寫入前請確認預覽內容，寫入後不可自動復原。
                 </span>
               </div>
 
@@ -186,7 +186,7 @@ export function WritebackModal({
                       className="rounded-lg p-3 bg-red-50 border border-red-200 flex items-start gap-2 text-xs text-red-800"
                     >
                       <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                      <span>外部業務系統連線尚未就緒，暫時無法執行回寫。請先於「資料來源」設定並測試連線。</span>
+                      <span>電銷系統連線尚未就緒，暫時無法執行回寫。請先於「資料來源」設定並測試連線。</span>
                     </div>
                   )}
 
@@ -209,7 +209,7 @@ export function WritebackModal({
                       onChange={(e) => setConfirmed(e.target.checked)}
                       className="rounded border-gray-300"
                     />
-                    我已確認上述預覽內容無誤，同意寫入業務系統
+                    我已確認上述預覽內容無誤，同意寫入電銷系統
                   </label>
                 </>
               )}

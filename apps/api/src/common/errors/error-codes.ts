@@ -270,7 +270,7 @@ export const ERROR_MESSAGES = {
   ASSIGNMENT_RUN_NOT_COMPARABLE: '僅 completed 狀態的月名單分派可比對',
   // F115 分派結果回寫外部 OBPOOLDATA_LIST
   WRITEBACK_CONNECTION_NOT_CONFIGURED:
-    '尚未設定或無法連線外部業務系統（APYHFC16.OB），請先於「資料來源」設定密碼並測試連線',
+    '尚未設定或無法連線電銷系統（APYHFC16.OB），請先於「資料來源」設定密碼並測試連線',
   WRITEBACK_CONFIRM_REQUIRED: '回寫為不可逆動作，請於確認後再執行',
   EXPORT_FILE_EXPIRED: '檔案產生逾時，請稍後再試或聯繫 IT',
   EXPORT_FORMAT_NOT_SUPPORTED: '匯出格式不支援，目前僅支援 csv',

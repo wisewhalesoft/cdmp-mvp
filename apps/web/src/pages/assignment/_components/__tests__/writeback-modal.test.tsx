@@ -71,14 +71,14 @@ describe('WritebackModal (F115)', () => {
   it('execute 失敗顯示錯誤（如連線未設定）', async () => {
     mockedPreview.mockResolvedValue(preview());
     mockedExecute.mockRejectedValue({
-      response: { data: { message: '尚未設定或無法連線外部業務系統（APYHFC16.OB）' } },
+      response: { data: { message: '尚未設定或無法連線電銷系統（APYHFC16.OB）' } },
     });
     render(<WritebackModal runId="R001" onClose={() => {}} />);
     await waitFor(() => expect(screen.getByTestId('writeback-preview-total')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('writeback-confirm-checkbox'));
     fireEvent.click(screen.getByTestId('writeback-execute-btn'));
     await waitFor(() =>
-      expect(screen.getByTestId('writeback-error')).toHaveTextContent(/無法連線外部業務系統/),
+      expect(screen.getByTestId('writeback-error')).toHaveTextContent(/無法連線電銷系統/),
     );
   });
 });
