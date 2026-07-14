@@ -23,6 +23,22 @@
     details > summary::-webkit-details-marker { display: none; }
     .arrow { display: inline-block; transition: transform 0.15s; }
     details[open] > summary > .arrow { transform: rotate(90deg); }
+
+    /* ===== 樞紐分析 pivot table ===== */
+    .pv-wrap { overflow: auto; max-height: 520px; }
+    .pv-table { border-collapse: separate; border-spacing: 0; }
+    .pv-table th, .pv-table td { white-space: nowrap; }
+    .pv-table tbody td { border-bottom: 1px solid #EEF2F6; }
+    .pv-head { position: sticky; top: 0; z-index: 3; background: #F1F5F9; border-bottom: 1px solid #E5E7EB; }
+    .pv-first { position: sticky; left: 0; z-index: 2; border-right: 1px solid #E5E7EB; min-width: 200px; }
+    .pv-last  { position: sticky; right: 0; z-index: 2; border-left: 1px solid #E5E7EB; }
+    .pv-head.pv-first, .pv-head.pv-last { z-index: 4; }
+    .pv-dept-row td { background: #F3F4F6; }
+    .pv-dept-row:hover td { background: #E7EAEE; }
+    .pv-emp-row td, .pv-other-row td { background: #FFFFFF; }
+    .pv-emp-row:hover td, .pv-other-row:hover td { background: #F8FAFC; }
+    .pv-total-row td { background: #EFF6FF; border-top: 2px solid #DBEAFE; }
+    .pv-table thead .pv-head + .pv-head { min-width: 92px; }
   </style>
 </head>
 <body class="bg-bg min-h-screen">
@@ -216,6 +232,10 @@
             <i data-lucide="table" class="w-4 h-4"></i>
             分派結果
             <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded-full tabular-nums">9,120</span>
+          </button>
+          <button id="tab-pivot" onclick="switchSnapTab('pivot')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 inline-flex items-center gap-1.5">
+            <i data-lucide="table-2" class="w-4 h-4"></i>
+            樞紐分析
           </button>
         </div>
 
@@ -490,6 +510,56 @@
           </div>
         </div>
 
+        <!-- ============ 樞紐分析 Panel ============ -->
+        <div id="panel-pivot" class="p-5 hidden">
+          <div class="bg-white border border-border rounded-lg">
+            <!-- 工具列 -->
+            <div class="px-4 py-3 border-b border-border flex items-start justify-between flex-wrap gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="table-2" class="w-4 h-4 text-primary"></i>
+                  <span class="text-sm font-semibold text-gray-700">樞紐分析</span>
+                  <span class="text-xs text-gray-400">值：<span id="pivotValueLabel">計數 - 案號</span></span>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">各部門／承辦人員（列）× 名單代號（欄）的分派案件數交叉表，可展開部門檢視所屬員編。</p>
+                <p class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
+                  <i data-lucide="info" class="w-3 h-3 shrink-0"></i>
+                  對應「結果摘要」匯出 Excel 的樞紐分析頁（工作表2）· 示範資料採 legacy 202607 分派名單
+                </p>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <button onclick="pivotExpandAll(true)" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50 transition">
+                  <i data-lucide="chevrons-down" class="w-3.5 h-3.5"></i>全部展開
+                </button>
+                <button onclick="pivotExpandAll(false)" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50 transition">
+                  <i data-lucide="chevrons-up" class="w-3.5 h-3.5"></i>全部收合
+                </button>
+                <div class="inline-flex rounded-md border border-border overflow-hidden" role="group" aria-label="計數或佔比切換">
+                  <button id="pv-mode-count" onclick="setPivotMode('count')" class="px-3 py-1.5 text-xs font-medium bg-primary text-white transition">計數</button>
+                  <button id="pv-mode-pct" onclick="setPivotMode('pct')" class="px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition border-l border-border">佔比</button>
+                </div>
+              </div>
+            </div>
+            <!-- pivot 表格（列標籤與表頭固定，欄可橫向捲動） -->
+            <div class="pv-wrap">
+              <table class="pv-table w-full text-sm">
+                <thead id="pivotThead"></thead>
+                <tbody id="pivotTbody"></tbody>
+                <tfoot id="pivotTfoot"></tfoot>
+              </table>
+            </div>
+          </div>
+
+          <!-- footer note -->
+          <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
+            <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+            <div>
+              <p class="font-medium text-gray-700 mb-0.5">關於樞紐分析</p>
+              <p>此交叉表以「案號」計數彙總各部門 / 承辦人員在各名單代號的分派件數，結構與「結果摘要」匯出 Excel 的樞紐分析頁一致。切換「佔比」可檢視占父層比例（部門列為占欄總計、員編列為占所屬部門同欄），空白格代表該員編在該名單無分派案件。</p>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- footer note -->
@@ -584,12 +654,174 @@
 
     // ===== Tab switch =====
     function switchSnapTab(name) {
-      ['config','input','result'].forEach(n => {
+      ['config','input','result','pivot'].forEach(n => {
         document.getElementById('tab-' + n).classList.toggle('active', n === name);
         document.getElementById('tab-' + n).classList.toggle('text-gray-500', n !== name);
         document.getElementById('panel-' + n).classList.toggle('hidden', n !== name);
       });
       lucide.createIcons();
+    }
+
+    // ===== 樞紐分析（Pivot）=====
+    // 列：部門（外層，可展開）→ 員編（內層）；欄：名單代號；值：計數 - 案號
+    // 示範資料採 legacy 202607 分派名單樞紐（工作表2）。每個部門的 colTotals 為該部門各名單的案件數，
+    // 具名員編列 + 「其他 N 位員編」聚合列（= colTotal − 具名列合計），確保列小計 / 欄總計 / 總計皆對得起來。
+    const PIVOT_LISTS = ['OB202607001','OB202607002','OB202607003','OB202607004','OB202607006','OB202607007','OB202607008','OB202607009','OB202607010','OB202607011','OB202607012','OB202607013'];
+    const PIVOT_DEPTS = [
+      { dept: '中區電銷1', otherEmps: 24,
+        colTotals: [3400,2600,2400,2900,380,720,620,1750,1300,1150,1350,1362],
+        emps: [
+          { id: '20501', nm: '王大明', counts: [46,34,32,37,30,59,9,22,null,null,17,24] },
+          { id: '21557', nm: '林淑芬', counts: [360,271,249,300,30,59,62,176,69,61,null,null] },
+          { id: '22159', nm: '陳志明', counts: [446,340,310,374,30,59,76,220,null,null,null,null] },
+        ] },
+      { dept: '北區電銷1', otherEmps: 38,
+        colTotals: [6200,5200,4600,5600,640,1180,1320,3400,1900,1640,1650,1650],
+        emps: [
+          { id: '20988', nm: '張美玲', counts: [780,610,540,690,60,120,140,410,180,150,220,190] },
+          { id: '21744', nm: '李國華', counts: [1020,880,760,940,70,130,160,520,240,210,260,240] },
+        ] },
+      { dept: '南區電銷', otherEmps: 18,
+        colTotals: [2200,1800,1600,2000,240,420,480,1200,680,560,700,660],
+        emps: [
+          { id: '30112', nm: '黃雅婷', counts: [180,150,130,170,20,40,44,110,60,50,64,52] },
+        ] },
+      { dept: '北區電銷2', otherEmps: 12,
+        colTotals: [1560,1280,1120,1420,160,300,340,860,460,380,470,410],
+        emps: [
+          { id: '40233', nm: '吳建宏', counts: [120,100,88,110,14,26,30,72,40,32,42,36] },
+        ] },
+    ];
+
+    let pivotMode = 'count';                 // 'count' | 'pct'
+    const pivotExpanded = new Set([0]);      // 預設展開第一個部門（中區電銷1）
+    const PV_DASH = '<span class="text-gray-300">-</span>';
+
+    const pvDeptTotal   = d => d.colTotals.reduce((s, v) => s + v, 0);
+    const pvNamedColSum = (d, c) => d.emps.reduce((s, e) => s + (e.counts[c] || 0), 0);
+    const pvOthersCell  = (d, c) => d.colTotals[c] - pvNamedColSum(d, c);
+    const pvGrandCol    = c => PIVOT_DEPTS.reduce((s, d) => s + d.colTotals[c], 0);
+    const PIVOT_GRAND   = PIVOT_DEPTS.reduce((s, d) => s + pvDeptTotal(d), 0);
+
+    // 依模式輸出單格：計數 = 千分位；佔比 = value / 父層 * 100（0.0%）
+    function pvVal(v, parent) {
+      if (v == null) return PV_DASH;
+      if (pivotMode === 'pct') return parent ? (v / parent * 100).toFixed(1) + '%' : PV_DASH;
+      return Number(v).toLocaleString();
+    }
+
+    function renderPivot() {
+      const n = PIVOT_LISTS.length;
+      const valLabel = pivotMode === 'pct' ? '佔比 - 案號' : '計數 - 案號';
+
+      // 表頭（單列，sticky top；左上角格 sticky top+left）
+      document.getElementById('pivotThead').innerHTML =
+        '<tr>' +
+        `<th class="pv-head pv-first text-left px-3 py-2 align-bottom">
+           <div class="text-[10px] font-normal text-gray-400" id="pivotCornerLabel">${valLabel}</div>
+           <div class="text-xs font-semibold text-gray-700">部門 / 員編</div>
+         </th>` +
+        PIVOT_LISTS.map(l => `<th class="pv-head px-3 py-2 text-right"><span class="mono-sub text-[11px] font-semibold text-gray-600">${l}</span></th>`).join('') +
+        `<th class="pv-head pv-last px-3 py-2 text-right text-xs font-semibold text-gray-700">總計</th>` +
+        '</tr>';
+
+      // 資料列
+      let rows = '';
+      PIVOT_DEPTS.forEach((d, di) => {
+        const open = pivotExpanded.has(di);
+        const deptTotal = pvDeptTotal(d);
+        const totalEmps = d.emps.length + d.otherEmps;
+
+        // 部門列（可點擊展開／收合）
+        rows += `<tr class="pv-dept-row cursor-pointer" onclick="togglePivotDept(${di})">`;
+        rows += `<td class="pv-first px-3 py-2 text-left">
+            <span class="inline-flex items-center gap-1.5">
+              <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-500 transition-transform" style="transform:rotate(${open ? 90 : 0}deg)"></i>
+              <i data-lucide="building-2" class="w-3.5 h-3.5 text-primary"></i>
+              <span class="text-sm font-semibold text-gray-800">${d.dept}</span>
+              <span class="text-[10px] text-gray-400 font-normal">${totalEmps} 位員編</span>
+            </span>
+          </td>`;
+        for (let c = 0; c < n; c++) {
+          rows += `<td class="px-3 py-2 text-right mono-sub tabular-nums text-xs font-semibold text-gray-700">${pvVal(d.colTotals[c], pvGrandCol(c))}</td>`;
+        }
+        rows += `<td class="pv-last px-3 py-2 text-right mono-sub tabular-nums text-xs font-bold text-gray-800">${pvVal(deptTotal, PIVOT_GRAND)}</td>`;
+        rows += '</tr>';
+
+        if (open) {
+          // 具名員編列
+          d.emps.forEach(e => {
+            const empTotal = e.counts.reduce((s, v) => s + (v || 0), 0);
+            rows += '<tr class="pv-emp-row">';
+            rows += `<td class="pv-first px-3 py-1.5 text-left">
+                <span class="inline-flex items-center gap-1.5 pl-6">
+                  <i data-lucide="user" class="w-3 h-3 text-gray-400 shrink-0"></i>
+                  <span class="mono-sub text-xs text-gray-500">${e.id}</span>
+                  <span class="text-xs text-gray-700">${e.nm || ''}</span>
+                </span>
+              </td>`;
+            for (let c = 0; c < n; c++) {
+              rows += `<td class="px-3 py-1.5 text-right mono-sub tabular-nums text-xs text-gray-600">${pvVal(e.counts[c], d.colTotals[c])}</td>`;
+            }
+            rows += `<td class="pv-last px-3 py-1.5 text-right mono-sub tabular-nums text-xs font-semibold text-gray-700">${pvVal(empTotal, deptTotal)}</td>`;
+            rows += '</tr>';
+          });
+          // 其他員編聚合列
+          if (d.otherEmps > 0) {
+            const namedTotal = d.emps.reduce((s, e) => s + e.counts.reduce((a, v) => a + (v || 0), 0), 0);
+            const othersTotal = deptTotal - namedTotal;
+            rows += '<tr class="pv-other-row">';
+            rows += `<td class="pv-first px-3 py-1.5 text-left">
+                <span class="inline-flex items-center gap-1.5 pl-6 text-xs text-gray-400 italic">
+                  <i data-lucide="more-horizontal" class="w-3 h-3"></i>
+                  其他 ${d.otherEmps} 位員編
+                </span>
+              </td>`;
+            for (let c = 0; c < n; c++) {
+              rows += `<td class="px-3 py-1.5 text-right mono-sub tabular-nums text-xs text-gray-400 italic">${pvVal(pvOthersCell(d, c), d.colTotals[c])}</td>`;
+            }
+            rows += `<td class="pv-last px-3 py-1.5 text-right mono-sub tabular-nums text-xs text-gray-400 italic">${pvVal(othersTotal, deptTotal)}</td>`;
+            rows += '</tr>';
+          }
+        }
+      });
+      document.getElementById('pivotTbody').innerHTML = rows;
+
+      // 總計列
+      let ft = '<tr class="pv-total-row">';
+      ft += `<td class="pv-first px-3 py-2 text-left text-xs font-bold text-gray-800">總計</td>`;
+      for (let c = 0; c < n; c++) {
+        ft += `<td class="px-3 py-2 text-right mono-sub tabular-nums text-xs font-bold text-gray-800">${pvVal(pvGrandCol(c), PIVOT_GRAND)}</td>`;
+      }
+      ft += `<td class="pv-last px-3 py-2 text-right mono-sub tabular-nums text-xs font-bold text-primary">${pivotMode === 'pct' ? '100.0%' : Number(PIVOT_GRAND).toLocaleString()}</td>`;
+      ft += '</tr>';
+      document.getElementById('pivotTfoot').innerHTML = ft;
+
+      lucide.createIcons();
+    }
+
+    function togglePivotDept(di) {
+      if (pivotExpanded.has(di)) pivotExpanded.delete(di); else pivotExpanded.add(di);
+      renderPivot();
+    }
+    function pivotExpandAll(open) {
+      pivotExpanded.clear();
+      if (open) PIVOT_DEPTS.forEach((_, i) => pivotExpanded.add(i));
+      renderPivot();
+    }
+    function setPivotMode(mode) {
+      pivotMode = mode;
+      const count = document.getElementById('pv-mode-count');
+      const pct = document.getElementById('pv-mode-pct');
+      count.classList.toggle('bg-primary', mode === 'count');
+      count.classList.toggle('text-white', mode === 'count');
+      count.classList.toggle('text-gray-600', mode !== 'count');
+      pct.classList.toggle('bg-primary', mode === 'pct');
+      pct.classList.toggle('text-white', mode === 'pct');
+      pct.classList.toggle('text-gray-600', mode !== 'pct');
+      const label = mode === 'pct' ? '佔比 - 案號' : '計數 - 案號';
+      const vl = document.getElementById('pivotValueLabel'); if (vl) vl.textContent = label + (mode === 'pct' ? '（占父層比）' : '');
+      renderPivot(); // renderPivot 會依 pivotMode 重建左上角格標籤
     }
 
     function downloadSnapshot() {
@@ -630,6 +862,7 @@
 
     // init
     renderResultTable();
+    renderPivot();
     switchSnapTab('config');
     lucide.createIcons();
   </script>
