@@ -30,6 +30,7 @@ import { AssignmentRunReportService } from './services/assignment-run-report.ser
 import { MonthlyRunReadinessService } from './services/monthly-run-readiness.service';
 import { TriggerRunDto } from './dto/trigger-run.dto';
 import { ExportQueryDto } from './dto/export-query.dto';
+import { ResultPageQueryDto } from './dto/result-page-query.dto';
 import { SnapshotQueryDto } from './dto/snapshot-query.dto';
 import { CompareRunsQueryDto } from './dto/compare-runs-query.dto';
 import { SystemService } from '@/modules/system/system.service';
@@ -198,6 +199,23 @@ export class AssignmentRunController {
   @Get(':runId/summary')
   async getRunSummary(@Param('runId') runId: string, @Req() req: any) {
     return this.reportService.getSummary(runId, this.toActor(req.user));
+  }
+
+  // -------------------------------------------------------------------------
+  // F066 v1.3 — GET 分派結果友善分頁（對齊 F064 匯出 23 欄）
+  // -------------------------------------------------------------------------
+
+  @Get(':runId/result')
+  async getRunResultPage(
+    @Param('runId') runId: string,
+    @Query() query: ResultPageQueryDto,
+    @Req() req: any,
+  ) {
+    return this.reportService.getResultPage(
+      runId,
+      { page: query.page, pageSize: query.pageSize, q: query.q },
+      this.toActor(req.user),
+    );
   }
 
   // -------------------------------------------------------------------------

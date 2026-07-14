@@ -57,6 +57,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
     getSummary: ReturnType<typeof vi.fn>;
     exportResult: ReturnType<typeof vi.fn>;
     compareRuns: ReturnType<typeof vi.fn>;
+    getResultPage: ReturnType<typeof vi.fn>;
   };
   let currentUser: CurrentUser = null;
   let authShouldThrow401 = false;
@@ -118,6 +119,14 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         configDiff: { cardVersionChanged: null, deptRatioChanges: [], crRuleChanged: null },
         personnelMismatch: { list: [], mismatchCount: 0, totalCount: 0, rate: 0, alert: false },
         customerDiff: { added: [], removed: [] },
+      }),
+      getResultPage: vi.fn().mockResolvedValue({
+        runId: 'run-uuid-1',
+        columns: [{ key: 'applNo', label: '案號' }],
+        rows: [{ applNo: 'A1' }],
+        page: 1,
+        pageSize: 50,
+        total: 1,
       }),
     };
 
@@ -476,6 +485,40 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       currentUser = plain;
       const res = await request(app.getHttpServer()).get(
         '/api/v1/assignment/runs/run-uuid-1/snapshot',
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('GET /runs/:runId/result (F066 v1.3 分派結果分頁)', () => {
+    it('director → getResultPage 帶分頁 + 搜尋參數 + actor', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/result?page=2&pageSize=25&q=A1',
+      );
+      expect(res.status).toBe(200);
+      expect(reportMock.getResultPage).toHaveBeenCalledWith(
+        'run-uuid-1',
+        expect.objectContaining({ page: 2, pageSize: 25, q: 'A1' }),
+        expect.objectContaining({ userId: 'u-director' }),
+      );
+      expect(res.body.columns).toBeDefined();
+      expect(res.body.rows).toBeDefined();
+      expect(res.body.total).toBe(1);
+    });
+
+    it('section_chief → 200（scope 縮小，不 403）', async () => {
+      currentUser = sectionChief;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/result',
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it('plain user → 403', async () => {
+      currentUser = plain;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/result',
       );
       expect(res.status).toBe(403);
     });

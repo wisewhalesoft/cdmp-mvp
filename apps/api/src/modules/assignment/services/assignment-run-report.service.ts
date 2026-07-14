@@ -155,6 +155,59 @@ export interface FormattedExportRow {
 }
 
 /**
+ * F066 v1.3 §5.3：分派結果分頁端點欄位 key（camelCase），順序**嚴格對齊** `EXPORT_HEADER_V2`
+ * （23 欄）。前端據此渲染友善表格；rows 以本 key 建物件。與 `EXPORT_HEADER_V2` 一一對應，
+ * 任一邊改動另一邊同步（長度相等由 getResultPage 單元測試 TC-RESULTPAGE-001 守住）。
+ */
+export const RESULT_COLUMN_KEYS = [
+  'branchName', // 1  分處（pool.dept_name）
+  'applNo', // 2  案號
+  'assignday', // 3  指派日
+  'listNo', // 4  名單代號
+  'listNm', // 5  名單名稱
+  'applDate', // 6  進件日
+  'crId', // 7  CR_ID
+  'crNm', // 8  CR_NM
+  'isCr', // 9  是否分配CR
+  'tierLevel', // 10 TIER
+  'deptId', // 11 部門代號
+  'deptName', // 12 部門名稱（emphire）
+  'emplid', // 13 員編
+  'empNm', // 14 姓名
+  'titleName', // 15 職級
+  'projectTp', // 16 專案類別
+  'specName', // 17 專案名稱
+  'overdueDay', // 18 逾期天數
+  'proRate', // 19 客戶利率
+  'staCode', // 20 STA_CODE
+  'staCodeNa', // 21 案件狀態
+  'brandName', // 22 廠牌名稱
+  'monthCnt', // 23 名單週期月數
+] as const;
+
+/** getResultPage 查詢參數（F066 §5.3）。 */
+export interface ResultPageParams {
+  page?: number;
+  pageSize?: number;
+  /** 搜尋字串：比對 r.custo_no / r.emplid / r.appl_no（皆位於 ob_monthly_run_result）。 */
+  q?: string;
+}
+
+/** getResultPage 回應（F066 §5.3）。rows 以 RESULT_COLUMN_KEYS 為 key。 */
+export interface ResultPageResponse {
+  runId: string;
+  columns: Array<{ key: string; label: string }>;
+  rows: Array<Record<string, string>>;
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+/** F066 §5.3：pageSize 預設與上限。 */
+const RESULT_PAGE_DEFAULT_SIZE = 50;
+const RESULT_PAGE_MAX_SIZE = 200;
+
+/**
  * F108 / AD-E07-v3.7 §2：樞紐分析聚合結構（部門名稱 × 員編 × 名單代號 計數）。
  *
  * I-PIV-MEM-01：記憶體中**只保留小型聚合計數**（部門 × 員編 × 名單代號量級），
@@ -282,6 +335,129 @@ export class AssignmentRunReportService {
     // F064 v2.0 / AD-E07-31：匯出多表 join 下推 + server-side cursor streaming（I-EXP-STREAM-01）
     private readonly dataSource: DataSource,
   ) {}
+
+  // -------------------------------------------------------------------------
+  // F066 v1.3 §5.3 — 分派結果友善分頁（對齊 F064 匯出 23 欄）
+  // -------------------------------------------------------------------------
+
+  /**
+   * getResultPage — 分派結果分頁讀取（F066 §5.3 / AC-8）。
+   *
+   * 重用 F064 匯出之 join 血緣（ob_monthly_run_result r INNER JOIN ob_pool_data o
+   * + LEFT JOIN ob_emphire e / ob_list_definition d）、`EXPORT_HEADER_V2`（欄標籤）與
+   * `formatRow()`（欄值格式），使畫面與匯出 Excel 逐欄一致。
+   *
+   * - 排序固定 (list_no, orgno, appl_no)，與匯出 I-EXP-DET-01 一致。
+   * - 分頁採 QueryBuilder limit/offset（dialect 自動：mssql OFFSET/FETCH、sqlite LIMIT/OFFSET）。
+   * - `total` 以 `COUNT(*)` over r（+ scope + 搜尋）計；搜尋欄位皆在 r 上，免 join 巨量 pool 表。
+   * - 搜尋 q 精確比對 r.custo_no / r.emplid / r.appl_no。
+   * - 處長走 scopeByCreator（r.emplid IN (...)；無轄區 → total=0 + 空 rows，回 200 不 403，同 BR-6）。
+   * - run 不存在 → 404 ASSIGNMENT_RUN_NOT_FOUND（AC-5）。
+   */
+  async getResultPage(
+    runId: string,
+    params: ResultPageParams,
+    actor?: ActorUser | null,
+  ): Promise<ResultPageResponse> {
+    const run = await this.runRepo.findOne({ where: { run_id: runId } });
+    if (!run) {
+      throw new NotFoundException({
+        error: ERROR_CODES.ASSIGNMENT_RUN_NOT_FOUND,
+        message: ERROR_MESSAGES.ASSIGNMENT_RUN_NOT_FOUND,
+      });
+    }
+
+    const page = Math.max(1, Math.floor(params.page ?? 1));
+    const pageSize = Math.min(
+      RESULT_PAGE_MAX_SIZE,
+      Math.max(1, Math.floor(params.pageSize ?? RESULT_PAGE_DEFAULT_SIZE)),
+    );
+    const q = params.q?.trim();
+
+    // 處長轄區 emplid（一次取得，count / page 共用）；null = 不過濾（部長 / admin）。
+    let scopeEmplIds: string[] | null = null;
+    if (this.scope.shouldFilter(actor)) {
+      scopeEmplIds = [...(await this.scope.getScopeEmplIds(actor!.userId))];
+    }
+
+    const repo = this.dataSource.getRepository(ObMonthlyRunResult);
+    const applyFilters = (qb: SelectQueryBuilder<ObMonthlyRunResult>) => {
+      qb.where('r.run_id = :runId', { runId });
+      if (scopeEmplIds !== null) {
+        if (scopeEmplIds.length === 0) {
+          qb.andWhere('1 = 0'); // 無轄區 → 永不匹配（回 total=0，不 403；BR-6）
+        } else {
+          qb.andWhere('r.emplid IN (:...emplIds)', { emplIds: scopeEmplIds });
+        }
+      }
+      if (q) {
+        qb.andWhere('(r.custo_no = :q OR r.emplid = :q OR r.appl_no = :q)', { q });
+      }
+      return qb;
+    };
+
+    // total：僅數 r（血緣保證每列必有對應 ob_pool_data，INNER JOIN 不減列），免 join 巨量 pool。
+    const total = await applyFilters(repo.createQueryBuilder('r')).getCount();
+
+    // I-EXP-APLDATE-FMT-01：進件日於 SQL 端字串化（mssql），繞開時區 getter 歧義；sqlite 走裸欄。
+    const applDateExpr =
+      this.dataSource.options.type === 'mssql'
+        ? 'CONVERT(varchar(10), o.appl_date, 120)'
+        : 'o.appl_date';
+
+    const pageQb = applyFilters(
+      repo
+        .createQueryBuilder('r')
+        .innerJoin('ob_pool_data', 'o', 'o.orgno = r.orgno AND o.appl_no = r.appl_no')
+        .leftJoin('ob_emphire', 'e', 'e.emp_id = r.emplid')
+        .leftJoin('ob_list_definition', 'd', 'd.list_no = r.list_no'),
+    )
+      .select('o.dept_name', 'dept_name')
+      .addSelect('r.appl_no', 'appl_no')
+      .addSelect('r.assignday', 'assignday')
+      .addSelect('r.list_no', 'list_no')
+      .addSelect('d.list_nm', 'list_nm')
+      .addSelect(applDateExpr, 'appl_date')
+      .addSelect('r.cr_id', 'cr_id')
+      .addSelect('r.cr_nm', 'cr_nm')
+      .addSelect('r.is_cr', 'is_cr')
+      .addSelect('r.tier_level', 'tier_level')
+      .addSelect('r.dept_id', 'dept_id')
+      .addSelect('e.dept_name', 'emphire_dept_name')
+      .addSelect('r.emplid', 'emplid')
+      .addSelect('e.emp_nm', 'emp_nm')
+      .addSelect('e.title_name', 'title_name')
+      .addSelect('o.project_tp', 'project_tp')
+      .addSelect('o.spec_name', 'spec_name')
+      .addSelect('o.overdue_day', 'overdue_day')
+      .addSelect('o.pro_rate', 'pro_rate')
+      .addSelect('o.sta_code', 'sta_code')
+      .addSelect('o.sta_code_na', 'sta_code_na')
+      .addSelect('o.brand_name', 'brand_name')
+      .addSelect('o.month_cnt', 'month_cnt')
+      .orderBy('r.list_no', 'ASC')
+      .addOrderBy('r.orgno', 'ASC')
+      .addOrderBy('r.appl_no', 'ASC')
+      .limit(pageSize)
+      .offset((page - 1) * pageSize);
+
+    const raw = await pageQb.getRawMany<RawExportRow>();
+
+    const columns = RESULT_COLUMN_KEYS.map((key, i) => ({
+      key,
+      label: EXPORT_HEADER_V2[i],
+    }));
+    const rows = raw.map((rr) => {
+      const formatted = this.formatRow(rr).row;
+      const obj: Record<string, string> = {};
+      RESULT_COLUMN_KEYS.forEach((key, i) => {
+        obj[key] = formatted[i];
+      });
+      return obj;
+    });
+
+    return { runId, columns, rows, page, pageSize, total };
+  }
 
   // -------------------------------------------------------------------------
   // F063 結果摘要
