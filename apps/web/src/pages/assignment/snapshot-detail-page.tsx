@@ -4,6 +4,7 @@ import {
   FileText,
   ListChecks,
   BarChart3,
+  Table2,
   AlertTriangle,
   Lock,
   Download,
@@ -26,7 +27,11 @@ import {
 } from './_components/snapshot-config-view';
 import { SnapshotInputSummary } from './_components/snapshot-input-summary';
 import { SnapshotResultTable } from './_components/snapshot-result-table';
+import { SnapshotPivotView } from './_components/snapshot-pivot-view';
 import { RunPageBreadcrumb } from './_components/run-page-breadcrumb';
+
+/** UI 分頁鍵：三種快照型別 + 樞紐分析（F116，非快照型別）。 */
+type TabKey = SnapshotType | 'pivot';
 
 /**
  * F066 v1.3 — 月名單分派快照詳情頁（對齊 prototype 35-snapshot-detail.html）
@@ -44,7 +49,7 @@ import { RunPageBreadcrumb } from './_components/run-page-breadcrumb';
  */
 
 const TAB_META: Record<
-  SnapshotType,
+  TabKey,
   { label: string; icon: typeof FileText; description: string }
 > = {
   config: {
@@ -61,6 +66,11 @@ const TAB_META: Record<
     label: '分派結果',
     icon: BarChart3,
     description: '本次分派完成後每位客戶對應到的承辦人員（欄位與「結果摘要」匯出 Excel 一致）。',
+  },
+  pivot: {
+    label: '樞紐分析',
+    icon: Table2,
+    description: '各部門／承辦人員 × 名單代號 的分派案件數交叉表（對應「結果摘要」匯出樞紐分析頁）。',
   },
 };
 
@@ -98,9 +108,9 @@ export function SnapshotDetailPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const runId = searchParams.get('runId') ?? '';
-  const initialType = (searchParams.get('type') as SnapshotType) || 'config';
+  const initialType = (searchParams.get('type') as TabKey) || 'config';
 
-  const [activeType, setActiveType] = useState<SnapshotType>(initialType);
+  const [activeType, setActiveType] = useState<TabKey>(initialType);
   const [run, setRun] = useState<RunProgressResponse | null>(null);
   const [summary, setSummary] = useState<RunSummaryResponse | null>(null);
 
@@ -190,7 +200,7 @@ export function SnapshotDetailPage() {
     };
   }, [activeType, runId, inputPayload]);
 
-  const selectTab = (type: SnapshotType) => {
+  const selectTab = (type: TabKey) => {
     setActiveType(type);
     const next = new URLSearchParams(searchParams);
     next.set('type', type);
@@ -205,7 +215,7 @@ export function SnapshotDetailPage() {
   const downloadPayload =
     activeType === 'config' ? configPayload : activeType === 'input_list' ? inputPayload : null;
 
-  const tabCount = (t: SnapshotType): number | null => {
+  const tabCount = (t: TabKey): number | null => {
     if (t === 'input_list') {
       return summary?.stage1Count ?? (inputPayload?.cases?.length ?? null);
     }
@@ -330,7 +340,7 @@ export function SnapshotDetailPage() {
             className="px-5 border-b border-gray-200 flex items-center gap-1"
             data-testid="snapshot-tabs"
           >
-            {(['config', 'input_list', 'result'] as const).map((t) => {
+            {(['config', 'input_list', 'result', 'pivot'] as const).map((t) => {
               const cfg = TAB_META[t];
               const Icon = cfg.icon;
               const isActive = activeType === t;
@@ -415,6 +425,9 @@ export function SnapshotDetailPage() {
             {activeType === 'result' && (
               <SnapshotResultTable runId={runId} summary={summary} />
             )}
+
+            {/* 樞紐分析 */}
+            {activeType === 'pivot' && <SnapshotPivotView runId={runId} />}
           </div>
         </div>
 

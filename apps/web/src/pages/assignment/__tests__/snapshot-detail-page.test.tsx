@@ -23,6 +23,7 @@ const mockedGetSnapshot = vi.mocked(runApi.getSnapshotByType);
 const mockedGetRun = vi.mocked(runApi.getRun);
 const mockedGetRunSummary = vi.mocked(runApi.getRunSummary);
 const mockedGetResultPage = vi.mocked(runApi.getResultPage);
+const mockedGetPivot = vi.mocked(runApi.getPivot);
 const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
@@ -110,11 +111,25 @@ describe('SnapshotDetailPage (F066 v1.3)', () => {
       pageSize: 50,
       total: 1,
     });
+    mockedGetPivot.mockResolvedValue({
+      runId: 'R001',
+      listNos: ['OB1'],
+      depts: [
+        {
+          deptName: '中區電銷1',
+          total: 3,
+          byList: { OB1: 3 },
+          emplids: [{ emplid: '20501', empNm: '王大明', total: 3, byList: { OB1: 3 } }],
+        },
+      ],
+      grandByList: { OB1: 3 },
+      grandTotal: 3,
+    });
   });
 
   afterEach(() => cleanup());
 
-  it('3 個分頁（設定快照 / 輸入名單 / 分派結果）渲染', async () => {
+  it('4 個分頁（設定快照 / 輸入名單 / 分派結果 / 樞紐分析）渲染', async () => {
     mockedGetSnapshot.mockResolvedValue(snap('config', { listDefinitions: [] }));
     renderPage();
     await waitFor(() =>
@@ -123,6 +138,17 @@ describe('SnapshotDetailPage (F066 v1.3)', () => {
     expect(screen.getByTestId('snapshot-tab-config')).toBeInTheDocument();
     expect(screen.getByTestId('snapshot-tab-input_list')).toBeInTheDocument();
     expect(screen.getByTestId('snapshot-tab-result')).toBeInTheDocument();
+    expect(screen.getByTestId('snapshot-tab-pivot')).toBeInTheDocument();
+  });
+
+  it('點樞紐分析分頁 → 呼叫 getPivot 並呈現交叉表', async () => {
+    mockedGetSnapshot.mockResolvedValue(snap('config', {}));
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('snapshot-tab-pivot')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('snapshot-tab-pivot'));
+    await waitFor(() => expect(mockedGetPivot).toHaveBeenCalledWith('R001'));
+    await waitFor(() => expect(screen.getByTestId('snapshot-pivot-view')).toBeInTheDocument());
+    expect(screen.getByText('中區電銷1')).toBeInTheDocument();
   });
 
   it('預設載入 config snapshot 並以正規化 view 呈現', async () => {

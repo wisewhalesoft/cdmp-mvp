@@ -556,6 +556,38 @@ export async function getResultPage(
 }
 
 // =====================================================================
+// F116 — GET 樞紐分析（部門名稱 × 員編 × 名單代號 案號計數）
+// =====================================================================
+
+export interface PivotEmplidNode {
+  emplid: string;
+  empNm: string | null;
+  total: number;
+  byList: Record<string, number>;
+}
+export interface PivotDeptNode {
+  deptName: string;
+  total: number;
+  byList: Record<string, number>;
+  emplids: PivotEmplidNode[];
+}
+export interface PivotResponse {
+  runId: string;
+  listNos: string[];
+  depts: PivotDeptNode[];
+  grandByList: Record<string, number>;
+  grandTotal: number;
+}
+
+/** F116：樞紐分析聚合（只回計數；佔比由前端換算）。 */
+export async function getPivot(runId: string): Promise<PivotResponse> {
+  const response = await apiClient.get<PivotResponse>(
+    `/assignment/runs/${runId}/pivot`,
+  );
+  return response.data;
+}
+
+// =====================================================================
 // F115 — 分派結果回寫外部 OBPOOLDATA_LIST（預覽 + 執行）
 // =====================================================================
 
