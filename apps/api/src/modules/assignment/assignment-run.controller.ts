@@ -31,7 +31,9 @@ import { MonthlyRunReadinessService } from './services/monthly-run-readiness.ser
 import { TriggerRunDto } from './dto/trigger-run.dto';
 import { ExportQueryDto } from './dto/export-query.dto';
 import { ResultPageQueryDto } from './dto/result-page-query.dto';
+import { WritebackExecuteDto } from './dto/writeback-execute.dto';
 import { SnapshotQueryDto } from './dto/snapshot-query.dto';
+import { ObpooldataWritebackService } from './services/obpooldata-writeback.service';
 import { CompareRunsQueryDto } from './dto/compare-runs-query.dto';
 import { SystemService } from '@/modules/system/system.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
@@ -67,6 +69,7 @@ export class AssignmentRunController {
     private readonly reportService: AssignmentRunReportService,
     private readonly readinessService: MonthlyRunReadinessService,
     private readonly systemService: SystemService,
+    private readonly writebackService: ObpooldataWritebackService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -216,6 +219,41 @@ export class AssignmentRunController {
       { page: query.page, pageSize: query.pageSize, q: query.q },
       this.toActor(req.user),
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // F115 — 分派結果回寫外部 OBPOOLDATA_LIST（部長專屬；預覽 + 二次確認）
+  // -------------------------------------------------------------------------
+
+  @Post(':runId/writeback/preview')
+  @HttpCode(HttpStatus.OK)
+  @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
+  async writebackPreview(@Param('runId') runId: string, @Req() req: any) {
+    return this.writebackService.preview(runId, this.toWritebackActor(req.user));
+  }
+
+  @Post(':runId/writeback')
+  @HttpCode(HttpStatus.OK)
+  @RequireDirector()
+  @RequireFeatureFlag('ENABLE_E07_REFACTOR_PHASE3')
+  async writebackExecute(
+    @Param('runId') runId: string,
+    @Body() dto: WritebackExecuteDto,
+    @Req() req: any,
+  ) {
+    return this.writebackService.execute(
+      runId,
+      { confirm: dto.confirm },
+      this.toWritebackActor(req.user),
+    );
+  }
+
+  private toWritebackActor(
+    user: any,
+  ): { userId: string; name?: string | null } | null {
+    if (!user || !user.userId) return null;
+    return { userId: user.userId, name: user.name ?? user.userId };
   }
 
   // -------------------------------------------------------------------------

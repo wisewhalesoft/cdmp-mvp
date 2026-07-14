@@ -23,6 +23,7 @@ export class AssignmentAuditLog {
   // P1 B6 / F064 AC-5 / 2026-05-17：補 EXPORT（分派結果匯出稽核）
   // F062 / Phase 2 / 2026-05-17：補 CANCEL（月名單分派取消稽核）
   // F054 v1.3 / 2026-05-18：補 SCORING_INTEGRITY_WARN（計分設定完整性稽核警告，25 chars，仍在 VARCHAR(30) 內）
+  // F115 / 2026-07-14：補 WRITEBACK（分派結果回寫外部 OBPOOLDATA_LIST 稽核；9 chars，VARCHAR(30) 內，無需 migration）
   @Column({ name: 'action', type: 'varchar', length: 30 })
   action:
     | 'CREATE'
@@ -36,7 +37,8 @@ export class AssignmentAuditLog {
     | 'STAGE_REJECT'
     | 'ASSIGN_ROLE'
     | 'REVOKE_ROLE'
-    | 'SCORING_INTEGRITY_WARN';
+    | 'SCORING_INTEGRITY_WARN'
+    | 'WRITEBACK';
 
   @Column({ name: 'actor_id', type: uuidColumnType })
   actor_id: string;

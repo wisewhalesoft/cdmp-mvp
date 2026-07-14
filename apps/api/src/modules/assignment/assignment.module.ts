@@ -24,6 +24,7 @@ import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
 import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
 import { User } from '@/database/entities/user.entity';
 import { TokenBlocklist } from '@/database/entities/token-blocklist.entity';
+import { Datasource } from '@/database/entities/datasource.entity';
 import { AssignmentRunGuardService } from './services/assignment-run-guard.service';
 import { MonthlyRunReadinessService } from './services/monthly-run-readiness.service';
 import { StageTransitionService } from './services/stage-transition.service';
@@ -31,6 +32,7 @@ import { AssignmentRunService } from './services/assignment-run.service';
 import { AssignmentRunPipelineService } from './services/assignment-run-pipeline.service';
 import { AssignmentRunSnapshotService } from './services/assignment-run-snapshot.service';
 import { AssignmentRunReportService } from './services/assignment-run-report.service';
+import { ObpooldataWritebackService } from './services/obpooldata-writeback.service';
 import { SectionChiefScopeService } from './services/section-chief-scope.service';
 import { AssignmentRunController } from './assignment-run.controller';
 import { AssignmentScoringModule } from '@/modules/assignment-scoring/assignment-scoring.module';
@@ -73,6 +75,7 @@ import { runQueueTuningProvider } from './queue/run-queue-tuning.provider';
       EtlPipelineVersion,
       User,
       TokenBlocklist,
+      Datasource,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],
@@ -91,6 +94,7 @@ import { runQueueTuningProvider } from './queue/run-queue-tuning.provider';
     AssignmentRunPipelineService,
     AssignmentRunSnapshotService,
     AssignmentRunReportService,
+    ObpooldataWritebackService,
     AssignmentRunGuardService,
     MonthlyRunReadinessService,
     StageTransitionService,

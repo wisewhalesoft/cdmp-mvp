@@ -23,6 +23,7 @@ import { AssignmentRunController } from '../assignment-run.controller';
 import { AssignmentRunService } from '../services/assignment-run.service';
 import { AssignmentRunSnapshotService } from '../services/assignment-run-snapshot.service';
 import { AssignmentRunReportService } from '../services/assignment-run-report.service';
+import { ObpooldataWritebackService } from '../services/obpooldata-writeback.service';
 import { MonthlyRunReadinessService } from '../services/monthly-run-readiness.service';
 import { SystemService } from '@/modules/system/system.service';
 import { AuthGuard } from '@/common/guards/auth.guard';
@@ -62,6 +63,7 @@ describe('POST /assignment/runs — F097 workYm + 過去月 guard', () => {
         { provide: AssignmentRunService, useValue: { triggerRun: triggerRunMock } },
         { provide: AssignmentRunSnapshotService, useValue: {} },
         { provide: AssignmentRunReportService, useValue: {} },
+        { provide: ObpooldataWritebackService, useValue: {} },
         {
           provide: MonthlyRunReadinessService,
           useValue: { calculateReadiness: vi.fn() },

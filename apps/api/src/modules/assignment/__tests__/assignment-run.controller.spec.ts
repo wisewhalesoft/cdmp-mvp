@@ -27,6 +27,7 @@ import { AssignmentRunController } from '../assignment-run.controller';
 import { AssignmentRunService } from '../services/assignment-run.service';
 import { AssignmentRunSnapshotService } from '../services/assignment-run-snapshot.service';
 import { AssignmentRunReportService } from '../services/assignment-run-report.service';
+import { ObpooldataWritebackService } from '../services/obpooldata-writeback.service';
 import { MonthlyRunReadinessService } from '../services/monthly-run-readiness.service';
 import { SystemService } from '@/modules/system/system.service';
 import { AuthGuard } from '@/common/guards/auth.guard';
@@ -58,6 +59,10 @@ describe('AssignmentRunController — RBAC + Routes', () => {
     exportResult: ReturnType<typeof vi.fn>;
     compareRuns: ReturnType<typeof vi.fn>;
     getResultPage: ReturnType<typeof vi.fn>;
+  };
+  let writebackMock: {
+    preview: ReturnType<typeof vi.fn>;
+    execute: ReturnType<typeof vi.fn>;
   };
   let currentUser: CurrentUser = null;
   let authShouldThrow401 = false;
@@ -129,6 +134,22 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         total: 1,
       }),
     };
+    writebackMock = {
+      preview: vi.fn().mockResolvedValue({
+        runId: 'run-uuid-1',
+        totalToWrite: 2,
+        byListNo: [{ listNo: 'OB1', count: 2 }],
+        sample: [],
+        notMatched: null,
+        connectionAvailable: true,
+      }),
+      execute: vi.fn().mockResolvedValue({
+        runId: 'run-uuid-1',
+        updated: 2,
+        notMatched: 0,
+        byListNo: [{ listNo: 'OB1', count: 2 }],
+      }),
+    };
 
     process.env.OVERRIDE_CURRENT_WORK_YM = '202605';
 
@@ -138,6 +159,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         { provide: AssignmentRunService, useValue: serviceMock },
         { provide: AssignmentRunSnapshotService, useValue: snapshotMock },
         { provide: AssignmentRunReportService, useValue: reportMock },
+        { provide: ObpooldataWritebackService, useValue: writebackMock },
         {
           provide: MonthlyRunReadinessService,
           useValue: {
@@ -520,6 +542,52 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       const res = await request(app.getHttpServer()).get(
         '/api/v1/assignment/runs/run-uuid-1/result',
       );
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('POST /runs/:runId/writeback (F115 回寫 OBPOOLDATA_LIST)', () => {
+    it('director preview → writeback.preview', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).post(
+        '/api/v1/assignment/runs/run-uuid-1/writeback/preview',
+      );
+      expect(res.status).toBe(200);
+      expect(writebackMock.preview).toHaveBeenCalledWith(
+        'run-uuid-1',
+        expect.objectContaining({ userId: 'u-director' }),
+      );
+      expect(res.body.totalToWrite).toBe(2);
+      expect(res.body.connectionAvailable).toBe(true);
+    });
+
+    it('director execute confirm=true → writeback.execute', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/runs/run-uuid-1/writeback')
+        .send({ confirm: true });
+      expect(res.status).toBe(200);
+      expect(writebackMock.execute).toHaveBeenCalledWith(
+        'run-uuid-1',
+        { confirm: true },
+        expect.objectContaining({ userId: 'u-director' }),
+      );
+      expect(res.body.updated).toBe(2);
+    });
+
+    it('section_chief → 403（部長專屬）', async () => {
+      currentUser = sectionChief;
+      const res = await request(app.getHttpServer()).post(
+        '/api/v1/assignment/runs/run-uuid-1/writeback/preview',
+      );
+      expect(res.status).toBe(403);
+    });
+
+    it('plain user → 403', async () => {
+      currentUser = plain;
+      const res = await request(app.getHttpServer())
+        .post('/api/v1/assignment/runs/run-uuid-1/writeback')
+        .send({ confirm: true });
       expect(res.status).toBe(403);
     });
   });
