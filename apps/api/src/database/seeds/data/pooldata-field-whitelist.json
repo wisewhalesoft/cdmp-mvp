@@ -30,28 +30,8 @@
     "updated_at": "2026-07-13T00:00:00.000Z"
   },
   {
-    "column_name": "phone_coll_times",
-    "display_name": "電催次數",
-    "field_type": "numeric",
-    "is_active": true,
-    "data_source": "customer_financial",
-    "is_system_fixed": false,
-    "created_at": "2026-07-13T00:00:00.000Z",
-    "updated_at": "2026-07-13T00:00:00.000Z"
-  },
-  {
     "column_name": "legal_coll_case_cnt",
     "display_name": "法催件數",
-    "field_type": "numeric",
-    "is_active": true,
-    "data_source": "customer_financial",
-    "is_system_fixed": false,
-    "created_at": "2026-07-13T00:00:00.000Z",
-    "updated_at": "2026-07-13T00:00:00.000Z"
-  },
-  {
-    "column_name": "legal_coll_times",
-    "display_name": "法催次數",
     "field_type": "numeric",
     "is_active": true,
     "data_source": "customer_financial",

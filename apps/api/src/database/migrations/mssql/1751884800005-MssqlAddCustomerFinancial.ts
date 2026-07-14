@@ -26,9 +26,7 @@ export class MssqlAddCustomerFinancial1751884800005 implements MigrationInterfac
         `"has_guarantor" varchar(1), ` +
         `"guarantor_count" int, ` +
         `"phone_coll_case_cnt" int, ` +
-        `"phone_coll_times" int, ` +
         `"legal_coll_case_cnt" int, ` +
-        `"legal_coll_times" int, ` +
         `"midterm_case_cnt" int, ` +
         `"matured_case_cnt" int, ` +
         `"settled_case_cnt" int, ` +

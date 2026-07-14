@@ -9,10 +9,8 @@
   欄位定義
     has_guarantor        有無保人（保人列數 > 0 → 'Y'）
     guarantor_count      保人數量  = COUNT(*) ZZIP_BAMGUARD_M（經案件橋接，不去重、不排除）
-    phone_coll_case_cnt  電催件數  = 該客戶有幾件案曾發生電催（案件層）
-    phone_coll_times     電催次數  = 期數層累加（每期 DELAY_DAY 8–30 → +1）
-    legal_coll_case_cnt  法催件數  = 該客戶有幾件案曾發生法催（案件層）
-    legal_coll_times     法催次數  = 期數層累加（每期 DELAY_DAY >= 31 → +1）
+    phone_coll_case_cnt  電催件數  = 該客戶有幾件案曾發生電催（案件層；每案任一期 DELAY_DAY 8–30）
+    legal_coll_case_cnt  法催件數  = 該客戶有幾件案曾發生法催（案件層；每案任一期 DELAY_DAY >= 31）
     midterm_case_cnt     期中件數  = STA_CODE 05–89
     matured_case_cnt     滿期件數  = STA_CODE = 90
     settled_case_cnt     中結件數  = STA_CODE 91–98
@@ -52,20 +50,16 @@ guarantor AS (          -- 保人：經案件橋接的保人列數（COUNT(*)，
     JOIN appl a ON a.APPL_NO = g.APPL_NO
     GROUP BY a.CUSTO_NO
 ),
-coll_case AS (          -- 電/法催：先逐案分桶（ARRETURNDF 一案一期一列）
+coll_case AS (          -- 電/法催：先逐案判定是否曾發生（ARRETURNDF 一案一期一列）
     SELECT r.APPL_NO,
-        SUM(CASE WHEN r.DELAY_DAY >= 8 AND r.DELAY_DAY <= 30 THEN 1 ELSE 0 END) AS phone_times,
-        SUM(CASE WHEN r.DELAY_DAY >= 31                      THEN 1 ELSE 0 END) AS legal_times,
         MAX(CASE WHEN r.DELAY_DAY >= 8 AND r.DELAY_DAY <= 30 THEN 1 ELSE 0 END) AS has_phone,
         MAX(CASE WHEN r.DELAY_DAY >= 31                      THEN 1 ELSE 0 END) AS has_legal
     FROM ZZIPPROD.dbo.ARRETURNDF r WITH (NOLOCK)
     WHERE r.ORGNO = '02'
     GROUP BY r.APPL_NO
 ),
-coll AS (               -- 電/法催：再彙總到客戶
+coll AS (               -- 電/法催件數：再彙總到客戶（曾發生電/法催之案件數）
     SELECT a.CUSTO_NO,
-        SUM(cc.phone_times) AS phone_coll_times,
-        SUM(cc.legal_times) AS legal_coll_times,
         SUM(cc.has_phone)   AS phone_coll_case_cnt,
         SUM(cc.has_legal)   AS legal_coll_case_cnt
     FROM coll_case cc
@@ -77,10 +71,8 @@ SELECT
     c.CUSTO_NO,
     CASE WHEN ISNULL(g.guarantor_count,0) > 0 THEN 'Y' ELSE 'N' END AS has_guarantor,      -- 有無保人
     ISNULL(g.guarantor_count,0)      AS guarantor_count,      -- 保人數量
-    ISNULL(cl.phone_coll_case_cnt,0) AS phone_coll_case_cnt,  -- 電催件數
-    ISNULL(cl.phone_coll_times,0)    AS phone_coll_times,     -- 電催次數
-    ISNULL(cl.legal_coll_case_cnt,0) AS legal_coll_case_cnt,  -- 法催件數
-    ISNULL(cl.legal_coll_times,0)    AS legal_coll_times,     -- 法催次數
+    ISNULL(cl.phone_coll_case_cnt,0) AS phone_coll_case_cnt,  -- 電催件數 (DELAY_DAY 8-30)
+    ISNULL(cl.legal_coll_case_cnt,0) AS legal_coll_case_cnt,  -- 法催件數 (DELAY_DAY >=31)
     ISNULL(s.midterm_case_cnt,0)     AS midterm_case_cnt,     -- 期中件數    (STA 05-89)
     ISNULL(s.matured_case_cnt,0)     AS matured_case_cnt,     -- 滿期件數    (STA 90)
     ISNULL(s.settled_case_cnt,0)     AS settled_case_cnt,     -- 中結件數    (STA 91-98)

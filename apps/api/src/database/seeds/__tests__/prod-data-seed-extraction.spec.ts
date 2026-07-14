@@ -269,7 +269,7 @@ describe('新增 seed 資料檔（帳號 / 篩選欄位 / 202607 名單）', () 
 
   it('篩選欄位：whitelist 19 + option 454（以 dev CDMP 為 ground truth；已移除 brand_no/list_type/sta_code_na）', () => {
     const wl = loadJson<any>('pooldata-field-whitelist.json');
-    expect(wl).toHaveLength(29);
+    expect(wl).toHaveLength(27);
     // 已硬刪除的欄位不得再出現
     const removed = ['brand_no', 'list_type', 'sta_code_na'];
     expect(wl.some((w) => removed.includes(w.column_name))).toBe(false);

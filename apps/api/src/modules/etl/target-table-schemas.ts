@@ -174,11 +174,9 @@ export const TARGET_TABLE_SCHEMAS: TargetTableSchema[] = [
       { name: 'has_guarantor', type: 'VARCHAR(1)', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'B', description: '有無保人（Y/N）' },
       { name: 'guarantor_count', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'B', description: '保人數量（經案件橋接之保人列數）' },
 
-      // C. 催收 (4)
-      { name: 'phone_coll_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '電催件數（曾發生電催之案件數）' },
-      { name: 'phone_coll_times', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '電催次數（各期 DELAY_DAY 8–30 累計）' },
-      { name: 'legal_coll_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '法催件數（曾發生法催之案件數）' },
-      { name: 'legal_coll_times', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '法催次數（各期 DELAY_DAY ≥31 累計）' },
+      // C. 催收 (2)
+      { name: 'phone_coll_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '電催件數（曾發生電催之案件數，DELAY_DAY 8–30）' },
+      { name: 'legal_coll_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'C', description: '法催件數（曾發生法催之案件數，DELAY_DAY ≥31）' },
 
       // D. 案件狀態件數 (4，互斥級距 STA_CODE)
       { name: 'midterm_case_cnt', type: 'INT', nullable: true, isPrimaryKey: false, isEtlTracking: false, category: 'D', description: '期中件數（STA_CODE 05–89）' },

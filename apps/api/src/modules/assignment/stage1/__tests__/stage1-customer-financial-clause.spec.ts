@@ -3,9 +3,9 @@
  *
  * 純函式（不依賴 DB / customer_financial 表）；驗證：
  *   - DATASRC：resolveConditionDataSource 對 customer_financial 之固化值優先 + 靜態 Set fallback
- *   - STATIC：CUSTOMER_FINANCIAL_COLUMN_NAMES 10 欄、與 customer_core 集合不交集、檔案/export 存在
+ *   - STATIC：CUSTOMER_FINANCIAL_COLUMN_NAMES 8 欄、與 customer_core 集合不交集、檔案/export 存在
  *   - CAT：has_guarantor IN fragment
- *   - NUM：件數/次數 BETWEEN fragment + min/max 缺一 → INCOMPLETE_NUMERIC_RANGE
+ *   - NUM：件數 BETWEEN fragment + min/max 缺一 → INCOMPLETE_NUMERIC_RANGE
  *   - JOIN：條件式單一 JOIN + baseAlias、cf 前綴命名空間
  *   - NULLEXC：原始碼不含 COALESCE(cf.*)
  */
@@ -45,7 +45,7 @@ describe('F114 DATASRC — resolveConditionDataSource（customer_financial）', 
   });
 
   it('缺 dataSource + columnName ∈ 集合 → fallback customer_financial', () => {
-    expect(resolveConditionDataSource({ columnName: 'phone_coll_times' })).toBe('customer_financial');
+    expect(resolveConditionDataSource({ columnName: 'phone_coll_case_cnt' })).toBe('customer_financial');
     expect(resolveConditionDataSource({ columnName: 'has_guarantor' })).toBe('customer_financial');
   });
 
@@ -59,8 +59,8 @@ describe('F114 DATASRC — resolveConditionDataSource（customer_financial）', 
 describe('F114 STATIC — 集合 / 原始碼掃描', () => {
   const clausePath = path.resolve(__dirname, '../stage1-customer-financial-clause.ts');
 
-  it('CUSTOMER_FINANCIAL_COLUMN_NAMES 恰 10 欄、與 customer_core 集合零交集', () => {
-    expect(CUSTOMER_FINANCIAL_COLUMN_NAMES.size).toBe(10);
+  it('CUSTOMER_FINANCIAL_COLUMN_NAMES 恰 8 欄、與 customer_core 集合零交集', () => {
+    expect(CUSTOMER_FINANCIAL_COLUMN_NAMES.size).toBe(8);
     for (const c of CUSTOMER_FINANCIAL_COLUMN_NAMES) {
       expect(CUSTOMER_CORE_COLUMN_NAMES.has(c)).toBe(false);
     }
@@ -69,11 +69,9 @@ describe('F114 STATIC — 集合 / 原始碼掃描', () => {
         'guarantor_count',
         'has_guarantor',
         'legal_coll_case_cnt',
-        'legal_coll_times',
         'matured_case_cnt',
         'midterm_case_cnt',
         'phone_coll_case_cnt',
-        'phone_coll_times',
         'settled_case_cnt',
         'void_case_cnt',
       ].sort(),
@@ -112,13 +110,13 @@ describe('F114 CAT — has_guarantor 直接值比對', () => {
   });
 });
 
-describe('F114 NUM — 件數/次數 BETWEEN', () => {
-  it('phone_coll_times min/max → (cf.phone_coll_times BETWEEN :cfNumMin0 AND :cfNumMax0)', () => {
+describe('F114 NUM — 件數 BETWEEN', () => {
+  it('phone_coll_case_cnt min/max → (cf.phone_coll_case_cnt BETWEEN :cfNumMin0 AND :cfNumMax0)', () => {
     const { clause } = build([
-      { columnName: 'phone_coll_times', fieldType: 'numeric', min: 1, max: 5, dataSource: 'customer_financial' },
+      { columnName: 'phone_coll_case_cnt', fieldType: 'numeric', min: 1, max: 5, dataSource: 'customer_financial' },
     ]);
     expect(clause.whereFragments).toEqual([
-      '(cf.phone_coll_times BETWEEN :cfNumMin0 AND :cfNumMax0)',
+      '(cf.phone_coll_case_cnt BETWEEN :cfNumMin0 AND :cfNumMax0)',
     ]);
     expect(clause.params.cfNumMin0).toBe(1);
     expect(clause.params.cfNumMax0).toBe(5);
@@ -126,10 +124,10 @@ describe('F114 NUM — 件數/次數 BETWEEN', () => {
 
   it('min/max 缺一 → INCOMPLETE_NUMERIC_RANGE + 不建 fragment', () => {
     const { clause, warnings } = build([
-      { columnName: 'legal_coll_times', fieldType: 'numeric', min: 1, dataSource: 'customer_financial' },
+      { columnName: 'legal_coll_case_cnt', fieldType: 'numeric', min: 1, dataSource: 'customer_financial' },
     ]);
     expect(warnings).toContainEqual(
-      expect.objectContaining({ code: 'INCOMPLETE_NUMERIC_RANGE', columnName: 'legal_coll_times' }),
+      expect.objectContaining({ code: 'INCOMPLETE_NUMERIC_RANGE', columnName: 'legal_coll_case_cnt' }),
     );
     expect(clause.whereFragments).toEqual([]);
     expect(clause.join).toBeNull();
@@ -149,7 +147,7 @@ describe('F114 JOIN / mixed / scope', () => {
   it('多條件共用單一 JOIN，params 獨立且一律 cf 前綴', () => {
     const { clause } = build([
       { columnName: 'has_guarantor', fieldType: 'categorical', values: ['Y'], dataSource: 'customer_financial' },
-      { columnName: 'phone_coll_times', fieldType: 'numeric', min: 1, max: 5, dataSource: 'customer_financial' },
+      { columnName: 'phone_coll_case_cnt', fieldType: 'numeric', min: 1, max: 5, dataSource: 'customer_financial' },
       { columnName: 'legal_coll_case_cnt', fieldType: 'numeric', min: 0, max: 3, dataSource: 'customer_financial' },
     ]);
     expect(clause.whereFragments).toHaveLength(3);
