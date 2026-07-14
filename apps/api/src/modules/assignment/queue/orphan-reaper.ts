@@ -7,7 +7,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, In, LessThanOrEqual } from 'typeorm';
+import { Repository, DataSource, In, IsNull, LessThanOrEqual } from 'typeorm';
 import { AssignmentRun } from '@/database/entities/assignment-run.entity';
 import {
   RUN_QUEUE_TUNING,
@@ -88,6 +88,18 @@ export class OrphanReaper implements OnApplicationBootstrap, OnModuleDestroy {
       select: ['run_id'],
     });
 
+    // 1b) 半轉換殭屍：status='running' 但 started_at IS NULL（例如 .mssql 測試 seed 直插 running、
+    //     或 stamp started_at 前 worker 就死）。SQL 中 `NULL <= cutoff` 恆為 UNKNOWN → 永遠逃過 1)，
+    //     故獨立以 created_at 逾時判定回收（否則此類殭屍會永久卡 'running' 全域擋 E07）。
+    const runningNullStartedOrphans = await this.runRepo.find({
+      where: {
+        status: 'running',
+        started_at: IsNull(),
+        created_at: LessThanOrEqual(cutoff),
+      },
+      select: ['run_id'],
+    });
+
     // 2) pending 孤兒（OQ-F098-01）：status='pending' 且 created_at <= cutoff（入列失敗 / 遺留）
     const pendingOrphans = await this.runRepo.find({
       where: {
@@ -99,6 +111,7 @@ export class OrphanReaper implements OnApplicationBootstrap, OnModuleDestroy {
 
     const orphanIds = [
       ...runningOrphans.map((r) => r.run_id),
+      ...runningNullStartedOrphans.map((r) => r.run_id),
       ...pendingOrphans.map((r) => r.run_id),
     ];
 
@@ -124,7 +137,7 @@ export class OrphanReaper implements OnApplicationBootstrap, OnModuleDestroy {
     });
 
     this.logger.warn(
-      `orphan 回收：標記 ${orphanIds.length} 筆殭屍 run 為 failed（running=${runningOrphans.length}, pending=${pendingOrphans.length}）`,
+      `orphan 回收：標記 ${orphanIds.length} 筆殭屍 run 為 failed（running=${runningOrphans.length}, running(null started_at)=${runningNullStartedOrphans.length}, pending=${pendingOrphans.length}）`,
     );
     return orphanIds.length;
   }

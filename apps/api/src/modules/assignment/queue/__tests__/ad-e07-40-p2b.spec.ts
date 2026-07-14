@@ -27,7 +27,10 @@ import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import type { ConfigService } from '@nestjs/config';
 import { RunQueueProducer } from '../run-queue.producer';
-import { RunQueueConsumer } from '../run-queue.consumer';
+import {
+  RunQueueConsumer,
+  WORKER_INTERRUPTED_ERROR_MESSAGE,
+} from '../run-queue.consumer';
 import type { MssqlQueueService } from '../mssql-queue.service';
 import { DEFAULT_RUN_QUEUE_TUNING, RunQueueTuning } from '../run-queue-tuning.provider';
 import { RUN_QUEUE_NAME } from '../run-queue.constants';
@@ -377,6 +380,120 @@ describe('AD-E07-40 P2b POLL（輪詢 loop）', () => {
     expect(/appContext\.close\(\)/.test(workerMain)).toBe(true);
     const consumerSrc = stripComments(readFileSync(CONSUMER_PATH, 'utf8'));
     expect(/onModuleDestroy/.test(consumerSrc)).toBe(true);
+  });
+});
+
+// ===========================================================================
+// 五、SHUTDOWN — 優雅關閉時標記中斷 run（殭屍防治）
+// ===========================================================================
+describe('P2b SHUTDOWN（onModuleDestroy 標記中斷 run 為 failed）', () => {
+  /** 可鏈式 update query builder mock，捕捉 set/where/andWhere/execute 呼叫。 */
+  function makeUpdateQB(affected = 1) {
+    const captured: any = {};
+    const qb: any = {
+      update: vi.fn(() => qb),
+      set: vi.fn((v: any) => {
+        captured.set = v;
+        return qb;
+      }),
+      where: vi.fn((w: any, p: any) => {
+        captured.where = [w, p];
+        return qb;
+      }),
+      andWhere: vi.fn((w: any, p: any) => {
+        captured.andWhere = [w, p];
+        return qb;
+      }),
+      execute: vi.fn(async () => ({ affected })),
+    };
+    return { qb, captured };
+  }
+
+  it('SHUTDOWN-001：currentRunId 有值 → UPDATE status=failed + WORKER_INTERRUPTED_ERROR_MESSAGE，狀態守衛 running', async () => {
+    const { qb, captured } = makeUpdateQB(1);
+    const runRepo = {
+      findOne: vi.fn(),
+      createQueryBuilder: vi.fn(() => qb),
+    };
+    const consumer = makeConsumer({
+      dbType: 'mssql',
+      mssqlQueue: makeMssqlQueue(),
+      runRepo: runRepo as any,
+    });
+    (consumer as any).currentRunId = 'r-stuck';
+    await consumer.onModuleDestroy();
+
+    expect(runRepo.createQueryBuilder).toHaveBeenCalledTimes(1);
+    expect(captured.set.status).toBe('failed');
+    expect(captured.set.error_message).toBe(WORKER_INTERRUPTED_ERROR_MESSAGE);
+    expect(captured.set.finished_at).toBeInstanceOf(Date);
+    // where run_id + 狀態守衛 status='running'（不覆寫 completed / 已取消 failed）
+    expect(captured.where[0]).toMatch(/run_id/);
+    expect(captured.where[1]).toEqual({ runId: 'r-stuck' });
+    expect(captured.andWhere[0]).toMatch(/status/);
+    expect(captured.andWhere[1]).toEqual({ running: 'running' });
+  });
+
+  it('SHUTDOWN-002：currentRunId 為 null（無 in-flight）→ 不觸碰 runRepo', async () => {
+    const runRepo = { findOne: vi.fn(), createQueryBuilder: vi.fn() };
+    const consumer = makeConsumer({
+      dbType: 'mssql',
+      mssqlQueue: makeMssqlQueue(),
+      runRepo: runRepo as any,
+    });
+    // currentRunId 預設 null
+    await consumer.onModuleDestroy();
+    expect(runRepo.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('SHUTDOWN-003：UPDATE 失敗（連線已關）→ best-effort 吞錯，不阻擋關閉', async () => {
+    const runRepo = {
+      findOne: vi.fn(),
+      createQueryBuilder: vi.fn(() => {
+        throw new Error('connection closed');
+      }),
+    };
+    const consumer = makeConsumer({
+      dbType: 'mssql',
+      mssqlQueue: makeMssqlQueue(),
+      runRepo: runRepo as any,
+    });
+    (consumer as any).currentRunId = 'r-stuck';
+    await expect(consumer.onModuleDestroy()).resolves.toBeUndefined();
+  });
+
+  it('SHUTDOWN-004：processPayload 期間 currentRunId 標記、結束後歸零（in-flight 生命週期）', async () => {
+    let seenDuring: string | null | undefined = 'UNSET' as any;
+    const consumerRef: { c?: RunQueueConsumer } = {};
+    const pipeline = {
+      runPipeline: vi.fn(async () => {
+        seenDuring = (consumerRef.c as any).currentRunId;
+      }),
+    };
+    const runRepo = { findOne: vi.fn(async () => ({ run_id: 'r-abc', status: 'pending' })) };
+    const consumer = makeConsumer({
+      dbType: 'mssql',
+      mssqlQueue: makeMssqlQueue(),
+      pipeline,
+      runRepo,
+    });
+    consumerRef.c = consumer;
+    await (consumer as any).processPayload('job-1', { runId: 'r-abc', ym: '202607' });
+    expect(seenDuring).toBe('r-abc'); // 執行途中已標記
+    expect((consumer as any).currentRunId).toBeNull(); // finally 歸零
+  });
+
+  it('SHUTDOWN-005：pipeline 拋錯後 currentRunId 仍歸零（finally 保證）', async () => {
+    const pipeline = { runPipeline: vi.fn(async () => { throw new Error('boom'); }) };
+    const runRepo = { findOne: vi.fn(async () => ({ run_id: 'r1', status: 'pending' })) };
+    const consumer = makeConsumer({
+      dbType: 'mssql',
+      mssqlQueue: makeMssqlQueue(),
+      pipeline,
+      runRepo,
+    });
+    await (consumer as any).processPayload('job-1', { runId: 'r1', ym: '202606' });
+    expect((consumer as any).currentRunId).toBeNull();
   });
 });
 

@@ -219,4 +219,29 @@ describe('F098 OrphanReaper 殭屍回收', () => {
     await seedRun(env.runRepo, { status: 'running', startedAt: justNow });
     expect(await env.reaper.reap(NOW)).toBe(0);
   });
+
+  // 追加：running 但 started_at IS NULL（半轉換殭屍；SQL `NULL <= cutoff` 恆逃過主 running 分支）
+  it('TS-F098-ORPHAN-007：running 且 started_at IS NULL 且 created_at 逾時 → 回收', async () => {
+    const run = await seedRun(env.runRepo, {
+      status: 'running',
+      startedAt: null,
+      createdAt: longAgo,
+    });
+    const recovered = await env.reaper.reap(NOW);
+    expect(recovered).toBe(1);
+    const reloaded = await env.runRepo.findOne({ where: { run_id: run.run_id } });
+    expect(reloaded?.status).toBe('failed');
+    expect(reloaded?.error_message).toBe(ORPHAN_ERROR_MESSAGE);
+  });
+
+  it('TS-F098-ORPHAN-008：running 且 started_at IS NULL 但 created_at 未逾時 → 不誤殺', async () => {
+    const run = await seedRun(env.runRepo, {
+      status: 'running',
+      startedAt: null,
+      createdAt: justNow,
+    });
+    expect(await env.reaper.reap(NOW)).toBe(0);
+    const reloaded = await env.runRepo.findOne({ where: { run_id: run.run_id } });
+    expect(reloaded?.status).toBe('running');
+  });
 });

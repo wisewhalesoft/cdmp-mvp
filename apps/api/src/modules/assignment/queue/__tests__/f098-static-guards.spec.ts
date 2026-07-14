@@ -104,6 +104,55 @@ describe('F098 靜態 / 回歸 guard', () => {
     expect(/OrphanReaper/.test(src)).toBe(true);
   });
 
+  it('TS-ZOMBIE-SHUTDOWN-001：consumer onModuleDestroy 主動標記中斷 run 為 failed（狀態守衛 running）', () => {
+    const src = stripComments(read('modules/assignment/queue/run-queue.consumer.ts'));
+    // 追蹤 in-flight run
+    expect(/currentRunId/.test(src)).toBe(true);
+    // 關閉時標記中斷 run
+    expect(/failInFlightRunOnShutdown/.test(src)).toBe(true);
+    expect(/WORKER_INTERRUPTED_ERROR_MESSAGE/.test(src)).toBe(true);
+    // onModuleDestroy 為 async（可 await DB 更新）
+    expect(/async onModuleDestroy/.test(src)).toBe(true);
+    // 狀態守衛：只覆寫仍為 'running' 者（不覆寫已 completed / 已取消 failed）
+    expect(/andWhere\([^)]*status[^)]*running/.test(src)).toBe(true);
+  });
+
+  it('TS-ZOMBIE-REAPER-NULLSTART-001：orphan-reaper 回收 running 且 started_at IS NULL 之半轉換殭屍', () => {
+    const src = stripComments(read('modules/assignment/queue/orphan-reaper.ts'));
+    // IsNull 分支存在（SQL `NULL <= cutoff` 恆逃過主 running 分支 → 需獨立以 created_at 逾時回收）
+    expect(/IsNull\(\)/.test(src)).toBe(true);
+    expect(/started_at:\s*IsNull\(\)/.test(src)).toBe(true);
+  });
+
+  it('TS-TZ-HYGIENE-001：orphan-reaper 逾時判定用 JS 時鐘（UTC 一致），不用 GETDATE()（server UTC+8）', () => {
+    // started_at/finished_at/created_at 由 worker JS new Date() 存 UTC；reaper cutoff 亦 JS Date（UTC）→ 一致。
+    // 若改用 GETDATE()（MSSQL 本地 UTC+8）對比 UTC 欄位，會多算 +8h 時區偏移（誤判殭屍 / 誤放行）。
+    const src = stripComments(read('modules/assignment/queue/orphan-reaper.ts'));
+    expect(/GETDATE|getdate|SYSDATETIME|CURRENT_TIMESTAMP/.test(src)).toBe(false);
+    // cutoff 由注入時鐘 now 推導（可測試 + UTC 一致）
+    expect(/orphanThresholdMs/.test(src)).toBe(true);
+  });
+
+  it('TS-TZ-HYGIENE-002：assignment queue/services 生產碼無 DATEDIFF(...GETDATE())（UTC 欄位對 UTC+8 之 +8h 陷阱）', () => {
+    // 存的 run 時間戳為 UTC；任何 DATEDIFF(col, GETDATE()) 監控/報表會多算 8 小時（診斷/畫面看似「卡住」）。
+    // 應改用 GETUTCDATE()/SYSUTCDATETIME()。本守門防止此模式回歸至生產碼。
+    const dirs = [
+      'modules/assignment/queue',
+      'modules/assignment/services',
+    ];
+    const offenders: string[] = [];
+    for (const rel of dirs) {
+      const abs = path.resolve(API_SRC, rel);
+      for (const name of fs.readdirSync(abs)) {
+        if (!name.endsWith('.ts') || name.endsWith('.spec.ts')) continue;
+        const src = stripComments(fs.readFileSync(path.resolve(abs, name), 'utf-8'));
+        // 同一 DATEDIFF(...) 內含 GETDATE()（單行近似；生產碼目前 0 命中）
+        if (/DATEDIFF\s*\([^;]*GETDATE\s*\(\)/i.test(src)) offenders.push(`${rel}/${name}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('queue name / payload 為單一匯出常數（防 producer/consumer typo）', () => {
     const constSrc = read('modules/assignment/queue/run-queue.constants.ts');
     expect(/export const RUN_QUEUE_NAME\s*=\s*['"]assignment-run['"]/.test(constSrc)).toBe(

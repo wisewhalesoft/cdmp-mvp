@@ -23,6 +23,14 @@ import {
 } from './run-queue.constants';
 
 /**
+ * worker 於 pipeline 執行途中收到 SIGTERM/SIGINT（dev `docker restart` / 部署 / OOM 前的優雅關閉）
+ * 而中斷時，寫入在跑 run 的 error_message。與 OrphanReaper 的 ORPHAN_ERROR_MESSAGE 區分：
+ *   - 本文案：worker「知道自己要關」→ 關閉當下主動標記（即時、不必等 4h reaper）。
+ *   - ORPHAN_ERROR_MESSAGE：worker「來不及標記就死了」（SIGKILL/斷電）→ 事後 reaper 逾時回收。
+ */
+export const WORKER_INTERRUPTED_ERROR_MESSAGE = 'worker 重啟中斷，請重新觸發';
+
+/**
  * F098 / AD-E07-28 P1 / AC-2：月名單分派 worker 消費者（cdmp-worker 程序）。
  *
  * 自建 T-SQL 佇列 pull 模型（AD-E07-40 §4；PG 全面遷移後 pg-boss 已移除）：
@@ -39,6 +47,13 @@ export class RunQueueConsumer implements OnModuleInit, OnModuleDestroy {
   // AD-E07-40 §4.1：mssql 輪詢 loop 之計時器 + reentrancy guard。
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private polling = false; // 避免上一輪 tick 未完成、下一輪計時器又觸發（重疊消費）。
+
+  /**
+   * 目前 pipeline 正在處理的 runId（processPayload 執行 runPipeline 期間為非 null）。
+   * onModuleDestroy（worker 優雅關閉）時據此把中斷的 run 主動標為 failed，避免殭屍 'running'
+   * 全域擋住 E07 寫入（assertNoRunningRun 掃全月份）。
+   */
+  private currentRunId: string | null = null;
 
   constructor(
     private readonly pipeline: AssignmentRunPipelineService,
@@ -79,11 +94,47 @@ export class RunQueueConsumer implements OnModuleInit, OnModuleDestroy {
   /**
    * AD-E07-40 §4.2 / P2b DoD #4：worker 優雅關閉時清除輪詢計時器，不留孤兒 interval。
    * worker-main.ts 之 SIGTERM/SIGINT → appContext.close() → NestJS 自動觸發本 hook（POLL-009/010）。
+   *
+   * 追加（殭屍防治）：若關閉當下正有 run 在跑（currentRunId != null），主動標為 failed
+   * （狀態守衛 AND status='running'，不覆寫已 completed / 已被取消為 failed 者）。NestJS 會 await
+   * async onModuleDestroy 完成後才續往下關閉 TypeOrm 連線，故此處 DB 更新可安全執行。
    */
-  onModuleDestroy(): void {
+  async onModuleDestroy(): Promise<void> {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+    await this.failInFlightRunOnShutdown();
+  }
+
+  /**
+   * 關閉時把「執行途中被中斷」的 run 標為 failed，避免殭屍 'running' 全域擋 E07。
+   * 盡力而為（best-effort）：連線已關 / 更新失敗僅記 log，不阻擋 worker 退出。
+   */
+  private async failInFlightRunOnShutdown(): Promise<void> {
+    const runId = this.currentRunId;
+    if (!runId) return;
+    try {
+      const res = await this.runRepo
+        .createQueryBuilder()
+        .update(AssignmentRun)
+        .set({
+          status: 'failed',
+          error_message: WORKER_INTERRUPTED_ERROR_MESSAGE,
+          finished_at: new Date(),
+        })
+        .where('run_id = :runId', { runId })
+        .andWhere('status = :running', { running: 'running' })
+        .execute();
+      if ((res.affected ?? 0) > 0) {
+        this.logger.warn(
+          `worker 關閉：中斷的 run 已標為 failed（runId=${runId}，${WORKER_INTERRUPTED_ERROR_MESSAGE}）`,
+        );
+      }
+    } catch (err: any) {
+      this.logger.error(
+        `worker 關閉時標記中斷 run 失敗（runId=${runId}）：${err?.message ?? err}`,
+      );
     }
   }
 
@@ -169,7 +220,13 @@ export class RunQueueConsumer implements OnModuleInit, OnModuleDestroy {
       }
 
       // 正常路徑：pending → running → completed/failed（pipeline 內部自行推進狀態）
-      await this.pipeline.runPipeline(runId, ym);
+      // currentRunId 期間標記：供 onModuleDestroy 在 worker 中途關閉時把此 run 標為 failed。
+      this.currentRunId = runId;
+      try {
+        await this.pipeline.runPipeline(runId, ym);
+      } finally {
+        this.currentRunId = null;
+      }
     } catch (err: any) {
       // pipeline 已自行 try/catch 標 failed；此處僅防其外意外，確保 worker 不退出
       this.logger.error(
