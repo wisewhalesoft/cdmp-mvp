@@ -178,8 +178,8 @@ describe('SnapshotDetailPage (F066 v1.3)', () => {
     expect(screen.getByText('台北分處')).toBeInTheDocument();
     // 分派結果分頁不呼叫快照 payload 端點（避免載入巨量 payload）
     expect(mockedGetSnapshot).not.toHaveBeenCalledWith('R001', 'result');
-    // F115 回寫按鈕為 disabled 佔位
-    expect(screen.getByTestId('btn-writeback')).toBeDisabled();
+    // F115 回寫按鈕（部長角色）可用
+    expect(screen.getByTestId('btn-writeback')).toBeEnabled();
   });
 
   it('分派結果分頁搜尋 → 帶 q 重新查詢並回第 1 頁', async () => {

@@ -556,6 +556,47 @@ export async function getResultPage(
 }
 
 // =====================================================================
+// F115 — 分派結果回寫外部 OBPOOLDATA_LIST（預覽 + 執行）
+// =====================================================================
+
+export interface WritebackPreviewResponse {
+  runId: string;
+  totalToWrite: number;
+  byListNo: Array<{ listNo: string; count: number }>;
+  sample: Array<Record<string, string | null>>;
+  notMatched: number | null;
+  connectionAvailable: boolean;
+}
+
+export interface WritebackResultResponse {
+  runId: string;
+  updated: number;
+  notMatched: number;
+  byListNo: Array<{ listNo: string; count: number }>;
+}
+
+/** F115：回寫預覽（dry-run，不寫入）。 */
+export async function previewWriteback(
+  runId: string,
+): Promise<WritebackPreviewResponse> {
+  const response = await apiClient.post<WritebackPreviewResponse>(
+    `/assignment/runs/${runId}/writeback/preview`,
+  );
+  return response.data;
+}
+
+/** F115：執行回寫（需二次確認）。 */
+export async function executeWriteback(
+  runId: string,
+): Promise<WritebackResultResponse> {
+  const response = await apiClient.post<WritebackResultResponse>(
+    `/assignment/runs/${runId}/writeback`,
+    { confirm: true },
+  );
+  return response.data;
+}
+
+// =====================================================================
 // F067 — GET 比對兩個月名單分派
 // =====================================================================
 

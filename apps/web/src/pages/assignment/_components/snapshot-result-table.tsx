@@ -4,6 +4,8 @@ import {
   getResultPage,
   type ResultPageResponse,
 } from '@/api/assignment-run';
+import { getEffectiveIdentity } from '@/stores/auth-store';
+import { WritebackModal } from './writeback-modal';
 
 /**
  * F066 v1.3 §5.3 / AC-8 — 分派結果友善表格
@@ -51,6 +53,10 @@ export function SnapshotResultTable({ runId }: { runId: string }) {
   const [data, setData] = useState<ResultPageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showWriteback, setShowWriteback] = useState(false);
+
+  // F115：回寫為部長專屬（後端 DirectorGuard 允許 admin / director）。
+  const canWriteback = ['admin', 'director'].includes(getEffectiveIdentity());
 
   useEffect(() => {
     if (!runId) return;
@@ -120,20 +126,18 @@ export function SnapshotResultTable({ runId }: { runId: string }) {
           >
             查詢
           </button>
-          {/* F115 回寫按鈕（下一階段實作；本輪 disabled 佔位） */}
-          <button
-            type="button"
-            data-testid="btn-writeback"
-            disabled
-            title="回寫功能將於下一階段推出（F115）"
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-400 border border-gray-200 rounded-md bg-gray-50 cursor-not-allowed"
-          >
-            <UploadCloud className="w-3.5 h-3.5" />
-            回寫業務系統
-            <span className="ml-0.5 inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded-full bg-gray-200 text-gray-500">
-              下一階段
-            </span>
-          </button>
+          {/* F115 回寫按鈕（部長 / admin 專屬） */}
+          {canWriteback && (
+            <button
+              type="button"
+              data-testid="btn-writeback"
+              onClick={() => setShowWriteback(true)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition"
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              回寫業務系統
+            </button>
+          )}
         </div>
       </div>
 
@@ -224,6 +228,10 @@ export function SnapshotResultTable({ runId }: { runId: string }) {
             </div>
           </div>
         </>
+      )}
+
+      {showWriteback && (
+        <WritebackModal runId={runId} onClose={() => setShowWriteback(false)} />
       )}
     </div>
   );
