@@ -59,6 +59,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
     exportResult: ReturnType<typeof vi.fn>;
     compareRuns: ReturnType<typeof vi.fn>;
     getResultPage: ReturnType<typeof vi.fn>;
+    getPivot: ReturnType<typeof vi.fn>;
   };
   let writebackMock: {
     preview: ReturnType<typeof vi.fn>;
@@ -132,6 +133,20 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         page: 1,
         pageSize: 50,
         total: 1,
+      }),
+      getPivot: vi.fn().mockResolvedValue({
+        runId: 'run-uuid-1',
+        listNos: ['OB1'],
+        depts: [
+          {
+            deptName: '中區電銷1',
+            total: 3,
+            byList: { OB1: 3 },
+            emplids: [{ emplid: '20501', empNm: '王大明', total: 3, byList: { OB1: 3 } }],
+          },
+        ],
+        grandByList: { OB1: 3 },
+        grandTotal: 3,
       }),
     };
     writebackMock = {
@@ -541,6 +556,38 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       currentUser = plain;
       const res = await request(app.getHttpServer()).get(
         '/api/v1/assignment/runs/run-uuid-1/result',
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('GET /runs/:runId/pivot (F116 樞紐分析)', () => {
+    it('director → getPivot + actor', async () => {
+      currentUser = director;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/pivot',
+      );
+      expect(res.status).toBe(200);
+      expect(reportMock.getPivot).toHaveBeenCalledWith(
+        'run-uuid-1',
+        expect.objectContaining({ userId: 'u-director' }),
+      );
+      expect(res.body.depts).toBeDefined();
+      expect(res.body.grandTotal).toBe(3);
+    });
+
+    it('section_chief → 200（scope 縮小，不 403）', async () => {
+      currentUser = sectionChief;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/pivot',
+      );
+      expect(res.status).toBe(200);
+    });
+
+    it('plain user → 403', async () => {
+      currentUser = plain;
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/runs/run-uuid-1/pivot',
       );
       expect(res.status).toBe(403);
     });

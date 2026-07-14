@@ -207,6 +207,27 @@ export interface ResultPageResponse {
 const RESULT_PAGE_DEFAULT_SIZE = 50;
 const RESULT_PAGE_MAX_SIZE = 200;
 
+/** F116 §5.1：樞紐分析回應（部門名稱 × 員編 × 名單代號 計數；只回計數，佔比由前端換算）。 */
+export interface PivotEmplidNode {
+  emplid: string;
+  empNm: string | null;
+  total: number;
+  byList: Record<string, number>;
+}
+export interface PivotDeptNode {
+  deptName: string;
+  total: number;
+  byList: Record<string, number>;
+  emplids: PivotEmplidNode[];
+}
+export interface PivotResponse {
+  runId: string;
+  listNos: string[];
+  depts: PivotDeptNode[];
+  grandByList: Record<string, number>;
+  grandTotal: number;
+}
+
 /**
  * F108 / AD-E07-v3.7 §2：樞紐分析聚合結構（部門名稱 × 員編 × 名單代號 計數）。
  *
@@ -457,6 +478,133 @@ export class AssignmentRunReportService {
     });
 
     return { runId, columns, rows, page, pageSize, total };
+  }
+
+  // -------------------------------------------------------------------------
+  // F116 §5.1 — 樞紐分析（部門名稱 × 員編 × 名單代號 案號計數）
+  // -------------------------------------------------------------------------
+
+  /**
+   * getPivot — 樞紐分析聚合（F116）。
+   *
+   * 來源 `ob_monthly_run_result r` LEFT JOIN `ob_emphire e ON e.emp_id = r.emplid`，
+   * `GROUP BY e.dept_name, r.emplid, e.emp_nm, r.list_no` 計數。**不 join ob_pool_data**
+   * （樞紐不需 pool 業務欄，且省去巨量表 join）。dept/emplid 空 → 歸組 '(空白)'。
+   * 語意對齊 F108 匯出樞紐頁（accumulatePivot：部門＝承辦人員所屬 emphire.dept_name）。
+   *
+   * 只回計數；佔比（% of parent row）由前端換算。處長走 scopeByCreator；run 不存在 → 404。
+   */
+  async getPivot(runId: string, actor?: ActorUser | null): Promise<PivotResponse> {
+    const run = await this.runRepo.findOne({ where: { run_id: runId } });
+    if (!run) {
+      throw new NotFoundException({
+        error: ERROR_CODES.ASSIGNMENT_RUN_NOT_FOUND,
+        message: ERROR_MESSAGES.ASSIGNMENT_RUN_NOT_FOUND,
+      });
+    }
+
+    const repo = this.dataSource.getRepository(ObMonthlyRunResult);
+    const qb = repo
+      .createQueryBuilder('r')
+      .leftJoin('ob_emphire', 'e', 'e.emp_id = r.emplid')
+      .select('e.dept_name', 'deptName')
+      .addSelect('r.emplid', 'emplid')
+      .addSelect('e.emp_nm', 'empNm')
+      .addSelect('r.list_no', 'listNo')
+      .addSelect('COUNT(*)', 'cnt')
+      .where('r.run_id = :runId', { runId })
+      .groupBy('e.dept_name')
+      .addGroupBy('r.emplid')
+      .addGroupBy('e.emp_nm')
+      .addGroupBy('r.list_no');
+
+    if (this.scope.shouldFilter(actor)) {
+      const emplids = [...(await this.scope.getScopeEmplIds(actor!.userId))];
+      if (emplids.length === 0) {
+        qb.andWhere('1 = 0');
+      } else {
+        qb.andWhere('r.emplid IN (:...emplIds)', { emplIds: emplids });
+      }
+    }
+
+    const rows = await qb.getRawMany<{
+      deptName: string | null;
+      emplid: string | null;
+      empNm: string | null;
+      listNo: string;
+      cnt: number | string;
+    }>();
+
+    // ---- in-memory 聚合為巢狀結構 ----
+    interface DeptAgg {
+      total: number;
+      byList: Map<string, number>;
+      emplids: Map<string, { empNm: string | null; total: number; byList: Map<string, number> }>;
+    }
+    const deptMap = new Map<string, DeptAgg>();
+    const listSet = new Set<string>();
+    const grandByList = new Map<string, number>();
+    let grandTotal = 0;
+
+    for (const row of rows) {
+      const listNo = String(row.listNo);
+      const cnt = Number(row.cnt) || 0;
+      const deptName = row.deptName ? String(row.deptName) : PIVOT_BLANK_LABEL;
+      const emplid = row.emplid ? String(row.emplid) : PIVOT_BLANK_LABEL;
+
+      listSet.add(listNo);
+      grandByList.set(listNo, (grandByList.get(listNo) ?? 0) + cnt);
+      grandTotal += cnt;
+
+      let dept = deptMap.get(deptName);
+      if (!dept) {
+        dept = { total: 0, byList: new Map(), emplids: new Map() };
+        deptMap.set(deptName, dept);
+      }
+      dept.total += cnt;
+      dept.byList.set(listNo, (dept.byList.get(listNo) ?? 0) + cnt);
+
+      let emp = dept.emplids.get(emplid);
+      if (!emp) {
+        emp = { empNm: row.empNm ?? null, total: 0, byList: new Map() };
+        dept.emplids.set(emplid, emp);
+      }
+      if (emp.empNm == null && row.empNm != null) emp.empNm = row.empNm;
+      emp.total += cnt;
+      emp.byList.set(listNo, (emp.byList.get(listNo) ?? 0) + cnt);
+    }
+
+    const byBlankLast = (a: string, b: string) => {
+      if (a === PIVOT_BLANK_LABEL) return 1;
+      if (b === PIVOT_BLANK_LABEL) return -1;
+      return a.localeCompare(b);
+    };
+    const mapToObj = (m: Map<string, number>) => Object.fromEntries(m);
+
+    const listNos = [...listSet].sort();
+    const depts: PivotDeptNode[] = [...deptMap.entries()]
+      .sort((a, b) => byBlankLast(a[0], b[0]))
+      .map(([deptName, d]) => ({
+        deptName,
+        total: d.total,
+        byList: mapToObj(d.byList),
+        emplids: [...d.emplids.entries()]
+          .sort((a, b) => byBlankLast(a[0], b[0]))
+          .map(([emplid, e]) => ({
+            emplid,
+            empNm: e.empNm,
+            total: e.total,
+            byList: mapToObj(e.byList),
+          })),
+      }));
+
+    return {
+      runId,
+      listNos,
+      depts,
+      grandByList: mapToObj(grandByList),
+      grandTotal,
+    };
   }
 
   // -------------------------------------------------------------------------
