@@ -18,7 +18,7 @@
     .tab-btn { position: relative; }
     .tab-btn.active { color: #2563EB; }
     .tab-btn.active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: #2563EB; }
-    .json-viewer { font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.55; }
+    .mono-sub { font-family: 'JetBrains Mono', monospace; }
     details > summary { cursor: pointer; user-select: none; list-style: none; }
     details > summary::-webkit-details-marker { display: none; }
     .arrow { display: inline-block; transition: transform 0.15s; }
@@ -125,7 +125,7 @@
           <i data-lucide="lock" class="w-8 h-8 text-gray-400"></i>
         </div>
         <h3 class="text-lg font-semibold text-gray-800 mb-1">您無此頁面權限</h3>
-        <p class="text-sm text-gray-500 max-w-md">「快照詳情」為部長 / Admin / 處長專屬功能。業務員角色請至 Customer 360 查看您被分派的客戶名單。</p>
+        <p class="text-sm text-gray-500 max-w-md">「快照詳情」為部長 / 系統管理者 / 處長專屬功能。業務員請至 Customer 360 查看您被分派的客戶名單。</p>
         <a href="25-customer-360-list.html" class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 bg-primary text-white text-sm rounded-md hover:bg-blue-700">
           <i data-lucide="contact" class="w-4 h-4"></i>前往 Customer 360
         </a>
@@ -133,40 +133,33 @@
     </div>
 
     <div id="mainContent">
-    <!-- Demo Bar (本頁以 sub-tab 為主，demo 切 tab) -->
-    <div class="bg-white border-b border-border px-6 py-2 flex items-center gap-2 flex-wrap">
-      <span class="text-xs text-gray-400 mr-1">Demo:</span>
-      <button onclick="switchSnapTab('config')" id="demo-config" class="demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary">Config 快照</button>
-      <button onclick="switchSnapTab('input')" id="demo-input" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Input List 快照</button>
-      <button onclick="switchSnapTab('result')" id="demo-result" class="demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">Result 快照</button>
-      <span class="ml-3 text-xs text-gray-400">|</span>
-      <a href="34-run-history.html" class="text-xs text-primary hover:underline inline-flex items-center gap-1">
-        <i data-lucide="arrow-left" class="w-3 h-3"></i>
-        返回執行歷史
-      </a>
+
+    <!-- ===== 頁面標題 + 說明 ===== -->
+    <div class="px-6 pt-6">
+      <h1 class="text-xl font-semibold text-gray-800">快照詳情</h1>
+      <p class="text-sm text-gray-500 mt-1">檢視本次月名單分派當時的設定、輸入名單與分派結果（唯讀紀錄）</p>
     </div>
 
     <div class="p-6 space-y-4">
 
-      <!-- ===== Run Info Bar ===== -->
-      <div class="bg-white rounded-lg border border-border shadow-sm">
-        <div class="px-5 py-3 border-b border-border flex items-center justify-between">
+      <!-- ===== Run 資訊卡 ===== -->
+      <div class="bg-white rounded-xl border border-border shadow-sm">
+        <div class="px-5 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
           <div class="flex items-center gap-3">
             <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-success">
               <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
               已完成
             </span>
-            <span class="text-xs text-gray-500">Run ID</span>
-            <span class="font-mono text-xs font-semibold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">7a1b2c3d-4e5f-41d4-a716-446655440002</span>
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 text-gray-600 border border-gray-200">
+            <span class="text-lg font-semibold text-gray-800">2026 年 4 月分派</span>
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-gray-100 text-gray-500 border border-gray-200">
               <i data-lucide="lock" class="w-3 h-3"></i>
-              READ-ONLY 不可變
+              唯讀
             </span>
           </div>
           <div class="flex items-center gap-2">
-            <button onclick="downloadJson()" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary border border-primary/30 rounded-md hover:bg-blue-50 transition">
+            <button onclick="downloadSnapshot()" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary border border-primary/30 rounded-md hover:bg-blue-50 transition">
               <i data-lucide="download" class="w-3.5 h-3.5"></i>
-              下載快照 JSON
+              下載快照檔
             </button>
             <a href="36-run-compare.html?runA=7a1b2c3d-4e5f" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50 transition">
               <i data-lucide="git-compare" class="w-3.5 h-3.5"></i>
@@ -174,10 +167,14 @@
             </a>
           </div>
         </div>
-        <div class="px-5 py-4 grid grid-cols-6 gap-4">
+        <div class="px-5 py-4 grid grid-cols-2 md:grid-cols-6 gap-4">
           <div>
             <div class="text-xs text-gray-500 mb-1">分派作業月份</div>
-            <div class="text-sm font-semibold text-gray-800 font-mono">202604</div>
+            <div class="text-sm font-semibold text-gray-800">2026 年 4 月</div>
+          </div>
+          <div>
+            <div class="text-xs text-gray-500 mb-1">狀態</div>
+            <div class="text-sm font-medium text-success">已完成</div>
           </div>
           <div>
             <div class="text-xs text-gray-500 mb-1">觸發者</div>
@@ -185,239 +182,256 @@
           </div>
           <div>
             <div class="text-xs text-gray-500 mb-1">觸發時間</div>
-            <div class="text-sm text-gray-700 font-mono">2026-04-24 10:30:12</div>
+            <div class="text-sm text-gray-700">2026-04-24 10:30</div>
           </div>
           <div>
             <div class="text-xs text-gray-500 mb-1">完成時間</div>
-            <div class="text-sm text-gray-700 font-mono">2026-04-24 11:02:08</div>
+            <div class="text-sm text-gray-700">2026-04-24 11:02</div>
           </div>
           <div>
-            <div class="text-xs text-gray-500 mb-1">總分派</div>
+            <div class="text-xs text-gray-500 mb-1">總分派筆數</div>
             <div class="text-sm font-semibold text-gray-800 tabular-nums">9,120 筆</div>
           </div>
-          <div>
-            <div class="text-xs text-gray-500 mb-1">快照保留</div>
-            <div class="text-sm text-gray-700">至 2029-04-24 <span class="text-xs text-gray-400">(3 年, AD-E07-3)</span></div>
-          </div>
+        </div>
+        <div class="px-5 pb-3 flex items-center gap-2 text-[11px] text-gray-400">
+          <span>批次編號</span>
+          <code class="mono-sub bg-gray-50 border border-border rounded px-1.5 py-0.5 text-gray-500">7a1b2c3d-4e5f-41d4-a716-446655440002</code>
+          <span>· 保留至 2029-04-24（3 年）</span>
         </div>
       </div>
 
-      <!-- ===== 三個 Sub-Tab ===== -->
-      <div class="bg-white rounded-lg border border-border shadow-sm">
-        <div class="px-5 border-b border-border flex items-center justify-between">
-          <div class="flex items-center gap-1">
-            <button id="tab-config" onclick="switchSnapTab('config')" class="tab-btn active px-4 py-3 text-sm font-medium inline-flex items-center gap-1.5">
-              <i data-lucide="settings" class="w-4 h-4"></i>
-              設定快照
-              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-medium bg-blue-50 text-primary rounded-full">config</span>
-            </button>
-            <button id="tab-input" onclick="switchSnapTab('input')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 inline-flex items-center gap-1.5">
-              <i data-lucide="list-tree" class="w-4 h-4"></i>
-              輸入名單快照
-              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded-full">input_list</span>
-            </button>
-            <button id="tab-result" onclick="switchSnapTab('result')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 inline-flex items-center gap-1.5">
-              <i data-lucide="table" class="w-4 h-4"></i>
-              結果快照
-              <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded-full">result</span>
-            </button>
-          </div>
-          <span class="text-xs text-gray-400">snapshot_type 三份均已寫入</span>
+      <!-- ===== 三個分頁 ===== -->
+      <div class="bg-white rounded-xl border border-border shadow-sm">
+        <div class="px-5 border-b border-border flex items-center gap-1">
+          <button id="tab-config" onclick="switchSnapTab('config')" class="tab-btn active px-4 py-3 text-sm font-medium inline-flex items-center gap-1.5">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+            設定快照
+          </button>
+          <button id="tab-input" onclick="switchSnapTab('input')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 inline-flex items-center gap-1.5">
+            <i data-lucide="list-tree" class="w-4 h-4"></i>
+            輸入名單
+            <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded-full tabular-nums">48,200</span>
+          </button>
+          <button id="tab-result" onclick="switchSnapTab('result')" class="tab-btn px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-800 inline-flex items-center gap-1.5">
+            <i data-lucide="table" class="w-4 h-4"></i>
+            分派結果
+            <span class="ml-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-medium bg-gray-100 text-gray-500 rounded-full tabular-nums">9,120</span>
+          </button>
         </div>
 
-        <!-- ============ Config Panel ============ -->
+        <!-- ============ 設定快照 Panel ============ -->
         <div id="panel-config" class="p-5 space-y-4">
-          <!-- 計分版本 -->
+          <p class="text-xs text-gray-500">本次分派當時採用的名單定義、計分卡分數區間、分級對應與部門／人員比例。</p>
+
+          <!-- 名單定義 -->
+          <details open class="border border-border rounded-lg bg-gray-50/40">
+            <summary class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition rounded-lg">
+              <div class="flex items-center gap-2">
+                <span class="arrow text-gray-400">▶</span>
+                <i data-lucide="clipboard-list" class="w-4 h-4 text-primary"></i>
+                <span class="text-sm font-semibold text-gray-800">名單定義</span>
+              </div>
+              <span class="text-xs text-gray-500">8 筆</span>
+            </summary>
+            <div class="px-4 py-3 border-t border-border bg-white rounded-b-lg overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50/60 text-xs text-gray-500">
+                    <th class="text-left px-3 py-2 font-semibold">名單編號</th>
+                    <th class="text-left px-3 py-2 font-semibold">名單名稱</th>
+                    <th class="text-left px-3 py-2 font-semibold">計分卡</th>
+                    <th class="text-left px-3 py-2 font-semibold">CR 回分</th>
+                    <th class="text-left px-3 py-2 font-semibold">案件結清期別</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  <tr><td class="px-3 py-2"><span class="mono-sub text-gray-700">OB202604001</span></td><td class="px-3 py-2">2026-04 汽車期中名單</td><td class="px-3 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H · 一般高分</span></td><td class="px-3 py-2"><span class="text-success">啟用</span></td><td class="px-3 py-2 text-gray-500">01</td></tr>
+                  <tr><td class="px-3 py-2"><span class="mono-sub text-gray-700">OB202604002</span></td><td class="px-3 py-2">2026-04 汽車中分名單</td><td class="px-3 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-700">S · 一般中分</span></td><td class="px-3 py-2"><span class="text-success">啟用</span></td><td class="px-3 py-2 text-gray-500">01</td></tr>
+                  <tr><td class="px-3 py-2"><span class="mono-sub text-gray-700">OB202604004</span></td><td class="px-3 py-2">2026-04 機車滿期名單</td><td class="px-3 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">M · 機車</span></td><td class="px-3 py-2"><span class="text-gray-400">停用</span></td><td class="px-3 py-2 text-gray-500">02</td></tr>
+                  <tr class="text-gray-400"><td class="px-3 py-2" colspan="5">⋯ 其他 5 筆</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <!-- 計分卡分數區間 -->
           <details open class="border border-border rounded-lg bg-gray-50/40">
             <summary class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition rounded-lg">
               <div class="flex items-center gap-2">
                 <span class="arrow text-gray-400">▶</span>
                 <i data-lucide="layers" class="w-4 h-4 text-primary"></i>
-                <span class="text-sm font-semibold text-gray-800">計分卡版本（card_version）</span>
+                <span class="text-sm font-semibold text-gray-800">計分卡分數區間</span>
               </div>
-              <span class="text-xs font-mono text-gray-500">v3 / 6 個 CARD_TYPE</span>
+              <span class="text-xs text-gray-500">30 筆</span>
             </summary>
-            <div class="px-4 py-3 border-t border-border bg-white rounded-b-lg">
+            <div class="px-4 py-3 border-t border-border bg-white rounded-b-lg overflow-x-auto">
               <table class="w-full text-sm">
                 <thead>
-                  <tr class="bg-gray-50/60 text-xs">
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">CARD_TYPE</th>
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">名稱</th>
-                    <th class="text-right px-3 py-2 font-semibold text-gray-600">card_version</th>
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">備註</th>
+                  <tr class="bg-gray-50/60 text-xs text-gray-500">
+                    <th class="text-left px-3 py-2 font-semibold">計分卡</th>
+                    <th class="text-right px-3 py-2 font-semibold">版本</th>
+                    <th class="text-right px-3 py-2 font-semibold">分數下限</th>
+                    <th class="text-right px-3 py-2 font-semibold">分數上限</th>
+                    <th class="text-left px-3 py-2 font-semibold">等級</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-border">
-                  <tr><td class="px-3 py-2 font-mono">H</td><td class="px-3 py-2">一般高分</td><td class="px-3 py-2 text-right font-mono">3</td><td class="px-3 py-2 text-gray-500">2026-04 調整 score_threshold 5 分</td></tr>
-                  <tr><td class="px-3 py-2 font-mono">S</td><td class="px-3 py-2">一般中分</td><td class="px-3 py-2 text-right font-mono">3</td><td class="px-3 py-2 text-gray-500">2026-04 同步調整</td></tr>
-                  <tr><td class="px-3 py-2 font-mono">E</td><td class="px-3 py-2">一般低分</td><td class="px-3 py-2 text-right font-mono">2</td><td class="px-3 py-2 text-gray-500">未變動</td></tr>
-                  <tr><td class="px-3 py-2 font-mono">S5</td><td class="px-3 py-2">中度逾期</td><td class="px-3 py-2 text-right font-mono">2</td><td class="px-3 py-2 text-gray-500">未變動</td></tr>
-                  <tr><td class="px-3 py-2 font-mono">E5</td><td class="px-3 py-2">嚴重逾期</td><td class="px-3 py-2 text-right font-mono">1</td><td class="px-3 py-2 text-gray-500">初始版本</td></tr>
-                  <tr><td class="px-3 py-2 font-mono">M</td><td class="px-3 py-2">機車</td><td class="px-3 py-2 text-right font-mono">2</td><td class="px-3 py-2 text-gray-500">未變動</td></tr>
+                  <tr><td class="px-3 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H · 一般高分</span></td><td class="px-3 py-2 text-right mono-sub">3</td><td class="px-3 py-2 text-right mono-sub">191</td><td class="px-3 py-2 text-right mono-sub">999</td><td class="px-3 py-2"><span class="inline-flex px-1.5 py-0.5 text-[11px] font-semibold rounded bg-blue-100 text-blue-700">A</span></td></tr>
+                  <tr><td class="px-3 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H · 一般高分</span></td><td class="px-3 py-2 text-right mono-sub">3</td><td class="px-3 py-2 text-right mono-sub">169</td><td class="px-3 py-2 text-right mono-sub">190</td><td class="px-3 py-2"><span class="inline-flex px-1.5 py-0.5 text-[11px] font-semibold rounded bg-cyan-100 text-cyan-700">B</span></td></tr>
+                  <tr class="text-gray-400"><td class="px-3 py-2" colspan="5">⋯ 其他 28 筆</td></tr>
                 </tbody>
               </table>
             </div>
           </details>
 
-          <!-- LIST_NO 部門比例 -->
-          <details open class="border border-border rounded-lg bg-gray-50/40">
+          <!-- 分級對應 -->
+          <details class="border border-border rounded-lg bg-gray-50/40">
+            <summary class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition rounded-lg">
+              <div class="flex items-center gap-2">
+                <span class="arrow text-gray-400">▶</span>
+                <i data-lucide="tag" class="w-4 h-4 text-primary"></i>
+                <span class="text-sm font-semibold text-gray-800">分級（TIER）對應</span>
+              </div>
+              <span class="text-xs text-gray-500">18 筆</span>
+            </summary>
+            <div class="px-4 py-3 border-t border-border bg-white rounded-b-lg overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50/60 text-xs text-gray-500">
+                    <th class="text-left px-3 py-2 font-semibold">計分卡</th>
+                    <th class="text-left px-3 py-2 font-semibold">等級</th>
+                    <th class="text-left px-3 py-2 font-semibold">分級（TIER）</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  <tr><td class="px-3 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H · 一般高分</span></td><td class="px-3 py-2"><span class="inline-flex px-1.5 py-0.5 text-[11px] font-semibold rounded bg-blue-100 text-blue-700">A</span></td><td class="px-3 py-2"><span class="inline-flex px-1.5 py-0.5 text-[11px] font-semibold rounded bg-green-100 text-success">T1</span></td></tr>
+                  <tr class="text-gray-400"><td class="px-3 py-2" colspan="3">⋯ 其他 17 筆</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <!-- 部門比例 -->
+          <details class="border border-border rounded-lg bg-gray-50/40">
             <summary class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition rounded-lg">
               <div class="flex items-center gap-2">
                 <span class="arrow text-gray-400">▶</span>
                 <i data-lucide="building-2" class="w-4 h-4 text-primary"></i>
-                <span class="text-sm font-semibold text-gray-800">部門比例 ob_dept_pct</span>
+                <span class="text-sm font-semibold text-gray-800">部門比例</span>
               </div>
-              <span class="text-xs font-mono text-gray-500">8 個 LIST_NO × 5 部門</span>
+              <span class="text-xs text-gray-500">8 名單 × 5 部門</span>
             </summary>
             <div class="px-4 py-3 border-t border-border bg-white rounded-b-lg overflow-x-auto">
-              <table class="w-full text-xs">
+              <table class="w-full text-sm">
                 <thead>
-                  <tr class="bg-gray-50/60">
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">LIST_NO</th>
-                    <th class="text-right px-3 py-2 font-semibold text-gray-600">D01</th>
-                    <th class="text-right px-3 py-2 font-semibold text-gray-600">D02</th>
-                    <th class="text-right px-3 py-2 font-semibold text-gray-600">D03</th>
-                    <th class="text-right px-3 py-2 font-semibold text-gray-600">D04</th>
-                    <th class="text-right px-3 py-2 font-semibold text-gray-600">D05</th>
-                    <th class="text-right px-3 py-2 font-semibold text-gray-600">合計</th>
+                  <tr class="bg-gray-50/60 text-xs text-gray-500">
+                    <th class="text-left px-3 py-2 font-semibold">名單編號</th>
+                    <th class="text-left px-3 py-2 font-semibold">部門</th>
+                    <th class="text-right px-3 py-2 font-semibold">比例 (%)</th>
                   </tr>
                 </thead>
-                <tbody class="divide-y divide-border font-mono">
-                  <tr><td class="px-3 py-2 font-semibold">OB202604001</td><td class="px-3 py-2 text-right">30.0%</td><td class="px-3 py-2 text-right">25.0%</td><td class="px-3 py-2 text-right">20.0%</td><td class="px-3 py-2 text-right">15.0%</td><td class="px-3 py-2 text-right">10.0%</td><td class="px-3 py-2 text-right text-success">100%</td></tr>
-                  <tr><td class="px-3 py-2 font-semibold">OB202604002</td><td class="px-3 py-2 text-right">35.0%</td><td class="px-3 py-2 text-right">30.0%</td><td class="px-3 py-2 text-right">15.0%</td><td class="px-3 py-2 text-right">10.0%</td><td class="px-3 py-2 text-right">10.0%</td><td class="px-3 py-2 text-right text-success">100%</td></tr>
-                  <tr><td class="px-3 py-2 font-semibold">OB202604005</td><td class="px-3 py-2 text-right">25.0%</td><td class="px-3 py-2 text-right">25.0%</td><td class="px-3 py-2 text-right">20.0%</td><td class="px-3 py-2 text-right">20.0%</td><td class="px-3 py-2 text-right">10.0%</td><td class="px-3 py-2 text-right text-success">100%</td></tr>
-                  <tr class="text-gray-500"><td class="px-3 py-2">⋯ 其他 5 筆 LIST_NO</td><td colspan="6" class="px-3 py-2 text-center">展開查看完整 8 筆</td></tr>
+                <tbody class="divide-y divide-border">
+                  <tr><td class="px-3 py-2"><span class="mono-sub text-gray-700">OB202604001</span></td><td class="px-3 py-2">業務一部（D01）</td><td class="px-3 py-2 text-right mono-sub">30.0</td></tr>
+                  <tr><td class="px-3 py-2"><span class="mono-sub text-gray-700">OB202604001</span></td><td class="px-3 py-2">業務二部（D02）</td><td class="px-3 py-2 text-right mono-sub">25.0</td></tr>
+                  <tr class="text-gray-400"><td class="px-3 py-2" colspan="3">⋯ 其他 38 筆</td></tr>
                 </tbody>
               </table>
             </div>
           </details>
 
-          <!-- 部門 → 人員 巢狀 -->
+          <!-- 人員比例 -->
           <details class="border border-border rounded-lg bg-gray-50/40">
             <summary class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition rounded-lg">
               <div class="flex items-center gap-2">
                 <span class="arrow text-gray-400">▶</span>
                 <i data-lucide="users" class="w-4 h-4 text-primary"></i>
-                <span class="text-sm font-semibold text-gray-800">部門人員比例 ob_empl_set</span>
+                <span class="text-sm font-semibold text-gray-800">人員比例</span>
               </div>
-              <span class="text-xs font-mono text-gray-500">5 部門 × 142 人員</span>
+              <span class="text-xs text-gray-500">142 人員</span>
             </summary>
-            <div class="px-4 py-3 border-t border-border bg-white rounded-b-lg space-y-2">
-              <details class="border border-border rounded">
-                <summary class="px-3 py-2 hover:bg-gray-50 transition flex items-center justify-between">
-                  <span class="text-sm"><span class="arrow text-gray-400 inline-block w-3">▶</span> <span class="font-mono font-semibold">D01</span> 業務一部 (32 人)</span>
-                  <span class="text-xs text-gray-500">合計 100.0%</span>
-                </summary>
-                <div class="px-3 py-2 text-xs text-gray-600 grid grid-cols-2 gap-x-6 gap-y-1 font-mono">
-                  <div>EMP001 王大明 — 5.0%</div><div>EMP002 林志強 — 4.5%</div>
-                  <div>EMP003 陳美華 — 4.0%</div><div>EMP004 黃文豪 — 3.5%</div>
-                  <div class="text-gray-400 col-span-2">⋯ 其他 28 人</div>
-                </div>
-              </details>
-              <details class="border border-border rounded">
-                <summary class="px-3 py-2 hover:bg-gray-50 transition flex items-center justify-between">
-                  <span class="text-sm"><span class="arrow text-gray-400 inline-block w-3">▶</span> <span class="font-mono font-semibold">D02</span> 業務二部 (28 人)</span>
-                  <span class="text-xs text-gray-500">合計 100.0%</span>
-                </summary>
-                <div class="px-3 py-2 text-xs text-gray-500 font-mono">展開查看 28 筆</div>
-              </details>
-              <div class="text-xs text-gray-400 px-3 py-1">⋯ D03 / D04 / D05 共 82 位人員</div>
-            </div>
-          </details>
-
-          <!-- 其他設定 JSON -->
-          <details class="border border-border rounded-lg bg-gray-50/40">
-            <summary class="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition rounded-lg">
-              <div class="flex items-center gap-2">
-                <span class="arrow text-gray-400">▶</span>
-                <i data-lucide="braces" class="w-4 h-4 text-primary"></i>
-                <span class="text-sm font-semibold text-gray-800">ob_assign_config（CR 回分規則 / 其他全域設定）</span>
-              </div>
-              <span class="text-xs font-mono text-gray-500">JSONB</span>
-            </summary>
-            <div class="px-4 py-3 border-t border-border bg-gray-900 rounded-b-lg">
-              <pre class="json-viewer text-gray-100 overflow-x-auto"><span class="text-gray-400">{</span>
-  <span class="text-pink-300">"cr_rule_enabled"</span>: <span class="text-green-300">true</span>,
-  <span class="text-pink-300">"cr_rule_threshold"</span>: <span class="text-amber-300">90</span>,
-  <span class="text-gray-500">// 90 天無回應自動回分</span>
-  <span class="text-pink-300">"daily_quota_enabled"</span>: <span class="text-green-300">true</span>,
-  <span class="text-pink-300">"daily_quota_max"</span>: <span class="text-amber-300">350</span>,
-  <span class="text-pink-300">"score_threshold_card_h"</span>: <span class="text-amber-300">85</span>,
-  <span class="text-pink-300">"score_threshold_card_s"</span>: <span class="text-amber-300">70</span>,
-  <span class="text-pink-300">"deduplication_strategy"</span>: <span class="text-green-300">"latest_run_wins"</span>
-<span class="text-gray-400">}</span></pre>
+            <div class="px-4 py-3 border-t border-border bg-white rounded-b-lg overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-gray-50/60 text-xs text-gray-500">
+                    <th class="text-left px-3 py-2 font-semibold">名單編號</th>
+                    <th class="text-left px-3 py-2 font-semibold">部門</th>
+                    <th class="text-left px-3 py-2 font-semibold">人員工號</th>
+                    <th class="text-right px-3 py-2 font-semibold">比例 (%)</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-border">
+                  <tr><td class="px-3 py-2"><span class="mono-sub text-gray-700">OB202604001</span></td><td class="px-3 py-2">業務一部（D01）</td><td class="px-3 py-2"><span class="mono-sub text-gray-700">EMP001</span> 王大明</td><td class="px-3 py-2 text-right mono-sub">5.0</td></tr>
+                  <tr class="text-gray-400"><td class="px-3 py-2" colspan="4">⋯ 其他 141 筆</td></tr>
+                </tbody>
+              </table>
             </div>
           </details>
         </div>
 
-        <!-- ============ Input List Panel ============ -->
+        <!-- ============ 輸入名單 Panel ============ -->
         <div id="panel-input" class="p-5 hidden">
-          <div class="grid grid-cols-3 gap-4 mb-4">
+          <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
             <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
-              <div class="text-xs text-gray-500 mb-1">總筆數（Stage 1）</div>
+              <div class="text-xs text-gray-500 mb-1">候選客戶總筆數</div>
               <div class="text-2xl font-bold text-primary tabular-nums">48,200</div>
-              <div class="text-xs text-gray-500 mt-1">原始未篩選名單</div>
+              <div class="text-xs text-gray-500 mt-1">分派前篩選出的候選名單</div>
             </div>
             <div class="bg-gray-50 border border-border rounded-lg p-4">
-              <div class="text-xs text-gray-500 mb-1">active LIST_NO 數</div>
+              <div class="text-xs text-gray-500 mb-1">使用中名單數</div>
               <div class="text-2xl font-bold text-gray-700 tabular-nums">8</div>
-              <div class="text-xs text-gray-500 mt-1">本月使用中名單</div>
+              <div class="text-xs text-gray-500 mt-1">本月納入分派的名單</div>
             </div>
-            <div class="bg-amber-50 border border-amber-100 rounded-lg p-4">
-              <div class="text-xs text-gray-500 mb-1">payload 大小</div>
-              <div class="text-2xl font-bold text-warning tabular-nums">2.3 MB</div>
-              <div class="text-xs text-gray-500 mt-1">JSONB 壓縮後</div>
+            <div class="bg-green-50 border border-green-100 rounded-lg p-4">
+              <div class="text-xs text-gray-500 mb-1">最終分派筆數</div>
+              <div class="text-2xl font-bold text-success tabular-nums">9,120</div>
+              <div class="text-xs text-gray-500 mt-1">覆蓋率 93.5%</div>
             </div>
           </div>
 
           <div class="bg-white border border-border rounded-lg">
-            <div class="px-4 py-3 border-b border-border flex items-center justify-between">
-              <span class="text-sm font-semibold text-gray-700">LIST_NO 與筆數明細</span>
-              <div class="flex items-center gap-2">
-                <input type="text" placeholder="依 custo_no 搜尋是否在輸入名單中..."
-                  class="px-3 py-1.5 text-xs border border-border rounded-md w-72 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-                <button class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition">
-                  <i data-lucide="search" class="w-3.5 h-3.5"></i>
-                  查詢
-                </button>
+            <div class="px-4 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
+              <span class="text-sm font-semibold text-gray-700">各名單筆數明細</span>
+              <div class="relative">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+                <input type="text" placeholder="輸入客戶編號，查詢是否在候選名單中…"
+                  class="pl-8 pr-3 py-1.5 text-xs border border-border rounded-md w-80 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
               </div>
             </div>
+            <div class="overflow-x-auto">
             <table class="w-full text-sm">
               <thead>
-                <tr class="bg-gray-50/60 text-xs">
-                  <th class="text-left px-4 py-2 font-semibold text-gray-600">LIST_NO</th>
-                  <th class="text-left px-4 py-2 font-semibold text-gray-600">名單名稱</th>
-                  <th class="text-left px-4 py-2 font-semibold text-gray-600">CARD_TYPE</th>
-                  <th class="text-right px-4 py-2 font-semibold text-gray-600">原始筆數</th>
-                  <th class="text-right px-4 py-2 font-semibold text-gray-600">佔比</th>
+                <tr class="bg-gray-50/60 text-xs text-gray-500">
+                  <th class="text-left px-4 py-2 font-semibold">名單編號</th>
+                  <th class="text-left px-4 py-2 font-semibold">名單名稱</th>
+                  <th class="text-left px-4 py-2 font-semibold">計分卡</th>
+                  <th class="text-right px-4 py-2 font-semibold">候選筆數</th>
+                  <th class="text-right px-4 py-2 font-semibold">佔比</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-border">
-                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604001</td><td class="px-4 py-2">2026-04 汽車期中名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">8,420</td><td class="px-4 py-2 text-right font-mono text-gray-500">17.5%</td></tr>
-                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604002</td><td class="px-4 py-2">2026-04 汽車中分名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-700">S</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">4,750</td><td class="px-4 py-2 text-right font-mono text-gray-500">9.9%</td></tr>
-                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604003</td><td class="px-4 py-2">2026-04 汽車低分名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-amber-100 text-amber-700">E</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">2,140</td><td class="px-4 py-2 text-right font-mono text-gray-500">4.4%</td></tr>
-                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604004</td><td class="px-4 py-2">2026-04 機車滿期名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">M</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">3,360</td><td class="px-4 py-2 text-right font-mono text-gray-500">7.0%</td></tr>
-                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604005</td><td class="px-4 py-2">2026-04 信貸中度逾期名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-orange-100 text-orange-700">S5</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">1,260</td><td class="px-4 py-2 text-right font-mono text-gray-500">2.6%</td></tr>
-                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604006</td><td class="px-4 py-2">2026-04 信貸嚴重逾期名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-red-100 text-red-700">E5</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">650</td><td class="px-4 py-2 text-right font-mono text-gray-500">1.3%</td></tr>
-                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604007</td><td class="px-4 py-2">2026-04 房貸中結名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">920</td><td class="px-4 py-2 text-right font-mono text-gray-500">1.9%</td></tr>
-                <tr><td class="px-4 py-2 font-mono text-xs font-semibold text-gray-700">OB202604008</td><td class="px-4 py-2">2026-04 信貸高分名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H</span></td><td class="px-4 py-2 text-right font-mono tabular-nums">26,700</td><td class="px-4 py-2 text-right font-mono text-gray-500">55.4%</td></tr>
+                <tr><td class="px-4 py-2"><span class="mono-sub text-gray-700">OB202604001</span></td><td class="px-4 py-2">2026-04 汽車期中名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H · 一般高分</span></td><td class="px-4 py-2 text-right mono-sub tabular-nums">8,420</td><td class="px-4 py-2 text-right mono-sub text-gray-500">17.5%</td></tr>
+                <tr><td class="px-4 py-2"><span class="mono-sub text-gray-700">OB202604002</span></td><td class="px-4 py-2">2026-04 汽車中分名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-700">S · 一般中分</span></td><td class="px-4 py-2 text-right mono-sub tabular-nums">4,750</td><td class="px-4 py-2 text-right mono-sub text-gray-500">9.9%</td></tr>
+                <tr><td class="px-4 py-2"><span class="mono-sub text-gray-700">OB202604004</span></td><td class="px-4 py-2">2026-04 機車滿期名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">M · 機車</span></td><td class="px-4 py-2 text-right mono-sub tabular-nums">3,360</td><td class="px-4 py-2 text-right mono-sub text-gray-500">7.0%</td></tr>
+                <tr><td class="px-4 py-2"><span class="mono-sub text-gray-700">OB202604008</span></td><td class="px-4 py-2">2026-04 信貸高分名單</td><td class="px-4 py-2"><span class="inline-flex px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 text-blue-700">H · 一般高分</span></td><td class="px-4 py-2 text-right mono-sub tabular-nums">26,700</td><td class="px-4 py-2 text-right mono-sub text-gray-500">55.4%</td></tr>
+                <tr class="text-gray-400"><td class="px-4 py-2" colspan="5">⋯ 其他 4 筆名單</td></tr>
               </tbody>
               <tfoot>
                 <tr class="bg-gray-50/60 font-semibold">
                   <td colspan="3" class="px-4 py-2 text-right">合計</td>
-                  <td class="px-4 py-2 text-right font-mono tabular-nums">48,200</td>
-                  <td class="px-4 py-2 text-right font-mono text-gray-500">100.0%</td>
+                  <td class="px-4 py-2 text-right mono-sub tabular-nums">48,200</td>
+                  <td class="px-4 py-2 text-right mono-sub text-gray-500">100.0%</td>
                 </tr>
               </tfoot>
             </table>
+            </div>
           </div>
         </div>
 
-        <!-- ============ Result Panel ============ -->
+        <!-- ============ 分派結果 Panel ============ -->
         <div id="panel-result" class="p-5 hidden">
-          <div class="grid grid-cols-4 gap-4 mb-4">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div class="bg-green-50 border border-green-100 rounded-lg p-4">
-              <div class="text-xs text-gray-500 mb-1">Stage 4 最終分派</div>
+              <div class="text-xs text-gray-500 mb-1">最終分派筆數</div>
               <div class="text-2xl font-bold text-success tabular-nums">9,120</div>
             </div>
             <div class="bg-blue-50 border border-blue-100 rounded-lg p-4">
@@ -425,46 +439,53 @@
               <div class="text-2xl font-bold text-primary tabular-nums">93.5%</div>
             </div>
             <div class="bg-purple-50 border border-purple-100 rounded-lg p-4">
-              <div class="text-xs text-gray-500 mb-1">分派部門</div>
+              <div class="text-xs text-gray-500 mb-1">分派部門數</div>
               <div class="text-2xl font-bold text-purple-700 tabular-nums">5</div>
             </div>
             <div class="bg-amber-50 border border-amber-100 rounded-lg p-4">
-              <div class="text-xs text-gray-500 mb-1">分派人員</div>
+              <div class="text-xs text-gray-500 mb-1">分派人員數</div>
               <div class="text-2xl font-bold text-warning tabular-nums">138</div>
             </div>
           </div>
 
           <div class="bg-white border border-border rounded-lg">
-            <div class="px-4 py-3 border-b border-border flex items-center justify-between">
-              <span class="text-sm font-semibold text-gray-700">前 50 筆 ob_pool_data_list 預覽</span>
+            <div class="px-4 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
               <div class="flex items-center gap-2">
-                <input type="text" placeholder="依 custo_no 或 emplid 搜尋..."
-                  class="px-3 py-1.5 text-xs border border-border rounded-md w-72 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
-                <button class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition">
-                  <i data-lucide="search" class="w-3.5 h-3.5"></i>
-                  查詢
+                <span class="text-sm font-semibold text-gray-700">分派明細</span>
+                <span class="text-xs text-gray-400">欄位與「結果摘要」匯出 Excel 一致</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <div class="relative">
+                  <i data-lucide="search" class="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+                  <input type="text" placeholder="搜尋 客戶編號 / 人員工號 / 案號…"
+                    class="pl-8 pr-3 py-1.5 text-xs border border-border rounded-md w-72 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary">
+                </div>
+                <!-- F115 回寫按鈕（設計預覽；實作為下一階段） -->
+                <button onclick="openWritebackModal()" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 transition">
+                  <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i>
+                  回寫業務系統
+                  <span class="ml-1 inline-flex items-center px-1.5 py-0.5 text-[9px] font-semibold rounded-full bg-white/25">下一階段</span>
                 </button>
               </div>
             </div>
             <div class="overflow-x-auto">
-              <table class="w-full text-xs">
-                <thead>
-                  <tr class="bg-gray-50/60">
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">LIST_NO</th>
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">orgno</th>
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">appl_no</th>
-                    <th class="text-right px-3 py-2 font-semibold text-gray-600">score</th>
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">card_level</th>
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">tier_level</th>
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">dept_id</th>
-                    <th class="text-left px-3 py-2 font-semibold text-gray-600">emplid</th>
-                  </tr>
-                </thead>
-                <tbody id="resultTbody" class="divide-y divide-border font-mono text-gray-700"></tbody>
+              <table class="w-full text-xs whitespace-nowrap">
+                <thead id="resultThead" class="bg-gray-50/60 text-gray-500"></thead>
+                <tbody id="resultTbody" class="divide-y divide-border text-gray-700"></tbody>
               </table>
             </div>
-            <div class="px-4 py-2 border-t border-border text-xs text-gray-500">
-              顯示前 50 / 共 9,120 筆 — 完整資料請使用搜尋或下載 JSON 快照
+            <!-- 分頁控制 -->
+            <div class="px-4 py-3 border-t border-border flex items-center justify-between flex-wrap gap-2">
+              <span class="text-xs text-gray-500">顯示第 <strong>1–50</strong> 筆 / 共 <strong class="tabular-nums">9,120</strong> 筆</span>
+              <div class="flex items-center gap-1">
+                <button class="px-2.5 py-1 text-xs border border-border rounded-md text-gray-400 bg-gray-50 cursor-not-allowed" disabled>上一頁</button>
+                <button class="px-2.5 py-1 text-xs border border-primary rounded-md text-white bg-primary">1</button>
+                <button class="px-2.5 py-1 text-xs border border-border rounded-md text-gray-700 hover:bg-gray-50">2</button>
+                <button class="px-2.5 py-1 text-xs border border-border rounded-md text-gray-700 hover:bg-gray-50">3</button>
+                <span class="px-1 text-xs text-gray-400">…</span>
+                <button class="px-2.5 py-1 text-xs border border-border rounded-md text-gray-700 hover:bg-gray-50">183</button>
+                <button class="px-2.5 py-1 text-xs border border-border rounded-md text-gray-700 hover:bg-gray-50">下一頁</button>
+              </div>
             </div>
           </div>
         </div>
@@ -475,8 +496,8 @@
       <div class="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
         <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
         <div>
-          <p class="font-medium text-gray-700 mb-0.5">快照詳情說明</p>
-          <p>F066 三份快照（config / input_list / result）均為 INSERT-only 不可變紀錄，由月名單分派完成時寫入 assignment_run_snapshot。保留期 3 年（AD-E07-3）。資料量 &gt; 100,000 筆時前端搜尋自動切換至後端搜尋 API（5.2 endpoint）。</p>
+          <p class="font-medium text-gray-700 mb-0.5">關於快照</p>
+          <p>三份快照（設定 / 輸入名單 / 分派結果）為分派完成當下的唯讀紀錄，可作為稽核與問題排查依據，保留 3 年。需要完整資料可使用「下載快照檔」。</p>
         </div>
       </div>
 
@@ -484,40 +505,81 @@
     </div><!-- /#mainContent -->
   </main>
 
+  <!-- ===== F115 回寫預覽 Modal（設計；實作為下一階段） ===== -->
+  <div id="writebackModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div class="bg-white rounded-xl shadow-xl w-full max-w-lg">
+      <div class="px-5 py-4 border-b border-border flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i data-lucide="upload-cloud" class="w-5 h-5 text-primary"></i>
+          <h3 class="text-base font-semibold text-gray-800">回寫至業務系統（OBPOOLDATA_LIST）</h3>
+        </div>
+        <button onclick="closeWritebackModal()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="px-5 py-4 space-y-4">
+        <div class="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+          <i data-lucide="alert-triangle" class="w-4 h-4 mt-0.5 shrink-0"></i>
+          <span>此動作會將本次分派結果寫入外部 legacy 業務系統，供催收人員使用。寫入前請先確認預覽內容，寫入後不可自動復原。</span>
+        </div>
+        <div>
+          <div class="text-xs font-semibold text-gray-600 mb-2">預覽（尚未寫入）</div>
+          <div class="grid grid-cols-3 gap-3">
+            <div class="bg-gray-50 border border-border rounded-lg p-3 text-center">
+              <div class="text-lg font-bold text-gray-800 tabular-nums">9,120</div>
+              <div class="text-[11px] text-gray-500">將更新筆數</div>
+            </div>
+            <div class="bg-gray-50 border border-border rounded-lg p-3 text-center">
+              <div class="text-lg font-bold text-gray-800 tabular-nums">8</div>
+              <div class="text-[11px] text-gray-500">涵蓋名單數</div>
+            </div>
+            <div class="bg-gray-50 border border-border rounded-lg p-3 text-center">
+              <div class="text-lg font-bold text-warning tabular-nums">12</div>
+              <div class="text-[11px] text-gray-500">目標未命中</div>
+            </div>
+          </div>
+          <p class="text-[11px] text-gray-400 mt-2">更新欄位：承辦部門、承辦人員、指派日、計分等級、分級、CR 相關欄。比對鍵：名單編號 + 機構 + 案號。</p>
+        </div>
+        <label class="flex items-center gap-2 text-xs text-gray-700">
+          <input type="checkbox" class="rounded border-gray-300"> 我已確認上述預覽內容無誤，同意寫入業務系統
+        </label>
+      </div>
+      <div class="px-5 py-3 border-t border-border flex items-center justify-between">
+        <span class="text-[11px] text-gray-400">此為設計預覽；回寫功能將於下一階段實作（F115）。</span>
+        <div class="flex items-center gap-2">
+          <button onclick="closeWritebackModal()" class="px-3 py-1.5 text-xs border border-border rounded-md text-gray-700 hover:bg-gray-50">取消</button>
+          <button class="px-3 py-1.5 text-xs text-white bg-primary/50 rounded-md cursor-not-allowed" disabled>確認回寫</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // ===== Mock Result Data =====
-    const sampleResult = [
-      ['OB202604001','9001234567','APPL000001',92,'A','T1','D01','EMP001'],
-      ['OB202604001','9001234568','APPL000002',88,'A','T1','D01','EMP002'],
-      ['OB202604001','9001234569','APPL000003',75,'B','T2','D02','EMP015'],
-      ['OB202604002','9001234570','APPL000004',68,'B','T2','D02','EMP021'],
-      ['OB202604002','9001234571','APPL000005',60,'C','T3','D03','EMP034'],
-      ['OB202604003','9001234572','APPL000006',45,'D','T4','D04','EMP058'],
-      ['OB202604004','9001234573','APPL000007',82,'A','T1M','D05','EMP102'],
-      ['OB202604005','9001234574','APPL000008',38,'D','T51','D03','EMP041'],
-      ['OB202604005','9001234575','APPL000009',32,'D','T51','D04','EMP063'],
-      ['OB202604006','9001234576','APPL000010',22,'D','T52','D02','EMP019'],
-      ['OB202604008','9001234577','APPL000011',95,'A','T1','D01','EMP005'],
-      ['OB202604008','9001234578','APPL000012',91,'A','T1','D01','EMP008'],
-      ['OB202604008','9001234579','APPL000013',78,'B','T2','D02','EMP024'],
-      ['OB202604001','9001234580','APPL000014',71,'B','T2','D02','EMP028'],
-      ['OB202604001','9001234581','APPL000015',64,'C','T3','D03','EMP037'],
+    // ===== 分派結果：23 欄（對齊 F064 匯出 EXPORT_HEADER_V2）=====
+    const RESULT_COLUMNS = [
+      '分處','案號','指派日','名單代號','名單名稱','進件日','CR_ID','CR_NM','是否分配CR','分級','部門代號','部門名稱','員編','姓名','職級','專案類別','專案名稱','逾期天數','客戶利率','狀態碼','案件狀態','廠牌名稱','名單週期月數'
+    ];
+    const RESULT_ROWS = [
+      ['台北分處','A112030571','20260701','OB202604001','2026-04 汽車期中名單','2015/05/18','','','否','T1','D01','業務一部','20742','王大明','專員','01','汽車貸款','','12.5','05','期中','TOYOTA','6'],
+      ['台北分處','A112031840','20260701','OB202604001','2026-04 汽車期中名單','2016/03/02','','','否','T2','D01','業務一部','20742','王大明','專員','01','汽車貸款','','9.8','05','期中','HONDA','6'],
+      ['台中分處','A112032635','20260702','OB202604002','2026-04 汽車中分名單','2017/11/20','CR088','CR林志強','是','T2','D02','業務二部','20815','林志強','資深專員','01','汽車貸款','','11.2','90','滿期','NISSAN','12'],
+      ['高雄分處','A112034387','20260702','OB202604004','2026-04 機車滿期名單','2018/07/09','','','否','T3','D05','業務五部','21033','陳美華','專員','02','機車貸款','','15.0','90','滿期','SYM','12'],
+      ['台北分處','A112037790','20260703','OB202604008','2026-04 信貸高分名單','2019/01/15','','','否','T1','D01','業務一部','20990','黃文豪','襄理','03','信用貸款','','8.5','05','期中','—','3'],
+      ['台中分處','A112048062','20260703','OB202604002','2026-04 汽車中分名單','2016/09/28','','','否','T2','D03','業務三部','21120','張家豪','專員','01','汽車貸款','','10.4','05','期中','MAZDA','6'],
     ];
 
-    function renderResult() {
-      const tb = document.getElementById('resultTbody');
-      tb.innerHTML = sampleResult.map(r => `
-        <tr class="hover:bg-gray-50/50 transition">
-          <td class="px-3 py-2 font-semibold text-gray-700">${r[0]}</td>
-          <td class="px-3 py-2">${r[1]}</td>
-          <td class="px-3 py-2">${r[2]}</td>
-          <td class="px-3 py-2 text-right tabular-nums">${r[3]}</td>
-          <td class="px-3 py-2"><span class="inline-flex px-1.5 py-0.5 text-[11px] font-semibold rounded ${r[4]==='A'?'bg-blue-100 text-blue-700':r[4]==='B'?'bg-cyan-100 text-cyan-700':r[4]==='C'?'bg-amber-100 text-amber-700':'bg-red-100 text-red-700'}">${r[4]}</span></td>
-          <td class="px-3 py-2 text-gray-600">${r[5]}</td>
-          <td class="px-3 py-2">${r[6]}</td>
-          <td class="px-3 py-2">${r[7]}</td>
-        </tr>
-      `).join('');
+    function renderResultTable() {
+      const thead = document.getElementById('resultThead');
+      const tbody = document.getElementById('resultTbody');
+      thead.innerHTML = '<tr>' + RESULT_COLUMNS.map(c => `<th class="text-left px-3 py-2 font-semibold">${c}</th>`).join('') + '</tr>';
+      tbody.innerHTML = RESULT_ROWS.map(r => '<tr class="hover:bg-gray-50/50 transition">' + r.map((v, i) => {
+        if (RESULT_COLUMNS[i] === '是否分配CR') {
+          return `<td class="px-3 py-2">${v === '是' ? '<span class="inline-flex px-1.5 py-0.5 text-[11px] font-semibold rounded bg-amber-100 text-amber-700">是</span>' : '<span class="text-gray-400">否</span>'}</td>`;
+        }
+        if (RESULT_COLUMNS[i] === '分級') {
+          return `<td class="px-3 py-2"><span class="inline-flex px-1.5 py-0.5 text-[11px] font-semibold rounded bg-green-100 text-success">${v}</span></td>`;
+        }
+        const isCode = ['案號','名單代號','員編','CR_ID'].includes(RESULT_COLUMNS[i]);
+        return `<td class="px-3 py-2 ${isCode ? 'mono-sub text-gray-700' : ''}">${v === '' ? '<span class="text-gray-300">—</span>' : v}</td>`;
+      }).join('') + '</tr>').join('');
     }
 
     // ===== Tab switch =====
@@ -526,25 +588,23 @@
         document.getElementById('tab-' + n).classList.toggle('active', n === name);
         document.getElementById('tab-' + n).classList.toggle('text-gray-500', n !== name);
         document.getElementById('panel-' + n).classList.toggle('hidden', n !== name);
-        const dbtn = document.getElementById('demo-' + n);
-        if (dbtn) {
-          if (n === name) dbtn.className = 'demo-btn px-3 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
-          else dbtn.className = 'demo-btn px-3 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50';
-        }
       });
       lucide.createIcons();
     }
 
-    function downloadJson() {
+    function downloadSnapshot() {
       const t = document.createElement('div');
       t.className = 'fixed bottom-6 right-6 z-50 bg-gray-900 text-white text-sm px-4 py-3 rounded-lg shadow-lg flex items-center gap-2';
-      t.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-success"></i><span>已下載 snapshot_7a1b2c3d.json (3.2 MB)</span>`;
+      t.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-success"></i><span>已下載快照檔 snapshot-202604.json</span>`;
       document.body.appendChild(t);
       lucide.createIcons();
       setTimeout(() => t.remove(), 2400);
     }
 
-    // ===== Role toggle (B7 standard 4-role) =====
+    function openWritebackModal() { document.getElementById('writebackModal').classList.remove('hidden'); lucide.createIcons(); }
+    function closeWritebackModal() { document.getElementById('writebackModal').classList.add('hidden'); }
+
+    // ===== Role toggle (standard 4-role) =====
     const ROLE_META = {
       admin:         { label: '系統管理者', bg: '#DBEAFE', fg: '#1D4ED8', icon: 'crown',     name: '王小明' },
       director:      { label: '業務部長',   bg: '#EDE9FE', fg: '#6D28D9', icon: 'briefcase', name: '張部長' },
@@ -553,7 +613,7 @@
     };
     let currentRole = 'director';
     function renderRoleBadge(role) {
-      const m = ROLE_META[role] || ROLE_META.sales;
+      const m = ROLE_META[role] || ROLE_META.director;
       return `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style="background:${m.bg};color:${m.fg};"><i data-lucide="${m.icon}" class="w-3 h-3"></i>${m.label}</span>`;
     }
     function setRole(role) {
@@ -569,7 +629,7 @@
     document.addEventListener('DOMContentLoaded', function(){ setRole('director'); });
 
     // init
-    renderResult();
+    renderResultTable();
     switchSnapTab('config');
     lucide.createIcons();
   </script>
