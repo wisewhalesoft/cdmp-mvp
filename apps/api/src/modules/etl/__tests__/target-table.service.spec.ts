@@ -6,17 +6,19 @@ describe('TargetTableService', () => {
   const service = new TargetTableService();
 
   describe('getAll()', () => {
-    it('TS-F036-001: should return exactly 1 target table (Phase 1 MVP)', () => {
-      const result = service.getAll();
-      expect(result.data).toHaveLength(1);
-      expect(result.data[0].tableName).toBe('customer_core');
-    });
-
-    it('should not contain Phase 2/3 tables', () => {
+    it('TS-F036-001: should return 2 target tables (customer_core + customer_financial)', () => {
       const result = service.getAll();
       const names = result.data.map((t) => t.tableName);
+      expect(result.data).toHaveLength(2);
+      expect(result.data[0].tableName).toBe('customer_core');
+      expect(names).toContain('customer_financial'); // F114
+    });
+
+    it('should not contain Phase 2/3 placeholder tables', () => {
+      const result = service.getAll();
+      const names = result.data.map((t) => t.tableName);
+      // customer_financial 已於 F114 實作為正式目標表，不再是佔位表
       expect(names).not.toContain('customer_interaction');
-      expect(names).not.toContain('customer_financial');
       expect(names).not.toContain('customer_service');
     });
 
@@ -40,7 +42,7 @@ describe('TargetTableService', () => {
       const result = service.getAll();
       const core = result.data[0];
       expect(core.domain).toBe('core');
-      expect(core.columnCount).toBe(79); // A~H: 5+12+10+10+12+12+13+5
+      expect(core.columnCount).toBe(85); // A~H: 6+13+10+10+12+14+15+5
       expect(core.displayName).toContain('Customer Core');
     });
   });
@@ -49,7 +51,7 @@ describe('TargetTableService', () => {
     it('should return customer_core schema with correct columns length', () => {
       const schema = service.getSchema('customer_core');
       expect(schema.tableName).toBe('customer_core');
-      expect(schema.columns).toHaveLength(54);
+      expect(schema.columns).toHaveLength(85);
     });
 
     it('TS-F036-012: should throw NotFoundException for unknown table', () => {
@@ -58,7 +60,6 @@ describe('TargetTableService', () => {
 
     it('TS-F036-013: should throw NotFoundException for Phase 2/3 tables', () => {
       expect(() => service.getSchema('customer_interaction')).toThrow(NotFoundException);
-      expect(() => service.getSchema('customer_financial')).toThrow(NotFoundException);
       expect(() => service.getSchema('customer_service')).toThrow(NotFoundException);
     });
 

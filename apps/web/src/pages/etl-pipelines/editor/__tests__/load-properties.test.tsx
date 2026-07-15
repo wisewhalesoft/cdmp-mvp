@@ -308,10 +308,10 @@ describe('LoadProperties (via PropertiesPanel)', () => {
       expect(within(catA).getByText('(5)')).toBeInTheDocument();
 
       const catE = screen.getByTestId('load-category-E');
-      expect(within(catE).getByText('(10)')).toBeInTheDocument();
+      expect(within(catE).getByText('(12)')).toBeInTheDocument();
 
       const catG = screen.getByTestId('load-category-G');
-      expect(within(catG).getByText('(7)')).toBeInTheDocument();
+      expect(within(catG).getByText('(13)')).toBeInTheDocument();
     });
 
     it('Category A is expanded by default, B~H are collapsed', async () => {

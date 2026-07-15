@@ -18,14 +18,14 @@ const mockedGetTargetTableSchema = vi.mocked(etlPipelinesApi.getTargetTableSchem
 const mockedGetTargetTableStats = vi.mocked(etlPipelinesApi.getTargetTableStats);
 const mockedGetUser = vi.mocked(authStore.getUser);
 
-// v2.0: Only 1 target table (customer_core), 54 columns
+// v2.0: Only 1 target table (customer_core), 79 columns
 const mockTableList: TargetTableListResponse = {
   data: [
     {
       tableName: 'customer_core',
       displayName: 'Customer Core（客戶主檔）',
       domain: 'core',
-      columnCount: 54,
+      columnCount: 79,
       description: '客戶身分、聯絡、職業、財務概況與風控旗標',
     },
   ],

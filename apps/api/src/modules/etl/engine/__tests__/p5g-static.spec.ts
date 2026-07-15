@@ -43,7 +43,7 @@ const OTHER_HANDLERS_MSSQL = OTHER_HANDLERS_PG.map((f) => f.replace('.ts', '-mss
 // §八 IMPACT
 // ===========================================================================
 describe('P5g IMPACT — 影響面盤點', () => {
-  it('IMPACT-001（MUST-FIX）：etl-pipelines.json 恰 6 個 target_load 節點（5 P5b + customer_core）', () => {
+  it('IMPACT-001（MUST-FIX）：etl-pipelines.json 恰 7 個 target_load 節點（5 P5b + customer_core + customer_financial）', () => {
     const arr = JSON.parse(fs.readFileSync(PIPELINE_JSON, 'utf8'));
     const targets: string[] = [];
     for (const p of arr) {
@@ -51,9 +51,9 @@ describe('P5g IMPACT — 影響面盤點', () => {
         if (n.data?.nodeType === 'target_load') targets.push(n.data.targetTable);
       }
     }
-    expect(targets.length).toBe(6);
+    expect(targets.length).toBe(7);
     expect(new Set(targets)).toEqual(
-      new Set(['ob_arreturndf_min_cap', 'ob_calendar', 'ob_emphire', 'ob_pool_data', 'ob_pool_data_list', 'customer_core']),
+      new Set(['ob_arreturndf_min_cap', 'ob_calendar', 'ob_emphire', 'ob_pool_data', 'ob_pool_data_list', 'customer_core', 'customer_financial']),
     );
   });
 

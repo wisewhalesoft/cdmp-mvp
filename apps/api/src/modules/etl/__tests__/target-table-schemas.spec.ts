@@ -4,15 +4,18 @@ import { TARGET_TABLE_SCHEMAS } from '../target-table-schemas';
 describe('target-table-schemas: customer_core', () => {
   const schema = TARGET_TABLE_SCHEMAS.find((t) => t.tableName === 'customer_core');
 
-  it('should have exactly one schema (customer_core)', () => {
-    expect(TARGET_TABLE_SCHEMAS).toHaveLength(1);
+  it('should have two schemas (customer_core + customer_financial, F114)', () => {
+    expect(TARGET_TABLE_SCHEMAS).toHaveLength(2);
     expect(schema).toBeDefined();
+    expect(TARGET_TABLE_SCHEMAS.map((t) => t.tableName)).toContain(
+      'customer_financial',
+    );
   });
 
   it('should not contain Phase 2/3 placeholder tables', () => {
     const tableNames = TARGET_TABLE_SCHEMAS.map((t) => t.tableName);
+    // customer_financial 已於 F114 實作為正式目標表，不再是佔位表
     expect(tableNames).not.toContain('customer_interaction');
-    expect(tableNames).not.toContain('customer_financial');
     expect(tableNames).not.toContain('customer_service');
   });
 
@@ -26,20 +29,22 @@ describe('target-table-schemas: customer_core', () => {
   describe('TS-F036-039: A~H category coverage', () => {
     const columnNames = () => schema!.columns.map((c) => c.name);
 
-    it('A. 識別與分類 (5 columns)', () => {
+    it('A. 識別與分類 (6 columns)', () => {
       const names = columnNames();
       expect(names).toContain('customer_id');
       expect(names).toContain('source_customer_no');
-      expect(names).toContain('customer_type');
+      expect(names).toContain('customer_type_code');
+      expect(names).toContain('customer_type_desc');
       expect(names).toContain('name');
       expect(names).toContain('english_name');
     });
 
-    it('B. 個人屬性 (12 columns)', () => {
+    it('B. 個人屬性 (13 columns)', () => {
       const names = columnNames();
       expect(names).toContain('gender');
       expect(names).toContain('date_of_birth');
-      expect(names).toContain('marital_status');
+      expect(names).toContain('marital_status_code');
+      expect(names).toContain('marital_status_desc');
       expect(names).toContain('education_code');
       expect(names).toContain('education_desc');
       expect(names).toContain('spouse_name');
@@ -82,24 +87,26 @@ describe('target-table-schemas: customer_core', () => {
     it('E. 職業與就業 (12 columns)', () => {
       const names = columnNames();
       expect(names).toContain('company_name');
-      expect(names).toContain('role_code');
-      expect(names).toContain('role_desc');
+      expect(names).toContain('role');
       expect(names).toContain('occupation_code');
       expect(names).toContain('occupation_desc');
       expect(names).toContain('job_title_code');
       expect(names).toContain('job_title_desc');
-      expect(names).toContain('job_level');
+      expect(names).toContain('job_level_code');
+      expect(names).toContain('job_level_desc');
       expect(names).toContain('industry_code');
       expect(names).toContain('industry_desc');
       expect(names).toContain('work_years');
       expect(names).toContain('company_scale');
     });
 
-    it('F. 財務與風控 (12 columns)', () => {
+    it('F. 財務與風控 (14 columns)', () => {
       const names = columnNames();
-      expect(names).toContain('monthly_income');
+      expect(names).toContain('monthly_income_code');
+      expect(names).toContain('monthly_income_desc');
       expect(names).toContain('approved_income');
-      expect(names).toContain('income_source');
+      expect(names).toContain('income_source_code');
+      expect(names).toContain('income_source_desc');
       expect(names).toContain('capital');
       expect(names).toContain('credit_limit');
       expect(names).toContain('highest_transaction_amount');
@@ -111,7 +118,7 @@ describe('target-table-schemas: customer_core', () => {
       expect(names).toContain('mainland_flag');
     });
 
-    it('G. 企業客戶專屬 (13 columns)', () => {
+    it('G. 企業客戶專屬 (15 columns)', () => {
       const names = columnNames();
       expect(names).toContain('owner_name');
       expect(names).toContain('owner_id');
@@ -120,9 +127,11 @@ describe('target-table-schemas: customer_core', () => {
       expect(names).toContain('owner_address');
       expect(names).toContain('group_owner');
       expect(names).toContain('established_capital');
-      expect(names).toContain('employee_count');
-      expect(names).toContain('is_listed');
-      expect(names).toContain('company_attr_code');
+      expect(names).toContain('employee_count_code');
+      expect(names).toContain('employee_count_desc');
+      expect(names).toContain('is_listed_code');
+      expect(names).toContain('is_listed_desc');
+      expect(names).toContain('business_item');
       expect(names).toContain('organization_type');
       expect(names).toContain('parent_customer_id');
       expect(names).toContain('parent_customer_name');
@@ -137,8 +146,8 @@ describe('target-table-schemas: customer_core', () => {
       expect(names).toContain('_etl_pipeline_id');
     });
 
-    it('total columns = 79 (5+12+10+10+12+12+13+5)', () => {
-      expect(schema!.columns).toHaveLength(79);
+    it('total columns = 85 (6+13+10+10+12+14+15+5)', () => {
+      expect(schema!.columns).toHaveLength(85);
     });
   });
 
@@ -186,9 +195,9 @@ describe('target-table-schemas: customer_core', () => {
       expect(col.nullable).toBe(true);
     });
 
-    it('monthly_income is DECIMAL(8,0), nullable', () => {
-      const col = findCol('monthly_income');
-      expect(col.type).toBe('DECIMAL(8,0)');
+    it('monthly_income_code is VARCHAR(5), nullable', () => {
+      const col = findCol('monthly_income_code');
+      expect(col.type).toBe('VARCHAR(5)');
       expect(col.nullable).toBe(true);
     });
 
