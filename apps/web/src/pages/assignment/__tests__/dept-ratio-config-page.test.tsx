@@ -1,12 +1,16 @@
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { DeptRatioConfigPage } from '../dept-ratio-config-page';
+import {
+  DeptRatioConfigPage,
+  splitConditionsFromList,
+} from '../dept-ratio-config-page';
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
 import * as assignmentStageApi from '@/api/assignment-stage';
 import * as authStore from '@/stores/auth-store';
 import type { AssignmentListItem, ListListsResponse } from '@/api/assignment-list';
+import type { ConditionDecoder } from '../_hooks/use-condition-decoder';
 
 /**
  * 29a 部門比例設定獨立頁面測試
@@ -87,6 +91,61 @@ function renderPage(listNo = 'OB202605003') {
     </MemoryRouter>,
   );
 }
+
+// ─────────────────────────────────────────────────────────────
+// 篩選條件顯示：欄位名稱（中文）：值（中文），比照個別業務比例設定頁
+// ─────────────────────────────────────────────────────────────
+describe('splitConditionsFromList — 篩選條件解碼為中文（比照 personnel-ratio）', () => {
+  const decoder: ConditionDecoder = {
+    decodeField: (col) =>
+      (
+        {
+          prod_kind: '產品類別',
+          spec_tp: '專案類別',
+          caseyear: '進件 / 滿期年數',
+          case_status: '案件結清期別',
+          card_type: '卡別',
+          settle_src: '結案來源',
+        } as Record<string, string>
+      )[col] ?? col,
+    decodeValue: (_col, v) => v,
+    decodeValues: (col, vals) =>
+      vals.map((v) =>
+        col === 'spec_tp'
+          ? (({ '01': '本牌/中古', '02': '本牌/原融' }) as Record<string, string>)[v] ?? v
+          : v,
+      ),
+  };
+
+  it('spec_tp 多值以「欄位中文：值中文、值中文」輸出，不再露出裸代碼', () => {
+    const list = {
+      ...deptRatioList,
+      prodKind: null,
+      caseYear: null,
+      caseStatus: null,
+      cardType: null,
+      settleSrc: null,
+      specTp: '01$$02',
+    } as AssignmentListItem;
+    const out = splitConditionsFromList(list, decoder);
+    expect(out).toEqual(['專案類別：本牌/中古、本牌/原融']);
+    // 舊格式（裸大寫代碼 / SQL 片段）不應再出現
+    expect(out.join(' ')).not.toMatch(/SPEC_TP|in \(/);
+  });
+
+  it('未知代碼 raw fallback：查無對照回傳原始值，永不臆測翻譯', () => {
+    const list = {
+      ...deptRatioList,
+      prodKind: null,
+      caseYear: null,
+      caseStatus: null,
+      cardType: null,
+      settleSrc: null,
+      specTp: '99',
+    } as AssignmentListItem;
+    expect(splitConditionsFromList(list, decoder)).toEqual(['專案類別：99']);
+  });
+});
 
 describe('DeptRatioConfigPage (29a)', () => {
   beforeEach(() => {

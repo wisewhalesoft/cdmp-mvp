@@ -16,6 +16,10 @@ import {
 import { DeptRatioForm, type DeptRatioFormHandle } from './_components/dept-ratio-form';
 import { ListSummaryCard } from './_components/list-summary-card';
 import { StageBreadcrumb } from './_components/stage-breadcrumb';
+import {
+  useConditionDecoder,
+  type ConditionDecoder,
+} from './_hooks/use-condition-decoder';
 import { getBusinessRole } from '@/stores/auth-store';
 import { writePendingToast } from './_utils/pending-toast';
 
@@ -36,19 +40,37 @@ import { writePendingToast } from './_utils/pending-toast';
  * 階段守衛：list.stage 必為 'dept_ratio'，否則顯示 stage-mismatch-warning
  */
 
-function splitConditionsFromList(list: AssignmentListItem): string[] {
+/** 篩選條件 chip 涉及之類別欄位（whitelist snake_case），供 decoder 預載 options。 */
+const DEPT_RATIO_COLUMNS = [
+  'prod_kind',
+  'spec_tp',
+  'caseyear',
+  'case_status',
+  'settle_src',
+];
+
+/**
+ * 將名單一級欄位攤平為篩選條件 chip 文字（欄位名稱 + 值皆解碼為中文，比照個別業務比例
+ * 設定頁與名單定義「查看」抽屜）。所有欄位一律以 '$$' 拆多值再逐值解碼（如
+ * settle_src='Y$$N'），查無對照之代碼回傳原始碼（decoder raw fallback），永不臆測翻譯。
+ */
+export function splitConditionsFromList(
+  list: AssignmentListItem,
+  decoder: ConditionDecoder,
+): string[] {
+  const decodeMulti = (col: string, raw: string): string =>
+    decoder.decodeValues(col, raw.split('$$').filter(Boolean)).join('、');
   const conditions: string[] = [];
-  if (list.prodKind) conditions.push(`PROD_KIND = ${list.prodKind}`);
-  if (list.specTp) {
-    const items = list.specTp.split('$$').filter(Boolean);
-    conditions.push(`SPEC_TP in (${items.join(', ')})`);
-  }
-  if (list.caseYear) {
-    const items = list.caseYear.split('$$').filter(Boolean);
-    conditions.push(`CASEYEAR in (${items.join(', ')})`);
-  }
-  if (list.cardType) conditions.push(`CARD_TYPE = ${list.cardType}`);
-  if (list.settleSrc) conditions.push(`SETTLE_SRC = ${list.settleSrc}`);
+  const push = (col: string, raw: string | null | undefined) => {
+    if (!raw) return;
+    conditions.push(`${decoder.decodeField(col)}：${decodeMulti(col, raw)}`);
+  };
+  push('prod_kind', list.prodKind);
+  push('spec_tp', list.specTp);
+  push('caseyear', list.caseYear);
+  push('case_status', list.caseStatus);
+  push('card_type', list.cardType);
+  push('settle_src', list.settleSrc);
   return conditions;
 }
 
@@ -78,6 +100,10 @@ export function DeptRatioConfigPage() {
   const businessRole = getBusinessRole();
   const isSectionChief = businessRole === 'section_chief';
   const canWrite = !isSectionChief; // director / admin
+
+  // 篩選條件 chip 代碼 → 中文解碼器（比照個別業務比例設定頁 / 名單定義「查看」抽屜；
+  //   card_type 走 listCardTypes）。
+  const decoder = useConditionDecoder(DEPT_RATIO_COLUMNS);
 
   useEffect(() => {
     if (!listNo) return;
@@ -245,7 +271,7 @@ export function DeptRatioConfigPage() {
               description="為本名單之各在職部門設定 RATION，加總須 = 100%；推進後比例將鎖定（如需修改請 Rollback 至草稿）。"
               createdBy={list.createdBy}
               createdAt={formatDate(list.createdAt)}
-              conditions={splitConditionsFromList(list)}
+              conditions={splitConditionsFromList(list, decoder)}
               crEnabled={true}
             />
 
