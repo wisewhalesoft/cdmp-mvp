@@ -76,6 +76,8 @@ describe('sampling-estimator — 真實 MSSQL TABLESAMPLE REPEATABLE（AD-E07-45
 
   it('TS-F055-038：REPEATABLE 決定性 — 兩次連續查詢回傳完全相同之 (orgno, appl_no) 集合', async (ctx) => {
     if (!reachable || !ds) return ctx.skip();
+    // CI 空庫（schema-only）ob_pool_data 母體為 0 → 本純讀取案例無意義，skip（不假綠）；populated DB 照跑。
+    if (totalCount === 0) return ctx.skip('需真實母體資料（ob_pool_data），CI 空庫 skip');
     // 大母體前提（dev CDMP ob_pool_data ~3.6M > 50000），否則本案例無意義
     expect(totalCount).toBeGreaterThan(POOL_DATA_SAMPLE_SIZE);
 
@@ -88,6 +90,7 @@ describe('sampling-estimator — 真實 MSSQL TABLESAMPLE REPEATABLE（AD-E07-45
 
   it('TS-F055-039：大母體實際修剪後恰 50000 列（過抽係數 1.3 緩衝生效）', async (ctx) => {
     if (!reachable || !ds) return ctx.skip();
+    if (totalCount === 0) return ctx.skip('需真實母體資料（ob_pool_data），CI 空庫 skip');
     expect(totalCount).toBeGreaterThan(POOL_DATA_SAMPLE_SIZE);
 
     const { ctePrefix, fromClause } = buildPoolDataSampleFrom(totalCount, 'mssql');

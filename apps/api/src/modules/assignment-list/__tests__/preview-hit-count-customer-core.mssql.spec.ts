@@ -12,6 +12,7 @@ import { restoreDbType, MSSQL, mssqlPortReachable, SKIP_REASON } from '@/databas
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { AssignmentListService } from '../assignment-list.service';
 import { AssignmentRunGuardService } from '@/modules/assignment/services/assignment-run-guard.service';
 import { SectionChiefScopeService } from '@/modules/assignment/services/section-chief-scope.service';
@@ -40,6 +41,10 @@ const WORKDT = new Date(Date.UTC(2026, 6, 1)); // 2026-07-01（AGE 基準）
 let reachable = false;
 let app: TestingModule | null = null;
 let service: AssignmentListService;
+// AD-E07-45：本檔為純讀取，依賴 dev CDMP 真實母體（ob_pool_data 1.68M + customer_core）。CI 空庫
+//   （schema-only）下母體為 0，估算恆回 0 → 對此類「需真實母體」案例 ctx.skip（不假綠、不 mask）。
+let hasData = false;
+const EMPTY_POPULATION_SKIP = '需真實母體資料（ob_pool_data/customer_core），CI 空庫 skip';
 
 beforeAll(async () => {
   reachable = await mssqlPortReachable(1500);
@@ -65,6 +70,11 @@ beforeAll(async () => {
     }).compile();
     await app.init();
     service = app.get(AssignmentListService);
+    // 母體可用性探測（決定 data-dependent 案例 run vs skip）。
+    const ds = app.get(DataSource);
+    const poolCnt = await ds.query(`SELECT COUNT(*) AS n FROM ob_pool_data`);
+    const ccCnt = await ds.query(`SELECT COUNT(*) AS n FROM customer_core`);
+    hasData = Number(poolCnt[0].n) > 0 && Number(ccCnt[0].n) > 0;
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn('[F050 §6.3 MSSQL] init failed → skip:', (e as Error)?.message);
@@ -89,6 +99,7 @@ describe('previewHitCount — customer_core（F109）納入估算，真實 MSSQL
 
   it('TS-F050-T01：age（date_of_birth 衍生）條件改變估算值（未被靜默 skip），大母體 sampleSize=50000', async (ctx) => {
     if (!reachable) return ctx.skip();
+    if (!hasData) return ctx.skip(EMPTY_POPULATION_SKIP);
     // 寬區間 [0,200]（幾乎全客戶）vs 窄區間 [30,40]
     const wide = await service.previewHitCount(
       { conditions: [{ columnName: 'date_of_birth', fieldType: 'numeric', min: 0, max: 200 }], logic: 'AND' } as any,
@@ -108,6 +119,7 @@ describe('previewHitCount — customer_core（F109）納入估算，真實 MSSQL
 
   it('TS-F050-T03：EMPTY_CONDITIONS 陷阱守門 — 僅 gender（customer_core）條件仍生效', async (ctx) => {
     if (!reachable) return ctx.skip();
+    if (!hasData) return ctx.skip(EMPTY_POPULATION_SKIP);
     // baseline：僅 best_case（系統固定注入）
     const baseline = await service.previewHitCount({ conditions: [], logic: 'AND' } as any, WORKDT);
     // gender=1 條件（customer_core，composer 會 skip → 由 customerCoreClause 產生）

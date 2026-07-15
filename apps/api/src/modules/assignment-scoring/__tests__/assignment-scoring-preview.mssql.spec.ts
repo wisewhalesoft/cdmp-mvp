@@ -12,6 +12,7 @@ import { restoreDbType, MSSQL, mssqlPortReachable, SKIP_REASON } from '@/databas
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { AssignmentScoringService } from '../assignment-scoring.service';
 import { ObLevelcardVersion } from '@/database/entities/ob-levelcard-version.entity';
 import { ObLevelcardColumn } from '@/database/entities/ob-levelcard-column.entity';
@@ -42,6 +43,10 @@ const E_LEVELS = JSON.stringify([
 let reachable = false;
 let app: TestingModule | null = null;
 let service: AssignmentScoringService;
+// AD-E07-45：純讀取，依賴 dev CDMP 真實母體（ob_pool_data_list + 計分卡 CARD_TYPE=E 種子）。CI 空庫
+//   （schema-only、未跑 data-seed）下母體/計分卡皆 0 → 對「需真實母體」案例 ctx.skip（不假綠、不 mask）。
+let hasData = false;
+const EMPTY_POPULATION_SKIP = '需真實母體資料（ob_pool_data_list / 計分卡 CARD_TYPE=E），CI 空庫 skip';
 
 beforeAll(async () => {
   reachable = await mssqlPortReachable(1500);
@@ -63,6 +68,11 @@ beforeAll(async () => {
     }).compile();
     await app.init();
     service = app.get(AssignmentScoringService);
+    // 母體 + 計分卡可用性探測（決定 data-dependent 案例 run vs skip）。
+    const ds = app.get(DataSource);
+    const listCnt = await ds.query(`SELECT COUNT(*) AS n FROM ob_pool_data_list`);
+    const cardCnt = await ds.query(`SELECT COUNT(*) AS n FROM ob_card_type WHERE card_type = 'E'`);
+    hasData = Number(listCnt[0].n) > 0 && Number(cardCnt[0].n) > 0;
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn('[F055/F056 MSSQL] init failed → skip:', (e as Error)?.message);
@@ -93,6 +103,7 @@ describe('previewCardLevels / previewTierMapping — 真實 MSSQL 效能 + 可�
   //   本斷言採寬鬆上限（證明已脫離 224.6s 全量病態、無逾時），實測 ms 由 console 誠實輸出供覆核。
   it('TS-F055-044：CARD_TYPE=E previewCardLevels 大幅優於 v1.6 全量計分 224.6s（實測 ms 記錄）', async (ctx) => {
     if (!reachable) return ctx.skip();
+    if (!hasData) return ctx.skip(EMPTY_POPULATION_SKIP);
     const t0 = Date.now();
     const r = await service.previewCardLevels({ cardType: 'E', levels: E_LEVELS });
     const elapsed = Date.now() - t0;
@@ -106,6 +117,7 @@ describe('previewCardLevels / previewTierMapping — 真實 MSSQL 效能 + 可�
 
   it('TS-F055-043：相同 CARD_TYPE + 門檻，兩次呼叫 distribution 完全相同（REPEATABLE 決定性）', async (ctx) => {
     if (!reachable) return ctx.skip();
+    if (!hasData) return ctx.skip(EMPTY_POPULATION_SKIP);
     const r1 = await service.previewCardLevels({ cardType: 'E', levels: E_LEVELS });
     const r2 = await service.previewCardLevels({ cardType: 'E', levels: E_LEVELS });
     expect(r2.distribution).toEqual(r1.distribution);
@@ -113,6 +125,7 @@ describe('previewCardLevels / previewTierMapping — 真實 MSSQL 效能 + 可�
 
   it('TS-F056-060：previewTierMapping(E) 兩次一致 + 各次 < 1 秒（A→T3, B/C/D→T4 合計）', async (ctx) => {
     if (!reachable) return ctx.skip();
+    if (!hasData) return ctx.skip(EMPTY_POPULATION_SKIP);
     const t0 = Date.now();
     const r1 = await service.previewTierMapping({ cardType: 'E' });
     const elapsed = Date.now() - t0;
