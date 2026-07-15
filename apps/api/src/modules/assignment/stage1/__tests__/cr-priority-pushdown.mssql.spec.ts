@@ -813,11 +813,15 @@ describe('P3d DATECAST — DATE↔DATETIME2 隱式轉換（真庫）', () => {
     // 全精度一致性：清空 ⟺ 儲存值 < twoYearsAgo 午夜（datetime2 full precision vs DATE-midnight）。
     //   字串比較：'2024-06-30T...' < '2024-07-01' → true；'2024-07-01T...' 非 < '2024-07-01'。
     const storedBeforeCutoff = storedIso < '2024-07-01';
+    // 核心不變式（timezone-agnostic）：清空與否 ⟺ 全精度儲存值 < 午夜 cutoff（datetime2 vs DATE-midnight）。
+    //   此於任何時區皆成立，為本測試真正驗證之語意。
     expect(cleared).toBe(storedBeforeCutoff);
-    // 記錄本環境實測：UTC 23:30 → 本機 07-01 07:30 → 非午夜前一日 → 不清（與 PG timestamp 全精度一致
-    //   之前提為兩者皆本機時區儲存；跨引擎逐位元組等價之最終判定需 prod 時區組態複驗，見 impl log）。
-    expect(storedIso.startsWith('2024-07-01')).toBe(true);
-    expect(cleared).toBe(false);
+    // 不硬編特定時區之儲存日期：tedious 依 driver/OS 時區將 UTC 2024-06-30T23:30 存為本機時刻——
+    //   CI Linux 容器（UTC）→ '2024-06-30T23:30'、開發機（+8）→ '2024-07-01T07:30'。兩者皆合法，
+    //   僅確認讀回值落在插入當日或跨日之合理範圍（非資料損毀），實際清空判定由上方不變式把關。
+    expect(
+      storedIso.startsWith('2024-06-30') || storedIso.startsWith('2024-07-01'),
+    ).toBe(true);
   });
 });
 
