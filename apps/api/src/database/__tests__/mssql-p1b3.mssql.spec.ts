@@ -154,9 +154,11 @@ async function dboBusinessTableCount(): Promise<number> {
   // AD-E07-41 P4-0：customer_core（PG-only、無 entity 之客戶主檔）為刻意的 migration-only 表——baseline migration
   //   會建之於 dbo，但非 36 表業務 baseline 之 entity 集合範疇；比照 queue_job 自業務表計數排除（其結構由 P1b2
   //   CUSTOMER-CORE 群組獨立驗證），使「migration:run 後 dbo 業務表數 = 36」之斷言不受此 migration-only 表影響。
+  // F114：customer_financial（PG-only、無 entity 之客戶財務彙總目標表，1751884800005 migration）同屬刻意的
+  //   migration-only 表，比照 customer_core 自業務表計數排除（見 P1b2 EXCLUDED_TABLES 白名單）。
   const r = await ds!.query(
     `SELECT COUNT(*) AS n FROM sys.tables t JOIN sys.schemas s ON t.schema_id=s.schema_id
-     WHERE s.name='dbo' AND t.name NOT IN ('typeorm_migrations', 'queue_job', 'customer_core')`,
+     WHERE s.name='dbo' AND t.name NOT IN ('typeorm_migrations', 'queue_job', 'customer_core', 'customer_financial')`,
   );
   return Number(r[0].n);
 }
@@ -217,10 +219,12 @@ afterAll(async () => {
 // DIALECT（4）
 // ===========================================================================
 describe('AD-E07-39 P1b3 DIALECT', () => {
-  it('TS-MSSQL-P1B3-DIALECT-001：seed.ts 依 DB_TYPE=mssql 連線並寫入 4 帳號（非 PG wire protocol）', async (ctx) => {
+  it('TS-MSSQL-P1B3-DIALECT-001：seed.ts 依 DB_TYPE=mssql 連線並寫入帳號（非 PG wire protocol）；全 bootstrap 後 users=9', async (ctx) => {
     ensureMssql(ctx);
     expect(seedRun!.status, `stderr=${seedRun!.stderr}`).toBe(0);
-    expect(await tableCount('users')).toBe(4);
+    // beforeAll 已跑完整 bootstrap（含 data-seed）→ users = 4 fixture（seed.ts）+ 5 真實帳號
+    //   （prod-data-seed users-real.json，皆唯一 UUID、與 fixture 不重疊）= 9。
+    expect(await tableCount('users')).toBe(9);
   });
 
   it('TS-MSSQL-P1B3-DIALECT-002：seed-datasource.ts 依 DB_TYPE=mssql 連線並寫入 9 空殼', async (ctx) => {
@@ -248,21 +252,24 @@ describe('AD-E07-39 P1b3 DIALECT', () => {
 // ALIAS（6）— B2 npm alias 修復
 // ===========================================================================
 describe('AD-E07-39 P1b3 ALIAS', () => {
-  it('TS-MSSQL-P1B3-ALIAS-001（🔴 B2 核心）：字面 npm run migration:run 對 mssql exit 0、36 表、3 筆 migration', async (ctx) => {
+  it('TS-MSSQL-P1B3-ALIAS-001（🔴 B2 核心）：字面 npm run migration:run 對 mssql exit 0、36 表、6 筆 migration', async (ctx) => {
     ensureMssql(ctx);
     expect(migrationRun!.status, `stderr=${migrationRun!.stderr}`).toBe(0);
     expect(ok(migrationRun)).toMatch(/has been executed successfully/);
     expect(ok(migrationRun)).not.toMatch(/17750|Could not load the DLL/i);
     expect(await dboBusinessTableCount()).toBe(36);
-    // P1b3 移植 reference-data → 2 支；AD-E07-40 P2a 再加 queue_job baseline → 3 支 mssql baseline（皆 glob 自動載入）。
-    expect(await tableCount('typeorm_migrations')).toBe(3);
+    // P1b3 移植 reference-data → 2 支；AD-E07-40 P2a 加 queue_job → 3 支；AD-E07-41 P4 加 customer_core
+    //   code-decode → 4 支；F113 加 users employee_no → 5 支；F114 加 customer_financial → 6 支 mssql
+    //   baseline（皆 migrations/mssql/* glob 自動載入）。
+    expect(await tableCount('typeorm_migrations')).toBe(6);
   });
 
-  it('TS-MSSQL-P1B3-ALIAS-003：字面 npm run seed 對 mssql exit 0（4 帳號）', async (ctx) => {
+  it('TS-MSSQL-P1B3-ALIAS-003：字面 npm run seed 對 mssql exit 0（4 fixture 帳號；全 bootstrap 後 users=9）', async (ctx) => {
     ensureMssql(ctx);
     expect(seedRun!.status).toBe(0);
     expect(ok(seedRun)).toMatch(/Created:|Skip:/);
-    expect(await tableCount('users')).toBe(4);
+    // seed.ts 寫 4 fixture；beforeAll 之 data-seed 再淨增 5 真實帳號 → 9（見 DIALECT-001 說明）。
+    expect(await tableCount('users')).toBe(9);
   });
 
   it('TS-MSSQL-P1B3-ALIAS-004：字面 npm run seed-datasource 對 mssql exit 0（9 空殼）', async (ctx) => {
@@ -470,7 +477,9 @@ describe('AD-E07-39 P1b3 BOOT', () => {
 // ===========================================================================
 describe('AD-E07-39 P1b3 COUNT', () => {
   const cases: Array<[string, string, number]> = [
-    ['COUNT-001', 'users', 4],
+    // users = 4 fixture（seed.ts）+ 5 真實帳號（prod-data-seed users-real.json，皆唯一 UUID）= 9
+    //   （見 DIALECT-001 說明）。
+    ['COUNT-001', 'users', 9],
     ['COUNT-002', 'datasources', SEED.datasources.length],
     ['COUNT-003', 'ob_card_type', SEED.cardType.length],
     ['COUNT-004', 'ob_levelcard_version', SEED.version.length],
@@ -530,6 +539,9 @@ describe('AD-E07-39 P1b3 IDEM（第二次 bootstrap seeds）', () => {
     }
   });
 
+  // 冪等：修正 users-real.json 中 michelleyou 之 id（原誤植為 seed.ts manager fixture 之
+  //   D4E5F6A7…，造成 data-seed UPDATE manager row → 二次 seed 以 email 查無而 INSERT → PK 衝突 exit 1）
+  //   為唯一 UUID 後，全 bootstrap + 二次 seed/seed-datasource/data-seed 皆冪等（0 新增 / 已存在）。
   it('TS-MSSQL-P1B3-IDEM-002：第二次執行 exit 0，且呈「0 新增 / 已存在」而非唯一鍵衝突拋錯', (ctx) => {
     ensureMssql(ctx);
     expect(seed2!.status).toBe(0);
@@ -544,11 +556,13 @@ describe('AD-E07-39 P1b3 IDEM（第二次 bootstrap seeds）', () => {
     expect(ok(dataSeed2)).not.toMatch(/\[漂移\]/);
   });
 
+  // michelleyou UUID 修正後 seed 冪等：第二次 seed 對 4 筆 fixture 皆「already correct」（含 manager，
+  //   其 email 不再被覆寫），列數維持全 bootstrap 後之 9。
   it('TS-MSSQL-P1B3-IDEM-005：seed.ts 對既有帳號第二次執行 → 4 筆「already correct」、列數不變', async (ctx) => {
     ensureMssql(ctx);
     const skips = (ok(seed2).match(/already correct/g) ?? []).length;
     expect(skips).toBe(4);
-    expect(await tableCount('users')).toBe(4);
+    expect(await tableCount('users')).toBe(9);
   });
 });
 
@@ -690,25 +704,27 @@ describe('AD-E07-39 P1b3 ALIAS（破壞性，末端執行）', () => {
     const out = ok(boot);
     expect(out).toMatch(/has been executed successfully/);
     expect(out).not.toMatch(/17750|Could not load the DLL|QueryFailedError/i);
-    // 最終狀態與分步一致。
-    expect(await tableCount('users')).toBe(4);
+    // 最終狀態與分步一致。one-shot bootstrap 各步驟僅執行一次 → 無 seed 二次冪等問題，
+    //   users = 4 fixture + 5 真實帳號 = 9（見 DIALECT-001 說明）。
+    expect(await tableCount('users')).toBe(9);
     expect(await tableCount('datasources')).toBe(9);
     expect(await tableCount('ob_levelcard_score')).toBe(SEED.score.length);
     expect(await tableCount('roles')).toBe(2);
     expect(await tableCount('pooldata_field_option')).toBe(454);
-    expect(await tableCount('typeorm_migrations')).toBe(3);
+    expect(await tableCount('typeorm_migrations')).toBe(6);
   });
 
-  it('TS-MSSQL-P1B3-ALIAS-002：字面 npm run migration:revert 對稱可用（逆轉三支 baseline → dbo 淨空）', async (ctx) => {
+  it('TS-MSSQL-P1B3-ALIAS-002：字面 npm run migration:revert 對稱可用（逆轉六支 baseline → dbo 淨空）', async (ctx) => {
     ensureMssql(ctx);
-    // AD-E07-40 P2a：3 支 baseline → 逆轉三次（TypeORM 由新到舊）：queue_job → reference-data（down no-op）→ schema（DROP 全表）。
-    const r1 = runNpm('migration:revert'); // queue_job（DROP queue_job）
-    expect(r1.status, `#1 stderr=${r1.stderr}`).toBe(0);
-    const r2 = runNpm('migration:revert'); // reference-data（down no-op）
-    expect(r2.status, `#2 stderr=${r2.stderr}`).toBe(0);
-    const r3 = runNpm('migration:revert'); // schema（DROP 全表）
-    expect(r3.status, `#3 stderr=${r3.stderr}`).toBe(0);
-    expect(ok(r1) + ok(r2) + ok(r3)).not.toMatch(/17750|Could not load the DLL|QueryFailedError/i);
+    // 6 支 baseline → 逆轉六次（TypeORM 由新到舊）：customer_financial → users employee_no →
+    //   customer_core code-decode → queue_job → reference-data（down no-op）→ schema（DROP 全表）。
+    const outs: string[] = [];
+    for (let i = 1; i <= 6; i++) {
+      const r = runNpm('migration:revert');
+      expect(r.status, `#${i} stderr=${r.stderr}`).toBe(0);
+      outs.push(ok(r));
+    }
+    expect(outs.join('')).not.toMatch(/17750|Could not load the DLL|QueryFailedError/i);
     expect(await dboBusinessTableCount()).toBe(0);
     expect(await tableCount('typeorm_migrations')).toBe(0);
   });
