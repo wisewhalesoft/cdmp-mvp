@@ -53,7 +53,6 @@ export function CustomerListPage() {
   const [, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [searchHint, setSearchHint] = useState('');
-  const [hasSearched, setHasSearched] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -91,7 +90,6 @@ export function CustomerListPage() {
       return;
     }
     setCurrentPage(1);
-    setHasSearched(true);
     const params: CustomerListParams = { page: 1, pageSize: 20 };
     if (keyword.length >= 2) params.keyword = keyword;
     if (typeFilter) params.type = typeFilter;
@@ -135,13 +133,15 @@ export function CustomerListPage() {
     setTypeFilter('');
     setSearchHint('');
     setCurrentPage(1);
-    setHasSearched(false);
     fetchCustomers();
   };
 
   const { data: customers, pagination } = listResponse;
   const isNoData = stats.total === 0 && customers.length === 0 && !loading;
-  const isEmptySearch = hasSearched && customers.length === 0 && !isNoData && !loading;
+  // 空結果狀態與 isNoData 對稱，僅依資料條件判斷：母體有資料（!isNoData）但目前
+  //   查詢／篩選／分頁結果為 0 筆時即顯示「找不到符合條件的客戶」。先前以 hasSearched
+  //   把關導致「切換客戶類別 / 翻頁到空頁」不會顯示空狀態、只留白畫面（bug）。
+  const isEmptySearch = customers.length === 0 && !isNoData && !loading;
 
   // Build page numbers for pagination
   const buildPageNumbers = (): (number | '...')[] => {
@@ -319,6 +319,7 @@ export function CustomerListPage() {
                 </span>
                 <div className="flex items-center gap-1">
                   <button
+                    aria-label="上一頁"
                     disabled={pagination.page <= 1}
                     onClick={() => handlePageChange(pagination.page - 1)}
                     className="px-3 py-1.5 text-sm border border-[#E5E7EB] rounded-md bg-white disabled:text-gray-300 disabled:cursor-not-allowed hover:bg-gray-50"
@@ -343,6 +344,7 @@ export function CustomerListPage() {
                     ),
                   )}
                   <button
+                    aria-label="下一頁"
                     disabled={pagination.page >= pagination.totalPages}
                     onClick={() => handlePageChange(pagination.page + 1)}
                     className="px-3 py-1.5 text-sm border border-[#E5E7EB] rounded-md bg-white disabled:text-gray-300 disabled:cursor-not-allowed hover:bg-gray-50"

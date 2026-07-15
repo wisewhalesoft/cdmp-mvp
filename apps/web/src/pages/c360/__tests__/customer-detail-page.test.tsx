@@ -199,10 +199,13 @@ describe('CustomerDetailPage', () => {
   it('TS-F047-032: risk flags show warning badge when Y', async () => {
     renderDetailPage();
     await waitFor(() => {
-      const badges = screen.getAllByText('Y');
-      // debt_flag and fine_flag both Y
-      const warningBadges = badges.filter((el) => {
-        return el.classList.contains('bg-amber-100') || el.closest('[class*="bg-amber"]') !== null;
+      // 啟用旗標（debtFlag / fineFlag = 'Y'）改以具名 amber 徽章呈現：消債註記 / 罰鍰註記
+      const warningBadges = [
+        screen.getByText('消債註記'),
+        screen.getByText('罰鍰註記'),
+      ];
+      warningBadges.forEach((el) => {
+        expect(el.closest('[class*="bg-amber"]')).not.toBeNull();
       });
       expect(warningBadges.length).toBeGreaterThanOrEqual(2);
     });
