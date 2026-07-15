@@ -67,8 +67,9 @@ describe('App routes — Phase 5d 波 2', () => {
     // BaseCodesPage 既有渲染會出現「PROD_KIND」/「SPEC_TP」/「CASE_STATUS」Tab；新版不應有
     expect(screen.queryByText('PROD_KIND')).not.toBeInTheDocument();
     expect(screen.queryByText('SPEC_TP')).not.toBeInTheDocument();
-    // 應 fallback 到 /login（App.tsx path="*" Navigate）
-    expect(screen.queryByText(/帳號|Login|登入/)).toBeInTheDocument();
+    // 應 fallback 到 /login（App.tsx path="*" Navigate）。登入頁含多個符合
+    //（標題／Email 標籤／登入按鈕）→ 用 queryAllByText 斷言「至少一個」，避免多重匹配丟錯。
+    expect(screen.queryAllByText(/帳號|Login|登入/).length).toBeGreaterThan(0);
   });
 
   it('舊路由 /assignment/whitelist 已刪除 → 不再渲染 FieldWhitelistPage', () => {

@@ -55,16 +55,20 @@ describe('F097 AssignmentWorkYmContext 涵蓋範圍（靜態）', () => {
     }
   });
 
-  // TS-F097-LABEL-003：未新增 E07 sidebar 路由（仍為既有 7 條 /assignment/* 連結）
-  it('TS-F097-LABEL-003：app-sidebar 仍為既有 E07 路由（無新增）', () => {
+  // TS-F097-LABEL-003：未新增 F097 專屬 sidebar 路由（work-ym / target-work）。
+  //   positive 清單同步為目前 app-sidebar 實際的 /assignment/* 連結：
+  //   run 詳情頁（run-progress / run-summary 等）已改為由「執行歷史」帶 ?runId 進入、無獨立 sidebar 入口；
+  //   另 F111 新增「分派總覽」/overview、F050 併入「篩選欄位」/field-base 與「計分卡設定」/scoring。
+  it('TS-F097-LABEL-003：app-sidebar 為現行 E07 路由，且無 F097 專屬路由', () => {
     const src = read('components/layout/app-sidebar.tsx');
     const expectedRoutes = [
+      '/assignment/overview',
+      '/assignment/field-base',
+      '/assignment/scoring',
       '/assignment/list-definitions',
       '/assignment/ready-summary',
       '/assignment/estimate',
       '/assignment/run',
-      '/assignment/run-progress',
-      '/assignment/run-summary',
       '/assignment/history',
     ];
     for (const r of expectedRoutes) {

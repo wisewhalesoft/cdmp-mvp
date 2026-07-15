@@ -29,7 +29,7 @@ describe('pooldata-fields API client', () => {
   it('reactivate-1：reactivateOption body 必含 isActive=true（regression for backend @Equals(true)）', async () => {
     await reactivateOption('prod_kind', '01');
     expect(mockedPatch).toHaveBeenCalledWith(
-      '/api/v1/pooldata-fields/prod_kind/options/01',
+      '/pooldata-fields/prod_kind/options/01',
       expect.objectContaining({ isActive: true }),
     );
   });
@@ -37,7 +37,7 @@ describe('pooldata-fields API client', () => {
   it('reactivate-2：reactivateOption 一併提供 optionLabel 時透傳', async () => {
     await reactivateOption('prod_kind', '01', { optionLabel: '汽車新車（更新）' });
     expect(mockedPatch).toHaveBeenCalledWith(
-      '/api/v1/pooldata-fields/prod_kind/options/01',
+      '/pooldata-fields/prod_kind/options/01',
       { isActive: true, optionLabel: '汽車新車（更新）' },
     );
   });
@@ -45,7 +45,7 @@ describe('pooldata-fields API client', () => {
   it('deactivate-1：deactivateOption body 含 isActive=false + reason，路徑帶 /deactivate', async () => {
     await deactivateOption('prod_kind', '01', { isActive: false, reason: '與新代碼合併' });
     expect(mockedPatch).toHaveBeenCalledWith(
-      '/api/v1/pooldata-fields/prod_kind/options/01/deactivate',
+      '/pooldata-fields/prod_kind/options/01/deactivate',
       { isActive: false, reason: '與新代碼合併' },
     );
   });
@@ -54,7 +54,7 @@ describe('pooldata-fields API client', () => {
     mockedPatch.mockResolvedValue({ data: { options: [] } });
     await reorderOptions('prod_kind', ['02', '01', '03']);
     expect(mockedPatch).toHaveBeenCalledWith(
-      '/api/v1/pooldata-fields/prod_kind/options/reorder',
+      '/pooldata-fields/prod_kind/options/reorder',
       { orderedValues: ['02', '01', '03'] },
     );
   });
