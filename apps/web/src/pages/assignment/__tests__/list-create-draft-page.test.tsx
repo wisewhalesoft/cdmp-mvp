@@ -1,7 +1,7 @@
 import { render, screen, cleanup, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import { ListCreateDraftPage } from '../list-create-draft-page';
+import { ListCreateDraftPage, rollForwardListName } from '../list-create-draft-page';
 import { ToastProvider } from '@/components/ui/toast';
 import * as assignmentListApi from '@/api/assignment-list';
 import * as assignmentStageApi from '@/api/assignment-stage';
@@ -479,6 +479,78 @@ describe('ListCreateDraftPage v2.1 (Phase 5d 波 8)', () => {
     });
     // 舊格式（conditionPayload=null）不應出現
     expect(screen.queryByTestId('copy-row-OB202604099')).toBeNull();
+  });
+
+  // ─────────────────────────────────────────
+  // lc.test#11b — 從上月複製一併帶入「名稱（月份前捲為本月）+ 卡別」（UX 需求）
+  // ─────────────────────────────────────────
+  it('lc.test#11b: 從上月複製 → 帶入名稱（202605→202606 前捲）、卡別、條件', async () => {
+    const src: AssignmentListItem = {
+      listNo: 'OB202605007',
+      listNm: '2026-05 業務二部 重點戶',
+      prodKind: null,
+      caseYear: null,
+      specTp: null,
+      caseStatus: null,
+      crEnabled: true,
+      listPeriodStart: 1,
+      listPeriodEnd: 6,
+      listInterval: 1,
+      settleSrc: null,
+      cardType: 'S5',
+      prodBest: null,
+      status: 'active',
+      stage: 'ready',
+      createdBy: '王部長',
+      createdAt: '2026-05-10T00:00:00Z',
+      updatedAt: '2026-05-10T00:00:00Z',
+      conditionPayload: {
+        conditions: [{ columnName: 'caseyear', fieldType: 'categorical', values: ['0'] }],
+        logic: 'AND',
+      },
+    };
+    mockedListLists.mockResolvedValue({
+      ...emptyPrevMonthLists,
+      selectedYm: '202605',
+      currentWorkYm: '202606',
+      lists: [src],
+      stageCounts: { draft: 0, dept_ratio: 0, personnel_ratio: 0, approval: 0, ready: 1, disabled: 0 },
+    });
+    // 作業月 2026-06 → 上月 2026-05；來源名稱「2026-05 …」前捲為「2026-06 …」
+    renderPage('/assignment/list-definitions/new?ym=2026-06');
+    await waitFor(() => expect(screen.getByTestId('btn-open-copy-modal')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('btn-open-copy-modal'));
+    await waitFor(() => expect(screen.getByTestId('btn-use-OB202605007')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('btn-use-OB202605007'));
+
+    // 名稱帶入且月份前捲為本作業月
+    await waitFor(() =>
+      expect(screen.getByTestId('input-listNm')).toHaveValue('2026-06 業務二部 重點戶'),
+    );
+    // 卡別帶入（S5 於 active 下拉中）
+    expect(screen.getByTestId('select-cardType')).toHaveValue('S5');
+    // 條件亦帶入（成功 banner 顯示）
+    expect(screen.getByTestId('copy-applied-banner')).toBeInTheDocument();
+  });
+
+  // ─────────────────────────────────────────
+  // lc.test#11c — rollForwardListName 純函式：月份 token 前捲（dash / compact / 無 token / 跨年）
+  // ─────────────────────────────────────────
+  it('lc.test#11c: rollForwardListName 前捲名稱月份 token', () => {
+    // dash 形
+    expect(rollForwardListName('2026-04 業務二部 重點戶', '202604', '202605')).toBe(
+      '2026-05 業務二部 重點戶',
+    );
+    // compact 形
+    expect(rollForwardListName('202604 重點戶', '202604', '202605')).toBe('202605 重點戶');
+    // 跨年
+    expect(rollForwardListName('2025-12 年終清理', '202512', '202601')).toBe('2026-01 年終清理');
+    // 無月份 token → 原樣返回
+    expect(rollForwardListName('主力催收名單', '202604', '202605')).toBe('主力催收名單');
+    // 空字串 / 非法 ym → 原樣返回
+    expect(rollForwardListName('', '202604', '202605')).toBe('');
+    expect(rollForwardListName('2026-04 x', 'bad', '202605')).toBe('2026-04 x');
   });
 
   // ─────────────────────────────────────────

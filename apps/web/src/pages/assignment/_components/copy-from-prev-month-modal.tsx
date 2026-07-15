@@ -207,7 +207,7 @@ export function CopyFromPrevMonthModal({
 
           <div className="px-5 py-3 border-t border-gray-200 bg-gray-50/50 flex items-center justify-between">
             <p className="text-xs text-gray-500">
-              複製後僅帶入欄位（CR 開關 / 篩選條件 / 商品 / 期別）；名稱與名單編號重新建立。
+              複製後帶入名稱、卡別、CR 開關、篩選條件與撈案期間；名單編號於儲存時重新產生。
             </p>
             <button
               type="button"

@@ -152,8 +152,8 @@
       <div id="copiedBanner" class="hidden mb-4 rounded-lg p-3 bg-green-50 border border-green-200 flex items-start gap-2 text-sm">
         <i data-lucide="check-circle-2" class="w-4 h-4 text-success mt-0.5 shrink-0"></i>
         <div class="flex-1">
-          <p class="font-semibold text-green-800">已從 <code id="copiedFromListNo" class="font-mono">OB202604005</code> 複製篩選條件</p>
-          <p class="text-xs text-green-700 mt-0.5">名稱欄位需自行命名；CR 開關已恢復為「啟用」預設值；條件可繼續編輯。</p>
+          <p class="font-semibold text-green-800">已從 <code id="copiedFromListNo" class="font-mono">OB202604005</code> 複製名稱、卡別與篩選條件</p>
+          <p class="text-xs text-green-700 mt-0.5">名稱與卡別已一併帶入並可調整（名稱月份自動更新為本月）；CR 開關已恢復為「啟用」預設值；條件可繼續編輯。</p>
         </div>
         <button onclick="document.getElementById('copiedBanner').classList.add('hidden')" class="text-green-700 hover:text-green-900">
           <i data-lucide="x" class="w-4 h-4"></i>
@@ -420,7 +420,7 @@
       </div>
       <div class="p-5 max-h-[55vh] overflow-y-auto space-y-2" id="copyListContainer"></div>
       <div class="px-5 py-3 border-t border-border bg-gray-50/50 text-[11px] text-gray-500">
-        <p><i data-lucide="info" class="w-3 h-3 inline -mt-0.5"></i> 複製後僅帶入 CR 開關 + 篩選條件；名稱與名單編號將重新建立。</p>
+        <p><i data-lucide="info" class="w-3 h-3 inline -mt-0.5"></i> 複製後帶入名稱、卡別、CR 開關與篩選條件；名單編號於儲存時重新產生。</p>
         <p class="mt-1"><i data-lucide="alert-triangle" class="w-3 h-3 inline -mt-0.5 text-warning"></i> 舊格式名單不可作為複製來源。</p>
       </div>
     </div>
@@ -614,9 +614,9 @@
     // 上月可複製名單 mock（v2.1：過濾 condition_payload IS NOT NULL）
     // ============================================================
     const LAST_MONTH_LISTS = [
-      { listNo: 'OB202604001', listNm: '2026-04 業務一部 主力催收', cr: true, conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'best_case', fieldType:'categorical', values:['Y'] }, { columnName:'month_cnt', fieldType:'numeric', min:2, max:6 }], logic:'AND' } },
-      { listNo: 'OB202604003', listNm: '2026-04 業務三部 信貸催收', cr: true, conditionPayload: { conditions: [{ columnName:'case_status', fieldType:'categorical', values:['01','02'] }, { columnName:'caseyear', fieldType:'categorical', values:['3','4','5'] }], logic:'AND' } },
-      { listNo: 'OB202604005', listNm: '2026-04 業務二部 重點戶',   cr: true, conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'settle_src', fieldType:'categorical', values:['Y'] }, { columnName:'month_cnt', fieldType:'numeric', min:6, max:12 }], logic:'AND' } },
+      { listNo: 'OB202604001', listNm: '2026-04 業務一部 主力催收', cr: true, cardType: 'S5', conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'best_case', fieldType:'categorical', values:['Y'] }, { columnName:'month_cnt', fieldType:'numeric', min:2, max:6 }], logic:'AND' } },
+      { listNo: 'OB202604003', listNm: '2026-04 業務三部 信貸催收', cr: true, cardType: 'OB', conditionPayload: { conditions: [{ columnName:'case_status', fieldType:'categorical', values:['01','02'] }, { columnName:'caseyear', fieldType:'categorical', values:['3','4','5'] }], logic:'AND' } },
+      { listNo: 'OB202604005', listNm: '2026-04 業務二部 重點戶',   cr: true, cardType: 'S6', conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'settle_src', fieldType:'categorical', values:['Y'] }, { columnName:'month_cnt', fieldType:'numeric', min:6, max:12 }], logic:'AND' } },
       // 舊格式名單範例（不應出現於 dropdown — 前端已過濾）
       { listNo: 'OB202604099', listNm: '2026-04 舊格式遷移名單', cr: true, conditionPayload: null }
     ];
@@ -1138,6 +1138,9 @@
     function applyCopyFrom(listNo) {
       const L = LAST_MONTH_LISTS.find(x => x.listNo === listNo);
       if (!L || !L.conditionPayload) return;
+      // UX：一併帶入名稱與卡別。名稱之月份 token 前捲為本作業月（demo：2026-04 → 2026-05）。
+      document.getElementById('listNm').value = (L.listNm || '').split('2026-04').join('2026-05');
+      document.getElementById('cardType').value = L.cardType || '';
       document.getElementById('crToggle').checked = true;
       onCrToggle(true);
       conditions = [];
@@ -1155,7 +1158,7 @@
       document.getElementById('copiedFromListNo').textContent = L.listNo;
       document.getElementById('copiedBanner').classList.remove('hidden');
       lucide.createIcons();
-      showToast('success', `已複製 ${L.listNo} 的篩選條件`, `${L.conditionPayload.conditions.length} 個條件已帶入，CR 已恢復預設啟用`);
+      showToast('success', `已複製 ${L.listNo} 的名稱、卡別與篩選條件`, `${L.conditionPayload.conditions.length} 個條件已帶入，名稱月份已更新為本月，CR 已恢復預設啟用`);
     }
 
     // ============================================================

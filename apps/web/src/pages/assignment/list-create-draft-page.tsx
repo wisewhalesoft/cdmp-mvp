@@ -124,6 +124,29 @@ function isConditionComplete(c: BuilderCondition): boolean {
 }
 
 /**
+ * 「從上月複製」帶入名稱時，將名稱中的「上月」月份 token 前捲為「本月」，
+ * 讓複製而來的名稱直接對應正在建立的作業月份（使用者仍可再自行調整）。
+ *
+ * dash 形（YYYY-MM）與 compact 形（YYYYMM）皆處理；名稱不含月份 token 時原樣返回。
+ * token 前後長度相同，不會超出 list_nm 50 字上限。
+ *
+ * @example rollForwardListName('2026-04 業務二部 重點戶', '202604', '202605')
+ *          === '2026-05 業務二部 重點戶'
+ */
+export function rollForwardListName(
+  name: string,
+  prevYm: string,
+  currentYm: string,
+): string {
+  if (!name) return name;
+  if (!/^\d{6}$/.test(prevYm) || !/^\d{6}$/.test(currentYm)) return name;
+  const prevDash = `${prevYm.slice(0, 4)}-${prevYm.slice(4)}`;
+  const currDash = `${currentYm.slice(0, 4)}-${currentYm.slice(4)}`;
+  // 先換 dash 形（換完的片段含 currentYm，不會被下一步 compact 換再誤傷），再換 compact 形。
+  return name.split(prevDash).join(currDash).split(prevYm).join(currentYm);
+}
+
+/**
  * F109 / US-172 AC-3：「新增條件」選單依 dataSource 分組（prototype 27a L647-676）。
  *   兩群組「案件資料」(ob_pool_data) / 「客戶資料」(customer_core)，可跨群組選取並存。
  */
@@ -588,7 +611,11 @@ export function ListCreateDraftPage() {
     (src: AssignmentListItem) => {
       const payload = src.conditionPayload;
       if (!payload) return;
-      // 帶入 CR + 篩選條件；名稱不帶
+      // 帶入 名稱 + 卡別 + CR + 篩選條件（UX：從上月複製一併帶入名稱與卡別，減少重複輸入）。
+      //   名稱之月份 token 前捲為本作業月（rollForwardListName），使用者可再自行調整；
+      //   卡別若來源為停用碼，建立模式下拉（僅 active）不會顯示選中，使用者需重選（罕見）。
+      setListNm(rollForwardListName(src.listNm, prevYm, currentYm));
+      setCardType(src.cardType ?? '');
       setCrEnabled(src.crEnabled ?? true);
       if (src.listPeriodStart != null) setListPeriodStart(String(src.listPeriodStart));
       if (src.listPeriodEnd != null) setListPeriodEnd(String(src.listPeriodEnd));
@@ -627,9 +654,9 @@ export function ListCreateDraftPage() {
 
       setCopyFromListNo(src.listNo);
       setCopyModalOpen(false);
-      showToast(`已從 ${src.listNo} 帶入欄位`, 'success');
+      showToast(`已從 ${src.listNo} 帶入名稱、卡別與篩選條件`, 'success');
     },
-    [condIdSeq, ensureOptions, showToast, fields],
+    [condIdSeq, ensureOptions, showToast, fields, prevYm, currentYm],
   );
 
   // ─── Render helpers ───
@@ -702,10 +729,10 @@ export function ListCreateDraftPage() {
               <CheckCircle2 className="w-4 h-4 text-green-700 mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="font-semibold text-green-900">
-                  已從 <code className="font-mono">{copyFromListNo}</code> 複製篩選條件
+                  已從 <code className="font-mono">{copyFromListNo}</code> 複製名稱、卡別與篩選條件
                 </p>
                 <p className="text-xs text-green-800 mt-0.5">
-                  名稱欄位需自行命名；CR 開關已恢復為「啟用」預設值；條件可繼續編輯。
+                  名稱與卡別已一併帶入並可調整（名稱月份自動更新為本月）；CR 開關已恢復為「啟用」預設值；條件可繼續編輯。
                 </p>
               </div>
               <button
