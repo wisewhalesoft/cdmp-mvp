@@ -352,13 +352,15 @@ describe('AD-E07-39 P1b2 BASELINE', () => {
     expect(rows.length).toBe(ds!.entityMetadatas.length);
   });
 
-  it('TS-MSSQL-P1B2-BASELINE-003：typeorm_migrations 恰 4 筆（schema + reference-data + queue_job + users employee_no baseline），第二次 migration:run 為 no-op', async (ctx) => {
+  it('TS-MSSQL-P1B2-BASELINE-003：typeorm_migrations 恰 6 筆（schema + reference-data + queue_job + customer_core code-decode + users employee_no + customer_financial baseline），第二次 migration:run 為 no-op', async (ctx) => {
     ensureMssql(ctx);
     // AD-E07-39 P1b3 新增 MssqlBaselineReferenceData（*1751884800001*）→ 由 1 支變 2 支；
     // AD-E07-40 P2a 再新增 MssqlQueueJobSchema（*1751884800002*）→ 2 支變 3 支；
-    // F113 / AD-E02-5 再新增 MssqlAddUsersEmployeeNo（*1751884800004*）→ 3 支變 4 支（皆 migrations/mssql/* glob 自動載入）。
+    // AD-E07-41 P4 再新增 MssqlUpdateCustomerCoreCodeDecode（*1751884800003*）→ 3 支變 4 支；
+    // F113 / AD-E02-5 再新增 MssqlAddUsersEmployeeNo（*1751884800004*）→ 4 支變 5 支；
+    // F114 再新增 MssqlAddCustomerFinancial（*1751884800005*）→ 5 支變 6 支（皆 migrations/mssql/* glob 自動載入）。
     const before = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
-    expect(Number(before[0].n)).toBe(4);
+    expect(Number(before[0].n)).toBe(6);
 
     const second = runTypeormCli('migration:run');
     expect(second.status, `stderr=${second.stderr}`).toBe(0);
@@ -366,7 +368,7 @@ describe('AD-E07-39 P1b2 BASELINE', () => {
     expect(out).toMatch(/No migrations are pending/i);
 
     const after = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
-    expect(Number(after[0].n)).toBe(4);
+    expect(Number(after[0].n)).toBe(6);
   });
 
   it('TS-MSSQL-P1B2-BASELINE-004：CLI datasource synchronize=false 且以 NODE_ENV=production 執行（無 synchronize 混淆）', (ctx) => {
@@ -900,21 +902,24 @@ describe('AD-E07-39 P1b2 STATIC', () => {
     expect(dsSrc).toMatch(/'migrations',\s*'mssql'/);
   });
 
-  it('TS-MSSQL-P1B2-STATIC-004（建議項）：migration:revert 逐一逆轉四支 baseline 後 dbo 全表與 migration 紀錄乾淨移除', async (ctx) => {
+  it('TS-MSSQL-P1B2-STATIC-004（建議項）：migration:revert 逐一逆轉六支 baseline 後 dbo 全表與 migration 紀錄乾淨移除', async (ctx) => {
     ensureMssql(ctx);
-    // P1b3 起 mssql 有 2 支 baseline；AD-E07-40 P2a 再加 queue_job → 3 支；F113 / AD-E02-5 再加
-    //   users employee_no（1751884800004）→ 4 支 → 需 revert 四次（TypeORM 由新到舊逆轉）：
-    //   #1 逆轉 users employee_no（DROP INDEX uq_users_employee_no + DROP COLUMN employee_no，時間戳最新故第 1）；
-    //   #2 逆轉 queue_job（DROP queue_job）；#3 逆轉 reference-data（down 為 no-op，僅移除紀錄）；
-    //   #4 逆轉 schema（DROP 全 36 表）。
-    for (let i = 1; i <= 4; i++) {
+    // P1b3 起 mssql 有 2 支 baseline；AD-E07-40 P2a 再加 queue_job → 3 支；AD-E07-41 P4 再加
+    //   customer_core code-decode（1751884800003）→ 4 支；F113 / AD-E02-5 再加 users employee_no
+    //   （1751884800004）→ 5 支；F114 再加 customer_financial（1751884800005）→ 6 支 → 需 revert 六次
+    //   （TypeORM 由新到舊逆轉）：
+    //   #1 逆轉 customer_financial（DROP customer_financial，時間戳最新故第 1）；
+    //   #2 逆轉 users employee_no（DROP INDEX uq_users_employee_no + DROP COLUMN employee_no）；
+    //   #3 逆轉 customer_core code-decode（回復欄位定義）；#4 逆轉 queue_job（DROP queue_job）；
+    //   #5 逆轉 reference-data（down 為 no-op，僅移除紀錄）；#6 逆轉 schema（DROP 全 36 表 + customer_core）。
+    for (let i = 1; i <= 6; i++) {
       const revert = runTypeormCli('migration:revert');
       expect(revert.status, `#${i} stderr=${revert.stderr}`).toBe(0);
       const out = `${revert.stdout ?? ''}${revert.stderr ?? ''}`;
       expect(out).not.toMatch(/QueryFailedError|17750|Could not load the DLL/i);
     }
-    // 四支 baseline 皆逆轉：36 業務表 + queue_job 移除、users.employee_no 欄/索引移除、
-    //   typeorm_migrations 紀錄歸 0（typeorm_migrations 表本身仍在）。
+    // 六支 baseline 皆逆轉：36 業務表 + queue_job + customer_core + customer_financial 移除、
+    //   users.employee_no 欄/索引移除、typeorm_migrations 紀錄歸 0（typeorm_migrations 表本身仍在）。
     const business = await countTables(DBO); // 含 typeorm_migrations
     const migRows = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
     expect(Number(migRows[0].n)).toBe(0);

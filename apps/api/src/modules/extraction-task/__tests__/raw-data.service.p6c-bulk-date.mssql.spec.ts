@@ -104,8 +104,12 @@ describe('P6c BULKDATE §一 重現（DATETIME2 raw 欄 → bulk 拒收髒日期
     // openBulkWriter 由 INFORMATION_SCHEMA 解析 dt 為 datetime2 → bulk 欄宣告 DateTime2。
     const writer = await svc.openBulkWriter(t, ['dt']);
     try {
+      // 缺陷本質 = 髒 year-0 Date 無法寫入 typed DATETIME2 → bulk 整批拒收（拋錯）。
+      // 錯誤訊息文字依 tedious 版本而異：OLE DB STREAM 路徑為「returned invalid data」，
+      // 較新 tedious 於 client 端型別驗證先攔截 year-0（< datetime2 下限 0001-01-01）→「Out of range.」。
+      // 兩者皆為正確拒收，故 regex 涵蓋，不因驅動版本差異而假性失敗（仍嚴格要求「拋錯」）。
       await expect(writer.writeRows([{ dt: DIRTY_YEAR0_DATE }])).rejects.toThrow(
-        /returned invalid data|invalid data for column/i,
+        /returned invalid data|invalid data for column|out of range/i,
       );
     } finally {
       await writer.abort();

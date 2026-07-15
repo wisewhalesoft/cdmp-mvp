@@ -121,13 +121,14 @@ function makeFailStub() {
 }
 
 function makeConsumer(stub: { runPipeline: ReturnType<typeof vi.fn> }): RunQueueConsumer {
+  // 建構子簽章（0102f41 移除 pg-boss / DI union 修正後）：
+  //   (pipeline, runRepo, tuning, config, mssqlQueue) — 共 5 參數（原多一個前導依賴，已移除）。
   return new RunQueueConsumer(
-    null,
-    stub as any,
-    runRepo,
-    tuning(),
-    mssqlConfig(),
-    queue,
+    stub as any,   // pipeline（stub.runPipeline）
+    runRepo,       // runRepo
+    tuning(),      // tuning
+    mssqlConfig(), // config（ConfigService，driverIsMssql 讀 DB_TYPE）
+    queue,         // mssqlQueue
   );
 }
 
@@ -155,7 +156,8 @@ beforeAll(async () => {
 
     queue = new MssqlQueueService(ds);
     runRepo = ds.getRepository(AssignmentRun);
-    producer = new RunQueueProducer(null, tuning(), mssqlConfig(), queue);
+    // 建構子簽章（0102f41 後）：RunQueueProducer(mssqlQueue) — 單一參數（原 tuning/config 依賴已移除）。
+    producer = new RunQueueProducer(queue);
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn('[AD-E07-40 P2b E2E] init failed → skip:', (e as Error)?.message);
