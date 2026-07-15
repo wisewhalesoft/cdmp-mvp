@@ -575,7 +575,10 @@ describe('F048 v2.0 — Detail Drawer（TS-F048-D-001~003）', () => {
     await waitFor(() => {
       expect(screen.getByTestId('detail-drawer')).toBeTruthy();
     });
-    expect(mockedGetFullSnapshot).toHaveBeenCalledWith('OB202605001');
+    // 部門比例頁籤比照準備完成摘要：由 API 隱藏 0% 部門（excludeZeroRatio）。
+    expect(mockedGetFullSnapshot).toHaveBeenCalledWith('OB202605001', {
+      excludeZeroRatio: true,
+    });
     // 4 個頁籤
     expect(screen.getByTestId('drawer-tab-conditions')).toBeTruthy();
     expect(screen.getByTestId('drawer-tab-dept')).toBeTruthy();
@@ -637,6 +640,70 @@ describe('F048 v2.0 — Detail Drawer（TS-F048-D-001~003）', () => {
     });
   });
 
+  it('D-002b 部門比例頁籤 — 以 excludeZeroRatio 呼叫 API，只呈現 API 回傳（0% 部門已由 API 濾除）', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({
+        lists: [makeItem({ listNo: 'OB202605001', stage: 'dept_ratio' })],
+        stageCounts: {
+          draft: 0,
+          dept_ratio: 1,
+          personnel_ratio: 0,
+          approval: 0,
+          ready: 0,
+          disabled: 0,
+        },
+      }),
+    );
+    const mockedGetFullSnapshot = vi.mocked(assignmentListApi.getFullSnapshot);
+    mockedGetFullSnapshot.mockResolvedValue({
+      list: {
+        listNo: 'OB202605001',
+        listNm: '車貸催收名單',
+        stage: 'dept_ratio',
+        status: 'active',
+        projectWorkym: '202605',
+        cardType: null,
+        crEnabled: true,
+        listPeriodStart: '1',
+        listPeriodEnd: '6',
+        listInterval: '1',
+        conditionPayload: { conditions: [], logic: 'AND' },
+        legacyEntityFallback: null,
+        createdBy: 'u-1',
+        createdAt: null,
+        updatedAt: null,
+      },
+      // API 已依 excludeZeroRatio 濾除 0% 部門 → 只回傳有配比之部門
+      deptRatios: [
+        { deptCode: 'XTA0', deptName: '業務一部', ration: 60 },
+        { deptCode: 'XTB0', deptName: '業務二部', ration: 40 },
+      ],
+      personnelRatios: [],
+      auditTrail: [],
+    });
+
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('btn-view-OB202605001')).toBeTruthy();
+    });
+    fireEvent.click(screen.getByTestId('btn-view-OB202605001'));
+    await waitFor(() => {
+      expect(screen.getByTestId('detail-drawer')).toBeTruthy();
+    });
+
+    // Drawer 以 excludeZeroRatio=true 呼叫 API（0% 濾除由後端負責）
+    expect(mockedGetFullSnapshot).toHaveBeenCalledWith('OB202605001', {
+      excludeZeroRatio: true,
+    });
+
+    fireEvent.click(screen.getByTestId('drawer-tab-dept'));
+    await waitFor(() => {
+      const panel = screen.getByTestId('drawer-panel-dept');
+      expect(panel.textContent).toContain('業務一部');
+      expect(panel.textContent).toContain('業務二部');
+    });
+  });
+
   it('D-003 月名單分派執行中「查看」按鈕仍可觸發 Drawer', async () => {
     mockedListLists.mockResolvedValue(
       buildResponse({
@@ -686,7 +753,9 @@ describe('F048 v2.0 — Detail Drawer（TS-F048-D-001~003）', () => {
     await waitFor(() => {
       expect(screen.getByTestId('detail-drawer')).toBeTruthy();
     });
-    expect(mockedGetFullSnapshot).toHaveBeenCalledWith('OB202605001');
+    expect(mockedGetFullSnapshot).toHaveBeenCalledWith('OB202605001', {
+      excludeZeroRatio: true,
+    });
   });
 });
 

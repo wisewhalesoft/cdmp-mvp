@@ -1425,7 +1425,9 @@ export class AssignmentListService {
    *   - 沿用既有 SectionChiefScopeService pattern：actor 為 section_chief 時，
    *     依 ob_empl_set.created_by = actor.userId 限縮 personnelRatios 範圍（取 deptid_m 集合）
    *   - admin / director / 無 actor → bypass（全可見）
-   *   - deptRatios 不過濾（處長仍可見全名單分配輪廓）
+   *   - deptRatios 不做轄區過濾（處長仍可見全名單分配輪廓）；
+   *     但可經 opts.excludeZeroRatio 隱藏比例 = 0% 之部門（Detail Drawer 部門比例頁籤用，
+   *     比照準備完成摘要 getDeptRatios）。
    *
    * Stage-aware null state（US-131 AC-3）：
    *   - draft：deptRatios=[], personnelRatios=[]
@@ -1439,6 +1441,7 @@ export class AssignmentListService {
   async getFullSnapshot(
     listNo: string,
     actor: { userId: string; role: string; businessRole: string | null },
+    opts: { excludeZeroRatio?: boolean } = {},
   ): Promise<ListSnapshotResponse> {
     // 1. 名單存在性
     const entity = await this.listRepo.findOne({ where: { list_no: listNo } });
@@ -1466,11 +1469,16 @@ export class AssignmentListService {
       where: { list_no: listNo },
       order: { obdeptid: 'ASC' },
     });
-    const deptRatios: SnapshotDeptRatio[] = deptRows.map((r) => ({
+    const allDeptRatios: SnapshotDeptRatio[] = deptRows.map((r) => ({
       deptCode: r.obdeptid,
       deptName: r.obdeptnm ?? null,
       ration: Number(r.ration),
     }));
+    // excludeZeroRatio（Detail Drawer 部門比例頁籤，比照準備完成摘要 getDeptRatios）：
+    //   隱藏比例 = 0% 之部門，避免唯讀檢視顯示未參與分配的部門。
+    const deptRatios = opts.excludeZeroRatio
+      ? allDeptRatios.filter((d) => d.ration > 0)
+      : allDeptRatios;
 
     // 4. personnelRatios（依 ob_empl_set group by deptid_m；section_chief 轄區隔離）
     const isSectionChief =

@@ -347,10 +347,18 @@ export interface FullSnapshotResponse {
  * - 歷史月份 / 月名單分派執行中均可呼叫（後端不攔截）
  *
  * 對應 React Drawer：apps/web/src/pages/assignment/_components/ListDetailDrawer.tsx
+ *
+ * @param opts.excludeZeroRatio 部門比例頁籤比照準備完成摘要，請 API 隱藏比例 = 0% 之部門。
  */
-export async function getFullSnapshot(listNo: string): Promise<FullSnapshotResponse> {
+export async function getFullSnapshot(
+  listNo: string,
+  opts?: { excludeZeroRatio?: boolean },
+): Promise<FullSnapshotResponse> {
+  const params: Record<string, string> = {};
+  if (opts?.excludeZeroRatio) params.excludeZeroRatio = 'true';
   const response = await apiClient.get<FullSnapshotResponse>(
     `/assignment/lists/${listNo}/full-snapshot`,
+    { params },
   );
   return response.data;
 }

@@ -472,6 +472,39 @@ describe('F050 v2.2 §6.2 — GET full-snapshot E2E (SS 群組 12 場景)', () =
   });
 
   // ============================================================
+  // SS-002b：excludeZeroRatio — Detail Drawer 部門比例頁籤隱藏 0% 部門
+  //   （比照 /assignment/ready-summary 之 getDeptRatios excludeZeroRatio）
+  // ============================================================
+  it('TS-F050-SS-002b：?excludeZeroRatio=true 隱藏 0% 部門；預設不濾除（向後相容）', async () => {
+    const listNo = 'OB202605022';
+    await seedList(ds, { listNo, stage: 'dept_ratio', conditionPayload: baseConditionPayload });
+    await seedDeptPct(ds, listNo, [
+      { deptCode: 'XTA0', deptName: '業務一部', ration: 60 },
+      { deptCode: 'XTB0', deptName: '業務二部', ration: 40 },
+      { deptCode: 'XTC0', deptName: '業務三部', ration: 0 },
+    ]);
+
+    // excludeZeroRatio=true → 0% 部門（XTC0）不出現
+    const filtered = await request(app.getHttpServer())
+      .get(snapshotUrl(listNo))
+      .query({ excludeZeroRatio: 'true' })
+      .set('Authorization', `Bearer ${directorToken}`);
+    expect(filtered.status).toBe(200);
+    expect(filtered.body.deptRatios.map((r: any) => r.deptCode)).toEqual(['XTA0', 'XTB0']);
+
+    // 預設（無 query）→ 向後相容，仍含 0% 部門
+    const unfiltered = await request(app.getHttpServer())
+      .get(snapshotUrl(listNo))
+      .set('Authorization', `Bearer ${directorToken}`);
+    expect(unfiltered.status).toBe(200);
+    expect(unfiltered.body.deptRatios.map((r: any) => r.deptCode)).toEqual([
+      'XTA0',
+      'XTB0',
+      'XTC0',
+    ]);
+  });
+
+  // ============================================================
   // SS-003：personnel_ratio 名單快照
   // ============================================================
   it('TS-F050-SS-003：personnel_ratio 名單 — 兩者皆有值', async () => {

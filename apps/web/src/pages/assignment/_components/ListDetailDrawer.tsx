@@ -77,7 +77,8 @@ export function ListDetailDrawer({ listNo, onClose }: ListDetailDrawerProps) {
     setErrorMsg(null);
     setLoading(true);
     let cancelled = false;
-    void getFullSnapshot(listNo)
+    // excludeZeroRatio：部門比例頁籤比照 /assignment/ready-summary，由 API 隱藏比例 = 0% 之部門。
+    void getFullSnapshot(listNo, { excludeZeroRatio: true })
       .then((snap) => {
         if (!cancelled) setData(snap);
       })

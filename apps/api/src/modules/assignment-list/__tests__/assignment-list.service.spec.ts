@@ -804,4 +804,72 @@ describe('AssignmentListService', () => {
       expect(src).not.toMatch(/dto\.prodBest\s*=/);
     });
   });
+
+  // =========================================================================
+  // F050 v2.2 §6.2 — getFullSnapshot excludeZeroRatio（Detail Drawer 部門比例頁籤）
+  //   比照準備完成摘要 getDeptRatios：由 API 隱藏比例 = 0% 之部門。
+  // =========================================================================
+  describe('getFullSnapshot — excludeZeroRatio（部門比例 0% 濾除）', () => {
+    const SNAP_ACTOR: { userId: string; role: string; businessRole: string | null } = {
+      userId: ACTOR.userId,
+      role: 'director',
+      businessRole: 'director',
+    };
+
+    async function seedDeptPct(
+      listNo: string,
+      rows: Array<{ deptCode: string; deptName: string; ration: number }>,
+    ) {
+      const repo = listRepo.manager.getRepository(ObDeptPct);
+      const now = new Date();
+      for (const r of rows) {
+        await repo.save(
+          repo.create({
+            project_workym: YM,
+            list_no: listNo,
+            obdeptid: r.deptCode,
+            obdeptnm: r.deptName,
+            ration: String(r.ration),
+            created_by_prog: 'TEST',
+            created_by: ACTOR.userId,
+            created_at: now,
+            updated_by_prog: 'TEST',
+            updated_by: ACTOR.userId,
+            updated_at: now,
+          } as Partial<ObDeptPct>),
+        );
+      }
+    }
+
+    it('TS-F050-SNAP-ZR01：excludeZeroRatio=true → 隱藏 0% 部門（僅回傳有配比部門）', async () => {
+      const { listNo } = await service.createList(baseCreateDto() as any, ACTOR, YM);
+      await seedDeptPct(listNo, [
+        { deptCode: 'XTA0', deptName: '業務一部', ration: 60 },
+        { deptCode: 'XTB0', deptName: '業務二部', ration: 40 },
+        { deptCode: 'XTC0', deptName: '業務三部', ration: 0 },
+      ]);
+
+      const snap = await service.getFullSnapshot(listNo, SNAP_ACTOR, {
+        excludeZeroRatio: true,
+      });
+      expect(snap.deptRatios.map((d) => d.deptCode)).toEqual(['XTA0', 'XTB0']);
+      expect(snap.deptRatios.every((d) => d.ration > 0)).toBe(true);
+    });
+
+    it('TS-F050-SNAP-ZR02：預設（無 opts）→ 不濾除，維持向後相容（含 0% 部門）', async () => {
+      const { listNo } = await service.createList(baseCreateDto() as any, ACTOR, YM);
+      await seedDeptPct(listNo, [
+        { deptCode: 'XTA0', deptName: '業務一部', ration: 60 },
+        { deptCode: 'XTB0', deptName: '業務二部', ration: 40 },
+        { deptCode: 'XTC0', deptName: '業務三部', ration: 0 },
+      ]);
+
+      const snap = await service.getFullSnapshot(listNo, SNAP_ACTOR);
+      expect(snap.deptRatios.map((d) => d.deptCode)).toEqual([
+        'XTA0',
+        'XTB0',
+        'XTC0',
+      ]);
+    });
+  });
 });

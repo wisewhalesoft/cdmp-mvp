@@ -97,13 +97,20 @@ export class AssignmentListController {
   // -------------------------------------------------------------------------
 
   @Get(':listNo/full-snapshot')
-  async getFullSnapshot(@Param('listNo') listNo: string, @Req() req: any) {
+  async getFullSnapshot(
+    @Param('listNo') listNo: string,
+    @Query('excludeZeroRatio') excludeZeroRatio: string | undefined,
+    @Req() req: any,
+  ) {
     const actor = {
       userId: req.user.userId,
       role: req.user.role,
       businessRole: req.user.businessRole ?? null,
     };
-    return this.service.getFullSnapshot(listNo, actor);
+    return this.service.getFullSnapshot(listNo, actor, {
+      // 部門比例頁籤比照準備完成摘要，由 API 隱藏比例 = 0% 之部門。
+      excludeZeroRatio: excludeZeroRatio === 'true' || excludeZeroRatio === '1',
+    });
   }
 
   // -------------------------------------------------------------------------
