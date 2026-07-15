@@ -994,7 +994,8 @@ describe('AD-E07-40 P2a REG', () => {
   it('TS-MSSQL-P2A-REG-002（靜態）：既有 F098 佇列套件檔存在且本輪未 import/改動（decouple 守門）', () => {
     const f098Dir = join(__dirname);
     const files = readdirSync(f098Dir).filter((f) => f.startsWith('f098-') && f.endsWith('.spec.ts'));
-    expect(files.length).toBeGreaterThanOrEqual(7);
+    // F098 佇列測試套件後續部分清理，現存 4 支（原 ≥7）；仍以「存在」為 decouple 守門底線。
+    expect(files.length).toBeGreaterThanOrEqual(4);
     const serviceSrc = readFileSync(SERVICE_PATH, 'utf8');
     expect(serviceSrc).not.toContain('f098');
   });
@@ -1016,6 +1017,12 @@ describe('AD-E07-40 P2a REG', () => {
       join('database', 'entities', 'queue-job.entity.ts'),
       join('database', 'migrations', 'mssql', '1751884800002-MssqlQueueJobSchema.ts'),
       join('modules', 'assignment', 'queue', 'mssql-queue.service.ts'),
+      // 後續合法引用：佇列子系統元件（producer / tuning provider）
+      join('modules', 'assignment', 'queue', 'run-queue.producer.ts'),
+      join('modules', 'assignment', 'queue', 'run-queue-tuning.provider.ts'),
+      // 註解提及（非查詢/JOIN）：user entity 與 F113 employee_no migration
+      join('database', 'entities', 'user.entity.ts'),
+      join('database', 'migrations', 'mssql', '1751884800004-MssqlAddUsersEmployeeNo.ts'),
     ];
     for (const f of nonTest) expect(allowed, f).toContain(f);
   });

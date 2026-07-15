@@ -767,9 +767,10 @@ describe('AD-E07-39 P1b1 ENTITY（D1）', () => {
 
   it('TS-MSSQL-P1B1-ENTITY-005（回歸）：sqlite/postgres 分支仍引用單一 ALL_ENTITIES（集合未縮減）', () => {
     const appSrc = readFileSync(join(__dirname, '..', '..', 'app.module.ts'), 'utf8');
-    // 三 dialect 分支皆 entities: ALL_ENTITIES（sqlite + mssql + postgres），共 3 處。
+    // dialect 分支皆 entities: ALL_ENTITIES；PG→MSSQL 遷移後移除 postgres 分支，
+    //   現為 sqlite + mssql 共 2 處。
     const occurrences = (appSrc.match(/entities:\s*ALL_ENTITIES/g) ?? []).length;
-    expect(occurrences).toBe(3);
+    expect(occurrences).toBe(2);
     // ALL_ENTITIES 定義含 36 個 entity（與 EXPECTED_ENTITY_COUNT 一致）。
     expect(ALL_ENTITIES.length).toBe(EXPECTED_ENTITY_COUNT);
   });
