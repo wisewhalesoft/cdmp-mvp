@@ -8,6 +8,7 @@ import { EtlPipelineExecutionService } from '../etl-pipeline-execution.service';
 import { EtlPipeline } from '@/database/entities/etl-pipeline.entity';
 import { EtlPipelineLog } from '@/database/entities/etl-pipeline-log.entity';
 import { EtlPipelineVersion } from '@/database/entities/etl-pipeline-version.entity';
+import { PipelineRunner } from '../engine';
 
 function makePipeline(overrides: Partial<EtlPipeline> = {}): EtlPipeline {
   return {
@@ -264,5 +265,45 @@ describe('EtlPipelineExecutionService', () => {
     expect(result.logId).toBeNull();
     expect(result.status).toBeNull();
     expect(result.processedCount).toBe(0);
+  });
+
+  // ===== enabled⟺status invariant on non-test success (排程漏跑回歸守門) =====
+
+  function makeRunningLog() {
+    return {
+      id: 'log-1',
+      is_test_run: false,
+      node_logs: null as string | null,
+      processed_count: 0,
+    } as unknown as EtlPipelineLog;
+  }
+
+  // 回歸：手動/排程成功跑完一條 enabled=false 的 pipeline，狀態不得升為 'active'
+  // （否則列表/儀表板顯示啟用中、綠色開關，但排程器因 enabled=false 永不觸發 → 靜默不排程）。
+  it('should keep a disabled pipeline as disabled (not active) after a non-test success', async () => {
+    const runSpy = vi
+      .spyOn(PipelineRunner.prototype, 'run')
+      .mockResolvedValue([{ nodeId: 'node-1', nodeName: 'Extract', status: 'completed' }] as any);
+    mockVersionRepository.findOne.mockResolvedValue(makeVersion());
+
+    const pipeline = makePipeline({ status: 'running', enabled: false });
+    await (service as any).executePipeline(pipeline, makeRunningLog());
+
+    expect(pipeline.status).toBe('disabled');
+    runSpy.mockRestore();
+  });
+
+  // 對照：enabled=true 成功跑完 → 'active'
+  it('should set an enabled pipeline to active after a non-test success', async () => {
+    const runSpy = vi
+      .spyOn(PipelineRunner.prototype, 'run')
+      .mockResolvedValue([{ nodeId: 'node-1', nodeName: 'Extract', status: 'completed' }] as any);
+    mockVersionRepository.findOne.mockResolvedValue(makeVersion());
+
+    const pipeline = makePipeline({ status: 'running', enabled: true });
+    await (service as any).executePipeline(pipeline, makeRunningLog());
+
+    expect(pipeline.status).toBe('active');
+    runSpy.mockRestore();
   });
 });

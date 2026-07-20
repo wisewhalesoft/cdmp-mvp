@@ -385,7 +385,10 @@ export class EtlPipelineExecutionService {
               await this.versionRepository.save(version);
             }
           } else {
-            pipeline.status = 'active';
+            // 維持 enabled⟺status 的 invariant（同 togglePipeline）：
+            // 手動 / 排程觸發一條 enabled=false 的 pipeline 成功後，不可升為 'active'
+            // （否則列表/儀表板顯示啟用中、綠色開關，但排程器因 enabled=false 永不觸發 → 靜默不排程）。
+            pipeline.status = pipeline.enabled ? 'active' : 'disabled';
 
             // Update pipeline stats (BR-7: test run doesn't count)
             const newExecutionCount = pipeline.execution_count + 1;
