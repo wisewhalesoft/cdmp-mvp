@@ -97,17 +97,30 @@ describe('PipelineSchedulerService', () => {
     );
   });
 
-  // TS-F030-011: 排程跳過執行中的 Pipeline (status=running filtered by query)
-  it('should only query active pipelines (running excluded by DB filter)', async () => {
+  // TS-F030-011: 排程僅撈 active/failed（running 由 DB filter 排除，避免重入）
+  it('should query active and failed pipelines (running excluded by DB filter)', async () => {
     mockQueryBuilder.getMany.mockResolvedValue([]);
 
     await service.scanAndExecute(new Date('2026-01-01T02:00:00+08:00'));
 
     expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-      'p.status = :status',
-      { status: 'active' },
+      'p.status IN (:...statuses)',
+      { statuses: ['active', 'failed'] },
     );
     expect(mockExecutionService.triggerSchedule).not.toHaveBeenCalled();
+  });
+
+  // 回歸：enabled 的 pipeline 上次排程失敗（status='failed'）→ 下個排程時點自動重試（不需人工 retry）
+  it('should re-trigger a failed-but-enabled pipeline on its next scheduled slot (self-heal)', async () => {
+    const pipeline = makePipeline({ status: 'failed', enabled: true, schedule: '0 2 * * *' });
+    mockQueryBuilder.getMany.mockResolvedValue([pipeline]);
+
+    await service.scanAndExecute(new Date('2026-01-01T02:00:00+08:00'));
+
+    expect(mockExecutionService.triggerSchedule).toHaveBeenCalledWith(
+      'pipeline-1',
+      'admin-user',
+    );
   });
 
   // TS-F030-012: draft Pipeline 不被排程觸發 (only active pipelines queried)
