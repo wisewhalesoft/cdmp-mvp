@@ -16,6 +16,7 @@ function makePipeline(overrides: Partial<PipelineListItem> = {}): PipelineListIt
     version: 2,
     stepCount: 5,
     status: 'active',
+    enabled: true,
     schedule: '0 2 * * *',
     lastExecutionAt: null,
     nextExecutionAt: null,

@@ -332,10 +332,11 @@ export function PipelineListPage() {
           </button>
         )}
 
-        {/* Toggle */}
+        {/* Toggle — 開關狀態一律以 enabled 為準（非 status）。
+            status='active' 不代表已排程；只有 enabled=true 排程器才會觸發。 */}
         {isRunning ? (
           <button className="p-1.5 rounded text-gray-300 cursor-not-allowed" disabled title="執行中">
-            <ToggleRight className="w-4 h-4" />
+            {pipeline.enabled ? <ToggleRight className="w-4 h-4" /> : <ToggleLeft className="w-4 h-4" />}
           </button>
         ) : pipeline.status === 'draft' ? (
           <button
@@ -348,25 +349,25 @@ export function PipelineListPage() {
               需先發布 Pipeline 才能啟用
             </span>
           </button>
-        ) : pipeline.status === 'disabled' ? (
-          <button
-            onClick={() => handleToggle(pipeline.id, true)}
-            className="p-1.5 hover:bg-gray-100 rounded text-gray-400"
-            title="啟用"
-            disabled={togglingIds.has(pipeline.id)}
-            data-testid={`toggle-pipeline-${pipeline.id}`}
-          >
-            <ToggleLeft className="w-4 h-4" />
-          </button>
-        ) : (
+        ) : pipeline.enabled ? (
           <button
             onClick={() => handleToggle(pipeline.id, false)}
             className="p-1.5 hover:bg-gray-100 rounded text-green-500"
-            title="停用"
+            title="停用（排程中）"
             disabled={togglingIds.has(pipeline.id)}
             data-testid={`toggle-pipeline-${pipeline.id}`}
           >
             <ToggleRight className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            onClick={() => handleToggle(pipeline.id, true)}
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-400"
+            title="啟用排程"
+            disabled={togglingIds.has(pipeline.id)}
+            data-testid={`toggle-pipeline-${pipeline.id}`}
+          >
+            <ToggleLeft className="w-4 h-4" />
           </button>
         )}
 

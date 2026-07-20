@@ -648,6 +648,8 @@ export interface PipelineListItem {
   version: number;
   stepCount: number;
   status: EtlPipelineStatus;
+  /** 是否啟用排程。status='active' 不代表已排程 — 必須 enabled=true 排程器才會觸發。 */
+  enabled: boolean;
   schedule: string | null;
   lastExecutionAt: string | null;
   nextExecutionAt: string | null;

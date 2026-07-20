@@ -200,6 +200,7 @@ const pipelinesData = {
       version: 3,
       stepCount: 4,
       status: 'draft' as const,
+      enabled: false,
       schedule: null,
       lastExecutionAt: null,
       nextExecutionAt: null,

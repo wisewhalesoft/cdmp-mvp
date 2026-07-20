@@ -284,6 +284,7 @@ export class EtlPipelineService {
       version: p.version,
       stepCount: p.step_count,
       status: p.status,
+      enabled: p.enabled,
       schedule: p.schedule,
       lastExecutionAt: p.last_execution_at?.toISOString() ?? null,
       nextExecutionAt: p.next_execution_at?.toISOString() ?? null,

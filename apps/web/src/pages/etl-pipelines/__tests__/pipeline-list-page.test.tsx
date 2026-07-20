@@ -33,6 +33,7 @@ const mockListResponse: PipelineListResponse = {
       version: 2,
       stepCount: 5,
       status: 'active',
+      enabled: true,
       schedule: '0 2 * * *',
       lastExecutionAt: '2026-03-18T02:00:00.000Z',
       nextExecutionAt: '2026-03-19T02:00:00.000Z',
@@ -47,6 +48,7 @@ const mockListResponse: PipelineListResponse = {
       version: 1,
       stepCount: 3,
       status: 'draft',
+      enabled: false,
       schedule: null,
       lastExecutionAt: null,
       nextExecutionAt: null,
@@ -61,6 +63,7 @@ const mockListResponse: PipelineListResponse = {
       version: 1,
       stepCount: 2,
       status: 'running',
+      enabled: true,
       schedule: '0 3 * * *',
       lastExecutionAt: '2026-03-18T03:00:00.000Z',
       nextExecutionAt: '2026-03-19T03:00:00.000Z',
@@ -474,14 +477,14 @@ describe('PipelineListPage', () => {
     const updatedResponse: PipelineListResponse = {
       ...mockListResponse,
       data: mockListResponse.data.map((p) =>
-        p.id === 'pl-1' ? { ...p, status: 'disabled' as const } : p,
+        p.id === 'pl-1' ? { ...p, status: 'disabled' as const, enabled: false } : p,
       ),
     };
     mockedGetPipelines.mockResolvedValue(updatedResponse);
 
     // Click toggle button for pl-1 (active → disable)
     const row = screen.getByTestId('pipeline-row-pl-1');
-    const toggleBtn = row.querySelector('button[title="停用"]') as HTMLButtonElement;
+    const toggleBtn = row.querySelector('button[title="停用（排程中）"]') as HTMLButtonElement;
     expect(toggleBtn).not.toBeNull();
 
     await act(async () => {
