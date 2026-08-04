@@ -1,10 +1,12 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.17"
-date: 2026-05-28
+version: "1.18"
+date: 2026-08-04
 status: Draft
 ---
+
+> **✅ v1.19 修訂（2026-08-04 / US-180 / F117）— 已核可**：`#assignment-ratio-errors` 新增 `RATIO_DEPT_DIRECTOR_REQUIRED`（422）：部門比例設定 PUT 之 payload 對「無在職處長且無既有非零比例」之部門配置 `ration > 0` 時拋出（defense-in-depth，正常前端流程不應觸發）。對應 [F117 AC-6 / BR-6](features/F117-dept-ratio-director-required-filter.md)。F117 已於 2026-08-04 人工審閱閘核可（v1.1），本碼為最終契約。同輪另更正 `LIST_NO_DUPLICATE` 之過時描述（原稱 `prod_kind + card_type`，實為「完整條件集相等 + card_type」）。**F118 經審查不新增錯誤碼**（唯讀提示；重複攔截仍由既有 `LIST_NO_DUPLICATE` 負責）。
 
 > **v1.17 修訂（2026-05-28 / US-144 best_case 系統固定篩選條件 Design A）**：`#assignment-errors`（代碼維護 / 篩選欄位區段，緊接 F075/F076 之 `WHITELIST_FIELD_*` / `OPTION_*` 錯誤碼）新增 `SYSTEM_FIXED_FIELD_CANNOT_DEACTIVATE`（422）：對 `pooldata_field_whitelist.is_system_fixed = true` 之欄位（如 `best_case`）執行停用（`DELETE /api/v1/pooldata-fields/{columnName}` 或 `PATCH` 帶 `{ isActive: false }`）時拋出；系統固定欄位之 `is_active` 恆維持 `true`，僅攔截停用 / `is_active = false`（`display_name` 編輯不受限）。對應 [F075 v1.7 BR-15 / AC-20](features/F075-manage-pooldata-field-whitelist.md)、[F050 v2.3 BR-14](features/F050-create-list-definition.md)、[F051 v2.2 BR-14](features/F051-edit-list-definition.md)。
 
@@ -244,7 +246,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | 錯誤碼 | HTTP 狀態碼 | 訊息 | 說明 | 相關功能 |
 |--------|------------|------|------|----------|
 | LIST_NO_LIMIT_EXCEEDED | 422 | 本月（{ym}）名單定義已達 999 筆上限，無法新增 | 同月 `ob_list_definition` 紀錄超過 999 筆（OB{YYYYMM}{NNN} 格式限制，Phase 2 擴位） | F050 |
-| LIST_NO_DUPLICATE | 422 | 相同產品類別（PROD_KIND）與卡別（CARD_TYPE）的有效名單已存在（LIST_NO: {conflictListNo}） | `prod_kind + card_type` 在當月 active 名單中已存在 | F050, F051 |
+| LIST_NO_DUPLICATE | 422 | 條件完全相同的有效名單已存在（LIST_NO: {conflictListNo}） | **v2.2 更正（2026-08-04 / F118 查核）**：判定基準為「**完整條件集相等 + `card_type` 相等**」（`findActiveConditionDuplicate`，排除 `is_system_fixed` 欄位如 `best_case` 後正規化比對），於**目標作業月** active 名單中比對。原描述「`prod_kind + card_type`」為 v2.1 舊規則遺留，自 [F050 v2.2](features/F050-create-list-definition.md) 起已不適用。[F118](features/F118-copy-from-prev-month-duplicate-indicator.md) 之「已複製過」提示重用同一判定，兩者依建構即一致（F118 AC-2） | F050, F051, F118 |
 | ~~CASE_STATUS_REQUIRED~~ | ~~422~~ | ~~案件結清期別為必填，請至少選取一項~~ | **DEPRECATED v2.1（2026-05-20 / F050 v2.1 重構）**：v2.1 之 case_status 必填語意由 `CONDITION_COLUMN_NOT_IN_WHITELIST`（白名單驗證）+ condition_payload 必填統一覆蓋（A1 / A5）；v2.0 service code 引用本錯誤碼之 rename 由 Phase 3a system-architect 安排，新實作禁止引用 | ~~F050, F051~~（DEPRECATED） |
 | CONDITION_COLUMN_NOT_IN_WHITELIST | 422 | 篩選條件欄位 `{columnName}` 不在 POOLDATA 篩選欄位白名單或已停用 | **v2.1（2026-05-20 / F050 v2.1 重構，拍板 1）**：F050 v2.1 / F051 v2.1 寫入名單時，`condition_payload.conditions[].columnName` 未存在於 F075 v1.5 `pooldata_field_whitelist` 或對應欄位 `is_active = false`；service 層校驗（即使前端 dropdown 已過濾，後端仍驗，defense-in-depth）；details 含不合法之 `columnName`。**對應 GAP-LIST §A3 解除**。**取代** v2.0 之 `LIST_FILTER_FIELD_NOT_IN_WHITELIST`（已標 DEPRECATED） | F050 v2.1, F051 v2.1 |
 | RESERVED_FIELD_IN_CONDITIONS | 400 | 以下欄位為一級保留欄位，不可納入篩選條件：`{reservedFields}` | **v2.1（2026-05-20 / F050 v2.1 重構，拍板 3 / J8）**：F050 v2.1 / F051 v2.1 寫入名單時，`condition_payload.conditions[].columnName` 含 `list_period_start` / `list_period_end` / `list_interval`（保留為一級欄位）；後端 defense-in-depth 校驗（前端 dropdown 不列出此三個欄位）；details 含 `reservedFields: string[]` | F050 v2.1, F051 v2.1 |
@@ -314,6 +316,7 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | PERSONNEL_RATIO_SUM_NOT_100 | 422 | 部門 {deptCode} 個別業務比例加總為 {sum}%，需調整至 100%（容忍 ±0.01%） | **v1.0 / 2026-05-15 / 批次 5 新增（取代 `PERSONNEL_RATIO_SUM_INVALID`）**：`ob_empl_set` 同 `(list_no, deptid_m)` 下 `ration` 加總超出 [99.99, 100.01] 容忍範圍（per-DEPT 驗證；沿用 Invariant I-8）；F082 PUT 寫入時觸發。**注意**：與 `RATIO_SUM_NOT_100`（per-LIST_NO）語意不同；本錯誤碼為 per-DEPT 加總 | F082 |
 | PERSONNEL_RATIO_DEPT_NOT_FOUND | 422 | 部門 {deptCode} 尚未於部門比例設定階段配置，無法設定個別業務比例 | **v1.0 / 2026-05-15 / 批次 5 新增**：F082 PUT 寫入前，service 層查詢 `ob_dept_pct WHERE (project_workym, list_no, obdeptid = :deptCode)` 不存在；理論上不會觸發（F080 推進已驗證部門比例加總 = 100% 即所有 `ob_dept_pct` 紀錄齊備），作為防呆 + Rollback 後資料一致性保護 | F082 |
 | BONUS_PENALTY_TEMPLATE_INVALID | 422 | 模板套用結果違反加總或單欄位邊界 | **v1.0 / 2026-05-15 / 批次 5 新增**：F082 PUT 收到 `appliedTemplate` 欄位時，service 層額外驗證套用結果之 per-DEPT 加總 100% 與單欄位 [0, 100]；不合法回此錯誤碼（前端 bug 防呆，正常流程不應觸發）；details 含 `template` / `targetEmpId` / `actualSum` | F083（透過 F082 PUT 觸發）|
+| RATIO_DEPT_DIRECTOR_REQUIRED | 422 | 部門 {deptCode} 目前無在職處長，無法配置分派比例 | **v1.19 / 2026-08-04 / US-180 / F117 新增（已核可）**：F079 / F117 PUT 寫入時，payload 對「無在職處長**且**無既有非零比例（即非孤兒部門）」之部門配置 `ration > 0` 時觸發。處長判定沿用 [F079 BR-14](features/F079-set-dept-ratio.md)（`TRIM(jfun_nm) = '處長'` + `emphire-active.util` 在職語意 + 同部門取最早到職）。**注意**：對「孤兒部門」（無處長但既有 `ration > 0`）**不**拋此碼——該類部門既有比例由伺服器端保留且不可經 payload 修改（[F117 BR-4 / BR-5](features/F117-dept-ratio-director-required-filter.md)），payload 帶入之值靜默忽略。加總驗證之對象為保留規則套用後之最終持久化集合（F117 BR-7），故加總不符時仍回 `RATIO_SUM_NOT_100` | F117（經 F079 PUT 觸發）|
 | PERSONNEL_RATIO_SUM_INVALID | 422 | 部門 {deptId} 人員比例加總為 {sum}%，需調整至 100% | `[DEPRECATED v2.0 / 2026-05-15]` 原 F058 v1.x 之錯誤碼；由 `PERSONNEL_RATIO_SUM_NOT_100` 取代（新版含容忍 ±0.01% 浮點誤差說明 + per-DEPT 語意明確）；保留以供 F058 廢棄前殘留實作參照，新實作禁止引用 | ~~F058 v1.x DEPRECATED~~ |
 
 #### 分派執行 {#assignment-run-errors}

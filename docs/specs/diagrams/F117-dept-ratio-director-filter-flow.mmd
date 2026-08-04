@@ -1,0 +1,57 @@
+%% F117 部門比例設定頁「有在職處長」過濾決策流程
+%% 涵蓋：GET 三分類判定（可編輯 / 孤兒鎖定 / 隱藏）與 PUT 孤兒列保留規則
+%% 對應 spec：features/F117-dept-ratio-director-required-filter.md BR-1 ~ BR-7
+flowchart TD
+    Start["部長或 Admin 開啟部門比例設定頁"] --> Get["GET ratios dept listNo 帶 requireDirector"]
+
+    Get --> LoadA["載入在職部門清單<br/>ob_emphire 在職判定<br/>emphire-active.util"]
+    Get --> LoadB["載入既有比例<br/>ob_dept_pct 本 listNo"]
+    Get --> LoadC["載入各部門在職處長<br/>jfun_nm 等於 處長<br/>同部門取最早到職"]
+
+    LoadA --> Classify
+    LoadB --> Classify
+    LoadC --> Classify
+
+    Classify{"該部門有在職處長嗎"}
+
+    Classify -->|"有"| Editable["分類：有處長部門<br/>可編輯，isRatioEditable 為 true"]
+    Classify -->|"無"| CheckRatio{"既有比例大於零嗎"}
+
+    CheckRatio -->|"是"| Orphan["分類：孤兒部門<br/>顯示但鎖定編輯<br/>標示 無在職處長"]
+    CheckRatio -->|"否"| Hidden["分類：無關部門<br/>自清單隱藏<br/>計入 hiddenNoDirectorCount"]
+
+    Editable --> Render["畫面渲染"]
+    Orphan --> Render
+    Hidden --> Info["顯示已隱藏 N 個部門資訊列"]
+    Info --> Render
+
+    Render --> Empty{"可編輯部門數為零嗎"}
+    Empty -->|"是"| EmptyState["空狀態文案：無任何部門具在職處長<br/>禁止推進至個別業務比例階段"]
+    Empty -->|"否"| Sum["加總範圍：可編輯列加上孤兒鎖定列<br/>須落於容忍區間方可儲存"]
+
+    Sum --> Put["PUT 儲存"]
+
+    Put --> Preserve["伺服器端重新判定孤兒部門<br/>BR-4 孤兒列一律以既有值寫回<br/>不論是否出現於 payload"]
+    Preserve --> Ignore["BR-5 payload 若含孤兒列<br/>以既有值為準，忽略 payload 值"]
+    Ignore --> Guard{"payload 是否對無處長且非孤兒部門<br/>配置大於零之比例"}
+
+    Guard -->|"是"| Err422["422 RATIO_DEPT_DIRECTOR_REQUIRED"]
+    Guard -->|"否"| SumCheck{"最終持久化集合加總是否符合"}
+
+    SumCheck -->|"否"| ErrSum["422 RATIO_SUM_NOT_100"]
+    SumCheck -->|"是"| Write["交易內：DELETE 既有<br/>INSERT 最終集合<br/>寫入稽核 after_value 含孤兒列"]
+
+    Write --> Done["儲存成功，切回唯讀模式"]
+
+    subgraph Legend["關鍵不變式"]
+        L1["隱藏集合恆為比例等於零<br/>故隱藏對加總為零影響"]
+        L2["孤兒列不得因儲存而消失<br/>由後端保證，非僅前端"]
+    end
+
+    style Orphan fill:#fff3cd,stroke:#856404
+    style Hidden fill:#e2e3e5,stroke:#6c757d
+    style Editable fill:#d4edda,stroke:#155724
+    style Err422 fill:#f8d7da,stroke:#721c24
+    style ErrSum fill:#f8d7da,stroke:#721c24
+    style Preserve fill:#cce5ff,stroke:#004085
+    style Legend fill:#f8f9fa,stroke:#adb5bd

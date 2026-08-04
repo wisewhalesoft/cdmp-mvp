@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-OQ
 title: 待決事項與開放問題
-version: "2.6"
-date: 2026-06-24
+version: "2.7"
+date: 2026-08-04
 status: Draft
 ---
 
@@ -413,10 +413,69 @@ status: Draft
 
 ---
 
+## F117 / F118 M03a·M01 UX 精煉（2026-08-04）— ✅ 已於人工審閱閘全數收斂
+
+> **本節全部項目已解決**（2026-08-04 人工審閱閘）。F117 / F118 兩份 feature spec 狀態已由 DRAFT 轉為 **Approved**，可進入 TDD 實作。以下保留裁決紀錄供追溯。
+
+### (A) spec-writer 裁定 — 人工已確認
+
+| # | 議題 | 裁定 | 狀態 |
+|---|------|------|------|
+| OQ-F117-A1 | US-180 AC-1「一律隱藏無處長部門」與 AC-3「不得靜默刪除既存比例」**互相矛盾** | 改為**三分類**：無處長且 ration = 0 → 隱藏；無處長且 ration > 0（孤兒）→ **顯示但鎖定**（[F117 §12.1 D-1](features/F117-dept-ratio-director-required-filter.md)） | ✅ **已確認**（2026-08-04）：業務接受「孤兒部門仍顯示但鎖定」 |
+| OQ-F117-A2 | US-180 AC-5「加總僅涵蓋畫面顯示（有處長）部門」 | 改為加總涵蓋**所有將被持久化之列**（含孤兒鎖定列）（[F117 §12.1 D-2](features/F117-dept-ratio-director-required-filter.md)） | ✅ **已確認**：加總含鎖定列符合業務預期 |
+| OQ-F118-A3 | US-181 OQ-181-01 判定機制三案選型 | 裁定採 **(b) 語意等價**，重用 `findActiveConditionDuplicate`（[F118 §12.1 D-1](features/F118-copy-from-prev-month-duplicate-indicator.md)） | ✅ **已確認**：業務選定語意等價，見 OQ-F118-B2 |
+
+### (B) 原阻塞項 — 業務主管已裁示（2026-08-04）
+
+| # | 議題 | 裁決 |
+|---|------|------|
+| **OQ-F117-B1** | **（承 US-180 OQ-180-02）** 孤兒部門之最終處理方式 | ✅ **採「顯示但鎖定 ＋ 後端強制保留」**。①接受該列在處長派任前無法調整②**不需要**「強制歸零」操作——既有 [F081](features/F081-rollback-dept-ratio-to-draft.md)「退回草稿」已 DELETE 全部 `ob_dept_pct` 列（含孤兒列），足為出場機制，另做強制歸零會使 F117 BR-5 需開例外通道③加總含鎖定列符合預期。紀錄見 [F117 §12.1 D-6 / BR-11](features/F117-dept-ratio-director-required-filter.md) |
+| **OQ-F118-B2** | **（承 US-181 OQ-181-05）** 「複製後編輯條件即不再標記」是否可接受 | ✅ **可接受**。標記語意確立為「原樣儲存會被 422 擋下」，非血緣語意。方案 (b) 為最終選型，不新增欄位、不需 migration。紀錄見 [F118 §12.1 D-6](features/F118-copy-from-prev-month-duplicate-indicator.md) |
+| **OQ-F118-B3** | 「從上月複製」複製範圍四方不一致 | ✅ **以現行實作為準修正三處 spec**。[F050 AC-5 / §7](features/F050-create-list-definition.md)、[data-model.md](data-model.md)、[US-106 AC-10](../stories/epics/E07-app-customer-list-assignment/US-106-M01-draft-create-list-with-filter.md) 已於同輪修正。紀錄見 [F118 §12.1 D-7](features/F118-copy-from-prev-month-duplicate-indicator.md) |
+
+### (C) system-architect / ui-ux-designer — 已定案
+
+| # | 議題 | 定案 |
+|---|------|------|
+| OQ-F117-01 | GET query flag 命名 | ✅ `requireDirector`（[AD-E07-48 §3.1](implementation-log/AD-E07-48-f117-f118-ux-refinements.md)） |
+| OQ-F117-02 | 孤兒部門之「出場機制」 | ✅ 併入 OQ-F117-B1 裁決：處長派任後自動恢復可編輯，或經 F081「退回草稿」清空（[F117 BR-11](features/F117-dept-ratio-director-required-filter.md)）。**不**新增強制歸零 |
+| OQ-F117-03 | 孤兒判定之併發語意 | ✅ 不引入樂觀鎖；GET / PUT 皆以呼叫當下即時查詢為準（[AD-E07-48 §3.1 A-2](implementation-log/AD-E07-48-f117-f118-ux-refinements.md)） |
+| OQ-F117-04 | prototype 29a「未設代理」紅點之處置 | ✅ **保留既有紅點不得移除**（「代理」與「處長」為不同業務概念）；孤兒鎖定列另設樣式，須與「已下線」徽章、「未設代理」紅點三者互不混淆（[F117 §7](features/F117-dept-ratio-director-required-filter.md)） |
+| OQ-F118-01 | 判定端點拓樸 | ✅ **`GET /api/v1/assignment/lists/copy-duplicate-check?prevYm&currentYm`**（[F118 §5.1.1](features/F118-copy-from-prev-month-duplicate-indicator.md)）。人工審閱閘自 AD-E07-48 之 POST-帶候選 設計調整為 GET-帶月份，使判定所用之 `condition_payload` 與儲存端同源（強化 AC-2）。**`copy-source-options` 殭屍規格不予補完**，清理列為獨立技術債（見下方 OQ-F118-06） |
+| OQ-F118-02 | `copiedToListNo` 選取決定性 | ✅ 明訂 `ORDER BY list_no ASC`，並同步為既有 `findActiveConditionDuplicate` 補上同一排序（[AD-E07-48 §3.2](implementation-log/AD-E07-48-f117-f118-ux-refinements.md)） |
+| OQ-F118-03 | 「已複製過」視覺與確認互動 | ✅ 徽章含目標編號（**純文字不可導航**，[F118 D-8](features/F118-copy-from-prev-month-duplicate-indicator.md)）；不得 disable 按鈕；採**二次確認彈窗**；確認後表單顯示持續提醒列（F118 AC-11）；判定進行中不加 skeleton 佔位 |
+| **OQ-F118-04** | 複製範圍四方不一致（明細見下表） | ✅ 併入 OQ-F118-B3 裁決，三處 spec 已修正 |
+
+### 本輪新增之遺留技術債（不阻塞 F117 / F118）
+
+| # | 議題 | 處置 |
+|---|------|------|
+| OQ-F118-05 | **建立草稿表單對非複製之新名單，前端 `crEnabled` state 初值為 `true`**（`list-create-draft-page.tsx`），與 [data-model.md](data-model.md) 之「欄位預設 `false`、需 admin 顯式開啟」（F102 US-154 / OQ-F102-3 裁示）不一致 | 本輪未處理（非複製流程，不在 F117 / F118 範圍）。須業務確認新名單 CR 開關之預設應為何，再決定改前端或改 spec |
+| OQ-F118-06 | **殭屍端點**：`GET .../copy-source-options` 與 `GET .../{listNo}/condition-payload` 已於 [data-model.md](data-model.md) / [F050 §6.1](features/F050-create-list-definition.md) 規格化但**從未實作** | 本輪已於 data-model.md 標註「不得作為實作依據」；正式移除該規格描述列為獨立清理任務 |
+| OQ-F118-07 | [F051](features/F051-edit-list-definition.md) 編輯草稿（27b）亦呼叫同一 `findActiveConditionDuplicate`，理論上可有等價提示 | ✅ 已確認**不在本輪範圍**（使用情境不同）；如需要另開 story（[F118 A-5](features/F118-copy-from-prev-month-duplicate-indicator.md)） |
+| OQ-DOC-01 | **既有文件漂移**（本輪查證發現，非本次任務造成）：`docs/stories/overview.md` 與 E07 `epic-brief.md` 自 2026-06-24 / 2026-05-19 起未同步，US-166 ~ US-181 皆有 story 檔但未登錄；`spec-index.md` 未登錄 F111 / F115 / F116；`scope.md` feature 表停在 F068（缺 F069–F118 共 49 列） | 建議另排一次專責同步 pass，本輪未回填 |
+
+**OQ-F118-04 落差明細（2026-08-04 逐行查證）**
+
+| # | [F050 AC-5](features/F050-create-list-definition.md) | [data-model.md](data-model.md) | US-106 AC-10 | 實際實作 |
+|---|---|---|---|---|
+| 1 | `list_nm` 留空待填 | 需重新填寫 `list_nm` | 未提及 | **帶入**，經 `rollForwardListName` 前捲月份 token |
+| 2 | `cr_enabled` 恢復預設 **`true`** | `cr_enabled` 恢復預設 **`false`** | 未提及 | **沿用來源值** |
+| 3 | 未提及 `card_type` | 未提及 | 未提及 | **帶入 `card_type`** |
+| 4 | 來源須 `stage = 'ready'` | 來源須 `stage = 'ready'` | 未提及 | 僅過濾 `status = 'active'` AND `condition_payload IS NOT NULL` |
+| 5 | 僅複製 `condition_payload` | 僅複製 `condition_payload` | 僅複製篩選條件 | 另複製撈案期間三欄 |
+
+> **注意**：第 2 點顯示 **F050 與 data-model.md 兩份 spec 本身即互相矛盾**（true vs false），非單純 spec-vs-impl 落差。
+> **✅ 裁決（2026-08-04 人工審閱閘）**：**以現行實作為準修正三處 spec**（右欄「實際實作」即為新的權威描述）。F050 AC-5 / §7、data-model.md 複製規則表、US-106 AC-10 已於同輪一併修正。第 3 點之 `card_type` 帶入行為自此有 spec 依據，[F118 BR-7](features/F118-copy-from-prev-month-duplicate-indicator.md) 之判定前提成立。
+
+---
+
 ## 更新紀錄
 
 | 日期 | 變更內容 | 負責人 |
 |------|---------|--------|
+| 2026-08-04 | **F117 / F118 人工審閱閘：全節收斂**。業務裁決 3 項（孤兒部門＝顯示鎖定＋後端保留、不做強制歸零；語意等價之後果可接受；複製範圍以實作為準修正 spec）；architect / ui-ux 8 項定案（端點改 `GET .../copy-duplicate-check`、`ORDER BY list_no`、保留「未設代理」紅點、二次確認彈窗等）。兩份 spec 狀態 DRAFT → **Approved**。新增 4 項不阻塞之遺留技術債（OQ-F118-05 ~ 07、OQ-DOC-01） | 人工審閱閘 |
+| 2026-08-04 | 新增 F117 / F118 UX 精煉節（**全數 Open，spec 為 DRAFT 待人工審閱**）：(A) 3 項 spec-writer 裁定待確認（AC-1/AC-3 矛盾調和、加總範圍、判定機制選型）；(B) 3 項阻塞性待業務裁示（孤兒部門處理、語意等價之業務可接受性、複製範圍四方不一致）；(C) 8 項交 architect / ui-ux。新發現：`copy-source-options` 端點已規格但從未實作；F050 與 data-model.md 對 `cr_enabled` 複製行為**互相矛盾** | Spec Writer Agent |
 | 2026-06-24 | 新增 F104 全欄對齊 legacy SP：OQ-159-01／縣市粒度／per-card 矩陣 3 項已查證解決；OQ-F104-01~04 交 system-architect（附建議）；OQ-159-02／OQ-160-01／OQ-161-01/02 記為已解 | Spec Writer Agent |
 | 2026-06-24 | F104 定點修正（使用者拍板 2 項）：縣市計分卡別 RESOLVED＝依 legacy（H/S 不計分縣市、default 屬 S5/E5/M/HM，保留不動）；空/NULL cus_sex 分流走向 RESOLVED＝改 legacy＝個人（gating default='1'，與 CUS_SEX 計分欄 default=3 分離，BR-F104-04/13a） | Spec Writer Agent |
 | 2026-06-24 | OQ-F104-01~04 全部 RESOLVED：signature 加 cardType（AD-E07-32）、per-card default 完整矩陣 + M/HM 不啟用 LIST_MONTH/LOAN_RATE（AD-E07-33）、AD-E07-10-L 全欄改寫 v4.0 + PROJECT_TP 單欄簡化標殘留風險（使用者拍板）、EDUCAT_BACK 字串 BETWEEN + 縣市 LEFT3 落點（AD-E07-34）；新增 AD-E07-32/33/34 | System Architect |

@@ -134,9 +134,11 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-07-11
 ### AC-5：複製名單功能
 
 - **Given** 業務部長在新增表單點擊「複製名單」按鈕
-- **When** 系統開啟複製來源選擇器（下拉或搜尋彈窗，顯示所有 `status = 'active'` AND `stage = 'ready'` AND `condition_payload IS NOT NULL` 之既有名單；上月）
-- **Then** 業務部長選擇某一來源名單後，新表單自動填入來源名單之 **`condition_payload`**（整段 JSONB 複製）與 `list_period_start` / `list_period_end` / `list_interval`；`list_nm` 仍為空待填；`cr_enabled` 恢復預設 `true`（不沿用上月設定，data-model 規則）；比例資料（部門 / 個別業務）不複製
-- **And** `list_no` 仍為空（儲存後重新產生），`list_nm` 可自由修改
+- **When** 系統開啟複製來源選擇器（Modal，顯示所有 `status = 'active'` AND `condition_payload IS NOT NULL` 之上月名單）
+- **Then** 業務部長選擇某一來源名單後，新表單自動填入來源名單之 **`condition_payload`**（整段 JSONB 複製）、`list_period_start` / `list_period_end` / `list_interval`、`list_nm`（經 `rollForwardListName` 將名稱中之月份 token 前捲至本作業月，可自由修改）、`card_type`、`cr_enabled`（**沿用來源設定**）；比例資料（部門 / 個別業務）不複製
+- **And** `list_no` 仍為空（儲存後重新產生）
+
+> **v2.5（2026-08-04 / F118 人工審閱閘 OQ-F118-B3 裁決）**：本 AC 之複製範圍**改以現行實作為權威**，修正三處與實作不符之描述：①原稱「`list_nm` 仍為空待填」→ 實際帶入並前捲月份 token ②原稱「`cr_enabled` 恢復預設 `true`」→ 實際沿用來源值（[data-model.md](../data-model.md) 原稱恢復預設 `false`，與本檔互相矛盾，一併修正）③補述原三處 spec 均未描述之 `card_type` 複製（[F118](F118-copy-from-prev-month-duplicate-indicator.md) BR-7 之判定以此為前提）④來源過濾移除 `stage = 'ready'`（實際 Modal 無此過濾）。裁決紀錄見 [F118 §12.1 D-7](F118-copy-from-prev-month-duplicate-indicator.md)。
 - **And** 5 個 backward-compat 欄位不由前端複製；後端依新 `condition_payload` 衍生填入（BR-10）
 - **And** 若來源名單 `condition_payload IS NULL`（舊遷移名單），前端 dropdown 已過濾不列出；若繞過直接呼叫 API，後端回 422 `LEGACY_LIST_NOT_COPYABLE`（defense-in-depth，拍板 Q4）
 
@@ -684,7 +686,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-07-11
   - `categorical` → 多選 chip / checkbox，選項來源 `GET /api/v1/pooldata-fields/{columnName}/options?active=true`（F076 v1.5）；至少選 1 個值
   - `numeric` → 「最小值（min）」+ 「最大值（max）」雙數字框；前端驗證 `max >= min`
   - `date` → 日期區間（`dateStart` / `dateEnd`）；前端驗證 `dateEnd >= dateStart`
-- **「複製名單」按鈕**：位於表單標頭，開啟 Modal 選擇來源；來源 dropdown 過濾條件 `status='active'` AND `stage='ready'` AND `condition_payload IS NOT NULL`（舊遷移名單不可作為複製來源；defense-in-depth：若繞過後端回 422 `LEGACY_LIST_NOT_COPYABLE`，拍板 Q4 / AC-5）；複製後整段 `condition_payload` 與 `list_period_*` 自動填入新表單；`cr_enabled` 恢復預設 `true`；`list_nm` 留空待填
+- **「從上月複製」按鈕**：位於表單標頭，開啟 Modal 選擇來源；來源過濾條件 `status='active'` AND `condition_payload IS NOT NULL`（舊遷移名單不可作為複製來源；defense-in-depth：若繞過後端回 422 `LEGACY_LIST_NOT_COPYABLE`，拍板 Q4 / AC-5）；複製後整段 `condition_payload`、`list_period_*`、`list_nm`（月份 token 前捲）、`card_type`、`cr_enabled`（沿用來源）自動填入新表單（v2.5 / OQ-F118-B3 裁決，以實作為準）
+- **「已複製過」提示**：Modal 內每筆候選標示本作業月是否已存在等價名單，詳見 [F118](F118-copy-from-prev-month-duplicate-indicator.md)
 - 即時驗證：欄位失去焦點時觸發
 - **預估命中筆數面板（v2.4 / US-176 / AD-E07-45）**：建立草稿頁篩選條件區之「依此條件預估命中 N 筆案件」banner 改接 §6.3 抽樣估算端點（**移除**前端 `previewCount` 假公式 `n = 12500 * 遞減係數`）;隨條件編輯 debounce 後即時（live）更新;明確標示為估算值（prototype 27a 現行文案「基於上月案件樣本估算」若樣本來源改為「當前 Pool 資料」須據實修訂，最終措辭由 ui-ux-designer 確認）;估算失敗顯示「預估暫時無法取得」而非 0 / 誤導數字，且**不阻擋**填表與儲存;保留既有「開啟 Stage 0 試算」連結（導向 F049 精確試算，US-071，互補非取代）。**僅建立頁（`list-create-draft`）納入;編輯既有草稿頁（`list-edit-draft` / prototype 27b）為 deferred follow-up（§9.2）**
 - 即時驗證與估算面板為兩獨立行為：估算失敗不影響儲存按鈕啟用條件（下列儲存按鈕啟用條件不含估算成功）
