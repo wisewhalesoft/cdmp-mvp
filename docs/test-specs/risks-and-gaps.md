@@ -1,6 +1,6 @@
 ---
 type: test-design-risks
-last_updated: 2026-07-12
+last_updated: 2026-08-04
 ---
 
 # 風險與缺口
@@ -1405,3 +1405,51 @@ last_updated: 2026-07-12
 - **影響**：若真實 `customer_core` 大型類別欄位之 DISTINCT 查詢在生產環境經常逼近或超過 15s 預算，使用者會頻繁看到逾時錯誤（即使資料本身合法）；orphaned query 若長期累積可能對 DB 連線池造成壓力（AD 已列為未來效能監控項）。
 - **建議**：`features/F112-test.md` 「殘留風險」§A/§E 與總結之「刻意排除範圍」已明確記錄此為單元測試層級無法驗證之範疇（需要真實 DB 連線與查詢監控），並建議 tdd-implementation 落地時於 dev CDMP 對 `customer_core.occupation_desc` 手動計時一次（AD §11 待裁決項），確認 15s 預算是否寬裕；若經常貼近逾時邊界，後續應為該欄位新增單欄索引或調整 `POOLDATA_DISTINCT_VALUES_TIMEOUT_MS` 環境變數。
 - **風險等級**：低（v1 不索引不阻擋上線，AD 已預留 env 覆寫與未來索引路徑；非測試設計缺口，屬產品上線後之營運觀測項）
+
+---
+
+## F117 部門比例設定頁僅提供「有在職處長」之部門設定測試風險與待決問題（AD-E07-48，2026-08-04 新增）
+
+> 完整測試設計見 [features/F117-test.md](features/F117-test.md)（US-180，31 場景：後端 Unit 12 + Integration 6 + 前端 Component 8 + E2E Fidelity 5）。F117 spec 本身之業務裁決（D-1~D-6）已於 2026-08-04 人工審閱閘全數核可，本節記錄的是**測試基礎設施層級**（非業務規則層級）之殘留缺口，均不阻擋 TDD 進入實作。
+
+### R-F117-01（中，測試基礎設施缺口，非業務規則缺口）：Playwright E2E fidelity 環境缺少 `business_role='director'` / `'section_chief'` 之 dev 種子測試帳號
+
+- **問題**：`apps/api/src/database/seeds/seed.ts`（本機/CI dev bootstrap 種子）目前僅提供 4 個帳號（`admin@cdmp.test` / `disabled@cdmp.test` / `user@cdmp.test` / `manager@cdmp.test`），其中 `manager@cdmp.test` 僅設 `is_sales_manager=true`（legacy 旗標），**無任何帳號設定 `business_role='director'` 或 `'section_chief'`**。`apps/api/src/database/seeds/data/users-real.json`（`prod-data-seed`）雖含真實 director/section_chief 帳號，但為真實員工姓名/Email 且密碼雜湊明文未知，不應作為 E2E 測試憑證使用。
+- **影響**：`e2e/tests/fidelity-f117-dept-ratio.spec.ts` 若採真實瀏覽器登入流程，缺少可用的 director/section_chief 憑證。**已採取的因應**：(a) 依 F079 BR-7「`admin` OR `business_role='director'`」之等價語意，E2E 中以既有 `admin@cdmp.test` 帳號涵蓋所有「部長可寫」情境（AC-1~8、AC-10），此非權宜替代而是規格明文之等價路徑；(b) `section_chief` 唯讀情境改以前端 Component 測試（`dept-ratio-config-page.test.tsx`，`mockedGetBusinessRole.mockReturnValue('section_chief')`）覆蓋，不依賴真實登入；後端 403 攔截已由 `TS-F117-INT-004`（in-memory SQLite + `buildSectionChief()` fixture，真實 HTTP round-trip）覆蓋，此路徑**不受本缺口影響**。故本缺口實際未遺漏任何 AC 的可執行覆蓋，僅是「真實瀏覽器 UI 呈現 section_chief 唯讀畫面」此一項未被 Playwright 層覆蓋（該畫面渲染邏輯已由前端 Component 測試覆蓋）。
+- **建議**：若未來需要真實瀏覽器覆蓋 section_chief 唯讀畫面，建議由 product-analyst / QA 決定是否於 `seed.ts` 新增 1 組 `business_role='section_chief'` 之 dev-only 測試帳號（**production 程式碼變更，non-test-generator 範圍**，須經 tdd-implementation 或後續維護輪次處理，本輪不代為新增）。
+- **風險等級**：中（不阻擋 TDD 進入實作；AC 覆蓋率未實際受損，僅為 E2E 層之「真實登入」深度略淺於理論最大值）
+
+### R-F117-02（中，測試資料策略之刻意設計選擇，非缺陷）：E2E fidelity 測試對 GET/PUT `/api/v1/assignment/ratios/dept/**` 採 `page.route()` 攔截而非真實 DB round-trip
+
+- **問題**：本機/CI 環境無法保證存在一份真實、穩定的 `stage='dept_ratio'` 名單（含孤兒部門情境所需的 `ob_dept_pct` 既有列 + `ob_emphire` 處長缺席組合），且 dev MSSQL 為外部共用資料庫（見專案記憶 `feedback_mssql_e2e_tests_wipe_dev_cdmp_tables`），不宜由 E2E 測試自行寫入/清空業務資料表製造 fixture。
+- **影響**：`e2e/tests/fidelity-f117-dept-ratio.spec.ts` 對「前端如何渲染三分類 / 空狀態 / 已隱藏資訊列」之斷言，資料來源為 `page.route()` 依 prototype 29a 之 6 個 demo 場景固定供應的 mock response，而非真實後端運算結果。真實後端運算正確性（BR-1~BR-9）已由 **TS-F117-BE-\*（mock repo unit）+ TS-F117-INT-\*（in-memory SQLite 真實 HTTP+Guard+DB round-trip）** 覆蓋，故業務邏輯正確性不依賴 E2E 層；E2E 層之獨有價值（建置/路由/proxy/Sidebar 導覽層級 fidelity）不受此設計影響。
+- **建議**：若日後建立穩定的 E07 dev fixture 資料集（例如透過一次性 fixture-provisioning script 建立固定 `list_no` 供 CI 使用），可將部分 E2E 案例（如 TS-F117-E2E-001）改為真實 GET round-trip 以進一步驗證前後端契約一致性；此為技術債，非本輪阻塞項。
+- **風險等級**：中（不阻擋 TDD 進入實作；業務邏輯正確性已由 Unit + Integration 兩層真實覆蓋，E2E 層僅犧牲「前後端真實串接」此一額外保證，未犧牲「前端渲染忠實度」本身的驗證力）
+
+### R-F117-03（低，命名對齊提醒，非阻擋）：Sum Banner 之 test-id 沿用既有 F079 命名（`dept-ratio-sum-banner`），與 prototype 29a 新標註之 `data-testid="ratio-sum-banner"` 字面不同
+
+- **問題**：`prototypes/29a-dept-ratio-config.html` 為 F117 UI ground truth，其 `#sumBanner` 元素標註 `data-testid="ratio-sum-banner"`；但既有 `apps/web/src/pages/assignment/_components/__tests__/dept-ratio-form.test.tsx`（F079，已通過）已以 `dept-ratio-sum-banner` 作為該元素之 test-id 並持續沿用。兩者指向同一元件、同一互動行為（僅 F117 擴充其加總組成顯示），並非兩個不同元素。
+- **影響**：若 tdd-implementation 逐字比對 prototype 的 `data-testid` 屬性字串並重新命名既有元件，會造成不必要的破壞性變更（且與既有 F079 測試脫鉤，需連帶修改該測試——而該測試檔案之維護者為 test-generator，非 tdd-implementation）。
+- **建議**：本輪 `F117-test.md` §三已明確採用既有 `dept-ratio-sum-banner` 命名，不要求重新命名。tdd-implementation 落地時延續既有 test-id，不需比對 prototype 逐字元素 ID。若日後 ui-ux-designer 認為 prototype 命名需要與實作對齊，應走正式的 prototype/測試調整流程（由 test-generator 統一更新），而非由實作端片面決定命名。
+- **風險等級**：低（已有明確決策與測試斷言因應，純屬 prototype 與既有實作命名之歷史差異，非設計缺陷）
+
+### R-F117-04（中，spec/contract 內部矛盾，架構層待 System Architect 回頭調和）：`RATIO_DEPT_DIRECTOR_REQUIRED` 錯誤回應信封形狀，`error-handling.md` §「標準錯誤回應格式」與 `contracts/F117-dept-ratio.contract.ts`（巢狀 `{error:{code,message,details}}`）與全 repo 既有 e2e 慣例（扁平 `{error:'CODE',message}`，22 個既有 `*.e2e-spec.ts` 檔、262 處 `res.body.error` 斷言，含 F117 自身沿用之 `f081-f085-f089-rollback.e2e-spec.ts` 範本與 F079 既有 `RATIO_SUM_NOT_100`/`RATIO_OUT_OF_RANGE` 之 unit 斷言 `personnel-ratio.service.spec.ts:167`）互相矛盾
+
+- **問題**：`error-handling.md`（v1.19，已核可）之「標準錯誤回應格式」章節（第 41~59 行）與同輪新增之 `docs/specs/contracts/F117-dept-ratio.contract.ts`（`RatioDeptDirectorRequiredError` 型別）皆將 `RATIO_DEPT_DIRECTOR_REQUIRED` 之回應信封定義為巢狀物件 `{ error: { code, message, details } }`。但本專案全部既有 e2e 測試（含 F117 自身在 §二 明文沿用之 bootstrap 範本 `f081-f085-f089-rollback.e2e-spec.ts`）一致採用扁平信封 `{ error: 'CODE_STRING', message }`（`res.body.error` 直接 `toBe('CODE')`），且 F079 既有錯誤碼（`RATIO_SUM_NOT_100` / `RATIO_OUT_OF_RANGE`，同一 `assignment-ratio-errors` 錯誤碼表）之既有 unit 測試 `personnel-ratio.service.spec.ts:167` 亦是 `e.response.error` 直接等於扁平字串。`error-handling.md` 全文（含 v1.0~v1.19 逐輪修訂紀錄）未曾提及此落差，判斷應為長期存在、未被實作端遵循之抱負性（aspirational）文件敘述，而非本輪刻意翻新之設計決策；`F117-dept-ratio.contract.ts` 之巢狀範例應是沿引 `error-handling.md` 該敘述性範例時一併複製了此落差，而非重新查證共用 `HttpExceptionFilter` 實際轉發行為後之刻意決定（該 filter 為全站共用元件，變更會是 F117 §1 明言排除在外的「repo-wide breaking change」）。
+- **本輪裁決（test-generator，2026-08-04，回應 tdd-implementation 對 `TS-F117-INT-003` 之爭議）**：`apps/api/test/f117-dept-ratio-director-filter.e2e-spec.ts` 之 `TS-F117-INT-003` 已改採**扁平**信封（`expect(res.body.error).toBe('RATIO_DEPT_DIRECTOR_REQUIRED')`），與全 repo e2e 慣例、F079 既有錯誤碼慣例、F117 §1「不變更 F079 既有錯誤語意」之範圍聲明一致。裁決理由：(a) 巢狀信封若要落地，共用 `HttpExceptionFilter` 需對此單一錯誤碼特殊處理或全站信封改版，兩者皆超出 F117 疊加限縮之範圍；(b) `error-handling.md`／`contract.ts` 之巢狀敘述與 22 個既有 e2e 檔案之實測慣例矛盾時，未經驗證的抱負性文件不應凌駕已驗證、一致、大量覆蓋之既有測試慣例；(c) 若日後系統性導入巢狀信封為全站標準，屬架構層決策（`http-exception.filter.ts` 變更），非 F117 範圍，亦非 test-generator 可單方裁定，需 System Architect 主導並回頭同步全部既有 e2e 斷言。
+- **待辦**：建議 System Architect 於下一輪架構維護排程檢視 `error-handling.md` §「標準錯誤回應格式」是否仍為有效目標（若是，需規劃全站遷移；若否，應改寫該章節為實際已生效之扁平格式，並同步修正 `F117-dept-ratio.contract.ts`），避免下一個新錯誤碼的 spec 作者重蹈同一落差。
+- **風險等級**：中（不阻擋本輪 TDD 進入實作；已於本輪測試檔案內裁定並修正，`TS-F117-BE-010` 之既有寬鬆斷言 `e.response?.error ?? e.response?.error?.code ?? e.message).toContain(...)` 與扁平信封相容，兩測試現已可同時綠燈；殘留風險僅為 `error-handling.md`／contract 文件本身尚未回頭同步）
+
+### R-F117-05（已修正，測試基礎設施缺口，非業務規則缺口）：Stryker mutation gate 之 `vitest.configFile` 誤指向全域 unit config，導致 dry run 完全無法產出分數
+
+- **問題**：`apps/api/stryker.conf.json` 原將 `vitest.configFile` 指向 `vitest.config.ts`（全域 unit config，`include: ['src/**/*.spec.ts', 'test/**/*.spec.ts']`）。此設定造成兩個獨立缺陷：(a) Stryker 的 initial dry run 會執行 include 集合內**全部**測試，其中 `src/database/__tests__/mssql-p1b1.mssql.spec.ts` 之 `TS-MSSQL-P1B1-DEFAULT-002` 為 HEAD baseline 即紅（UTC+8 時差既有缺陷，經 `npx vitest run --config vitest.config.ts src/database/__tests__/mssql-p1b1.mssql.spec.ts` 實測重現，`expected 28799606 to be less than 300000`），與 F117 完全無關；Stryker 要求 dry run 全數通過才能產出突變分數，此一既有紅測試使整條 mutation gate 完全無法運作（非分數偏低，而是無分數）；(b) `test/**/*.spec.ts` 這個 glob 依字面比對不會匹配本專案 e2e/integration 測試慣用的 `*.e2e-spec.ts` 命名（全 `apps/api/test/` 下 29+ 個既有檔案皆用此慣例，另有專用之 `vitest.e2e.config.ts` 以 `include: ['test/**/*.e2e-spec.ts']` 執行），因此 `test/f117-dept-ratio-director-filter.e2e-spec.ts` 從未真正參與 mutation run——而該檔案是唯一能殺死 `computeActiveDirectorMap()` 內 TypeORM QueryBuilder SQL 字串突變（`'TRIM(e.dept_code)'`、`'處長'`、orderBy 方向）的測試，mock repo 的 unit test 在結構上無法偵測這類突變。
+- **裁決**（test-generator，2026-08-04，回應 tdd-implementation dispute #1）：兩項皆為 test-generator 自身 ring 授權範圍內之設定缺陷，production 側無對應可解之改動。新增 `apps/api/vitest.mutation.config.ts`，include 僅限 F117 觸及之兩檔（`src/modules/assignment-stage/__tests__/dept-ratio.service.spec.ts` + `test/f117-dept-ratio-director-filter.e2e-spec.ts`），並改 `stryker.conf.json` 之 `vitest.configFile` 指向此檔。已實測 `npx vitest run --config vitest.mutation.config.ts` 僅匹配上述兩檔，2 files / 26 tests 全綠，dry run 可正常產出分數。
+- **是否影響 F117 §10「後端測試須同時涵蓋 SQLite unit 與 MSSQL spec 兩軌」**：不影響。AD-E07-48 §9 已裁定 F117 無 PG/MSSQL-only 依賴，「兩軌」由既有 `emphire-active.util` 之既有兩軌 dialect 測試涵蓋，F117 本身無需新增 dialect-only 測試分支；縮限 Stryker include 範圍不改變任何測試檔案之內容或既有覆蓋率，僅修正 mutation gate 自身可否產出分數。
+- **風險等級**：已修正（不阻擋 TDD 實作；`mssql-p1b1.mssql.spec.ts` 之既有紅測試本身仍待該檔維護者另行修復，與本次裁決範圍無關）
+
+### R-F117-06（已修正，測試基礎設施缺陷）：`e2e/tests/fidelity-f117-dept-ratio.spec.ts` 之 project 範圍與載入閘 locator 缺陷
+
+- **問題 A**：本檔未做 Playwright project 限制。`npm run test:e2e`（`playwright test`，無 `--project` 過濾）會在 `playwright.config.ts` 的 `admin` 與 `user` 兩個 project 下各跑一次全部 5 個 scenario。`user` persona 依 F079 AC-8 / F117 AC-9 本就無 E07 入口（403 `AUTH_FORBIDDEN`、不渲染入口），該路徑已由 `apps/api/test/f117-dept-ratio-director-filter.e2e-spec.ts` 的 `TS-F117-INT-004` 以真實 HTTP+Guard round-trip 覆蓋，非本檔（前端渲染 fidelity）待驗證對象；不加守衛時，本檔在 `user` project 下必然全紅，等同斷言「無權限 persona 應看見部長專用 UI」，與 AC-9 矛盾。
+- **問題 B**：共用 helper `gotoDeptRatioPage()` 原以 `page.getByTestId('dept-ratio-form').or(page.getByTestId('no-active-director-empty-state'))` 作為頁面就緒等待閘。AC-7 末句／prototype demo⑥（`empty_orphan` 場景，`TS-F117-E2E-004`）明訂空狀態與孤兒鎖定列可並存於同一畫面，此時兩個 testid 會同時匹配到元素；`.or()` 為聯集 locator，兩者皆存在時 resolve 到 2 個元素，對 `toBeVisible()` 這類要求單一元素的斷言會觸發 Playwright strict mode violation（`resolved to 2 elements`），且此為 locator 機制本身、與斷言內容無關，設 `display:none` 亦無效。
+- **裁決**（test-generator，2026-08-04，回應 tdd-implementation dispute #2/#3/#4）：兩者皆為本檔（test-generator 專屬授權範圍）之實作瑕疵，不觸及任何斷言本體。修正：(a) 於 `test.describe` 內加 `test.beforeEach` + `test.skip(testInfo.project.name !== 'admin', ...)`，讓本檔於 `user` project 下正確 skip（而非 fail）；(b) helper 之聯集 locator 改為 `.or(...).first()`——聯集中只要有一元素已渲染即視為就緒，兩者並存時任取其一必為 visible，不影響、不弱化任一測試之獨立斷言。已實測 `E2E_BASE_URL=http://localhost:5174 npx playwright test tests/fidelity-f117-dept-ratio.spec.ts`（不帶 `--project`，對照 `npm run test:e2e` 之無過濾行為）：`admin` project 5/5 全綠（含先前因 strict mode violation 而紅的 `TS-F117-E2E-004`）、`user` project 5/5 皆為 `skipped`（非 `failed`）。
+- **風險等級**：已修正

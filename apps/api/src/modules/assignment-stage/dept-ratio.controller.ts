@@ -20,8 +20,13 @@ import { SystemService } from '@/modules/system/system.service';
 import { DeptRatioService } from './dept-ratio.service';
 import { SetDeptRatioDto } from './dto/set-dept-ratio.dto';
 
+/** query string 布林旗標（沿用既有 'true' / '1' 慣例） */
+function isTruthyFlag(value?: string): boolean {
+  return value === 'true' || value === '1';
+}
+
 /**
- * F079 v1.2 — 部門比例設定 Controller
+ * F079 v1.2 / F117 v1.1 — 部門比例設定 Controller
  *
  * 路由：
  *   - GET  /api/v1/assignment/ratios/dept/{listNo}
@@ -41,13 +46,19 @@ export class DeptRatioController {
     private readonly systemService: SystemService,
   ) {}
 
+  /**
+   * F117 §5.1：新增選用 query flag `requireDirector`（比照既有 `excludeZeroRatio` 之 API 層 flag 模式）。
+   * 設定頁帶 true 以套用「有在職處長」三分類過濾；其餘既有消費端不帶（維持既有行為，AC-10）。
+   */
   @Get(':listNo')
   async getDeptRatios(
     @Param('listNo') listNo: string,
     @Query('excludeZeroRatio') excludeZeroRatio?: string,
+    @Query('requireDirector') requireDirector?: string,
   ) {
     return this.service.getDeptRatios(listNo, {
-      excludeZeroRatio: excludeZeroRatio === 'true' || excludeZeroRatio === '1',
+      excludeZeroRatio: isTruthyFlag(excludeZeroRatio),
+      requireDirector: isTruthyFlag(requireDirector),
     });
   }
 

@@ -101,6 +101,9 @@ export function DeptRatioConfigPage() {
   const isSectionChief = businessRole === 'section_chief';
   const canWrite = !isSectionChief; // director / admin
 
+  /** 返回名單定義列表（返回箭頭 / 表單「取消」/ 推進與退回成功後之共同去向）。 */
+  const goToListDefinitions = () => navigate('/assignment/list-definitions');
+
   // 篩選條件 chip 代碼 → 中文解碼器（比照個別業務比例設定頁 / 名單定義「查看」抽屜；
   //   card_type 走 listCardTypes）。
   const decoder = useConditionDecoder(DEPT_RATIO_COLUMNS);
@@ -162,7 +165,7 @@ export function DeptRatioConfigPage() {
         sub: '已推進至個別比例設定階段',
       });
       setShowAdvance(false);
-      navigate('/assignment/list-definitions');
+      goToListDefinitions();
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '推進失敗', 'error');
@@ -182,7 +185,7 @@ export function DeptRatioConfigPage() {
         sub: '部門比例已清空',
       });
       setShowRollback(false);
-      navigate('/assignment/list-definitions');
+      goToListDefinitions();
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       showToast(e?.response?.data?.message ?? '退回失敗', 'error');
@@ -197,7 +200,7 @@ export function DeptRatioConfigPage() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => navigate('/assignment/list-definitions')}
+            onClick={goToListDefinitions}
             className="text-gray-400 hover:text-gray-700"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -268,7 +271,8 @@ export function DeptRatioConfigPage() {
               listNo={list.listNo}
               listNm={list.listNm}
               title="部門比例設定"
-              description="為本名單之各在職部門設定 RATION，加總須 = 100%；推進後比例將鎖定（如需修改請 Rollback 至草稿）。"
+              /* F117 AC-1：可設定範圍限縮為「有在職處長」之部門（對齊 prototype 29a） */
+              description="為本名單之各有在職處長的部門設定 RATION，加總須 = 100%；推進後比例將鎖定（如需修改請 Rollback 至草稿）。"
               createdBy={list.createdBy}
               createdAt={formatDate(list.createdAt)}
               conditions={splitConditionsFromList(list, decoder)}
@@ -282,7 +286,7 @@ export function DeptRatioConfigPage() {
               readOnly={!canWrite || !!stageMismatch}
               onRequestAdvance={canWrite && !stageMismatch ? () => setShowAdvance(true) : undefined}
               onRequestRollback={canWrite && !stageMismatch ? () => setShowRollback(true) : undefined}
-              onCancel={() => navigate('/assignment/list-definitions')}
+              onCancel={goToListDefinitions}
             />
           </>
         )}

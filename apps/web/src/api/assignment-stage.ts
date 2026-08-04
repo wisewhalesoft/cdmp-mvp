@@ -38,6 +38,17 @@ export interface DeptRatioItem {
   setByName?: string | null;
   /** F088 v1.3 BR-11：設定者為部長（director/admin）→「部長代設定」 */
   proxyByDirector?: boolean;
+  /**
+   * F117 §5.1：該部門是否有在職處長（BR-1 判定，`directorName != null` 之布林投影）。
+   * 後端恆計算並回傳；型別標為 optional 僅為相容 F117 實作前之舊回應（AC-10 回歸基準）。
+   * 前端一律以本欄判定，**不得**以 `directorName` 字串推導。
+   */
+  hasActiveDirector?: boolean;
+  /**
+   * F117 §5.1：比例是否可編輯（=== `hasActiveDirector`）。孤兒部門為 false（AC-3 鎖定列依據）。
+   * 判定一律以 `=== false` 為鎖定，`undefined`（舊回應）視為可編輯。
+   */
+  isRatioEditable?: boolean;
 }
 
 /**
@@ -57,6 +68,12 @@ export interface GetDeptRatiosResponse {
   deptRatios: DeptRatioItem[];
   total: number;
   isReadOnly: boolean;
+  /**
+   * F117 §5.1 / AC-8：本次因「無在職處長且既有 ration = 0」而被隱藏之部門數量
+   * （＝「無關部門」，不含孤兒部門）。`requireDirector = false` 時恆為 0（AC-10）。
+   * optional 以相容 F117 實作前之舊回應。
+   */
+  hiddenNoDirectorCount?: number;
 }
 
 export interface SetDeptRatiosRequest {
@@ -73,11 +90,15 @@ export interface SetDeptRatiosResponse {
 
 export async function getDeptRatios(
   listNo: string,
-  opts?: { excludeZeroRatio?: boolean },
+  opts?: { excludeZeroRatio?: boolean; requireDirector?: boolean },
 ): Promise<GetDeptRatiosResponse> {
   const params: Record<string, string> = {};
   // 準備完成摘要等唯讀檢視傳 true：後端隱藏比例 = 0% 之部門（設定頁不傳，維持全部顯示）。
   if (opts?.excludeZeroRatio) params.excludeZeroRatio = 'true';
+  // F117 AC-1 / BR-8：部門比例「設定頁」傳 true，套用「有在職處長」三分類過濾；
+  // 其餘既有消費端（準備完成摘要 / 快照 Detail Drawer）一律不傳，行為完全不變（AC-10）。
+  // 兩個 flag 正交，可並存。
+  if (opts?.requireDirector) params.requireDirector = 'true';
   const response = await apiClient.get<GetDeptRatiosResponse>(
     `/assignment/ratios/dept/${listNo}`,
     { params },
