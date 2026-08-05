@@ -75,6 +75,7 @@ ring 測試兩軌皆未覆蓋此退化情境（還原前後皆綠），屬主動
   - 僅 unit spec → **64.90%**（135 killed / 70 survived），低於 break 70；
   - unit + integration spec → **75.00%**（156 killed / 49 survived），**通過** break 70。
   - 差異來源為 `computeActiveDirectorMap()` / `computeActiveDeptMap()` 內 TypeORM QueryBuilder 的 SQL 字串常數突變——mock repo 的單元測試在結構上無法殺死，唯有真實 SQLite round-trip 可殺。
+- **📍 後續（2026-08-05）**：`stryker.conf.json` / `vitest.mutation.config.ts` 已拆分為 `stryker.dept-ratio.conf.json` + `stryker.assignment-list.conf.json` 並刪除（理由見 `risks-and-gaps.md` R-F118-08）。以下為當時之解除紀錄。
 - **解除方式**：test-generator 已新增 `apps/api/vitest.mutation.config.ts`（include 縮限為 F117 unit spec + F117 integration spec）並將 `stryker.conf.json` 之 `vitest.configFile` 指向之。本輪實跑 `npx stryker run` → **75.36%**、EXIT 0。production 側無對應改動（如當初判定）。
 
 ### 4a. 尚存之突變存活者（測試覆蓋缺口，非 production 缺陷；供 test-generator 參考）

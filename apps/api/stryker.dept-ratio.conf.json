@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Stryker 標的①：dept-ratio.service.ts（F079 主流程 + F117 有處長過濾）。2026-08-05 自單一 stryker.conf.json 拆分而來 —— 原設定把本檔與 1682 行的 assignment-list.service.ts 合併計分，聚合分數被既有 legacy 碼主導，數學上不可能達標（門檻 70% 需殺 777/1110，缺口 116 中僅 22 個落在新碼），使 gate 淪為噪音。拆分後本標的新碼佔比高，可維持嚴格門檻。",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.mutation.dept-ratio.config.ts"
+  },
+  "coverageAnalysis": "perTest",
+  "mutate": ["src/modules/assignment-stage/dept-ratio.service.ts"],
+  "reporters": ["clear-text", "progress", "html"],
+  "htmlReporter": {
+    "fileName": "reports/mutation/dept-ratio/index.html"
+  },
+  "thresholds": {
+    "high": 90,
+    "low": 75,
+    "break": 70
+  },
+  "timeoutMS": 60000
+}

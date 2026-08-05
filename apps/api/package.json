@@ -11,7 +11,7 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "test:mutation": "stryker run",
+    "test:mutation": "npm run test:mutation:dept-ratio && npm run test:mutation:assignment-list",
     "deps:check": "depcruise src --config .dependency-cruiser.cjs",
     "gate:complexity": "eslint -c eslint.ring.config.cjs src/modules/assignment-stage/dept-ratio.service.ts src/modules/assignment-stage/dept-ratio.controller.ts",
     "gate:coverage:dept-ratio": "vitest run --coverage --coverage.include=src/modules/assignment-stage/dept-ratio.service.ts --coverage.include=src/modules/assignment-stage/dept-ratio.controller.ts --coverage.thresholds.lines=80 --coverage.thresholds.functions=80 --coverage.thresholds.branches=75 --coverage.thresholds.statements=80 src/modules/assignment-stage/__tests__/dept-ratio.service.spec.ts",
@@ -26,7 +26,9 @@
     "seed-datasource": "ts-node -r tsconfig-paths/register src/database/seeds/seed-datasource.ts",
     "data-seed": "ts-node -r tsconfig-paths/register src/database/seeds/prod-data-seed.ts",
     "data-seed:regen-json": "node src/database/seeds/transformers/csv-to-json.mjs",
-    "bootstrap": "npm run migration:run && npm run seed && npm run seed-datasource && npm run data-seed"
+    "bootstrap": "npm run migration:run && npm run seed && npm run seed-datasource && npm run data-seed",
+    "test:mutation:dept-ratio": "stryker run stryker.dept-ratio.conf.json",
+    "test:mutation:assignment-list": "stryker run stryker.assignment-list.conf.json"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",

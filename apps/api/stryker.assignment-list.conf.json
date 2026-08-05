@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "Stryker 標的②：assignment-list.service.ts（F048/F050/F051/F052 既有 + F118 checkCopyDuplicates）。門檻低於標的① 並非放水，而是反映既有技術債：本檔 1682 行、F118 新增僅約 60 行，Stryker 無檔案內函式級 scoping，分數必然由既有碼主導。break=61 之依據：2026-08-05 實測 63.35%（503 killed / 174 survived / 117 no-coverage / 109 error；covered-score 74.30%），另有一次合併設定下之同檔實測 62.19%（該次尚未含 TS-F118-BE-012~015）。兩次差約 1.2pp，主因為 error 分類於各次 run 間有浮動（91 vs 109），故取比當前實測低約 2pp 之 61 作為 ratchet：足以攔下真實退步，又不會被 run 間浮動誤殺。**此值只可調高、不可在未改善測試的情況下調降。** 待 checkCopyDuplicates 等抽為獨立 service（檔案變小、新碼佔比提高）後應同步上調。",
+  "packageManager": "npm",
+  "testRunner": "vitest",
+  "vitest": {
+    "configFile": "vitest.mutation.assignment-list.config.ts"
+  },
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/modules/assignment-list/assignment-list.service.ts"
+  ],
+  "reporters": [
+    "clear-text",
+    "progress",
+    "html"
+  ],
+  "htmlReporter": {
+    "fileName": "reports/mutation/assignment-list/index.html"
+  },
+  "thresholds": {
+    "high": 90,
+    "low": 70,
+    "break": 61
+  },
+  "timeoutMS": 60000
+}

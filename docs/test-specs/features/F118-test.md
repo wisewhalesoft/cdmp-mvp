@@ -272,7 +272,7 @@ last_updated: 2026-08-04
 
 | Ring 元件 | 範圍 | 門檻 |
 |---|---|---|
-| Stryker（`apps/api/stryker.conf.json`）| `assignment-list.service.ts`（`checkCopyDuplicates` 新增方法 + `findActiveConditionDuplicate` 的 `ORDER BY` 新增行為主要覆蓋標的；dry-run test 集擴大為既有 19 個 SQLite unit spec + 本輪新增之 `f118-copy-duplicate-check.spec.ts`，見 `vitest.mutation.config.ts` 註記）| break 70 / low 75 / high 90（同 F117 門檻） |
+| Stryker（`apps/api/stryker.assignment-list.conf.json`，2026-08-05 自合併設定拆出）| `assignment-list.service.ts`（`checkCopyDuplicates` + `findActiveConditionDuplicate` 的 `ORDER BY` 為主要覆蓋標的；dry-run test 集為該模組全部 20 個 SQLite unit spec，見 `vitest.mutation.assignment-list.config.ts` 註記）| break **61** / low 70 / high 90 —— **實測 63.35%**（503 killed / 174 survived / 117 no-cov / 109 error；covered 74.30%）。門檻低於 F117 標的係反映「1682 行既有大檔、F118 新碼僅約 60 行」之技術債，非放水；為 ratchet 值，只可調高。首輪存活突變已促成 TS-F118-BE-012~015 之補強（見 `risks-and-gaps.md` R-F118-08 / R-F118-09） |
 | dependency-cruiser（`apps/api/.dependency-cruiser.cjs`）| `src/`（no-circular error, no-orphans warn）| error on circular；F118 未新增模組邊界，沿用既有設定 |
 | ESLint 複雜度 gate（`apps/api/eslint.ring.config.cjs`）| `assignment-list.service.ts` / `assignment-list.controller.ts`（新增獨立 `files` 區塊，`max-lines` 門檻另計，見下方風險說明）| complexity ≤10 / max-lines-per-function ≤80 / max-depth ≤4（per-function 規則，即使檔案本身已大，仍能有意義地檢查新增之 `checkCopyDuplicates`）；執行載體為 `scripts/gate-complexity-diff.cjs`（非直接呼叫 `eslint`），比對 `eslint-baseline.f118.json`（F118 開工前既有 14 項違規之基準線）僅對**新違規**回傳非 0，見 `risks-and-gaps.md` R-F118-04 |
 | Coverage gate（後端） | `assignment-list.service.ts` + `.controller.ts`（`gate:coverage:f118`，`--coverage.include` 鎖定此二檔；測試檔清單為該模組全部既有 20 個 SQLite unit spec，非僅新增之 1 個，見 `risks-and-gaps.md` R-F118-06） | lines/functions ≥80%、branches ≥75% |

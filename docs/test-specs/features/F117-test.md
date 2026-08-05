@@ -247,7 +247,7 @@ last_updated: 2026-08-04
 
 | Ring 元件 | 範圍 | 門檻 |
 |---|---|---|
-| Stryker（`apps/api/stryker.conf.json`）| `dept-ratio.service.ts`（F117 新增之 `computeActiveDirectorMap` + PUT 孤兒保留分支為主要覆蓋標的）| break 70 / low 75 / high 90 |
+| Stryker（`apps/api/stryker.dept-ratio.conf.json`，2026-08-05 自合併設定拆出）| `dept-ratio.service.ts`（F117 新增之 `computeActiveDirectorMap` + PUT 孤兒保留分支為主要覆蓋標的）| break 70 / low 75 / high 90 —— **實測 75.36% 通過**（156 killed / 47 survived / 4 no-cov，3m43s）。拆分理由見 `risks-and-gaps.md` R-F118-08 |
 | dependency-cruiser（`apps/api/.dependency-cruiser.cjs` / `apps/web/.dependency-cruiser.cjs`）| `src/`（no-circular error, no-orphans warn）| error on circular |
 | ESLint 複雜度 gate（`apps/api/eslint.ring.config.cjs`）| `dept-ratio.service.ts` / `dept-ratio.controller.ts` | complexity ≤10 / max-lines-per-function ≤80 / max-depth ≤4 / max-lines ≤400 |
 | Coverage gate | `dept-ratio.service.ts` / `dept-ratio.controller.ts`（BE）、`dept-ratio-form.tsx` / `dept-ratio-config-page.tsx`（FE）| lines/functions ≥80%、branches ≥75% |

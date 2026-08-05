@@ -1444,6 +1444,8 @@ last_updated: 2026-08-04
 
 - **問題**：`apps/api/stryker.conf.json` 原將 `vitest.configFile` 指向 `vitest.config.ts`（全域 unit config，`include: ['src/**/*.spec.ts', 'test/**/*.spec.ts']`）。此設定造成兩個獨立缺陷：(a) Stryker 的 initial dry run 會執行 include 集合內**全部**測試，其中 `src/database/__tests__/mssql-p1b1.mssql.spec.ts` 之 `TS-MSSQL-P1B1-DEFAULT-002` 為 HEAD baseline 即紅（UTC+8 時差既有缺陷，經 `npx vitest run --config vitest.config.ts src/database/__tests__/mssql-p1b1.mssql.spec.ts` 實測重現，`expected 28799606 to be less than 300000`），與 F117 完全無關；Stryker 要求 dry run 全數通過才能產出突變分數，此一既有紅測試使整條 mutation gate 完全無法運作（非分數偏低，而是無分數）；(b) `test/**/*.spec.ts` 這個 glob 依字面比對不會匹配本專案 e2e/integration 測試慣用的 `*.e2e-spec.ts` 命名（全 `apps/api/test/` 下 29+ 個既有檔案皆用此慣例，另有專用之 `vitest.e2e.config.ts` 以 `include: ['test/**/*.e2e-spec.ts']` 執行），因此 `test/f117-dept-ratio-director-filter.e2e-spec.ts` 從未真正參與 mutation run——而該檔案是唯一能殺死 `computeActiveDirectorMap()` 內 TypeORM QueryBuilder SQL 字串突變（`'TRIM(e.dept_code)'`、`'處長'`、orderBy 方向）的測試，mock repo 的 unit test 在結構上無法偵測這類突變。
 - **裁決**（test-generator，2026-08-04，回應 tdd-implementation dispute #1）：兩項皆為 test-generator 自身 ring 授權範圍內之設定缺陷，production 側無對應可解之改動。新增 `apps/api/vitest.mutation.config.ts`，include 僅限 F117 觸及之兩檔（`src/modules/assignment-stage/__tests__/dept-ratio.service.spec.ts` + `test/f117-dept-ratio-director-filter.e2e-spec.ts`），並改 `stryker.conf.json` 之 `vitest.configFile` 指向此檔。已實測 `npx vitest run --config vitest.mutation.config.ts` 僅匹配上述兩檔，2 files / 26 tests 全綠，dry run 可正常產出分數。
+> **📍 後續（2026-08-05）**：本節所述之 `stryker.conf.json` / `vitest.mutation.config.ts` 已於 R-F118-08 拆分為 `stryker.dept-ratio.conf.json` + `stryker.assignment-list.conf.json`（及對應之兩份 vitest config）並刪除。本節保留為當時裁決之歷史紀錄。
+
 - **是否影響 F117 §10「後端測試須同時涵蓋 SQLite unit 與 MSSQL spec 兩軌」**：不影響。AD-E07-48 §9 已裁定 F117 無 PG/MSSQL-only 依賴，「兩軌」由既有 `emphire-active.util` 之既有兩軌 dialect 測試涵蓋，F117 本身無需新增 dialect-only 測試分支；縮限 Stryker include 範圍不改變任何測試檔案之內容或既有覆蓋率，僅修正 mutation gate 自身可否產出分數。
 - **風險等級**：已修正（不阻擋 TDD 實作；`mssql-p1b1.mssql.spec.ts` 之既有紅測試本身仍待該檔維護者另行修復，與本次裁決範圍無關）
 
@@ -1485,12 +1487,43 @@ last_updated: 2026-08-04
 - **建議**：14 項既有違規之清理仍為獨立技術債，建議日後另立重構任務（例如拆分 `getFullSnapshot`/`listLists`/`updateList`），不在 F118 範圍內處理；`eslint-baseline.f118.json` 應隨這類重構同步更新（移除已修復項目），避免基準線隨時間長期偏離現況。
 - **風險等級**：已解決，機器可判、對正確實作可通過。
 
-### R-F118-05（低，Stryker 檔案級 mutate 粒度之已知限制，非缺陷）：`assignment-list.service.ts` 整檔納入 mutate 範圍，而非僅新增之 `checkCopyDuplicates`
+### R-F118-05（低，Stryker 檔案級 mutate 粒度之已知限制，非缺陷）
+
+> **📍 後續（2026-08-05）**：本節所述之單一 `stryker.conf.json` 已由 R-F118-08 拆分為兩份標的各自設門檻並刪除；本節保留為歷史紀錄。
+：`assignment-list.service.ts` 整檔納入 mutate 範圍，而非僅新增之 `checkCopyDuplicates`
 
 - **問題**：Stryker 的 `mutate` 設定為檔案 glob 粒度，無法僅指定「檔案內某個方法」；test-generator 亦不得編輯 production 檔加註 `// Stryker disable next-line` 排除既有無關程式碼（越界修改生產碼）。因此 `stryker.conf.json` 追加 `assignment-list.service.ts` 後，Stryker 會對整個 1580 行檔案產生突變，而非僅 `checkCopyDuplicates` 新增之 ~50-70 行。
 - **裁決**：若僅將本輪新增的 `f118-copy-duplicate-check.spec.ts` 納入 `vitest.mutation.config.ts` 之 dry-run include，該檔其餘既有邏輯（`createList`/`updateList`/`normalizeConditionPayload` 等）之突變會因涵蓋它們的既有測試不在 include 內而被判定 `NoCoverage`（視同存活突變），拖累出一個「看似低但其實失真」的分數。改為將該模組**全部既有 19 個 SQLite unit spec**（`src/modules/assignment-list/__tests__/*.spec.ts`，排除 `.mssql.spec.ts`）一併納入 include——**已實測**（2026-08-04）`npx vitest run --config vitest.mutation.config.ts`（F117 兩檔 + F118 19+1 檔合併）：F117 部分 2 files/26 tests 綠燈；F118 部分因 `checkCopyDuplicates`/路由尚未實作而 2 files（`f118-copy-duplicate-check.spec.ts` 11 + `assignment-list.controller.spec.ts` 新增 `TC-F118` 區塊 9）共 20 tests 紅燈（預期中的紅，其餘既有 18 檔 356 tests 全綠，無回歸）；待 F118 實作完成、這 20 個測試轉綠後，Stryker dry run 即可正常產出分數。
 - **是否影響 F118 §10「後端測試須同時涵蓋 SQLite unit 與 MSSQL spec 兩軌」**：不影響。AD-E07-48 §9 已裁定 F118 無 PG/MSSQL-only 依賴，本 feature 之邏輯全數可於 SQLite 覆蓋，不需新增 dialect-only 測試分支。
-- **風險等級**：低，資訊性記錄，不阻擋 TDD 進入實作（Stryker 完整 mutation run 因需要綠燈 dry-run 前提，本輪未實際執行至產出分數，僅驗證 config 語法有效與 dry-run 測試選取機制正確；待實作完成後由機器/CI 產出真實分數）。
+- **風險等級**：已由 R-F118-08 之拆分處置解決（見下）。
+
+### R-F118-07（已解決，2026-08-05）：跨 workspace regression guard 於 Stryker 沙箱內 ENOENT，導致整條 mutation gate 無分數
+
+- **問題**：`assignment-list.service.spec.ts` 之 `TS-F050-K01b` / `K01c`（依 `feedback_grep_negative_lookahead` 建立之 fs + regex dead-code 防迴歸守衛）以 `path.resolve(__dirname, '../../../../../web/src/pages/assignment/*.tsx')` 讀取 **apps/web** 之檔案。Stryker 僅將 `apps/api` 複製進 `.stryker-tmp/` 沙箱執行 dry run，該相對路徑於沙箱內解析為不存在的 `.stryker-tmp/web/...` → `ENOENT` → dry run 失敗 → **整條 mutation gate 完全無法產出分數**（非分數偏低）。此為既有測試設計缺陷，因 F118 將 `assignment-list.service.ts` 納入 `mutate` 而首次引爆。
+- **裁決**：改為自 `__dirname` 逐層上溯，尋找實際存在 `apps/web/src` 的 repo root（沙箱內會一路上溯出 `.stryker-tmp` 找到真實 repo root，一般執行則於同一位置命中），最多上溯 12 層後拋出明確錯誤。**斷言內容一字未改**，僅修正路徑解析。已實測該 spec 39 tests 全綠，且 Stryker dry run 可正常完成。
+- **風險等級**：已解決。凡日後新增跨 workspace 讀檔之守衛測試，皆須採同一 repo-root 錨定方式，不可用固定層數的相對路徑。
+
+### R-F118-08（已解決，2026-08-05 人工裁決）：單一 Stryker run 合併計分，門檻數學上不可能達標
+
+- **問題**：原 `stryker.conf.json` 於單次 run 同時 mutate `dept-ratio.service.ts`（515 行，F117 新碼佔比高）與 `assignment-list.service.ts`（1682 行，F118 新碼僅約 60 行），以單一 `break: 70` 對**聚合分數**把關。實測聚合 64.87%，且**數學上不可能達標**：門檻需殺掉 777/1110 個突變，實得 661，缺口 116；而 F118 新增區段全部突變僅 53 個（存活 18 + RuntimeError 4），即使測到完美也只能補 22 個，**仍差 94 個須靠既有 legacy 碼補**。gate 因此恆紅，淪為噪音而非約束。
+- **裁決**（使用者，2026-08-05）：**拆成兩次 run，各自設門檻**。
+  - `stryker.dept-ratio.conf.json` + `vitest.mutation.dept-ratio.config.ts` → mutate `dept-ratio.service.ts`，`break: 70`（**實測 75.36% 通過**，耗時 3m43s）。
+  - `stryker.assignment-list.conf.json` + `vitest.mutation.assignment-list.config.ts` → mutate `assignment-list.service.ts`，`break: 61` 作為 **ratchet（只防退步）**，反映「1682 行既有大檔之技術債非 F118 造成、亦非 F118 可於本輪償還」之事實。**實測 63.35%**（503 killed / 174 survived / 117 no-coverage / 109 error；covered-score 74.30%）；另有合併設定下之同檔實測 62.19%（尚未含 BE-012~015），兩次差約 1.2pp 主因 error 分類浮動（91 vs 109），故取低約 2pp 之 61，避免被 run 間浮動誤殺。
+  - npm scripts：`test:mutation:dept-ratio` / `test:mutation:assignment-list`，`test:mutation` 依序跑兩支。
+- **為何不採其他選項**：(a) 維持單一門檻 → gate 恆紅、失去訊號；(c) 把 `assignment-list.service.ts` 移出 `mutate` → 等於完全不驗 F118 新碼，誠實度最低。
+- **後續**：待 `checkCopyDuplicates` 等抽為獨立 service（檔案變小、新碼佔比提高）後，應同步調高 `assignment-list` 標的之 `break`。ratchet 值不得在未改善測試的情況下調降。
+- **⚠️ 已知不穩定（Windows）**：`assignment-list` 標的之 Stryker dry run 偶發原生崩潰 `exit code 3221225477`（0xC0000005 ACCESS_VIOLATION），推測為 better-sqlite3 於沙箱內大量建立/銷毀 in-memory DataSource 所致；實測 4 次中失敗 3 次、成功 1 次，**同一份設定重跑即可通過**。伴隨出現之 `[vite] Failed to load source map ... stryker-setup.js.map` 僅為警告、非死因（曾嘗試以 swc `sourceMaps:false` 消除，對崩潰無效，已還原）。`dept-ratio` 標的僅 2 個 spec 檔，未觀察到此現象。**CI 採用本 gate 時須加重試機制**。
+- **風險等級**：已解決（門檻政策）；不穩定性另記於上，屬環境層問題。
+
+### R-F118-09（已解決，2026-08-05）：mutation testing 暴露 F118 新碼之實質測試缺口（AC-9 / BR-4 / AC-10）
+
+- **問題**：首輪 Stryker 對 F118 新增區段（`buildConditionSignatureIndex` + `checkCopyDuplicates`，行 1392-1480）產生 53 個突變，**存活 18 個**（分數 58.49% total / 63.27% covered）。逐一檢視後確認**非雜訊，而是有 AC 但無有效測試**：
+  - 上月候選之 `condition_payload !== null && !== undefined` 過濾被改為恆真 → 測試仍全綠，代表 **AC-9**（舊格式名單須排除於候選）無有效驗證。
+  - 兩處 `order: { list_no: 'ASC' }` 被移除 → 測試仍全綠，代表 **BR-4** 決定性在 `checkCopyDuplicates` 自身路徑未驗（既有 TS-F118-BE-011 驗的是 `findActiveConditionDuplicate`）。
+  - `if (sig === '') continue` 被改為不跳過 → 測試仍全綠，代表 **AC-10** 空簽章不得進索引未驗。
+  - `if (!index.has(key))` 先到先贏改為後到覆蓋 → 測試仍全綠。
+- **裁決**：新增 4 則測試 TS-F118-BE-012 ~ BE-015（AC-9 舊格式排除 / BR-4 多筆等價取 `list_no` 最小者 / AC-10 空簽章不進索引 / 本月舊格式名單之 legacy fallback 仍參與比對）。**並以手動施加突變驗證測試有效性**（非僅「測試存在」）：將候選過濾改為恆真 → BE-012 失敗；移除本月查詢之 `ORDER BY` → BE-013 失敗；還原後 15 tests 全綠。
+- **風險等級**：已解決。此筆為 mutation gate 發揮實質作用之案例——單看 unit / e2e 全綠會誤判為「已充分測試」。
 
 ### R-F118-06（已解決，2026-08-04 dispute #3 裁決）：後端 Coverage gate `--coverage.include` 涵蓋整個 1680 行 legacy service，但原僅跑 2 個 spec 檔，數學上不可能達標
 
