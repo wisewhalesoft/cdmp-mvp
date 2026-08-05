@@ -30,12 +30,14 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import {
+  checkCopyDuplicates,
   createList,
   listLists,
   previewHitCount,
   type AssignmentListItem,
   type ConditionItem,
   type ConditionPayload,
+  type CopyDuplicateCheckItem,
 } from '@/api/assignment-list';
 import { getBusinessRole } from '@/stores/auth-store';
 import {
@@ -217,6 +219,12 @@ export function ListCreateDraftPage() {
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [prevLists, setPrevLists] = useState<AssignmentListItem[]>([]);
   const [prevLoading, setPrevLoading] = useState(false);
+  // F118：「已複製過」判定結果（undefined＝判定不可得 → AC-10 降級，Modal 不顯示任何提示）
+  const [dupItems, setDupItems] = useState<CopyDuplicateCheckItem[] | undefined>(
+    undefined,
+  );
+  // F118 AC-11：採用「已複製過」來源後之持續提醒（值＝本月等價名單編號；null＝不提醒）
+  const [dupReminderListNo, setDupReminderListNo] = useState<string | null>(null);
 
   // 載入 active fields（whitelist source of truth；list_period_* 不在 whitelist）
   useEffect(() => {
@@ -588,8 +596,23 @@ export function ListCreateDraftPage() {
   }, [submitDraft]);
 
   // ─── 從上月複製 ───
+  /**
+   * F118 AC-6 / BR-6：每次開啟 Modal 重新查詢判定，不引入任何快取。
+   * AC-10：判定失敗僅降級為「全部未標示」，不阻擋 Modal、不顯示錯誤。
+   * §7：判定進行中不顯示 skeleton 佔位（避免閃爍）。
+   */
+  const loadCopyDuplicates = useCallback(async () => {
+    try {
+      const res = await checkCopyDuplicates({ prevYm, currentYm });
+      setDupItems(res.items ?? []);
+    } catch {
+      setDupItems(undefined);
+    }
+  }, [prevYm, currentYm]);
+
   const handleOpenCopyModal = useCallback(async () => {
     setCopyModalOpen(true);
+    if (prevYm) void loadCopyDuplicates();
     if (prevLists.length > 0 || !prevYm) return;
     setPrevLoading(true);
     try {
@@ -605,7 +628,7 @@ export function ListCreateDraftPage() {
     } finally {
       setPrevLoading(false);
     }
-  }, [prevLists.length, prevYm]);
+  }, [prevLists.length, prevYm, loadCopyDuplicates]);
 
   const handleCopyApply = useCallback(
     (src: AssignmentListItem) => {
@@ -654,9 +677,17 @@ export function ListCreateDraftPage() {
 
       setCopyFromListNo(src.listNo);
       setCopyModalOpen(false);
+
+      // F118 AC-11：來源被判定為「已複製過」時，於表單持續提醒（可關閉、不阻擋任何操作）。
+      //   判定不可得（AC-10 降級）或來源未複製過 → 不提醒。
+      const judged = dupItems?.find((item) => item.listNo === src.listNo);
+      setDupReminderListNo(
+        judged?.alreadyCopied ? (judged.copiedToListNo ?? null) : null,
+      );
+
       showToast(`已從 ${src.listNo} 帶入名稱、卡別與篩選條件`, 'success');
     },
-    [condIdSeq, ensureOptions, showToast, fields, prevYm, currentYm],
+    [condIdSeq, ensureOptions, showToast, fields, prevYm, currentYm, dupItems],
   );
 
   // ─── Render helpers ───
@@ -729,10 +760,10 @@ export function ListCreateDraftPage() {
               <CheckCircle2 className="w-4 h-4 text-green-700 mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="font-semibold text-green-900">
-                  已從 <code className="font-mono">{copyFromListNo}</code> 複製名稱、卡別與篩選條件
+                  已從 <code className="font-mono">{copyFromListNo}</code> 複製名稱、卡別、CR 開關與篩選條件
                 </p>
                 <p className="text-xs text-green-800 mt-0.5">
-                  名稱與卡別已一併帶入並可調整（名稱月份自動更新為本月）；CR 開關已恢復為「啟用」預設值；條件可繼續編輯。
+                  名稱與卡別已一併帶入並可調整（名稱月份自動更新為本月）；CR 開關沿用來源名單設定；條件可繼續編輯。
                 </p>
               </div>
               <button
@@ -740,6 +771,36 @@ export function ListCreateDraftPage() {
                 onClick={() => setCopyFromListNo(null)}
                 aria-label="關閉"
                 className="text-green-700 hover:bg-green-100 p-1 rounded"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* F118 AC-11：採用「已複製過」來源後之持續提醒（對齊 prototype 27a L163-174） */}
+          {dupReminderListNo && (
+            <div
+              data-testid="dup-reminder-banner"
+              role="status"
+              className="rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm"
+            >
+              <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="font-semibold text-amber-900">
+                  本月已有一份條件相同的名單：
+                  <code className="font-mono">{dupReminderListNo}</code>
+                </p>
+                <p className="text-xs text-amber-800 mt-0.5">
+                  若<strong>不修改篩選條件</strong>就儲存，系統會拒絕建立（
+                  <code className="font-mono">422 LIST_NO_DUPLICATE</code>）。請調整條件使其不再等價。
+                </p>
+              </div>
+              <button
+                type="button"
+                data-testid="btn-close-dup-reminder"
+                onClick={() => setDupReminderListNo(null)}
+                aria-label="關閉提醒"
+                className="text-amber-700 hover:bg-amber-100 p-1 rounded"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1427,6 +1488,7 @@ export function ListCreateDraftPage() {
         prevYm={prevYm}
         lists={prevLists}
         loading={prevLoading}
+        duplicateItems={dupItems}
         onCopy={handleCopyApply}
         onClose={() => setCopyModalOpen(false)}
       />

@@ -760,6 +760,34 @@ describe('AssignmentListService', () => {
    * 對應 test spec：F050-test.md §十四 K 群組（TS-F050-K01a / K01b / K01c）
    */
   describe('v2.1.1 regression guard — prodBest dead code removed (K 群組)', () => {
+    /**
+     * 跨 workspace（apps/api → apps/web）讀檔之路徑解析。
+     *
+     * 不可用 `path.resolve(__dirname, '../../../../../web/...')`：Stryker 會把
+     * apps/api 複製進 `.stryker-tmp/` 沙箱執行 dry run，該相對路徑於沙箱內會解析到
+     * 不存在的 `.stryker-tmp/web/...` → ENOENT → dry run 失敗 → 整條 mutation gate
+     * 無法產出分數（非分數偏低，而是無分數）。
+     *
+     * 改為自 __dirname 逐層上溯，找到「實際存在 apps/web/src」的 repo root 為止；
+     * 沙箱內會一路上溯出 .stryker-tmp 找到真實 repo root，一般執行則於同一位置命中。
+     * 斷言內容不變，僅修正路徑解析。
+     */
+    const resolveWebSrc = async (relFromWebSrc: string): Promise<string> => {
+      const fs = await import('fs');
+      const path = await import('path');
+      let dir = __dirname;
+      for (let i = 0; i < 12; i++) {
+        const candidate = path.join(dir, 'apps', 'web', 'src');
+        if (fs.existsSync(candidate)) return path.join(candidate, relFromWebSrc);
+        const parent = path.dirname(dir);
+        if (parent === dir) break;
+        dir = parent;
+      }
+      throw new Error(
+        `找不到 apps/web/src（自 ${__dirname} 上溯）；跨 workspace regression guard 無法定位目標檔`,
+      );
+    };
+
     it('TS-F050-K01a：backend regression — assignment-list.service.ts 不再含 dto.prodBest 讀取', async () => {
       const fs = await import('fs');
       const path = await import('path');
@@ -777,11 +805,7 @@ describe('AssignmentListService', () => {
 
     it('TS-F050-K01b：frontend regression — list-create-draft-page.tsx 不再含 setProdBest / prodBest = / dto.prodBest =', async () => {
       const fs = await import('fs');
-      const path = await import('path');
-      const filePath = path.resolve(
-        __dirname,
-        '../../../../../web/src/pages/assignment/list-create-draft-page.tsx',
-      );
+      const filePath = await resolveWebSrc('pages/assignment/list-create-draft-page.tsx');
       const src = fs.readFileSync(filePath, 'utf-8');
 
       expect(src).not.toMatch(/setProdBest/);
@@ -793,11 +817,7 @@ describe('AssignmentListService', () => {
 
     it('TS-F050-K01c：frontend regression — list-edit-draft-page.tsx 不再含 setProdBest / prodBest = / dto.prodBest =', async () => {
       const fs = await import('fs');
-      const path = await import('path');
-      const filePath = path.resolve(
-        __dirname,
-        '../../../../../web/src/pages/assignment/list-edit-draft-page.tsx',
-      );
+      const filePath = await resolveWebSrc('pages/assignment/list-edit-draft-page.tsx');
       const src = fs.readFileSync(filePath, 'utf-8');
 
       expect(src).not.toMatch(/\bsetProdBest\b/);

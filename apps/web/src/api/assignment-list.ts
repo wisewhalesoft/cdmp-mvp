@@ -236,6 +236,44 @@ export async function previewHitCount(conditionPayload: {
   return res.data;
 }
 
+// ============================================================================
+// F118 §5.1.1 — 從上月複製「已複製過」判定（唯讀提示）
+// 契約：docs/specs/contracts/F118-copy-duplicate-check.contract.ts
+// ============================================================================
+
+/** 單筆上月候選之判定結果（BR-9 候選過濾由後端負責） */
+export interface CopyDuplicateCheckItem {
+  listNo: string;
+  alreadyCopied: boolean;
+  /** alreadyCopied=false 時恆為 null；true 時為本月等價名單之 listNo（BR-4 取最小者） */
+  copiedToListNo: string | null;
+}
+
+export interface CopyDuplicateCheckResponse {
+  prevYm: string;
+  currentYm: string;
+  items: CopyDuplicateCheckItem[];
+}
+
+/**
+ * F118：查詢上月候選名單是否已於本作業月存在等價名單。
+ *
+ * - `currentYm` 由呼叫端帶入（F097 作業月語意），後端不自行推導系統當月（AC-5）
+ * - 唯讀提示端點：DirectorOrSectionChiefGuard（處長亦可讀）
+ * - 不引入快取，Modal 每次開啟重新查詢（BR-6 / AC-6）
+ * - 判定失敗不阻擋複製流程（AC-10 由呼叫端降級處理）
+ */
+export async function checkCopyDuplicates(params: {
+  prevYm: string;
+  currentYm: string;
+}): Promise<CopyDuplicateCheckResponse> {
+  const response = await apiClient.get<CopyDuplicateCheckResponse>(
+    '/assignment/lists/copy-duplicate-check',
+    { params: { prevYm: params.prevYm, currentYm: params.currentYm } },
+  );
+  return response.data;
+}
+
 /**
  * F052：停用名單（軟刪除）。
  */

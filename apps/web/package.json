@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "deps:check": "depcruise src --config .dependency-cruiser.cjs",
-    "gate:coverage:dept-ratio": "vitest run --coverage --coverage.include=src/pages/assignment/_components/dept-ratio-form.tsx --coverage.include=src/pages/assignment/dept-ratio-config-page.tsx --coverage.thresholds.lines=80 --coverage.thresholds.functions=80 --coverage.thresholds.branches=75 --coverage.thresholds.statements=80 src/pages/assignment/__tests__/dept-ratio-form.test.tsx src/pages/assignment/__tests__/dept-ratio-config-page.test.tsx"
+    "gate:coverage:dept-ratio": "vitest run --coverage --coverage.include=src/pages/assignment/_components/dept-ratio-form.tsx --coverage.include=src/pages/assignment/dept-ratio-config-page.tsx --coverage.thresholds.lines=80 --coverage.thresholds.functions=80 --coverage.thresholds.branches=75 --coverage.thresholds.statements=80 src/pages/assignment/__tests__/dept-ratio-form.test.tsx src/pages/assignment/__tests__/dept-ratio-config-page.test.tsx",
+    "gate:coverage:f118": "vitest run --coverage --coverage.include=src/pages/assignment/_components/copy-from-prev-month-modal.tsx --coverage.thresholds.lines=80 --coverage.thresholds.functions=80 --coverage.thresholds.branches=75 --coverage.thresholds.statements=80 src/pages/assignment/_components/__tests__/copy-from-prev-month-modal.test.tsx src/pages/assignment/__tests__/list-create-draft-page.test.tsx src/api/__tests__/assignment-list-copy-duplicate-check.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

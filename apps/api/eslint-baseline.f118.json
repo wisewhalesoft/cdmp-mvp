@@ -1,0 +1,77 @@
+{
+  "description": "F118（AD-E07-48）ring metric gate #4 baseline — assignment-list.service.ts / assignment-list.controller.ts 於 F118 開工前（HEAD 33379ac，2026-08-04）既有之 ESLint complexity/size 違規清單。gate:complexity:f118（scripts/gate-complexity-diff.cjs）僅在偵測到不在此清單之新違規時才 FAIL——比對鍵為 (file basename, ruleId, message)，message 含函式名稱與複雜度/行數數值，同一函式數值改變（含惡化）即不再匹配、會被視為新違規。見 docs/test-specs/risks-and-gaps.md R-F118-04 / test-generator dispute #2 裁決（2026-08-04）。",
+  "generatedFrom": "git show 33379ac -- apps/api/src/modules/assignment-list/assignment-list.service.ts（F118 開工前 HEAD，本 repo F118 分支之基底 commit）",
+  "generatedAt": "2026-08-04",
+  "violations": [
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "complexity",
+      "message": "Async method 'previewHitCount' has a complexity of 13. Maximum allowed is 10."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "complexity",
+      "message": "Method 'deriveBackwardCompatColumns' has a complexity of 14. Maximum allowed is 10."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "complexity",
+      "message": "Method 'normalizeConditionPayload' has a complexity of 16. Maximum allowed is 10."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "max-lines-per-function",
+      "message": "Async method 'listLists' has too many lines (149). Maximum allowed is 80."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "complexity",
+      "message": "Async method 'listLists' has a complexity of 22. Maximum allowed is 10."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "complexity",
+      "message": "Arrow function has a complexity of 13. Maximum allowed is 10."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "max-lines-per-function",
+      "message": "Async method 'createList' has too many lines (122). Maximum allowed is 80."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "complexity",
+      "message": "Async method 'createList' has a complexity of 11. Maximum allowed is 10."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "max-lines-per-function",
+      "message": "Async method 'updateList' has too many lines (133). Maximum allowed is 80."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "complexity",
+      "message": "Async method 'updateList' has a complexity of 21. Maximum allowed is 10."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "complexity",
+      "message": "Async method 'calculateInactiveOptionWarnings' has a complexity of 13. Maximum allowed is 10."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "complexity",
+      "message": "Async method 'findActiveConditionDuplicate' has a complexity of 11. Maximum allowed is 10."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "max-lines-per-function",
+      "message": "Async method 'getFullSnapshot' has too many lines (118). Maximum allowed is 80."
+    },
+    {
+      "file": "assignment-list.service.ts",
+      "ruleId": "complexity",
+      "message": "Async method 'getFullSnapshot' has a complexity of 37. Maximum allowed is 10."
+    }
+  ]
+}
