@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Database, CheckCircle, XCircle, HelpCircle, RefreshCw } from 'lucide-react';
-import { PieChart, Pie, Cell, Sector, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, Sector, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, type PieSectorDataItem } from 'recharts';
 import { getDashboard, getMetrics, getAlerts, testDatasourceConnection } from '@/api/datasources';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTW, formatTimeTW } from '@/utils/date-utils';
@@ -52,7 +52,6 @@ export function DashboardTab() {
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
 
   // Pie chart hover
-  const [activePieIndex, setActivePieIndex] = useState<number | undefined>(undefined);
 
   // Refresh / Test state
   const [refreshing, setRefreshing] = useState(false);
@@ -247,6 +246,9 @@ export function DashboardTab() {
             <div className="flex justify-center" data-testid="pie-chart">
               <ResponsiveContainer width={280} height={280}>
                 <PieChart>
+                  {/* recharts v3 移除了 Pie 的 activeIndex prop（見官方 v2→v3 遷移指引）：
+                      active 狀態改由同一 chart 內的 <Tooltip /> 內部管理，hover 時自動
+                      套用 activeShape，不需再自行以 state 追蹤 index。 */}
                   <Pie
                     data={pieData}
                     cx="50%"
@@ -256,12 +258,9 @@ export function DashboardTab() {
                     dataKey="value"
                     stroke="#FFFFFF"
                     strokeWidth={2}
-                    activeIndex={activePieIndex}
-                    activeShape={(props: Record<string, unknown>) => (
-                      <Sector {...props} outerRadius={(props.outerRadius as number) + 6} />
+                    activeShape={(props: PieSectorDataItem) => (
+                      <Sector {...props} outerRadius={(props.outerRadius ?? 0) + 6} />
                     )}
-                    onMouseEnter={(_, index) => setActivePieIndex(index)}
-                    onMouseLeave={() => setActivePieIndex(undefined)}
                   >
                     {pieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} style={{ cursor: 'pointer' }} />

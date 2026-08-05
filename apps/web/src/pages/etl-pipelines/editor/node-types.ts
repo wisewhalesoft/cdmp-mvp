@@ -85,9 +85,10 @@ export function canConnect(sourceType: string, targetType: string): boolean {
   // Load -> anything is not allowed (load is terminal)
   if (sourceDef.category === 'load') return false;
   // anything -> Extract is not allowed (extract is source)
+  // 註：此規則已涵蓋 Extract -> Extract，故不需另一條判斷
+  //（原有的 `sourceDef.category === 'extract' && targetDef.category === 'extract'`
+  //  在本行之後 targetDef.category 已被收斂為 'transform' | 'load'，恆為 false 之死碼）
   if (targetDef.category === 'extract') return false;
-  // Extract -> Extract not allowed
-  if (sourceDef.category === 'extract' && targetDef.category === 'extract') return false;
 
   return true;
 }

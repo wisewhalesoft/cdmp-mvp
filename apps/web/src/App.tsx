@@ -21,7 +21,7 @@ import { TargetTablesPage } from '@/pages/etl-pipelines/target-tables-page';
 import { CustomerListPage } from '@/pages/c360/customer-list-page';
 import { CustomerDetailPage } from '@/pages/c360/customer-detail-page';
 import {
-  AssignmentStubPage,
+
   AssignmentOverviewPage,
   ScoringConfigPage,
   ListDefinitionPage,
@@ -46,7 +46,7 @@ import {
   DirectorOrSectionChiefRoute,
   DirectorRoute,
   ProtectedRoute,
-  SalesManagerRoute,
+
 } from '@/router/protected-route';
 
 export function App() {

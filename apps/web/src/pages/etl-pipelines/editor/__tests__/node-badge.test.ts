@@ -4,18 +4,13 @@ import type { Node, Edge } from '@xyflow/react';
 import {
   computeNodeFieldStats,
   getBadgeDescriptor,
-  type NodeFieldStats,
-  type BadgeDescriptor,
 } from '../node-field-stats';
 import {
   mockSourceColumnsA,
   mockSourceColumnsB,
   extractNode1,
-  extractNode2,
   mappingNode,
   derivedNode,
-  mergeNode,
-  loadNode,
   typeCastNode,
   conditionalNode,
   dedupNode,

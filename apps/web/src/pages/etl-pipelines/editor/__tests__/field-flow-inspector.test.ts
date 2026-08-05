@@ -6,12 +6,8 @@ import {
   mockSourceColumnsA,
   mockSourceColumnsB,
   extractNode1,
-  extractNode2,
   mappingNode,
   derivedNode,
-  dedupNode,
-  allNodes,
-  mockEdges,
 } from './fixtures/pipeline-graph';
 
 vi.mock('@/api/etl-pipelines');

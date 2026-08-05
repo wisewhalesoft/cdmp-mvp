@@ -79,7 +79,6 @@ export function PipelineLogsPage() {
 
   // Drawer state
   const [selectedLog, setSelectedLog] = useState<PipelineLogDetailResponse | null>(null);
-  const [drawerLoading, setDrawerLoading] = useState(false);
   const [retrying, setRetrying] = useState(false);
 
   const fetchLogs = useCallback(async () => {
@@ -101,14 +100,13 @@ export function PipelineLogsPage() {
   }, [fetchLogs]);
 
   const handleLogClick = async (logId: string) => {
-    setDrawerLoading(true);
+    // 註：抽屜僅於 selectedLog 有值時渲染（即 fetch 完成後才出現），
+    //     故不需要獨立的 drawerLoading 狀態；原有之 state 從未被讀取，已移除。
     try {
       const detail = await getLogDetail(logId);
       setSelectedLog(detail);
     } catch {
       // handled by API client
-    } finally {
-      setDrawerLoading(false);
     }
   };
 
@@ -280,7 +278,7 @@ export function PipelineLogsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedLog.nodeLogs.map((node, idx) => {
+                      {selectedLog.nodeLogs.map((node) => {
                         const isFailed = node.status === 'failed';
                         const typeInfo = getNodeTypeLabel(node.nodeType);
 

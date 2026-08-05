@@ -4,7 +4,7 @@ import { MousePointerClick, Trash2, Plus, Lock, ChevronDown, CheckCircle, MinusC
 import { getNodeDef, getCategoryColor, getCategoryLabel } from './node-types';
 import { FieldFlowTab } from './field-flow-tab';
 import type { RawTableItem, TargetTableSummary, TargetTableColumn } from '@cdmp/shared';
-import { getTargetTables, getTargetTableSchema, getRawTableColumns } from '@/api/etl-pipelines';
+import { getTargetTables, getTargetTableSchema } from '@/api/etl-pipelines';
 import { getUpstreamColumns } from './node-field-stats';
 
 interface PropertiesPanelProps {
