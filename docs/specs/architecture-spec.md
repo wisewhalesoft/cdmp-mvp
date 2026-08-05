@@ -1,10 +1,14 @@
 ---
 type: architecture-spec
-version: "2.28"
+version: "2.29"
 status: draft
-last_updated: 2026-07-12
-covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105, F108, F109, F110]
+last_updated: 2026-08-04
+covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105, F108, F109, F110, F117, F118]
 ---
+
+> **v2.29 / 2026-08-04 變更摘要（AD-E07-48：F117 部門比例「有處長」過濾 + F118 從上月複製「已複製過」提示 — 🔴 DRAFT，待人工審閱）**：
+>
+> **✅ 2026-08-04 人工審閱閘：F117 v1.1 / F118 v1.1 / AD-E07-48 v1.1 均已核可，可作為 TDD 實作依據。** 原業務阻塞事項（OQ-F117-B1 / OQ-F118-B2 / OQ-F118-B3）全數裁決完畢。新增 **§5.18「F117/F118 UX 精煉架構決策（AD-E07-48）」** 與決策記錄 [`implementation-log/AD-E07-48-f117-f118-ux-refinements.md`](implementation-log/AD-E07-48-f117-f118-ux-refinements.md)。核心決策：(1) **F117**：GET flag 命名採 `requireDirector`；不引入樂觀鎖（孤兒判定於 PUT 呼叫當下即時查詢，A-2）；**不新增元件**——三分類 + PUT 孤兒保留邏輯直接擴充既有 `DeptRatioService`，抽取共用 private method `computeActiveDirectorMap()` 避免 GET/PUT 出現第二套處長判定實作；查證確認 GET 現行已計算 `directorMap` 並回傳 `directorName`，F117 對 GET 側**零新查詢成本**；(2) **F118**：**推翻 spec §5.1 建議之選項 (A)**（補完從未實作的 `copy-source-options` 端點），改採獨立最小端點 **`GET /api/v1/assignment/lists/copy-duplicate-check?prevYm&currentYm`**（v1.1 修訂：原設計為 POST 帶前端候選；OQ-F118-B3 裁決後候選過濾規則已唯一明確，改由後端自載候選，使判定所用之 `condition_payload` 與儲存端**同源**，強化 AC-2 一致性）——固定 3 次查詢，與候選數無關；亦查證確認 `copy-source-options` 之既有文件路徑前綴 `assignment/list-definitions` 在現行程式碼中根本不存在（實際為 `assignment/lists`），為該端點「規格與實作徹底脫節」之額外佐證；(3) 判定邏輯 100% 重用既有 `AssignmentListService.normalizeConditionPayload`（同 class private method 直接呼叫，不抽取新檔案）；(4) 對既有 `findActiveConditionDuplicate` 之**最小修改**：新增 `ORDER BY list_no ASC` 決定性排序，並使新端點採同一排序，確保多筆同簽章候選時 AC-2（儲存時 422）與 AC-4（提示顯示）之目標名單編號一致（OQ-F118-02）——此為對既有已上線程式碼的修改，已於 AD §10.2 R-2 記錄為低風險項並建議補回歸測試。無 schema / migration 變更（兩者皆為查詢時衍生狀態）。新增 9 個不變式（`I-F117-DIRECTOR-SINGLE-SOURCE-01` / `I-F117-ORPHAN-PRESERVE-01` / `I-F117-SUM-SCOPE-01` / `I-F117-HIDDEN-ZERO-01` / `I-F118-SINGLE-NORMALIZE-01` / `I-F118-CONST-QUERY-01` / `I-F118-CONFLICT-ORDER-01` / `I-F118-READONLY-JUDGE-01`；v1.1 移除 `I-F118-CLIENT-PAYLOAD-TRUST-01`——GET 化後不再接受前端候選，該信任模型已不適用）。covers 補入 F117/F118。AD-E07-48 §10 之待確認事項已於人工審閱閘全數結案。
 
 > **v2.28 / 2026-07-12 變更摘要（AD-E07-45 v1.2 修正：實測結果推翻「抽樣後即次秒級」+ 前端 histogram 快取）**：
 >
@@ -118,12 +122,12 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
-| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月名單分派執行流程、**5.13 月名單分派執行模型重構**、**§5.14 Stage 3/4 真實比例分派**、**§5.15 Stage 0 試算頁業務化重設計**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、**AD-E07-29（確定性排序鍵表 / st4_exchange 廢除 / 警告通道 / AC-12~18 測試策略）**、**AD-E07-36（端點拓樸 / Guard 接線 / DTO shape / I-DEPT-SCOPE-01 / I-DEPT-ORDER-01 / OQ 裁定）**、10. 技術棧決策 |
+| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月名單分派執行流程、**5.13 月名單分派執行模型重構**、**§5.14 Stage 3/4 真實比例分派**、**§5.15 Stage 0 試算頁業務化重設計**、**§5.18 F117/F118 UX 精煉（DRAFT，待人工審閱後方可用於出題）**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、**AD-E07-29（確定性排序鍵表 / st4_exchange 廢除 / 警告通道 / AC-12~18 測試策略）**、**AD-E07-36（端點拓樸 / Guard 接線 / DTO shape / I-DEPT-SCOPE-01 / I-DEPT-ORDER-01 / OQ 裁定）**、**AD-E07-48（F117/F118，DRAFT）**、10. 技術棧決策 |
 | TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**AD-E07-16（F072 應用層 Transaction）**、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、**E07-G M02 擴充 Migration 設計（D-CT-01/02/03 + D11 驗證 SQL）**、10. 技術棧決策 |
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**、**AD-E02-4-F Assignment Sidebar IA v2.3 重整決策**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、**5.13.7（cdmp-worker 容器 / pg-boss schema / docker-compose 變更 / dev synchronize vs prod migration）**、**AD-E07-28 §7~8（pg-boss schema migration 固定、worker entrypoint、不引入 Redis）**、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、**風險 13~16 為 E07 M02 擴充新增**）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月名單分派執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月名單分派架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）**；**§5.13 + AD-E07-28（月名單分派執行模型重構：pg-boss worker 抽離 + Stage 1~4 SQL 下推；P1/P2/P3 階段邊界；estimate≡run 共用 buildStage1Sql / I-RUN-EST-01；JS↔SQL 等價測試取代 RGv2-005；year-above portability 選項 C / I-PORT-01；冪等 I-IDEM-01；cancellation poller + orphan reaper；OQ-AD28-01~06）**；**§5.14 + AD-E07-29（F101 Stage 3/4 真實比例分派：三維分組 FLOOR + 確定性差額補足；st4_exchange 廢除 I-NO-ST4-EXCHANGE；ASSIGNDAY calculateDailyEstimate 共享；確定性排序鍵 obdeptid/emplid/orgno+appl_no；警告通道 skipped_cases.warnings；OQ-F101-01~05 全裁定；I-DET-01 / I-PIPELINE-STAGE-ORDER）** |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月名單分派執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月名單分派架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）**；**§5.13 + AD-E07-28（月名單分派執行模型重構：pg-boss worker 抽離 + Stage 1~4 SQL 下推；P1/P2/P3 階段邊界；estimate≡run 共用 buildStage1Sql / I-RUN-EST-01；JS↔SQL 等價測試取代 RGv2-005；year-above portability 選項 C / I-PORT-01；冪等 I-IDEM-01；cancellation poller + orphan reaper；OQ-AD28-01~06）**；**§5.14 + AD-E07-29（F101 Stage 3/4 真實比例分派：三維分組 FLOOR + 確定性差額補足；st4_exchange 廢除 I-NO-ST4-EXCHANGE；ASSIGNDAY calculateDailyEstimate 共享；確定性排序鍵 obdeptid/emplid/orgno+appl_no；警告通道 skipped_cases.warnings；OQ-F101-01~05 全裁定；I-DET-01 / I-PIPELINE-STAGE-ORDER）**；**AD-E07-48（F117/F118 UX 精煉，🔴 DRAFT，待人工審閱：`computeActiveDirectorMap` 共用 helper / PUT 孤兒保留演算法 / `checkCopyDuplicates` 常數查詢設計 / `findActiveConditionDuplicate` ORDER BY 修正 / 9 個不變式）** |
 
 ## 目錄
 
@@ -1346,10 +1350,10 @@ const level1   = normalizeCharField(row['LEVEL1']) || null;  // 空字串還原�
 
 | 服務 | 職責 | 關鍵業務規則 | 相關 Stories |
 |------|------|------------|------------|
-| AssignmentList Service | `ob_list_definition` CRUD；LIST_NO 自動產生；停用（status='inactive'） | LIST_NO 格式 `OB{YYYYMM}{NNN}`；同月 > 999 筆回傳 422（LIST_NO_LIMIT_EXCEEDED）；停用不刪除記錄 | US-070, US-071, US-088, US-089, US-090 |
+| AssignmentList Service | `ob_list_definition` CRUD；LIST_NO 自動產生；停用（status='inactive'） | LIST_NO 格式 `OB{YYYYMM}{NNN}`；同月 > 999 筆回傳 422（LIST_NO_LIMIT_EXCEEDED）；停用不刪除記錄；**F118 v1.0 補登（AD-E07-48，🔴 DRAFT）**：新增 `checkCopyDuplicates(currentYm, candidates)` public method（供「從上月複製」已複製過判定，固定 2 次查詢 + 重用既有 `normalizeConditionPayload`）；既有 `findActiveConditionDuplicate` 新增 `ORDER BY list_no ASC` 決定性排序（AD §5.3） | US-070, US-071, US-088, US-089, US-090 |
 | AssignmentScoring Service | 計分維度（ob_levelcard_*）讀寫；版本管理（新版本遞增）；CARD_LEVEL 門檻；TIER_LEVEL 對應；**F056 v1.5 起：所有寫入端點加入 CARD_TYPE 範圍鎖（assertCardTypeActive）**；**F054 v1.3：match_type 欄位 atomic delete + update + insert（AD-E07-2 補充）** | 寫入時建立新 CARD_VERSION（不覆蓋舊版本）；複雜計分呼叫 PostgreSQL function（AD-E07-3）；**F056 TIER_LEVEL 列舉驗證（T1~T10）；Fallback/Standard 互斥檢查**（應用層 Mutex）；**ob_tier fallback 紀錄刪除必須用 `repo.remove(entity)`（TypeORM NULL PK silent bug 防範）**；**`scoresClear` 原子操作（F054 v1.3）**：match_type 切換時先 `DELETE ob_levelcard_score WHERE (card_type, card_version, column_name) = (:ct, :cv, :cn)` 再重新 INSERT，確保舊 score 紀錄不殘留；整段在同一 DB Transaction 中執行（DELETE + INSERT + UPDATE ob_levelcard_column.match_type）；Transaction 失敗時 Rollback，回傳 500 | US-072, US-073, US-074, US-075 |
 | CardType Service（**F069~F072 新增**） | `ob_card_type` CRUD；查詢清單（JOIN `ob_code_df` 取 prodKindName）；新增（同 transaction 自動建立 v1 `ob_levelcard_version`）；編輯（card_name / prod_kind 僅此兩欄）；刪除預覽（5 張下游表筆數統計 + ob_list_definition active 引用數）；級聯 hard delete（6 步驟 transaction）；審計日誌同 transaction 寫入 | **依賴 Repository**：`ObCardType`（新建 Entity）/ `ObLevelcardVersion` / `ObLevelcardColumn` / `ObLevelcardScore` / `ObLevelcardLevel` / `ObTier` / `ObCodeDf`（需新增 module import）/ `AssignmentRun` / `AssignmentAuditLog`；F070 同 transaction：INSERT ob_card_type + INSERT ob_levelcard_version（v1，sdate=今日 / edate=20991231 / status=active）；F072 採應用層 transaction（AD-E07-16，不使用 `ON DELETE CASCADE`） | US-093, US-094, US-095, US-096 |
-| AssignmentRatio Service（含 `PersonnelRatioService`） | per-LIST_NO 部門比例（ob_dept_pct）讀寫；人員比例（ob_empl_set）讀寫；CR 回分規則開關；**F084 v2.0 auto-advance 觸發宿主（AD-E07-19 補登）** | 比例總和驗證（各部門 RATION 總和需 = 100%）由應用層執行；`ob_dept_pct` 即為 per-LIST_NO 設定（無全域表）；**`PersonnelRatioService.setPersonnelRatios()` 擴大後 transaction scope（AD-E07-19）**：`dataSource.transaction(async (mgr) => {` (1) `mgr.query('SELECT pg_advisory_xact_lock($1)', [lockKey])`（tx 開頭取得 blocking advisory lock，`lockKey = hashtext(listNo)::bigint`）→ (2) DELETE `ob_empl_set` WHERE `(list_no, deptid_m)` → (3) INSERT 新員工比例紀錄 → (4) INSERT `assignment_audit_log`（`SET_PERSONNEL_RATIO`）→ (5)（若 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` = on）呼叫 `assertAllDeptsSumEquals100WithMgr(listNo, mgr)` 偵測完成度 → (6)（若全部完成且 `stage = 'personnel_ratio'`）月名單分派 guard check → (7) `stageTransition.advanceToInMgr(listNo, 'personnel_ratio', 'approval', actorId, mgr, { auto_advanced_by_completion: true, operator_role })` → `})`；tx commit 時 advisory lock 自動釋放；lock 等待超時（`lock_timeout = 5000ms`）→ auto-advance 跳過、PUT 仍回 200 + `autoAdvanced: false` | US-078, US-079, US-080, US-091 |
+| AssignmentRatio Service（含 `PersonnelRatioService`） | per-LIST_NO 部門比例（ob_dept_pct）讀寫；人員比例（ob_empl_set）讀寫；CR 回分規則開關；**F084 v2.0 auto-advance 觸發宿主（AD-E07-19 補登）**；**F117 v1.0 補登（AD-E07-48，🔴 DRAFT）**：`DeptRatioService`（`ratios/dept`）新增共用 private method `computeActiveDirectorMap()`（自 GET 現行邏輯抽取，GET/PUT 共用）；GET 增量 `hasActiveDirector`/`isRatioEditable`/`hiddenNoDirectorCount` + `requireDirector` flag；PUT 增量孤兒列伺服器端保留（BR-4/5）+ 無處長防呆 422 `RATIO_DEPT_DIRECTOR_REQUIRED`（BR-6）+ 加總驗證範圍改為最終持久化集合（BR-7） | 比例總和驗證（各部門 RATION 總和需 = 100%）由應用層執行；`ob_dept_pct` 即為 per-LIST_NO 設定（無全域表）；**`PersonnelRatioService.setPersonnelRatios()` 擴大後 transaction scope（AD-E07-19）**：`dataSource.transaction(async (mgr) => {` (1) `mgr.query('SELECT pg_advisory_xact_lock($1)', [lockKey])`（tx 開頭取得 blocking advisory lock，`lockKey = hashtext(listNo)::bigint`）→ (2) DELETE `ob_empl_set` WHERE `(list_no, deptid_m)` → (3) INSERT 新員工比例紀錄 → (4) INSERT `assignment_audit_log`（`SET_PERSONNEL_RATIO`）→ (5)（若 `ENABLE_E07_AUTO_ADVANCE_TO_APPROVAL` = on）呼叫 `assertAllDeptsSumEquals100WithMgr(listNo, mgr)` 偵測完成度 → (6)（若全部完成且 `stage = 'personnel_ratio'`）月名單分派 guard check → (7) `stageTransition.advanceToInMgr(listNo, 'personnel_ratio', 'approval', actorId, mgr, { auto_advanced_by_completion: true, operator_role })` → `})`；tx commit 時 advisory lock 自動釋放；lock 等待超時（`lock_timeout = 5000ms`）→ auto-advance 跳過、PUT 仍回 200 + `autoAdvanced: false` | US-078, US-079, US-080, US-091 |
 | AssignmentCode Service | `ob_code_df` CRUD（PROD_KIND / SPEC_TP / CASE_STATUS **三類**代碼維護；**CASEYEAR 不納入**，因 CASEYEAR 為前端 hard-coded 的 11 個固定 enum 選項 0~10，不從 `ob_code_df` 動態載入，證據：`reference/Areas/OBZ/Views/OBZ020/edit.cshtml:174-235`）；`tbl_id` 使用英文常數（非原系統數字代碼），映射規則：`'01'→'PROD_KIND'`、`'02'→'SPEC_TP'`、`'22'→'CASE_STATUS'`（AD-E07-14；初版含 `'04'→'CASEYEAR'`，於 2026-05-12 OQ-E07-24 Resolved 後移除） | Admin 與業務主管均可存取；代碼用於名單定義表單選項；F050/F051 `case_status` 欄位多選選項來源為 `tbl_id='CASE_STATUS'`；F050/F051 `caseyear` 欄位為前端固定 11 個選項（0~10），非 ob_code_df 動態載入 | US-092 |
 | AssignmentRun Service | 觸發月名單分派（202 非同步）；Stage 0~4 執行引擎；進度查詢；結果摘要；**匯出分派結果（23 欄，xlsx / CSV 雙格式 streaming；v2.0 改多表 join；BR-F064-01~15，AD-E07-31）** | 同月僅一個 running/pending 月名單分派（409 拒絕重複）；快照 Transaction 原子性（AD-E07-2）；Stage 1 讀取 ob_pool_data（依賴 E04）；Stage 3/4 回寫 ob_pool_data_list.ob_dept / ob_emplid；**F064 v2.0 匯出：資料來源改 `ob_monthly_run_result` 多表 join（INNER JOIN `ob_pool_data_list`，LEFT JOIN `ob_emphire`/`ob_list_definition`），不讀 snapshot JSONB；xlsx / CSV 共用 server-side cursor row-producer** | US-081, US-082, US-083, US-084, US-155 |
 | AssignmentSnapshot Service | 執行歷史清單；快照詳情；兩次執行差異比對 | 差異比對在應用層計算（比對兩份 result 快照 JSONB）；快照為不可變記錄 | US-085, US-086, US-087 |
@@ -1372,6 +1376,7 @@ const level1   = normalizeCharField(row['LEVEL1']) || null;  // 空字串還原�
 | PUT | `/api/v1/assignment/list-definitions/:listNo` | 編輯名單定義 | user + is_sales_manager |
 | PUT | `/api/v1/assignment/list-definitions/:listNo/disable` | 停用名單定義 | user + is_sales_manager |
 | GET | `/api/v1/assignment/list-definitions/:listNo/estimate` | Stage 0 案件估算 | user + is_sales_manager |
+| GET | `/api/v1/assignment/lists/copy-duplicate-check?prevYm&currentYm` | **[F118 v1.1 新增，AD-E07-48 v1.1]** 「從上月複製」已複製過唯讀判定（回傳 `items[]`：`listNo` / `alreadyCopied` / `copiedToListNo`，固定 3 次查詢）；⚠️ 路由須宣告於 `@Get(':listNo...')` 動態路由之前，否則會被誤匹配；不影響任何寫入路徑，class 級 `DirectorOrSectionChiefGuard` 讀權限即可，不加 `@RequireDirector`。**注意**：本表其餘 `assignment/list-definitions/*` 路徑前綴與現行 controller 實際路由前綴 `assignment/lists`（`AssignmentListController`）不一致，屬本輪查證發現之既有文件落差（AD-E07-48 §2 事實 3），本列採**實際**路由前綴，未回頭修正其餘既有列 | user + is_sales_manager |
 | GET | `/api/v1/assignment/scoring/card-types` | **[F069 新增]** 查看 CARD_TYPE 計分卡類型清單（含 prodKindName JOIN） | user + is_sales_manager |
 | POST | `/api/v1/assignment/scoring/card-types` | **[F070 新增]** 新增 CARD_TYPE（同 transaction 自動建立 v1 版本） | user + is_sales_manager |
 | PUT | `/api/v1/assignment/scoring/card-types/:cardType` | **[F071 新增]** 編輯 CARD_TYPE（card_name / prod_kind；代碼不可修改） | user + is_sales_manager |
@@ -1381,8 +1386,8 @@ const level1   = normalizeCharField(row['LEVEL1']) || null;  // 空字串還原�
 | PUT | `/api/v1/assignment/scoring/dimensions` | 編輯計分維度與分數（**F054 v1.2：加 CARD_TYPE 範圍鎖**） | user + is_sales_manager |
 | PUT | `/api/v1/assignment/scoring/card-levels` | 編輯 CARD_LEVEL 門檻（**F055 v1.4：加 CARD_TYPE 範圍鎖**） | user + is_sales_manager |
 | PUT | `/api/v1/assignment/scoring/tier-mapping` | 編輯 TIER_LEVEL 對應表（**F056 v1.5 breaking：CARD_TYPE 範圍鎖 + TIER_LEVEL 列舉 + Fallback/Standard 互斥**） | user + is_sales_manager |
-| GET | `/api/v1/assignment/ratios/dept/:listNo` | 查看部門比例設定 | user + is_sales_manager |
-| PUT | `/api/v1/assignment/ratios/dept/:listNo` | 設定 per-LIST_NO 部門比例 | user + is_sales_manager |
+| GET | `/api/v1/assignment/ratios/dept/:listNo` | 查看部門比例設定（**[F117 v1.0 增量，🔴 DRAFT]** 新增 `requireDirector` query flag + `hasActiveDirector`/`isRatioEditable`/`hiddenNoDirectorCount` 回應欄位） | user + is_sales_manager |
+| PUT | `/api/v1/assignment/ratios/dept/:listNo` | 設定 per-LIST_NO 部門比例（**[F117 v1.0 增量，🔴 DRAFT]** 孤兒列伺服器端保留 + 無處長防呆 422 `RATIO_DEPT_DIRECTOR_REQUIRED` + 加總驗證範圍改為最終持久化集合） | user + is_sales_manager |
 | GET | `/api/v1/assignment/ratios/personnel/:listNo` | 查看人員比例設定 | user + is_sales_manager |
 | PUT | `/api/v1/assignment/ratios/personnel/:listNo` | 編輯人員比例設定 | user + is_sales_manager |
 | PUT | `/api/v1/assignment/ratios/cr-rule` | 開關 CR 回分規則 | user + is_sales_manager |
@@ -2640,6 +2645,96 @@ graph TD
 #### 5.17.5 測試邊界
 
 `TABLESAMPLE` 不存在於 SQLite，抽樣 CTE 分支只能於 `.pg.spec.ts` / `.mssql.spec.ts` 驗證；小母體 fallback 分支不含 `TABLESAMPLE`，可於 SQLite 單元測試驗證。純函式部分（`scaleEstimate`、F056 histogram→card_level→tier 彙總邏輯）為 driver-agnostic，應以一般單元測試覆蓋。**v1.2**：`card-levels/preview` / `tier-mapping/preview` 端點本身之效能斷言不應為 <1 秒（重卡實測 ≈12s），僅 F050 端點與前端 re-bucketing 行為（不觸發新 HTTP 請求）為 <1 秒之驗收點。
+
+---
+
+### 5.18 F117/F118 UX 精煉架構決策（AD-E07-48）
+
+> 🔴 **本節為 DRAFT，不可作為 TDD 實作依據。** F117（US-180）/ F118（US-181）之 feature spec 本身為 DRAFT，各帶一項業務阻塞待裁事項（[OQ-F117-B1](open-questions.md) / [OQ-F118-B2](open-questions.md)），待業務主管裁示前不得進入實作。本節記錄 architect 已先行解決之 HOW 層級決策，供裁示後直接銜接 TDD、不需二次架構往返。
+>
+> 完整設計（GET/PUT 完整契約、`computeActiveDirectorMap` 抽取、PUT 孤兒保留演算法、新端點 DTO 契約、`checkCopyDuplicates` 方法、`findActiveConditionDuplicate` 修改細節、9 個不變式、風險與待確認事項）：見
+> [`implementation-log/AD-E07-48-f117-f118-ux-refinements.md`](implementation-log/AD-E07-48-f117-f118-ux-refinements.md)。
+> 本節為架構主文概要，供 Test Designer / TDD Developer 快速定位。
+
+#### 5.18.1 背景
+
+F117 限縮 F079 部門比例設定頁之可設定範圍為「有在職處長」之部門；F118 於 F050「從上月複製」Modal 疊加「已複製過」提示。兩者皆為既有已上線流程之增量擴充，不需新模組、不需 migration，可獨立部署、順序無關，故合併於同一 AD 處理。
+
+#### 5.18.2 F117 資料流
+
+```mermaid
+graph TD
+    A["GET/PUT ratios/dept/:listNo"] --> B["computeActiveDirectorMap()\n（自現行 getDeptRatios 抽取，GET/PUT 共用，零新查詢）"]
+    B --> C{"三分類：hasActiveDirector × ration>0"}
+    C -->|"有處長"| D["可編輯，isRatioEditable=true"]
+    C -->|"無處長 + ration>0"| E["孤兒：顯示鎖定"]
+    C -->|"無處長 + ration=0"| F["無關：requireDirector=true 時隱藏"]
+
+    G["PUT payload"] --> H["BR-6 防呆：對無處長且非孤兒部門配置 ration>0 → 422"]
+    H --> I["finalRows = payload（扣除孤兒覆寫）∪ orphanRows（原樣強制併入）"]
+    I --> J["BR-7：加總驗證對象 = finalRows"]
+    J --> K["Tx：DELETE + INSERT finalRows + audit"]
+
+    classDef unchanged fill:#e8e8e8,stroke:#888
+    classDef new fill:#d4f4dd,stroke:#2a9d5c
+    class A unchanged
+    class B,C,D,E,F,H,I,J new
+```
+
+#### 5.18.3 F118 資料流
+
+```mermaid
+graph TD
+    A["Modal 開啟（prevYm = computePrevYm(currentYm)）"] --> A2["既有：listLists(prevYm)\n（不變，渲染用）"]
+    A --> B["[新] GET assignment/lists/copy-duplicate-check\n?prevYm&currentYm（可與 listLists 並行）"]
+    B --> C["AssignmentListService.checkCopyDuplicates\n查詢①：loadSystemFixedFields\n查詢②：上月候選（BR-9 過濾）\n查詢③：本月 active 名單（ORDER BY list_no ASC）"]
+    C --> D["記憶體索引比對（沿用既有 normalizeConditionPayload）\n固定 3 次查詢，與候選數無關"]
+    D --> E["alreadyCopied / copiedToListNo"]
+
+    F["儲存（createList）"] --> G["findActiveConditionDuplicate\n（新增 ORDER BY list_no ASC，與②一致）"]
+    G --> H["422 LIST_NO_DUPLICATE（AC-2 依建構一致）"]
+
+    classDef unchanged fill:#e8e8e8,stroke:#888
+    classDef new fill:#d4f4dd,stroke:#2a9d5c
+    class A unchanged
+    class B,C,D,E new
+    class F unchanged
+    class G,H new
+```
+
+#### 5.18.4 核心決策摘要
+
+| 決策 | 內容 |
+|---|---|
+| F117 flag 命名（A-1） | `requireDirector`，比照既有 `excludeZeroRatio` 之 API 層 flag 慣例 |
+| F117 併發語意（A-2） | 不引入樂觀鎖；GET/PUT 皆為呼叫當下即時查詢 `ob_emphire`；理由與接受風險見 AD §3.1 |
+| F117 元件邊界 | 不新增 service；擴充既有 `DeptRatioService`，抽取共用 private method `computeActiveDirectorMap()` 避免 GET/PUT 出現第二套處長判定 |
+| F117 端點拓樸 | 不新增端點；沿用既有 `GET/PUT ratios/dept/:listNo`，增量欄位對既有呼叫端零 breaking change |
+| F118 端點拓樸（OQ-F118-01） | **不補完 `copy-source-options`**（殭屍規格，轉獨立技術債 OQ-F118-06）；改採獨立端點 **`GET assignment/lists/copy-duplicate-check?prevYm&currentYm`**（v1.1：OQ-F118-B3 裁決後改由後端自載候選，判定與儲存端同源）；查證確認 spec 文件路徑前綴 `assignment/list-definitions` 於現行程式碼中不存在（實際為 `assignment/lists`） |
+| F118 選取決定性（OQ-F118-02） | `ORDER BY list_no ASC`；**同步修正**既有 `findActiveConditionDuplicate`（新增同一排序），確保 AC-2/AC-4 之目標名單編號一致 |
+| F118 正規化重用 | 新方法與 `findActiveConditionDuplicate` 同屬 `AssignmentListService`，直接呼叫既有 private `normalizeConditionPayload`，不抽取新檔案 |
+
+#### 5.18.5 不變式
+
+| 不變式 | 說明 |
+|---|---|
+| **I-F117-DIRECTOR-SINGLE-SOURCE-01** | 處長在職判定僅 `computeActiveDirectorMap` 一份實作，GET/PUT 皆呼叫此方法 |
+| **I-F117-ORPHAN-PRESERVE-01** | PUT 覆寫式寫入前必先計算孤兒列並強制併入最終寫入集合，不論其是否出現於 payload |
+| **I-F117-SUM-SCOPE-01** | 加總驗證對象為「最終持久化集合」，非原始 payload |
+| **I-F117-HIDDEN-ZERO-01** | 「無關部門」既有 `ration` 恆為 0 或無紀錄；此為分類條件本身保證，非外部斷言 |
+| **I-F118-SINGLE-NORMALIZE-01** | `checkCopyDuplicates` 與 `findActiveConditionDuplicate` 共用同一 `normalizeConditionPayload`，禁止平行實作 |
+| **I-F118-CONST-QUERY-01** | `checkCopyDuplicates` 固定 2 次查詢，與 `candidates.length` 無關 |
+| **I-F118-CONFLICT-ORDER-01** | 兩條路徑皆以 `list_no ASC` 為決定性排序，多筆同簽章候選時選取結果須一致 |
+| **I-F118-READONLY-JUDGE-01** | 判定端點不寫入任何資料表，真正攔截仍在儲存時發生（`findActiveConditionDuplicate`） |
+| ~~I-F118-CLIENT-PAYLOAD-TRUST-01~~ | **v1.1 移除**：GET 化後端點不再接受前端傳入之候選資料，`condition_payload` 一律由後端自 DB 讀取（與儲存端同源），原「信任前端 payload」之信任模型已不適用 |
+
+#### 5.18.6 測試邊界
+
+F117／F118 皆無 PG-only 依賴（不涉及 `customer_core` / `TABLESAMPLE`），完整邏輯可於 SQLite unit test 覆蓋；`.pg.spec.ts` / `.mssql.spec.ts` 僅需驗證既有 dialect 差異（如 `emphire-active.util` 既有兩軌模式），無需新增 dialect-only 測試分支。
+
+#### 5.18.7 風險與待人工確認事項（摘要）
+
+完整清單見 AD §10。摘要：(1) F117 BR-5「孤兒列鎖定」與 OQ-F117-B1 可能裁示之「強制歸零」操作有潛在牴觸，建議業務裁示時一併評估是否需要 API 層新增專屬操作（R-1）；(2) §5.3 對既有 `findActiveConditionDuplicate` 加入 `ORDER BY` 屬於對已上線程式碼的修改，建議 TDD 階段補回歸測試（R-2）；(3) F118 端點設計使 Modal 開啟維持兩次請求，已於 AD 中權衡並判斷「與 OQ-F118-B3 解耦」之價值更高（R-3）；(4) `copy-source-options` 殭屍端點本輪未清除，待 OQ-F118-B3 裁示時一併處理（R-4）。
 
 ---
 

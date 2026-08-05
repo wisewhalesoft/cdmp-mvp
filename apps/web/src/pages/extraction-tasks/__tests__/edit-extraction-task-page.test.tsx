@@ -368,7 +368,10 @@ describe('EditExtractionTaskPage', () => {
       });
 
       // Click the cancel button in the modal (not the form cancel)
-      const modal = screen.getByText('確認變更來源資料表').closest('div[class*="fixed"]')!;
+      // closest() 回傳 Element | null；within() 要求 HTMLElement，`!` 只去除 null 不做窄化
+      const modal = screen
+        .getByText('確認變更來源資料表')
+        .closest('div[class*="fixed"]') as HTMLElement;
       const cancelBtn = within(modal).getByRole('button', { name: '取消' });
       await user.click(cancelBtn);
 

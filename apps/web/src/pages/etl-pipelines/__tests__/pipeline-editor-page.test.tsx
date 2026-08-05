@@ -10,7 +10,7 @@ vi.mock('@xyflow/react', () => {
   };
   return {
     ...actual,
-    ReactFlow: ({ children, onConnect, isValidConnection, onNodeClick, onPaneClick, onDrop, onDragOver }: any) => (
+    ReactFlow: ({ children, onConnect, isValidConnection, onPaneClick, onDrop, onDragOver }: any) => (
       <div
         data-testid="react-flow-mock"
         onClick={onPaneClick}
@@ -81,14 +81,14 @@ vi.mock('@xyflow/react', () => {
     useNodesState: (initial: any[]) => {
       const { useState } = require('react');
       const [nodes, setNodes] = useState(initial);
-      return [nodes, setNodes, (changes: any) => {
+      return [nodes, setNodes, (_changes: any) => {
         // Simple no-op for mock
       }];
     },
     useEdgesState: (initial: any[]) => {
       const { useState } = require('react');
       const [edges, setEdges] = useState(initial);
-      return [edges, setEdges, (changes: any) => {
+      return [edges, setEdges, (_changes: any) => {
         // Simple no-op for mock
       }];
     },

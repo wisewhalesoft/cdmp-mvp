@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import {
   CopyFromPrevMonthModal,
   computePrevYm,
@@ -250,5 +250,182 @@ describe('CopyFromPrevMonthModal (component)', () => {
     // prod_kind 'A1' 非白名單可選值 → raw fallback（顯示原碼），不裸露欄位代碼
     expect(row1.textContent).toContain('產品類別：A1');
     expect(row1.textContent).not.toContain('prod_kind');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F118 — 從上月複製「已複製過」提示
+// 對應 prototypes/27a-list-create-draft.html L1192-1295（already-copied-badge / dupConfirmModal）
+// docs/specs/contracts/F118-copy-duplicate-check.contract.ts
+// docs/test-specs/features/F118-test.md §四 TS-F118-FE-001~009
+// ═══════════════════════════════════════════════════════════════════════════
+describe('F118 — 已複製過提示（CopyFromPrevMonthModal）', () => {
+  const DUPLICATE_ITEMS = [
+    { listNo: 'OB202604001', alreadyCopied: true, copiedToListNo: 'OB202605003' },
+    { listNo: 'OB202604002', alreadyCopied: false, copiedToListNo: null },
+  ];
+
+  it('TS-F118-FE-001：alreadyCopied=true 之候選顯示 already-copied-badge，內容含目標編號', () => {
+    render(
+      <CopyFromPrevMonthModal
+        open
+        prevYm="202604"
+        lists={LISTS}
+        loading={false}
+        duplicateItems={DUPLICATE_ITEMS as any}
+        onCopy={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const row1 = screen.getByTestId('copy-row-OB202604001');
+    const badge = within(row1).getByTestId('already-copied-badge');
+    expect(badge.textContent).toContain('OB202605003');
+  });
+
+  it('TS-F118-FE-002：未複製過之候選不渲染 already-copied-badge', () => {
+    render(
+      <CopyFromPrevMonthModal
+        open
+        prevYm="202604"
+        lists={LISTS}
+        loading={false}
+        duplicateItems={DUPLICATE_ITEMS as any}
+        onCopy={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const row2 = screen.getByTestId('copy-row-OB202604002');
+    expect(within(row2).queryByTestId('already-copied-badge')).toBeNull();
+  });
+
+  it('TS-F118-FE-003：copy-row 帶 data-already-copied / data-copied-to-list-no 屬性', () => {
+    render(
+      <CopyFromPrevMonthModal
+        open
+        prevYm="202604"
+        lists={LISTS}
+        loading={false}
+        duplicateItems={DUPLICATE_ITEMS as any}
+        onCopy={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const row1 = screen.getByTestId('copy-row-OB202604001');
+    expect(row1.getAttribute('data-already-copied')).toBe('true');
+    expect(row1.getAttribute('data-copied-to-list-no')).toBe('OB202605003');
+    const row2 = screen.getByTestId('copy-row-OB202604002');
+    expect(row2.getAttribute('data-already-copied')).toBe('false');
+  });
+
+  it('TS-F118-FE-004：目標編號為純文字，非連結（AC-4 / D-8）', () => {
+    render(
+      <CopyFromPrevMonthModal
+        open
+        prevYm="202604"
+        lists={LISTS}
+        loading={false}
+        duplicateItems={DUPLICATE_ITEMS as any}
+        onCopy={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    const badge = screen.getByTestId('already-copied-badge');
+    expect(badge.querySelector('a')).toBeNull();
+    expect(badge.tagName).not.toBe('A');
+  });
+
+  it('TS-F118-FE-005（★核心）：點擊已複製過候選「使用此名單」→ 觸發二次確認彈窗，onCopy 尚未被呼叫', () => {
+    const onCopy = vi.fn();
+    render(
+      <CopyFromPrevMonthModal
+        open
+        prevYm="202604"
+        lists={LISTS}
+        loading={false}
+        duplicateItems={DUPLICATE_ITEMS as any}
+        onCopy={onCopy}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('btn-use-OB202604001'));
+    expect(screen.getByTestId('dup-confirm-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('dup-confirm-target-list-no').textContent).toContain('OB202605003');
+    expect(onCopy).not.toHaveBeenCalled();
+  });
+
+  it('TS-F118-FE-006：確認彈窗按「取消」→ 彈窗關閉，onCopy 未被呼叫', () => {
+    const onCopy = vi.fn();
+    render(
+      <CopyFromPrevMonthModal
+        open
+        prevYm="202604"
+        lists={LISTS}
+        loading={false}
+        duplicateItems={DUPLICATE_ITEMS as any}
+        onCopy={onCopy}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('btn-use-OB202604001'));
+    fireEvent.click(screen.getByTestId('btn-cancel-dup-copy'));
+    expect(screen.queryByTestId('dup-confirm-modal')).toBeNull();
+    expect(onCopy).not.toHaveBeenCalled();
+  });
+
+  it('TS-F118-FE-007：確認彈窗按「仍要以此名單為基礎建立」→ onCopy 被呼叫且帶入該 list，彈窗關閉', () => {
+    const onCopy = vi.fn();
+    render(
+      <CopyFromPrevMonthModal
+        open
+        prevYm="202604"
+        lists={LISTS}
+        loading={false}
+        duplicateItems={DUPLICATE_ITEMS as any}
+        onCopy={onCopy}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('btn-use-OB202604001'));
+    fireEvent.click(screen.getByTestId('btn-confirm-dup-copy'));
+    expect(onCopy).toHaveBeenCalledWith(LISTS[0]);
+    expect(screen.queryByTestId('dup-confirm-modal')).toBeNull();
+  });
+
+  it('TS-F118-FE-008（回歸）：未複製過候選之「使用此名單」→ 不觸發確認彈窗，onCopy 立即被呼叫', () => {
+    const onCopy = vi.fn();
+    render(
+      <CopyFromPrevMonthModal
+        open
+        prevYm="202604"
+        lists={LISTS}
+        loading={false}
+        duplicateItems={DUPLICATE_ITEMS as any}
+        onCopy={onCopy}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('btn-use-OB202604002'));
+    expect(onCopy).toHaveBeenCalledWith(LISTS[1]);
+    expect(screen.queryByTestId('dup-confirm-modal')).toBeNull();
+  });
+
+  it('TS-F118-FE-009（AC-10 降級）：duplicateItems 未傳入 → 無徽章、點擊直接 onCopy（行為與 F118 實作前相同）', () => {
+    const onCopy = vi.fn();
+    render(
+      <CopyFromPrevMonthModal
+        open
+        prevYm="202604"
+        lists={LISTS}
+        loading={false}
+        onCopy={onCopy}
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId('already-copied-badge')).toBeNull();
+    // 即使 LISTS[0].listNo 與 DUPLICATE_ITEMS 中「應為已複製過」的 listNo 相同，
+    // 未傳入 duplicateItems 時仍必須直接呼叫 onCopy（AC-10：判定資料不可得 = 全部未標示）
+    fireEvent.click(screen.getByTestId('btn-use-OB202604001'));
+    expect(onCopy).toHaveBeenCalledWith(LISTS[0]);
+    expect(screen.queryByTestId('dup-confirm-modal')).toBeNull();
   });
 });

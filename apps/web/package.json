@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deps:check": "depcruise src --config .dependency-cruiser.cjs",
+    "gate:coverage:dept-ratio": "vitest run --coverage --coverage.include=src/pages/assignment/_components/dept-ratio-form.tsx --coverage.include=src/pages/assignment/dept-ratio-config-page.tsx --coverage.thresholds.lines=80 --coverage.thresholds.functions=80 --coverage.thresholds.branches=75 --coverage.thresholds.statements=80 src/pages/assignment/__tests__/dept-ratio-form.test.tsx src/pages/assignment/__tests__/dept-ratio-config-page.test.tsx",
+    "gate:coverage:f118": "vitest run --coverage --coverage.include=src/pages/assignment/_components/copy-from-prev-month-modal.tsx --coverage.thresholds.lines=80 --coverage.thresholds.functions=80 --coverage.thresholds.branches=75 --coverage.thresholds.statements=80 src/pages/assignment/_components/__tests__/copy-from-prev-month-modal.test.tsx src/pages/assignment/__tests__/list-create-draft-page.test.tsx src/api/__tests__/assignment-list-copy-duplicate-check.test.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -30,7 +33,9 @@
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "autoprefixer": "^10.4.20",
+    "dependency-cruiser": "^18.1.1",
     "jsdom": "^25.0.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.0",

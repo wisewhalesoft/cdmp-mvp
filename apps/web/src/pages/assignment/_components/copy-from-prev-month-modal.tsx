@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   Copy,
   X,
@@ -5,8 +6,14 @@ import {
   ChevronRight,
   Loader2,
   ClipboardList,
+  CopyCheck,
+  AlertTriangle,
+  Lightbulb,
 } from 'lucide-react';
-import type { AssignmentListItem } from '@/api/assignment-list';
+import type {
+  AssignmentListItem,
+  CopyDuplicateCheckItem,
+} from '@/api/assignment-list';
 import { stageLabel } from '../_utils/labels';
 import {
   useConditionDecoder,
@@ -49,8 +56,138 @@ export interface CopyFromPrevMonthModalProps {
   prevYm: string;
   lists: AssignmentListItem[];
   loading: boolean;
+  /**
+   * F118：本作業月「已複製過」判定結果（後端 GET copy-duplicate-check）。
+   *
+   * - `undefined`（或省略）＝判定資料不可得 → AC-10 降級：不顯示任何徽章、
+   *   點擊「使用此名單」直接沿用既有帶入流程（行為與 F118 實作前完全相同）。
+   * - 有值 → 依 listNo 對照；`alreadyCopied=true` 者渲染徽章並於點擊時二次確認。
+   */
+  duplicateItems?: CopyDuplicateCheckItem[];
   onCopy: (list: AssignmentListItem) => void;
   onClose: () => void;
+}
+
+/** F118：以 listNo 為 key 之「已複製過」對照（僅收 alreadyCopied=true 且有目標編號者）。 */
+function buildCopiedLookup(
+  duplicateItems: CopyDuplicateCheckItem[] | undefined,
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const item of duplicateItems ?? []) {
+    if (item.alreadyCopied && item.copiedToListNo) {
+      map.set(item.listNo, item.copiedToListNo);
+    }
+  }
+  return map;
+}
+
+/**
+ * F118 AC-1 / AC-4：「已複製過」徽章（靛紫 pill，對齊 prototype 27a L1198-1202）。
+ * 目標編號為純文字，**不**做成連結（D-8：導航離開會丟失本表單已填內容）。
+ */
+function AlreadyCopiedBadge({ copiedToListNo }: { copiedToListNo: string }) {
+  return (
+    <span
+      data-testid="already-copied-badge"
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border"
+      style={{ background: '#EEF2FF', color: '#4338CA', borderColor: '#C7D2FE' }}
+    >
+      <CopyCheck className="w-3 h-3" />
+      已複製為 <span className="font-mono">{copiedToListNo}</span>
+    </span>
+  );
+}
+
+/**
+ * F118 AC-3：已複製過候選之二次確認（巢狀 alertdialog，對齊 prototype 27a L444-488）。
+ * 不 disable「使用此名單」——使用者可能刻意要建立條件不同的衍生名單。
+ */
+function DuplicateConfirmDialog({
+  sourceListNo,
+  targetListNo,
+  onCancel,
+  onConfirm,
+}: {
+  sourceListNo: string;
+  targetListNo: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div
+      data-testid="dup-confirm-modal"
+      role="alertdialog"
+      aria-modal="true"
+      aria-label="本月已有內容相同的名單"
+      className="absolute inset-0 z-[60] flex items-center justify-center p-4"
+    >
+      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-lg">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center gap-2">
+          <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center">
+            <CopyCheck className="w-5 h-5 text-amber-700" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-base font-semibold text-gray-800">
+              本月已有內容相同的名單
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              確認後仍會照常帶入欄位，可再修改條件
+            </p>
+          </div>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="rounded-lg bg-amber-50/70 border border-amber-200 p-3 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+            <div className="text-sm text-amber-900">
+              <p>
+                本作業月已有一份與{' '}
+                <span className="font-mono font-semibold">{sourceListNo}</span>{' '}
+                <strong>篩選條件與卡別完全相同</strong>的名單：
+                <span
+                  data-testid="dup-confirm-target-list-no"
+                  className="font-mono font-semibold"
+                >
+                  {targetListNo}
+                </span>
+                。
+              </p>
+              <p className="text-xs mt-1.5 text-amber-800">
+                若直接複製後<strong>不修改任何條件</strong>即儲存，系統會拒絕建立（
+                <code className="font-mono">422 LIST_NO_DUPLICATE</code>）。
+              </p>
+            </div>
+          </div>
+          <div className="rounded-lg bg-blue-50/60 border border-blue-200 p-3 flex items-start gap-2">
+            <Lightbulb className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+            <p className="text-xs text-blue-900">
+              若您是<strong>刻意</strong>要以這份名單為基礎建立條件不同的衍生名單，
+              請於確認後<strong>修改篩選條件</strong>（使其不再等價），即可正常儲存。
+            </p>
+          </div>
+        </div>
+        <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-end gap-2 bg-gray-50/50">
+          <button
+            type="button"
+            data-testid="btn-cancel-dup-copy"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm text-gray-700 hover:bg-white rounded-md border border-gray-200"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            data-testid="btn-confirm-dup-copy"
+            onClick={onConfirm}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-blue-700 shadow-sm"
+          >
+            <Copy className="w-4 h-4" />
+            仍要以此名單為基礎建立
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /** 名單條件摘要：欄位名稱與（類別型）值代碼皆解碼為中文；查無對照回傳原始代碼。 */
@@ -90,10 +227,30 @@ export function CopyFromPrevMonthModal({
   prevYm,
   lists,
   loading,
+  duplicateItems,
   onCopy,
   onClose,
 }: CopyFromPrevMonthModalProps) {
   const decoder = useConditionDecoder(COPY_SUMMARY_COLUMNS);
+  // F118 AC-3：待二次確認之候選（null＝無確認中之候選）
+  const [pendingDup, setPendingDup] = useState<AssignmentListItem | null>(null);
+  const copiedLookup = buildCopiedLookup(duplicateItems);
+
+  // F118 AC-3：已複製過 → 先二次確認；未複製過（含 AC-10 判定不可得）→ 直接沿用既有帶入流程
+  const handleUse = (list: AssignmentListItem) => {
+    if (copiedLookup.has(list.listNo)) {
+      setPendingDup(list);
+      return;
+    }
+    onCopy(list);
+  };
+
+  const confirmPendingDup = () => {
+    const target = pendingDup;
+    setPendingDup(null);
+    if (target) onCopy(target);
+  };
+
   if (!open) return null;
 
   return (
@@ -157,10 +314,15 @@ export function CopyFromPrevMonthModal({
 
             {!loading && lists.length > 0 && (
               <ul className="space-y-2">
-                {lists.map((l) => (
+                {lists.map((l) => {
+                  // F118：null＝未複製過或判定不可得（AC-10 降級）→ 不渲染徽章
+                  const copiedToListNo = copiedLookup.get(l.listNo) ?? null;
+                  return (
                   <li
                     key={l.listNo}
                     data-testid={`copy-row-${l.listNo}`}
+                    data-already-copied={copiedToListNo !== null ? 'true' : 'false'}
+                    data-copied-to-list-no={copiedToListNo ?? ''}
                     className="border border-gray-200 rounded-lg p-3 hover:border-primary transition flex items-start gap-3"
                   >
                     <div className="flex-1 min-w-0">
@@ -182,6 +344,9 @@ export function CopyFromPrevMonthModal({
                             CR 停用
                           </span>
                         )}
+                        {copiedToListNo !== null && (
+                          <AlreadyCopiedBadge copiedToListNo={copiedToListNo} />
+                        )}
                       </div>
                       <p className="text-xs text-gray-600 break-all">
                         {formatConditionSummary(l, decoder)}
@@ -193,32 +358,49 @@ export function CopyFromPrevMonthModal({
                     <button
                       type="button"
                       data-testid={`btn-use-${l.listNo}`}
-                      onClick={() => onCopy(l)}
+                      onClick={() => handleUse(l)}
                       className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded-md hover:bg-blue-700 shrink-0"
                     >
                       使用此名單
                       <ChevronRight className="w-3 h-3" />
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>
 
-          <div className="px-5 py-3 border-t border-gray-200 bg-gray-50/50 flex items-center justify-between">
-            <p className="text-xs text-gray-500">
-              複製後帶入名稱、卡別、CR 開關、篩選條件與撈案期間；名單編號於儲存時重新產生。
-            </p>
+          <div className="px-5 py-3 border-t border-gray-200 bg-gray-50/50 flex items-start justify-between gap-3">
+            <div className="text-[11px] text-gray-500 space-y-1">
+              <p>
+                複製後帶入名稱（月份自動前捲）、卡別、CR 開關、篩選條件與撈案期間；名單編號於儲存時重新產生。
+              </p>
+              <p className="flex items-start gap-1">
+                <CopyCheck className="w-3 h-3 mt-0.5 shrink-0" style={{ color: '#4338CA' }} />
+                標示「已複製為 …」者，代表本月已有條件與卡別完全相同的名單；仍可選用，但需二次確認。
+              </p>
+            </div>
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-md hover:bg-white"
+              className="px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-md hover:bg-white shrink-0"
             >
               取消
             </button>
           </div>
         </div>
       </div>
+
+      {/* F118 AC-3：巢狀二次確認 dialog（僅在點擊「已複製過」候選時出現） */}
+      {pendingDup && (
+        <DuplicateConfirmDialog
+          sourceListNo={pendingDup.listNo}
+          targetListNo={copiedLookup.get(pendingDup.listNo) ?? ''}
+          onCancel={() => setPendingDup(null)}
+          onConfirm={confirmPendingDup}
+        />
+      )}
     </div>
   );
 }

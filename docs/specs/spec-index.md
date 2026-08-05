@@ -1,12 +1,24 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.35"
-date: 2026-07-13
+version: "3.36"
+date: 2026-08-04
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **✅ v3.37 / 2026-08-04 / F117 + F118 兩個 E07 UX 精煉 feature（US-180 / US-181）— 已通過人工審閱閘，可進入 TDD**
+>
+> 依 US-180 / US-181 新建 F117 / F118，並於 2026-08-04 人工審閱閘完成裁決（孤兒部門＝顯示鎖定＋後端保留、不做強制歸零；已複製過＝語意等價；複製範圍以實作為準修正 F050 / data-model / US-106）。兩份 spec 已升為 **v1.1 / Approved**，為最終契約。
+> - **新建 v1.0（DRAFT）**：[F117-dept-ratio-director-required-filter.md](features/F117-dept-ratio-director-required-filter.md)（M03a，F079 之限縮精煉）、[F118-copy-from-prev-month-duplicate-indicator.md](features/F118-copy-from-prev-month-duplicate-indicator.md)（M01，F050 複製子流程之提示疊加）
+> - **新建圖表（mermaid 已驗證）**：[diagrams/F117-dept-ratio-director-filter-flow.mmd](diagrams/F117-dept-ratio-director-filter-flow.mmd)（Flowchart）、[diagrams/F118-copied-indicator-flow.mmd](diagrams/F118-copied-indicator-flow.mmd)（Sequence）
+> - **F117 核心裁決（改變了 US-180 之字面契約，須人工確認）**：US-180 AC-1「一律隱藏無處長部門」與 AC-3「不得靜默刪除既存比例」**互相矛盾**——已查證 `dept-ratio.service.ts` PUT 為「DELETE 全部既有列再 INSERT payload」（F079 BR-5），純隱藏即等同靜默刪除。裁定改採**三分類**（有處長→可編輯／無處長且既有 ration>0「孤兒」→**顯示但鎖定**＋伺服器端強制保留／無處長且 ration=0→隱藏），使兩條 AC 同時成立且隱藏集合對加總零影響。另裁定加總範圍改為**最終持久化集合**（US-180 AC-5 字面會違反 I-8）。**OQ-180-04（準備完成摘要是否套用）經技術論證收斂為 no-op**：該頁已帶 `excludeZeroRatio:true`，而隱藏集合恆為 ration=0 之子集，故套用與否結果相同——**不需業務裁示**
+> - **F118 核心裁決**：US-181 OQ-181-01 三案裁定採 **(b) 語意等價**——重用 `findActiveConditionDuplicate`（F050 v2.2「完整條件集相等 + card_type」），使提示與儲存端 422 `LIST_NO_DUPLICATE` **依建構即一致**（AC-2 免於靠測試維持）且直接提供 AC-4 所需之目標名單編號；(a) 血緣與 AC-2 直接矛盾且需 migration，(c) audit 反查不可靠。**不需 migration、不新增錯誤碼**
+> - **支援文件更新**：`error-handling.md` v1.17→**v1.18**（`#assignment-ratio-errors` 新增 `RATIO_DEPT_DIRECTOR_REQUIRED` 422，F117）；`data-model.md` v1.18→**v1.19**（`ob_dept_pct` 補「有無在職處長為衍生狀態不落表」+ 加總驗證對象範圍；`ob_list_definition` 複製規則補落差告示）；`open-questions.md` v2.6→**v2.7**（新增 F117/F118 節，3 項待確認裁定 + 3 項阻塞 + 8 項 architect/ui-ux）；`scope.md` v1.7→**v1.8**（登錄 F117/F118 + 標註既有落差）
+> - **🔴 阻塞性待裁（未裁示前不可實作）**：**OQ-F117-B1**（孤兒部門最終處理方式，承 US-180 OQ-180-02）／**OQ-F118-B2**（採語意等價後「編輯條件即不再標記」是否業務可接受，承 US-181 OQ-181-05）／**OQ-F118-B3**（複製範圍四方不一致）
+> - **本輪查證發現之既有落差（刻意未修，交人工／各 owner）**：①**「從上月複製」複製範圍四方不一致**——F050 AC-5、`data-model.md`、US-106 AC-10、實際實作互不相符共 5 點，其中 **F050 與 data-model.md 對 `cr_enabled` 兩份 spec 本身即矛盾**（true vs false），實作則為沿用來源值（詳 open-questions OQ-F118-04）②**`copy-source-options` 端點已規格但從未實作**（`grep` 命中 0），現行前端改用 `listLists`③**本索引之 feature 登錄落差：F111 / F115 / F116 從未登錄**（F112 僅 1 處提及）④`scope.md` 功能對照表止於 F068（F069~F116 共 48 個未回填）⑤`docs/stories/overview.md` 與 E07 `epic-brief.md` 未登錄 US-166~US-181。**②~⑤ 均為本輪範圍外之既有技術債，未自行回填**
+> - **刻意未動（邊界）**：`overview.md` / `nfr.md`（無新增系統層目標或非功能需求；F118 效能要求為 feature 層，引用既有 NFR-002.1 不重複定義）；`architecture-spec.md`（端點拓樸 / flag 命名 / 併發語意 = system-architect）；`prototypes/29a-*.html` 與 `27a-*.html`（ui-ux-designer）；code / test / migration（本輪**無** migration 需求）
 
 > **v3.35 / 2026-07-13 / F113 新增員工編號作為登入識別碼（US-179）**：依已核可 US-179 **新建 F113**（E02 帳號與角色管理，跨 E01 登入）。本輪變更檔案：
 > - **新建 v1.0**：[F113-employee-no-login-identifier.md](features/F113-employee-no-login-identifier.md)（選填 nullable `users.employee_no` VARCHAR(32)；Admin 於建立 F004 / 編輯 F006 設定；登入識別碼欄位維持名 `email`、可承載 Email 或員工編號、依 `@` 分支〔含 `@`→Email 小寫化；否則→`employee_no` 精確、大小寫敏感〕；`LoginDto` 由 `@IsEmail` 放寬為 `@IsNotEmpty+@IsString`；**有值時唯一之雙軌設計**〔service 檢查 + MSSQL filtered unique index，entity 保持 plain column〕；格式 `^[A-Za-z0-9_-]{1,32}$`、不含 `@`、trim、原樣儲存；新增錯誤碼 `ACCOUNT_EMPLOYEE_NO_EXISTS`〔409〕、登入失敗重用 `AUTH_INVALID_CREDENTIALS`；清單搜尋大小寫不敏感部分匹配〔OQ-179-02〕；forgot-password 維持 email-only〔OQ-179-01〕；通知 out of scope〔OQ-179-03〕；與 EMPHIRE 無關〔OQ-179-04〕。此為欄位契約 + 登入分支權威來源）
@@ -234,9 +246,11 @@ status: Draft
 | Feature 文件（E05） | 18 |
 | Feature 文件（E04/E05 跨模組） | 1 |
 | Feature 文件（E06） | 2 |
-| Feature 文件（E07） | 52 |
-| Mermaid 圖表 | 47 |
-| **總計** | **154** |
+| Feature 文件（E07） | 54 |
+| Mermaid 圖表 | 49 |
+| **總計** | **158** |
+
+> **⚠️ 統計基準說明（2026-08-04）**：上表 E07 數為「本索引已登錄」之數，含本輪新增之 F117 / F118（DRAFT）。**實際 `features/` 目錄檔案數多於本表**——F111 / F115 / F116 已存在但從未登錄於本索引（F112 僅片段提及），為既有登錄落差，本輪未回填（見頂部 v3.36 banner 第 ③ 點）。需精確清單時請以 `ls docs/specs/features/` 為準。
 
 ---
 
@@ -354,6 +368,7 @@ status: Draft
 | F052 | [F052-disable-list-definition.md](features/F052-disable-list-definition.md) | **草稿階段停用名單定義（軟刪除，限 `stage = 'draft'`，v2.0 重寫）** | US-090, US-106 | P0-MVP（**v2.0**）|
 | F077 | [F077-month-switch-and-stage-overview.md](features/F077-month-switch-and-stage-overview.md) | 月份切換與名單五階段總覽（M01 入口互動補強，合併 US-104 + US-105；**v1.4 / 2026-05-27**：F097 月份預設改 `target_work_ym`（下月）、UI 標籤「分派作業月份」、順修 BR-7 C-4 殘留舊文字） | US-104, US-105, US-143 | P0-MVP（**v1.4**）|
 | F078 | [F078-draft-advance-to-dept-ratio.md](features/F078-draft-advance-to-dept-ratio.md) | **草稿階段推進至部門比例設定（五階段流程引擎之第一個推進操作）** | US-108 | P0-MVP（**新增 v1.0**）|
+| F118 | [F118-copy-from-prev-month-duplicate-indicator.md](features/F118-copy-from-prev-month-duplicate-indicator.md) | ✅ **Approved v1.1**：從上月複製名單顯示「已複製過」提示（v1.0 / 2026-08-04 / US-181）。判定裁定採**語意等價**（重用 `findActiveConditionDuplicate` 之 F050 v2.2「完整條件集相等 + card_type」規則），使提示與儲存端 422 `LIST_NO_DUPLICATE` **依建構即一致**且直接提供目標名單編號；**不需 migration、不新增錯誤碼**（衍生狀態不落表）。禁 N+1（常數查詢 + 記憶體簽章索引）、判定失敗安全降級不阻擋主流程。**已裁決**：OQ-F118-B2＝接受「編輯條件後不再標記」之語意；OQ-F118-B3＝以實作為準修正三處 spec。端點定案 `GET /api/v1/assignment/lists/copy-duplicate-check?prevYm&currentYm` | US-181 | P1（**v1.1 Approved**）|
 
 #### M02 計分設定（5 Tab 結構，2026-05-14 擴充）
 
@@ -394,6 +409,7 @@ status: Draft
 | F079 | [F079-set-dept-ratio.md](features/F079-set-dept-ratio.md) | 部門比例設定（per-LIST_NO 各部門分配比例，限 `stage = 'dept_ratio'`） | US-109 | P0-MVP |
 | F080 | [F080-advance-to-personnel-ratio.md](features/F080-advance-to-personnel-ratio.md) | 部門比例設定階段推進至個別業務比例設定 | US-110 | P0-MVP |
 | F081 | [F081-rollback-to-draft.md](features/F081-rollback-to-draft.md) | 部門比例設定階段 Rollback 至草稿（清空 `ob_dept_pct`） | US-111 | P0-MVP |
+| F117 | [F117-dept-ratio-director-required-filter.md](features/F117-dept-ratio-director-required-filter.md) | ✅ **Approved v1.1**：部門比例設定頁僅提供「有在職處長」之部門設定（v1.0 / 2026-08-04 / US-180，F079 之限縮精煉）。核心為調和 US-180 AC-1（隱藏）與 AC-3（不得靜默刪除）之**直接矛盾**——於 F079 BR-5 覆寫式寫入下純隱藏必然造成資料遺失；裁定改採**三分類**（有處長→可編輯／無處長且既有比例>0「孤兒」→顯示但鎖定＋伺服器端保留／無處長且比例=0→隱藏），並將加總範圍改為**最終持久化集合**（原 AC-5 字面違反 I-8）。新增 `RATIO_DEPT_DIRECTOR_REQUIRED`（422）；OQ-180-04 經技術論證收斂為 no-op（不需業務裁示）。**已裁決**：OQ-F117-B1＝孤兒部門顯示鎖定＋後端保留，**不**提供強制歸零（出場機制沿用 F081 退回草稿，BR-11） | US-180 | P1（**v1.1 Approved**）|
 
 **M03b — 個別業務比例設定階段（E07 重構批次 5，2026-05-15 新增）**
 
@@ -540,6 +556,8 @@ status: Draft
 | [diagrams/F101-stage3-4-proportional-flow.mmd](diagrams/F101-stage3-4-proportional-flow.mmd) | **F101 v1.0 月名單分派 Stage 3/4 真實比例分派（Stage 2 tier_level 就緒 → Stage 3 三維分組 FLOOR+確定性差額 → Stage 4 員工 FLOOR+兩階段補足 → ASSIGNDAY 千分比+DIVIDE_LEFT；DB_TYPE dual-path PG 下推/JS oracle gate + 三 fallback 分支 + 警告通道 report_payload + JS↔SQL 等價 DoD）** | Flowchart | F101, F100, F049, F067 |
 | [diagrams/F102-cr-priority-flow.mmd](diagrams/F102-cr-priority-flow.mmd) | **F102 v1.0 月名單分派 CR 優先分派（Stage 2 就緒 → F101 清除 → cr_enabled 閘控：true 步驟 1 逾2年清空→2 離職清空→3 CR 優先指派→4 扣量／false 強制 is_cr='N'；F101 比例分派只跑 is_cr<>'Y'；確定性 SET-based align I-DET-01；旁註廢除全域旗標 + 死碼不引用）** | Flowchart | F102, F101, F059, F064, F067 |
 | [diagrams/F106-enable-dimension-flow.mmd](diagrams/F106-enable-dimension-flow.mmd) | **F106 v1.0 啟用計分維度流程（對稱 disable）：前端 inactive 列點啟用 → PUT enable → Guard 鏈（Director + FeatureFlag）→ assertNotLocked(409 SCORING_VERSION_LOCKED) → assertCardTypeActive(404 CARD_TYPE_NOT_FOUND) → findOne(status=inactive，找不到/重複啟用 404 SCORING_COLUMN_NOT_FOUND) → status=active save → writeAudit(action=ENABLE) → 回 {status:active, enabledAt} → 前端 refetch getScoring；對稱 disable findOne(status=active)/寫 inactive/action=DISABLE** | Sequence | F106, F054, F053 |
+| [diagrams/F117-dept-ratio-director-filter-flow.mmd](diagrams/F117-dept-ratio-director-filter-flow.mmd) | ⚠️ **DRAFT** — **F117 v1.0 部門比例「有在職處長」過濾決策流程**：GET 三分類判定（有處長→可編輯／孤兒→顯示鎖定／無關→隱藏）＋ PUT 孤兒列伺服器端保留（BR-4）→ payload 值忽略（BR-5）→ 無處長新配置攔截 422 `RATIO_DEPT_DIRECTOR_REQUIRED`（BR-6）→ 最終持久化集合加總驗證（BR-7）；含兩條關鍵不變式旁註（隱藏集合恆為比例 0 故對加總零影響／孤兒列不得因儲存消失且由後端保證）。mermaid 已驗證 | Flowchart | F117, F079, F080 |
+| [diagrams/F118-copied-indicator-flow.mmd](diagrams/F118-copied-indicator-flow.mmd) | ⚠️ **DRAFT** — **F118 v1.0「已複製過」判定與一致性流程**：開啟 Modal（`prevYm` 由 `computePrevYm(currentYm)` 推導）→ 常數兩次查詢（上月候選 + 本月 active）→ 記憶體建立「簽章＋卡別」索引逐筆比對（排除 system-fixed 如 `best_case`）→ 空簽章不標示（安全降級）→ 徽章含目標編號 → 點擊已複製過先確認（不 disable）→ 儲存時 `findActiveConditionDuplicate` 同一規則 → 422 `LIST_NO_DUPLICATE` 之 `conflictListNo` 等於提示編號（AC-2 依建構即一致）。mermaid 已驗證 | Sequence | F118, F050, F097 |
 | [diagrams/F107-decode-ui-flow.mmd](diagrams/F107-decode-ui-flow.mmd) | **F107 v1.0 decode UI 同源供給流程（唯讀）：Tab 切換 → GET /assignment/scoring（DirectorOrSectionChiefGuard 唯讀）→ getScoring 查 columns/scores → 逐維度由 SCORING_DECODE 共用常數取 decode（PROJECT_TP/SALES_STS/CUS_SEX/三縣市/五欄分流有；純數值欄→null 優雅降級 BR-6）→ 旁註 BR-4 同步斷言（decode codes/sourceField ≡ resolveColumnSource 衍生規則 + AD-E07-10-S §2）→ 回傳每維度附 decode → Tab 3 碼層並陳業務語意（原始碼保留）/ Tab 2 欄層來源欄+規則摘要；全程唯讀無寫入** | Sequence | F107, F053, F054, F106 |
 
 ### 狀態圖

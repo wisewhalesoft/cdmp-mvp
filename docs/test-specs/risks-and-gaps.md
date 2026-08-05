@@ -1,6 +1,6 @@
 ---
 type: test-design-risks
-last_updated: 2026-07-12
+last_updated: 2026-08-04
 ---
 
 # 風險與缺口
@@ -1405,3 +1405,134 @@ last_updated: 2026-07-12
 - **影響**：若真實 `customer_core` 大型類別欄位之 DISTINCT 查詢在生產環境經常逼近或超過 15s 預算，使用者會頻繁看到逾時錯誤（即使資料本身合法）；orphaned query 若長期累積可能對 DB 連線池造成壓力（AD 已列為未來效能監控項）。
 - **建議**：`features/F112-test.md` 「殘留風險」§A/§E 與總結之「刻意排除範圍」已明確記錄此為單元測試層級無法驗證之範疇（需要真實 DB 連線與查詢監控），並建議 tdd-implementation 落地時於 dev CDMP 對 `customer_core.occupation_desc` 手動計時一次（AD §11 待裁決項），確認 15s 預算是否寬裕；若經常貼近逾時邊界，後續應為該欄位新增單欄索引或調整 `POOLDATA_DISTINCT_VALUES_TIMEOUT_MS` 環境變數。
 - **風險等級**：低（v1 不索引不阻擋上線，AD 已預留 env 覆寫與未來索引路徑；非測試設計缺口，屬產品上線後之營運觀測項）
+
+---
+
+## F117 部門比例設定頁僅提供「有在職處長」之部門設定測試風險與待決問題（AD-E07-48，2026-08-04 新增）
+
+> 完整測試設計見 [features/F117-test.md](features/F117-test.md)（US-180，31 場景：後端 Unit 12 + Integration 6 + 前端 Component 8 + E2E Fidelity 5）。F117 spec 本身之業務裁決（D-1~D-6）已於 2026-08-04 人工審閱閘全數核可，本節記錄的是**測試基礎設施層級**（非業務規則層級）之殘留缺口，均不阻擋 TDD 進入實作。
+
+### R-F117-01（中，測試基礎設施缺口，非業務規則缺口）：Playwright E2E fidelity 環境缺少 `business_role='director'` / `'section_chief'` 之 dev 種子測試帳號
+
+- **問題**：`apps/api/src/database/seeds/seed.ts`（本機/CI dev bootstrap 種子）目前僅提供 4 個帳號（`admin@cdmp.test` / `disabled@cdmp.test` / `user@cdmp.test` / `manager@cdmp.test`），其中 `manager@cdmp.test` 僅設 `is_sales_manager=true`（legacy 旗標），**無任何帳號設定 `business_role='director'` 或 `'section_chief'`**。`apps/api/src/database/seeds/data/users-real.json`（`prod-data-seed`）雖含真實 director/section_chief 帳號，但為真實員工姓名/Email 且密碼雜湊明文未知，不應作為 E2E 測試憑證使用。
+- **影響**：`e2e/tests/fidelity-f117-dept-ratio.spec.ts` 若採真實瀏覽器登入流程，缺少可用的 director/section_chief 憑證。**已採取的因應**：(a) 依 F079 BR-7「`admin` OR `business_role='director'`」之等價語意，E2E 中以既有 `admin@cdmp.test` 帳號涵蓋所有「部長可寫」情境（AC-1~8、AC-10），此非權宜替代而是規格明文之等價路徑；(b) `section_chief` 唯讀情境改以前端 Component 測試（`dept-ratio-config-page.test.tsx`，`mockedGetBusinessRole.mockReturnValue('section_chief')`）覆蓋，不依賴真實登入；後端 403 攔截已由 `TS-F117-INT-004`（in-memory SQLite + `buildSectionChief()` fixture，真實 HTTP round-trip）覆蓋，此路徑**不受本缺口影響**。故本缺口實際未遺漏任何 AC 的可執行覆蓋，僅是「真實瀏覽器 UI 呈現 section_chief 唯讀畫面」此一項未被 Playwright 層覆蓋（該畫面渲染邏輯已由前端 Component 測試覆蓋）。
+- **建議**：若未來需要真實瀏覽器覆蓋 section_chief 唯讀畫面，建議由 product-analyst / QA 決定是否於 `seed.ts` 新增 1 組 `business_role='section_chief'` 之 dev-only 測試帳號（**production 程式碼變更，non-test-generator 範圍**，須經 tdd-implementation 或後續維護輪次處理，本輪不代為新增）。
+- **風險等級**：中（不阻擋 TDD 進入實作；AC 覆蓋率未實際受損，僅為 E2E 層之「真實登入」深度略淺於理論最大值）
+
+### R-F117-02（中，測試資料策略之刻意設計選擇，非缺陷）：E2E fidelity 測試對 GET/PUT `/api/v1/assignment/ratios/dept/**` 採 `page.route()` 攔截而非真實 DB round-trip
+
+- **問題**：本機/CI 環境無法保證存在一份真實、穩定的 `stage='dept_ratio'` 名單（含孤兒部門情境所需的 `ob_dept_pct` 既有列 + `ob_emphire` 處長缺席組合），且 dev MSSQL 為外部共用資料庫（見專案記憶 `feedback_mssql_e2e_tests_wipe_dev_cdmp_tables`），不宜由 E2E 測試自行寫入/清空業務資料表製造 fixture。
+- **影響**：`e2e/tests/fidelity-f117-dept-ratio.spec.ts` 對「前端如何渲染三分類 / 空狀態 / 已隱藏資訊列」之斷言，資料來源為 `page.route()` 依 prototype 29a 之 6 個 demo 場景固定供應的 mock response，而非真實後端運算結果。真實後端運算正確性（BR-1~BR-9）已由 **TS-F117-BE-\*（mock repo unit）+ TS-F117-INT-\*（in-memory SQLite 真實 HTTP+Guard+DB round-trip）** 覆蓋，故業務邏輯正確性不依賴 E2E 層；E2E 層之獨有價值（建置/路由/proxy/Sidebar 導覽層級 fidelity）不受此設計影響。
+- **建議**：若日後建立穩定的 E07 dev fixture 資料集（例如透過一次性 fixture-provisioning script 建立固定 `list_no` 供 CI 使用），可將部分 E2E 案例（如 TS-F117-E2E-001）改為真實 GET round-trip 以進一步驗證前後端契約一致性；此為技術債，非本輪阻塞項。
+- **風險等級**：中（不阻擋 TDD 進入實作；業務邏輯正確性已由 Unit + Integration 兩層真實覆蓋，E2E 層僅犧牲「前後端真實串接」此一額外保證，未犧牲「前端渲染忠實度」本身的驗證力）
+
+### R-F117-03（低，命名對齊提醒，非阻擋）：Sum Banner 之 test-id 沿用既有 F079 命名（`dept-ratio-sum-banner`），與 prototype 29a 新標註之 `data-testid="ratio-sum-banner"` 字面不同
+
+- **問題**：`prototypes/29a-dept-ratio-config.html` 為 F117 UI ground truth，其 `#sumBanner` 元素標註 `data-testid="ratio-sum-banner"`；但既有 `apps/web/src/pages/assignment/_components/__tests__/dept-ratio-form.test.tsx`（F079，已通過）已以 `dept-ratio-sum-banner` 作為該元素之 test-id 並持續沿用。兩者指向同一元件、同一互動行為（僅 F117 擴充其加總組成顯示），並非兩個不同元素。
+- **影響**：若 tdd-implementation 逐字比對 prototype 的 `data-testid` 屬性字串並重新命名既有元件，會造成不必要的破壞性變更（且與既有 F079 測試脫鉤，需連帶修改該測試——而該測試檔案之維護者為 test-generator，非 tdd-implementation）。
+- **建議**：本輪 `F117-test.md` §三已明確採用既有 `dept-ratio-sum-banner` 命名，不要求重新命名。tdd-implementation 落地時延續既有 test-id，不需比對 prototype 逐字元素 ID。若日後 ui-ux-designer 認為 prototype 命名需要與實作對齊，應走正式的 prototype/測試調整流程（由 test-generator 統一更新），而非由實作端片面決定命名。
+- **風險等級**：低（已有明確決策與測試斷言因應，純屬 prototype 與既有實作命名之歷史差異，非設計缺陷）
+
+### R-F117-04（中，spec/contract 內部矛盾，架構層待 System Architect 回頭調和）：`RATIO_DEPT_DIRECTOR_REQUIRED` 錯誤回應信封形狀，`error-handling.md` §「標準錯誤回應格式」與 `contracts/F117-dept-ratio.contract.ts`（巢狀 `{error:{code,message,details}}`）與全 repo 既有 e2e 慣例（扁平 `{error:'CODE',message}`，22 個既有 `*.e2e-spec.ts` 檔、262 處 `res.body.error` 斷言，含 F117 自身沿用之 `f081-f085-f089-rollback.e2e-spec.ts` 範本與 F079 既有 `RATIO_SUM_NOT_100`/`RATIO_OUT_OF_RANGE` 之 unit 斷言 `personnel-ratio.service.spec.ts:167`）互相矛盾
+
+- **問題**：`error-handling.md`（v1.19，已核可）之「標準錯誤回應格式」章節（第 41~59 行）與同輪新增之 `docs/specs/contracts/F117-dept-ratio.contract.ts`（`RatioDeptDirectorRequiredError` 型別）皆將 `RATIO_DEPT_DIRECTOR_REQUIRED` 之回應信封定義為巢狀物件 `{ error: { code, message, details } }`。但本專案全部既有 e2e 測試（含 F117 自身在 §二 明文沿用之 bootstrap 範本 `f081-f085-f089-rollback.e2e-spec.ts`）一致採用扁平信封 `{ error: 'CODE_STRING', message }`（`res.body.error` 直接 `toBe('CODE')`），且 F079 既有錯誤碼（`RATIO_SUM_NOT_100` / `RATIO_OUT_OF_RANGE`，同一 `assignment-ratio-errors` 錯誤碼表）之既有 unit 測試 `personnel-ratio.service.spec.ts:167` 亦是 `e.response.error` 直接等於扁平字串。`error-handling.md` 全文（含 v1.0~v1.19 逐輪修訂紀錄）未曾提及此落差，判斷應為長期存在、未被實作端遵循之抱負性（aspirational）文件敘述，而非本輪刻意翻新之設計決策；`F117-dept-ratio.contract.ts` 之巢狀範例應是沿引 `error-handling.md` 該敘述性範例時一併複製了此落差，而非重新查證共用 `HttpExceptionFilter` 實際轉發行為後之刻意決定（該 filter 為全站共用元件，變更會是 F117 §1 明言排除在外的「repo-wide breaking change」）。
+- **本輪裁決（test-generator，2026-08-04，回應 tdd-implementation 對 `TS-F117-INT-003` 之爭議）**：`apps/api/test/f117-dept-ratio-director-filter.e2e-spec.ts` 之 `TS-F117-INT-003` 已改採**扁平**信封（`expect(res.body.error).toBe('RATIO_DEPT_DIRECTOR_REQUIRED')`），與全 repo e2e 慣例、F079 既有錯誤碼慣例、F117 §1「不變更 F079 既有錯誤語意」之範圍聲明一致。裁決理由：(a) 巢狀信封若要落地，共用 `HttpExceptionFilter` 需對此單一錯誤碼特殊處理或全站信封改版，兩者皆超出 F117 疊加限縮之範圍；(b) `error-handling.md`／`contract.ts` 之巢狀敘述與 22 個既有 e2e 檔案之實測慣例矛盾時，未經驗證的抱負性文件不應凌駕已驗證、一致、大量覆蓋之既有測試慣例；(c) 若日後系統性導入巢狀信封為全站標準，屬架構層決策（`http-exception.filter.ts` 變更），非 F117 範圍，亦非 test-generator 可單方裁定，需 System Architect 主導並回頭同步全部既有 e2e 斷言。
+- **待辦**：建議 System Architect 於下一輪架構維護排程檢視 `error-handling.md` §「標準錯誤回應格式」是否仍為有效目標（若是，需規劃全站遷移；若否，應改寫該章節為實際已生效之扁平格式，並同步修正 `F117-dept-ratio.contract.ts`），避免下一個新錯誤碼的 spec 作者重蹈同一落差。
+- **風險等級**：中（不阻擋本輪 TDD 進入實作；已於本輪測試檔案內裁定並修正，`TS-F117-BE-010` 之既有寬鬆斷言 `e.response?.error ?? e.response?.error?.code ?? e.message).toContain(...)` 與扁平信封相容，兩測試現已可同時綠燈；殘留風險僅為 `error-handling.md`／contract 文件本身尚未回頭同步）
+
+### R-F117-05（已修正，測試基礎設施缺口，非業務規則缺口）：Stryker mutation gate 之 `vitest.configFile` 誤指向全域 unit config，導致 dry run 完全無法產出分數
+
+- **問題**：`apps/api/stryker.conf.json` 原將 `vitest.configFile` 指向 `vitest.config.ts`（全域 unit config，`include: ['src/**/*.spec.ts', 'test/**/*.spec.ts']`）。此設定造成兩個獨立缺陷：(a) Stryker 的 initial dry run 會執行 include 集合內**全部**測試，其中 `src/database/__tests__/mssql-p1b1.mssql.spec.ts` 之 `TS-MSSQL-P1B1-DEFAULT-002` 為 HEAD baseline 即紅（UTC+8 時差既有缺陷，經 `npx vitest run --config vitest.config.ts src/database/__tests__/mssql-p1b1.mssql.spec.ts` 實測重現，`expected 28799606 to be less than 300000`），與 F117 完全無關；Stryker 要求 dry run 全數通過才能產出突變分數，此一既有紅測試使整條 mutation gate 完全無法運作（非分數偏低，而是無分數）；(b) `test/**/*.spec.ts` 這個 glob 依字面比對不會匹配本專案 e2e/integration 測試慣用的 `*.e2e-spec.ts` 命名（全 `apps/api/test/` 下 29+ 個既有檔案皆用此慣例，另有專用之 `vitest.e2e.config.ts` 以 `include: ['test/**/*.e2e-spec.ts']` 執行），因此 `test/f117-dept-ratio-director-filter.e2e-spec.ts` 從未真正參與 mutation run——而該檔案是唯一能殺死 `computeActiveDirectorMap()` 內 TypeORM QueryBuilder SQL 字串突變（`'TRIM(e.dept_code)'`、`'處長'`、orderBy 方向）的測試，mock repo 的 unit test 在結構上無法偵測這類突變。
+- **裁決**（test-generator，2026-08-04，回應 tdd-implementation dispute #1）：兩項皆為 test-generator 自身 ring 授權範圍內之設定缺陷，production 側無對應可解之改動。新增 `apps/api/vitest.mutation.config.ts`，include 僅限 F117 觸及之兩檔（`src/modules/assignment-stage/__tests__/dept-ratio.service.spec.ts` + `test/f117-dept-ratio-director-filter.e2e-spec.ts`），並改 `stryker.conf.json` 之 `vitest.configFile` 指向此檔。已實測 `npx vitest run --config vitest.mutation.config.ts` 僅匹配上述兩檔，2 files / 26 tests 全綠，dry run 可正常產出分數。
+> **📍 後續（2026-08-05）**：本節所述之 `stryker.conf.json` / `vitest.mutation.config.ts` 已於 R-F118-08 拆分為 `stryker.dept-ratio.conf.json` + `stryker.assignment-list.conf.json`（及對應之兩份 vitest config）並刪除。本節保留為當時裁決之歷史紀錄。
+
+- **是否影響 F117 §10「後端測試須同時涵蓋 SQLite unit 與 MSSQL spec 兩軌」**：不影響。AD-E07-48 §9 已裁定 F117 無 PG/MSSQL-only 依賴，「兩軌」由既有 `emphire-active.util` 之既有兩軌 dialect 測試涵蓋，F117 本身無需新增 dialect-only 測試分支；縮限 Stryker include 範圍不改變任何測試檔案之內容或既有覆蓋率，僅修正 mutation gate 自身可否產出分數。
+- **風險等級**：已修正（不阻擋 TDD 實作；`mssql-p1b1.mssql.spec.ts` 之既有紅測試本身仍待該檔維護者另行修復，與本次裁決範圍無關）
+
+### R-F117-06（已修正，測試基礎設施缺陷）：`e2e/tests/fidelity-f117-dept-ratio.spec.ts` 之 project 範圍與載入閘 locator 缺陷
+
+- **問題 A**：本檔未做 Playwright project 限制。`npm run test:e2e`（`playwright test`，無 `--project` 過濾）會在 `playwright.config.ts` 的 `admin` 與 `user` 兩個 project 下各跑一次全部 5 個 scenario。`user` persona 依 F079 AC-8 / F117 AC-9 本就無 E07 入口（403 `AUTH_FORBIDDEN`、不渲染入口），該路徑已由 `apps/api/test/f117-dept-ratio-director-filter.e2e-spec.ts` 的 `TS-F117-INT-004` 以真實 HTTP+Guard round-trip 覆蓋，非本檔（前端渲染 fidelity）待驗證對象；不加守衛時，本檔在 `user` project 下必然全紅，等同斷言「無權限 persona 應看見部長專用 UI」，與 AC-9 矛盾。
+- **問題 B**：共用 helper `gotoDeptRatioPage()` 原以 `page.getByTestId('dept-ratio-form').or(page.getByTestId('no-active-director-empty-state'))` 作為頁面就緒等待閘。AC-7 末句／prototype demo⑥（`empty_orphan` 場景，`TS-F117-E2E-004`）明訂空狀態與孤兒鎖定列可並存於同一畫面，此時兩個 testid 會同時匹配到元素；`.or()` 為聯集 locator，兩者皆存在時 resolve 到 2 個元素，對 `toBeVisible()` 這類要求單一元素的斷言會觸發 Playwright strict mode violation（`resolved to 2 elements`），且此為 locator 機制本身、與斷言內容無關，設 `display:none` 亦無效。
+- **裁決**（test-generator，2026-08-04，回應 tdd-implementation dispute #2/#3/#4）：兩者皆為本檔（test-generator 專屬授權範圍）之實作瑕疵，不觸及任何斷言本體。修正：(a) 於 `test.describe` 內加 `test.beforeEach` + `test.skip(testInfo.project.name !== 'admin', ...)`，讓本檔於 `user` project 下正確 skip（而非 fail）；(b) helper 之聯集 locator 改為 `.or(...).first()`——聯集中只要有一元素已渲染即視為就緒，兩者並存時任取其一必為 visible，不影響、不弱化任一測試之獨立斷言。已實測 `E2E_BASE_URL=http://localhost:5174 npx playwright test tests/fidelity-f117-dept-ratio.spec.ts`（不帶 `--project`，對照 `npm run test:e2e` 之無過濾行為）：`admin` project 5/5 全綠（含先前因 strict mode violation 而紅的 `TS-F117-E2E-004`）、`user` project 5/5 皆為 `skipped`（非 `failed`）。
+- **風險等級**：已修正
+
+---
+
+## F118 從上月複製名單顯示「已複製過」提示測試風險與待決問題（AD-E07-48，2026-08-04 新增）
+
+> 完整測試設計見 [features/F118-test.md](features/F118-test.md)（US-181，42 場景：後端 Unit/Integration 11 + Route/RBAC 9 + E2E 4 + 前端 Component 9 + Page 整合 5 + E2E Fidelity 4）。F118 spec 本身之業務裁決（D-1~D-8）已於 2026-08-04 人工審閱閘全數核可（含 OQ-F118-B2/B3 兩項阻塞事項），本節記錄的是**測試基礎設施層級**（非業務規則層級）之殘留缺口與設計裁量，均不阻擋 TDD 進入實作。
+
+### R-F118-01（低，AC-6 之測試邊界說明，非缺口）：「不引入快取」無獨立可測之負向案例
+
+- **問題**：F118 AC-6/BR-6 明訂「Modal 每次開啟重新查詢」（不引入快取）。此為**設計層級不變式**——`checkCopyDuplicates(prevYm, currentYm)` 方法簽章本身即為純函式式查詢（無任何快取層之注入點、無 memoization），若實作真的引入快取，會是一個**新增**的程式碼路徑而非「移除既有防護後才會出現的缺陷」，故無法比照一般負向測試（「移除防護 → 斷言防護不存在」）設計反向案例。
+- **裁決**：TS-F118-BE-001 等每次呼叫皆為獨立、無共享狀態之 `beforeEach` 清空 DB 重建情境，已隱含驗證「每次呼叫皆為即時查詢」（若有跨呼叫快取，BE-006「本月等價名單 status 改 disabled 後 alreadyCopied 應變為 false」等測試會因快取到舊結果而失敗）。不另立獨立 AC-6 案例，於總表註記為「由查詢設計本身保證」。
+- **風險等級**：低，資訊性記錄。
+
+### R-F118-02（中，測試資料策略之刻意設計選擇，非缺陷）：E2E Fidelity 測試對 GET `/assignment/lists/copy-duplicate-check` 採 `page.route()` 攔截而非真實 DB round-trip
+
+- **問題**：與 R-F117-02 同型。無穩定存在於 dev DB 的「上月候選 + 本月等價名單」配對可供 Playwright 對照，亦無已知穩定 `director`/`section_chief` 測試帳號（見 R-F117-01，同一缺口，未在本輪重複記錄）。
+- **決策**：`e2e/tests/fidelity-f118-copy-duplicate.spec.ts` 以 `page.route()` 攔截 `GET **/assignment/lists**`（候選）與 `GET **/copy-duplicate-check**`（判定）供應固定回應，同時對真實運行中的前端執行導覽/點擊/斷言 DOM，故仍能捕捉建置/路由/proxy 層漂移；後端業務規則（BR-1~BR-9）之真實正確性由 §一~三之後端測試（真實 SQLite / 真實 HTTP+Guard+DB）三層真實覆蓋，不依賴本檔。已以 `npx playwright test --list` 靜態驗證 4 案例可正確解析列舉（本輪authoring 環境無可用 `npm run web:dev` live stack 執行，同 cdmp-project-facts 記憶）。
+- **建議**：與 R-F117-02 相同，技術債非本輪阻塞項。
+
+### R-F118-03（中，既有程式碼缺陷之回歸測試，非 F118 新增缺陷）：`findActiveConditionDuplicate` 現行查詢無 `ORDER BY`，多筆歷史等價名單時 `conflictListNo` 非決定性
+
+- **問題**：`AD-E07-48 §2 事實 4 / §5.3` 已明文記錄此既有小缺口——`findActiveConditionDuplicate` 之候選查詢無顯式排序，多筆同簽章候選時選取結果依 DB 隱式順序。TS-F118-BE-011 以「刻意先插入 `list_no` 較大者、後插入較小者」之歷史異常資料重現此缺陷，**已實測**（2026-08-04）：`npx vitest run src/modules/assignment-list/__tests__/f118-copy-duplicate-check.spec.ts` 顯示該案例目前回傳 `conflictListNo='OB202605999'`（後插入的較小者被期望值，實際回傳先插入的較大者，即 SQLite 隱式 rowid 順序），與期望之 `'OB202605001'`（`list_no` 字典序最小者）不符——這是**紅燈**，但紅得「不是因為方法不存在」而是「因為既有行為與 AD 裁定的目標行為不同」，性質與其餘 10 個因 `checkCopyDuplicates` 不存在而 TypeError 的案例不同，特此記錄避免被誤判為斷言寫錯。
+- **決策**：此為 AD-E07-48 §5.3 明訂之修復對象（`findActiveConditionDuplicate` 補 `ORDER BY l.list_no ASC` 一行），非 test-generator 越界修復生產碼；`tdd-implementation` 實作 F118 時應連帶完成此修正（Implementation Checklist 已列為必要項）。
+- **風險等級**：中（不阻擋 TDD 進入實作；此為既有已上線程式碼之唯一修改點，AD §10.3 已明確要求連帶回歸測試，本項即為該測試）。
+
+### R-F118-04（已解決，2026-08-04 dispute #2 裁決）：ESLint 複雜度 gate 原本無法區分「既有 14 項 pre-existing 違規」與「F118 新增違規」，任何正確實作皆會恆紅
+
+- **問題**（原始記錄）：`apps/api/eslint.ring.config.cjs` 追加對 `assignment-list.service.ts`/`.controller.ts` 之 `files` 區塊後，**已實測**（2026-08-04）`npx eslint -c eslint.ring.config.cjs src/modules/assignment-list/assignment-list.service.ts src/modules/assignment-list/assignment-list.controller.ts` 回報 14 個 pre-existing 違規：`previewHitCount`（complexity 13）、`deriveBackwardCompatColumns`（14）、`normalizeConditionPayload`（16）、`listLists`（複雜度 22 + 149 行）、`createList`（複雜度 11 + 122 行）、`updateList`（複雜度 21 + 133 行）、`calculateInactiveOptionWarnings`（13）、`findActiveConditionDuplicate`（複雜度 11，F118 於此方法新增 1 行 `ORDER BY`，經實測不改變其複雜度計數）、`getFullSnapshot`（複雜度 37 + 118 行）。全數為既有、F118 開工前即存在之技術債。**原始裁決僅止於「如實記錄」，未處理 gate 腳本本身作為 CI exit-code 閘門時，14 項既有違規會使 `npm run gate:complexity:f118` 對任何實作（不論是否新增違規）恆回傳非 0——此為一個機器無法通過的假閘門，違反「機器可判、對正確實作可通過」的 ring 前提**。
+- **裁決（implementer dispute #2，2026-08-04）**：實作方提出爭議並實測佐證——`git show HEAD:...assignment-list.service.ts`（F118 開工前）套用同一 config 產出**完全相同**之 14 項違規（僅行號因新增程式碼位移而不同，訊息文字逐字相同），且 `checkCopyDuplicates` 本身未被任何規則命中、`max-lines`（1650）未被突破。裁定**採納**：測試機器改為 `apps/api/scripts/gate-complexity-diff.cjs` + `apps/api/eslint-baseline.f118.json`（由 HEAD 產出之 14 項違規基準線，比對鍵為 `(file basename, ruleId, message)`，訊息文字含複雜度/行數數值，故基準線函式之數值若被改壞會重新被判定為新違規），`gate:complexity:f118` 改呼叫此腳本。**未放寬任何門檻數值**——`eslint.ring.config.cjs` 本身完全未變更，僅新增「新舊違規區分」這層機器可判邏輯。已實測驗證：(a) 對現行實作（含 F118 變更）跑出 `PASS（0 new violations；14 個已知基準線違規已忽略）`；(b) 暫時注入一個刻意複雜度過高的新函式驗證 gate 正確回報「1 個新違規」並失敗，驗證後即還原。
+- **建議**：14 項既有違規之清理仍為獨立技術債，建議日後另立重構任務（例如拆分 `getFullSnapshot`/`listLists`/`updateList`），不在 F118 範圍內處理；`eslint-baseline.f118.json` 應隨這類重構同步更新（移除已修復項目），避免基準線隨時間長期偏離現況。
+- **風險等級**：已解決，機器可判、對正確實作可通過。
+
+### R-F118-05（低，Stryker 檔案級 mutate 粒度之已知限制，非缺陷）
+
+> **📍 後續（2026-08-05）**：本節所述之單一 `stryker.conf.json` 已由 R-F118-08 拆分為兩份標的各自設門檻並刪除；本節保留為歷史紀錄。
+：`assignment-list.service.ts` 整檔納入 mutate 範圍，而非僅新增之 `checkCopyDuplicates`
+
+- **問題**：Stryker 的 `mutate` 設定為檔案 glob 粒度，無法僅指定「檔案內某個方法」；test-generator 亦不得編輯 production 檔加註 `// Stryker disable next-line` 排除既有無關程式碼（越界修改生產碼）。因此 `stryker.conf.json` 追加 `assignment-list.service.ts` 後，Stryker 會對整個 1580 行檔案產生突變，而非僅 `checkCopyDuplicates` 新增之 ~50-70 行。
+- **裁決**：若僅將本輪新增的 `f118-copy-duplicate-check.spec.ts` 納入 `vitest.mutation.config.ts` 之 dry-run include，該檔其餘既有邏輯（`createList`/`updateList`/`normalizeConditionPayload` 等）之突變會因涵蓋它們的既有測試不在 include 內而被判定 `NoCoverage`（視同存活突變），拖累出一個「看似低但其實失真」的分數。改為將該模組**全部既有 19 個 SQLite unit spec**（`src/modules/assignment-list/__tests__/*.spec.ts`，排除 `.mssql.spec.ts`）一併納入 include——**已實測**（2026-08-04）`npx vitest run --config vitest.mutation.config.ts`（F117 兩檔 + F118 19+1 檔合併）：F117 部分 2 files/26 tests 綠燈；F118 部分因 `checkCopyDuplicates`/路由尚未實作而 2 files（`f118-copy-duplicate-check.spec.ts` 11 + `assignment-list.controller.spec.ts` 新增 `TC-F118` 區塊 9）共 20 tests 紅燈（預期中的紅，其餘既有 18 檔 356 tests 全綠，無回歸）；待 F118 實作完成、這 20 個測試轉綠後，Stryker dry run 即可正常產出分數。
+- **是否影響 F118 §10「後端測試須同時涵蓋 SQLite unit 與 MSSQL spec 兩軌」**：不影響。AD-E07-48 §9 已裁定 F118 無 PG/MSSQL-only 依賴，本 feature 之邏輯全數可於 SQLite 覆蓋，不需新增 dialect-only 測試分支。
+- **風險等級**：已由 R-F118-08 之拆分處置解決（見下）。
+
+### R-F118-07（已解決，2026-08-05）：跨 workspace regression guard 於 Stryker 沙箱內 ENOENT，導致整條 mutation gate 無分數
+
+- **問題**：`assignment-list.service.spec.ts` 之 `TS-F050-K01b` / `K01c`（依 `feedback_grep_negative_lookahead` 建立之 fs + regex dead-code 防迴歸守衛）以 `path.resolve(__dirname, '../../../../../web/src/pages/assignment/*.tsx')` 讀取 **apps/web** 之檔案。Stryker 僅將 `apps/api` 複製進 `.stryker-tmp/` 沙箱執行 dry run，該相對路徑於沙箱內解析為不存在的 `.stryker-tmp/web/...` → `ENOENT` → dry run 失敗 → **整條 mutation gate 完全無法產出分數**（非分數偏低）。此為既有測試設計缺陷，因 F118 將 `assignment-list.service.ts` 納入 `mutate` 而首次引爆。
+- **裁決**：改為自 `__dirname` 逐層上溯，尋找實際存在 `apps/web/src` 的 repo root（沙箱內會一路上溯出 `.stryker-tmp` 找到真實 repo root，一般執行則於同一位置命中），最多上溯 12 層後拋出明確錯誤。**斷言內容一字未改**，僅修正路徑解析。已實測該 spec 39 tests 全綠，且 Stryker dry run 可正常完成。
+- **風險等級**：已解決。凡日後新增跨 workspace 讀檔之守衛測試，皆須採同一 repo-root 錨定方式，不可用固定層數的相對路徑。
+
+### R-F118-08（已解決，2026-08-05 人工裁決）：單一 Stryker run 合併計分，門檻數學上不可能達標
+
+- **問題**：原 `stryker.conf.json` 於單次 run 同時 mutate `dept-ratio.service.ts`（515 行，F117 新碼佔比高）與 `assignment-list.service.ts`（1682 行，F118 新碼僅約 60 行），以單一 `break: 70` 對**聚合分數**把關。實測聚合 64.87%，且**數學上不可能達標**：門檻需殺掉 777/1110 個突變，實得 661，缺口 116；而 F118 新增區段全部突變僅 53 個（存活 18 + RuntimeError 4），即使測到完美也只能補 22 個，**仍差 94 個須靠既有 legacy 碼補**。gate 因此恆紅，淪為噪音而非約束。
+- **裁決**（使用者，2026-08-05）：**拆成兩次 run，各自設門檻**。
+  - `stryker.dept-ratio.conf.json` + `vitest.mutation.dept-ratio.config.ts` → mutate `dept-ratio.service.ts`，`break: 70`（**實測 75.36% 通過**，耗時 3m43s）。
+  - `stryker.assignment-list.conf.json` + `vitest.mutation.assignment-list.config.ts` → mutate `assignment-list.service.ts`，`break: 61` 作為 **ratchet（只防退步）**，反映「1682 行既有大檔之技術債非 F118 造成、亦非 F118 可於本輪償還」之事實。**實測 63.35%**（503 killed / 174 survived / 117 no-coverage / 109 error；covered-score 74.30%）；另有合併設定下之同檔實測 62.19%（尚未含 BE-012~015），兩次差約 1.2pp 主因 error 分類浮動（91 vs 109），故取低約 2pp 之 61，避免被 run 間浮動誤殺。
+  - npm scripts：`test:mutation:dept-ratio` / `test:mutation:assignment-list`，`test:mutation` 依序跑兩支。
+- **為何不採其他選項**：(a) 維持單一門檻 → gate 恆紅、失去訊號；(c) 把 `assignment-list.service.ts` 移出 `mutate` → 等於完全不驗 F118 新碼，誠實度最低。
+- **後續**：待 `checkCopyDuplicates` 等抽為獨立 service（檔案變小、新碼佔比提高）後，應同步調高 `assignment-list` 標的之 `break`。ratchet 值不得在未改善測試的情況下調降。
+- **⚠️ 已知不穩定（Windows）**：`assignment-list` 標的之 Stryker dry run 偶發原生崩潰 `exit code 3221225477`（0xC0000005 ACCESS_VIOLATION），推測為 better-sqlite3 於沙箱內大量建立/銷毀 in-memory DataSource 所致；實測 4 次中失敗 3 次、成功 1 次，**同一份設定重跑即可通過**。伴隨出現之 `[vite] Failed to load source map ... stryker-setup.js.map` 僅為警告、非死因（曾嘗試以 swc `sourceMaps:false` 消除，對崩潰無效，已還原）。`dept-ratio` 標的僅 2 個 spec 檔，未觀察到此現象。**CI 採用本 gate 時須加重試機制**。
+- **風險等級**：已解決（門檻政策）；不穩定性另記於上，屬環境層問題。
+
+### R-F118-09（已解決，2026-08-05）：mutation testing 暴露 F118 新碼之實質測試缺口（AC-9 / BR-4 / AC-10）
+
+- **問題**：首輪 Stryker 對 F118 新增區段（`buildConditionSignatureIndex` + `checkCopyDuplicates`，行 1392-1480）產生 53 個突變，**存活 18 個**（分數 58.49% total / 63.27% covered）。逐一檢視後確認**非雜訊，而是有 AC 但無有效測試**：
+  - 上月候選之 `condition_payload !== null && !== undefined` 過濾被改為恆真 → 測試仍全綠，代表 **AC-9**（舊格式名單須排除於候選）無有效驗證。
+  - 兩處 `order: { list_no: 'ASC' }` 被移除 → 測試仍全綠，代表 **BR-4** 決定性在 `checkCopyDuplicates` 自身路徑未驗（既有 TS-F118-BE-011 驗的是 `findActiveConditionDuplicate`）。
+  - `if (sig === '') continue` 被改為不跳過 → 測試仍全綠，代表 **AC-10** 空簽章不得進索引未驗。
+  - `if (!index.has(key))` 先到先贏改為後到覆蓋 → 測試仍全綠。
+- **裁決**：新增 4 則測試 TS-F118-BE-012 ~ BE-015（AC-9 舊格式排除 / BR-4 多筆等價取 `list_no` 最小者 / AC-10 空簽章不進索引 / 本月舊格式名單之 legacy fallback 仍參與比對）。**並以手動施加突變驗證測試有效性**（非僅「測試存在」）：將候選過濾改為恆真 → BE-012 失敗；移除本月查詢之 `ORDER BY` → BE-013 失敗；還原後 15 tests 全綠。
+- **風險等級**：已解決。此筆為 mutation gate 發揮實質作用之案例——單看 unit / e2e 全綠會誤判為「已充分測試」。
+
+### R-F118-06（已解決，2026-08-04 dispute #3 裁決）：後端 Coverage gate `--coverage.include` 涵蓋整個 1680 行 legacy service，但原僅跑 2 個 spec 檔，數學上不可能達標
+
+- **問題**：`gate:coverage:f118` 原設定 `--coverage.include` 為整個 `assignment-list.service.ts`/`.controller.ts`，門檻 80/80/75，但僅執行 `f118-copy-duplicate-check.spec.ts` + `assignment-list.controller.spec.ts` 兩檔——後者 mock 掉整個 service（對 service 覆蓋率貢獻趨近 0），前者只驅動 `createList` + `checkCopyDuplicates`，`listLists`/`updateList`/`disableList`/`getFullSnapshot`/`previewHitCount` 等既有邏輯完全未被觸及。**已實測**（implementer dispute 佐證 + test-generator 覆核）：以此設定跑出 service stmts 9.1% / funcs 0%，遠低於門檻；即便換另一組同樣以 `createList` 為主的既有 spec 亦僅達 stmts 46.1% / funcs 56.52%。
+- **裁決**：**採納**。此與 `vitest.mutation.config.ts`（見 R-F118-05）已採用之解法同一道理——單一新 spec 檔案量測「整檔」覆蓋率在數學上必然失真。改為將 `gate:coverage:f118` 之測試檔清單擴大為該模組**全部既有 20 個 SQLite unit spec**（`src/modules/assignment-list/__tests__/*.spec.ts`，排除唯一的 `.mssql.spec.ts`），`--coverage.include` 維持鎖定 `assignment-list.service.ts` + `.controller.ts` 兩檔（未擴大範圍、未調降門檻）。**已實測**（2026-08-04，F118 已實作情境）：20 檔 350 tests 全綠，覆蓋率 stmts 93.19% / branch 79.25% / funcs 97.05% / lines 93.19%，三項門檻（80/80/75）皆通過。
+- **風險等級**：已解決。
+
+### R-F118-07（已解決，2026-08-04 dispute #4 裁決）：前端 Coverage gate 對 `src/api/assignment-list.ts` 之函式覆蓋率門檻在測試檔案結構下不可達
+
+- **問題**：`gate:coverage:f118`（apps/web）原 `--coverage.include` 同時涵蓋 `copy-from-prev-month-modal.tsx` 與整個 `src/api/assignment-list.ts`（9 個匯出函式，橫跨 F048/F050/F051/F052/F077/F118 多個 feature），但兩個受測檔（`list-create-draft-page.test.tsx` 對 `@/api/assignment-list` 做 `vi.mock()` 自動 mock、`copy-from-prev-month-modal.test.tsx` 僅 type-only import）皆不會真正執行該模組任何函式本體。**已實測**：`assignment-list.ts` stmts 1.51% / funcs 0%；modal 檔本身單獨已達 100%/93.33%/100%/100%；聚合後 funcs 52.63% < 80% 門檻 → ERROR。若要達標須為 `listLists`/`createList`/`updateList`/`disableList`/`deleteList`/`getFullSnapshot`/`getCurrentWorkYm` 等 7 個與 F118 無關之既有函式另補契約測試——超出 F118 範圍（BR-1：判定邏輯全數在後端，前端 client 僅為 3 行 axios wrapper）。
+- **裁決**：**採納**。(1) 新增 `apps/web/src/api/__tests__/assignment-list-copy-duplicate-check.test.ts`——沿用既有 `sampling-preview-clients.test.ts` 之慣例（僅 mock `../client`，`checkCopyDuplicates` 函式本體真實執行），驗證 GET URL / params 形狀（`{ prevYm, currentYm }`，AC-5）與 response passthrough，補上 F118 新增 API client 函式原本缺少的直接單元測試。(2) `gate:coverage:f118` 移除 `--coverage.include=src/api/assignment-list.ts`（該檔案為多 feature 共用之大檔，非 F118 專屬變更面，比照後端 dispute #2/#3 之「不得把既有大檔整檔強行納入單一 feature 門檻」原則），改為僅對 `copy-from-prev-month-modal.tsx` 設定覆蓋率門檻（其本身已是 F118 新增/修改之真正變更面），並將新增之 client 契約測試加入 gate 執行清單（實際跑但不對其設檔案級覆蓋率門檻）。**已實測**：3 檔 81 tests 全綠，`copy-from-prev-month-modal.tsx` stmts/branch/funcs/lines = 100/93.33/100/100，全數通過門檻。
+- **風險等級**：已解決。

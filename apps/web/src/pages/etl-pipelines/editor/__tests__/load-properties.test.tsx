@@ -235,8 +235,7 @@ describe('LoadProperties (via PropertiesPanel)', () => {
   });
 
   it('TS-F036-033: regular field selects are editable (dropdown style)', async () => {
-    const user = userEvent.setup();
-    const { onNodeDataChange } = renderLoadProperties({ targetTable: 'customer_core' });
+    renderLoadProperties({ targetTable: 'customer_core' });
 
     await waitFor(() => {
       // Wait for fields to appear in category A (expanded by default)
@@ -249,8 +248,7 @@ describe('LoadProperties (via PropertiesPanel)', () => {
   });
 
   it('TS-F036-034: field mapping value updates correctly via select', async () => {
-    const user = userEvent.setup();
-    const { onNodeDataChange } = renderLoadProperties({
+    renderLoadProperties({
       targetTable: 'customer_core',
       fieldMappings: { source_customer_no: 'CUSTO_NO' },
     });

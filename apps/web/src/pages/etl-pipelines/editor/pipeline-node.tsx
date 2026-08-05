@@ -18,7 +18,7 @@ import {
   Calculator,
   Upload,
 } from 'lucide-react';
-import { getNodeDef, getCategoryColor, getCategoryLabel, type NodeCategory } from './node-types';
+import { getNodeDef, getCategoryColor, getCategoryLabel } from './node-types';
 import { NodeFieldBadge } from './node-field-badge';
 import { useNodeFieldStats } from './use-node-field-stats';
 import { useTooltipManager } from './badge-tooltip';

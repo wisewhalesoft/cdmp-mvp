@@ -30,6 +30,7 @@ import { AssignmentListService } from './assignment-list.service';
 import { CreateListDto } from './dto/create-list.dto';
 import { UpdateListDto } from './dto/update-list.dto';
 import { ListListsQueryDto } from './dto/list-lists-query.dto';
+import { CopyDuplicateCheckQueryDto } from './dto/copy-duplicate-check-query.dto';
 
 /**
  * F048 v2.0 / F050 v2.0 / F051 v2.0 / F052 v2.0 / F077 v1.2 — M01 名單 CRUD Controller
@@ -85,6 +86,34 @@ export class AssignmentListController {
         message: ERROR_MESSAGES.LIST_HISTORICAL_READONLY,
       });
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // F118 v1.1 §5.1.1 / AD-E07-48 §5.1 — GET copy-duplicate-check
+  //
+  // 從上月複製「已複製過」判定（唯讀提示，不落表）。
+  //
+  // 唯讀端點：class 級 DirectorOrSectionChiefGuard，method 不加 @RequireDirector
+  //   （比照 getFullSnapshot 慣例）；不套 FeatureFlagGuard /
+  //   LIST_HISTORICAL_READONLY / ASSIGNMENT_RUN_ALREADY_RUNNING
+  //   （I-F118-READONLY-JUDGE-01：不影響任何寫入路徑）。
+  //
+  // ⚠️ 路由排序：本字面路徑必須宣告於任何 @Get(':listNo...') 動態路由之前，
+  //   否則 NestJS 會把 'copy-duplicate-check' 誤匹配為 :listNo。
+  // -------------------------------------------------------------------------
+
+  @Get('copy-duplicate-check')
+  async copyDuplicateCheck(@Query() query: CopyDuplicateCheckQueryDto) {
+    // AC-5：currentYm 由呼叫端帶入（F097 作業月語意），不由 SystemService 推導。
+    const items = await this.service.checkCopyDuplicates(
+      query.prevYm,
+      query.currentYm,
+    );
+    return {
+      prevYm: query.prevYm,
+      currentYm: query.currentYm,
+      items,
+    };
   }
 
   // -------------------------------------------------------------------------

@@ -110,6 +110,8 @@ function setupMocks() {
     mode: 'full',
     status: 'disabled',
     sourceTable: 'customers',
+    sourceSchema: 'dbo',
+    rawTableName: 'raw_customers',
     incrementalColumn: null,
     lastIncrementalValue: null,
     schedule: '0 2 * * *',

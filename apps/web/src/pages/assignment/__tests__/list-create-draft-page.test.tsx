@@ -41,6 +41,8 @@ const mockedGetUser = vi.mocked(authStore.getUser);
 const mockedGetBusinessRole = vi.mocked(authStore.getBusinessRole);
 const mockedGetEffectiveIdentity = vi.mocked(authStore.getEffectiveIdentity);
 const mockedPreviewHitCount = vi.mocked(assignmentListApi.previewHitCount);
+// F118 — 從上月複製「已複製過」提示（GET /assignment/lists/copy-duplicate-check）
+const mockedCheckCopyDuplicates = vi.mocked(assignmentListApi.checkCopyDuplicates);
 
 // 對齊 prototype 27a L510-519 之 FIELDS mock（含拍板 UI-Q5 birth_date date type）
 // v2.1.1（US-128/US-129）：新增 best_case categorical（承接已移除之 prod_best 業務語意）
@@ -1338,5 +1340,143 @@ describe('ListCreateDraftPage — 假公式移除迴歸守門（TS-F050-W02）',
     );
     expect(src).not.toMatch(/12500/);
     expect(src).not.toMatch(/0\.85/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// F118 — 從上月複製「已複製過」提示（頁面整合）
+// 對應 docs/specs/features/F118-copy-from-prev-month-duplicate-indicator.md（AC-5/AC-10/AC-11）
+// docs/specs/contracts/F118-copy-duplicate-check.contract.ts
+// docs/test-specs/features/F118-test.md §五 TS-F118-PAGE-001~005
+// ═══════════════════════════════════════════════════════════════════════════
+describe('F118 — 已複製過提示（頁面整合）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetUser.mockReturnValue({
+      id: 'd1',
+      name: 'Director',
+      email: 'manager@cdmp.test',
+      role: 'user',
+      isSalesManager: true,
+      businessRole: 'director',
+    });
+    mockedGetBusinessRole.mockReturnValue('director');
+    mockedGetEffectiveIdentity.mockReturnValue('director');
+    setupDefaultMocks();
+    mockedCheckCopyDuplicates.mockResolvedValue({
+      prevYm: '202604',
+      currentYm: '202605',
+      items: [],
+    });
+  });
+
+  afterEach(() => cleanup());
+
+  const dupSrc: AssignmentListItem = {
+    listNo: 'OB202604007',
+    listNm: '2026-04 業務二部 重點戶',
+    prodKind: null,
+    caseYear: null,
+    specTp: null,
+    caseStatus: null,
+    crEnabled: true,
+    listPeriodStart: 1,
+    listPeriodEnd: 6,
+    listInterval: 1,
+    settleSrc: null,
+    cardType: 'S5',
+    prodBest: null,
+    status: 'active',
+    stage: 'ready',
+    createdBy: '王部長',
+    createdAt: '2026-04-10T00:00:00Z',
+    updatedAt: '2026-04-10T00:00:00Z',
+    conditionPayload: {
+      conditions: [{ columnName: 'caseyear', fieldType: 'categorical', values: ['0'] }],
+      logic: 'AND',
+    },
+  };
+
+  async function openCopyModalWithSrc() {
+    mockedListLists.mockResolvedValue({
+      ...emptyPrevMonthLists,
+      lists: [dupSrc],
+      stageCounts: { draft: 0, dept_ratio: 0, personnel_ratio: 0, approval: 0, ready: 1, disabled: 0 },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('btn-open-copy-modal')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('btn-open-copy-modal'));
+    await waitFor(() => expect(screen.getByTestId('btn-use-OB202604007')).toBeInTheDocument());
+  }
+
+  it('TS-F118-PAGE-001（AC-5）：開啟複製 Modal → checkCopyDuplicates 以 {prevYm, currentYm} 呼叫，currentYm 為頁面作業月', async () => {
+    mockedListLists.mockResolvedValue(emptyPrevMonthLists);
+    renderPage('/assignment/list-definitions/new?ym=2026-06');
+    await waitFor(() => expect(screen.getByTestId('btn-open-copy-modal')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('btn-open-copy-modal'));
+    await waitFor(() =>
+      expect(mockedCheckCopyDuplicates).toHaveBeenCalledWith({ prevYm: '202605', currentYm: '202606' }),
+    );
+  });
+
+  it('TS-F118-PAGE-002（★核心 / AC-11）：確認採用已複製過之來源 → 表單顯示 dup-reminder-banner，內容含目標編號', async () => {
+    mockedCheckCopyDuplicates.mockResolvedValue({
+      prevYm: '202604',
+      currentYm: '202605',
+      items: [{ listNo: dupSrc.listNo, alreadyCopied: true, copiedToListNo: 'OB202605099' }],
+    });
+    await openCopyModalWithSrc();
+    await waitFor(() => expect(mockedCheckCopyDuplicates).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId(`btn-use-${dupSrc.listNo}`));
+    await waitFor(() => expect(screen.getByTestId('dup-confirm-modal')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('btn-confirm-dup-copy'));
+
+    await waitFor(() => expect(screen.getByTestId('dup-reminder-banner')).toBeInTheDocument());
+    expect(screen.getByTestId('dup-reminder-banner').textContent).toContain('OB202605099');
+  });
+
+  it('TS-F118-PAGE-003：dup-reminder-banner 可關閉，關閉後不阻擋任何操作（AC-11 末句）', async () => {
+    mockedCheckCopyDuplicates.mockResolvedValue({
+      prevYm: '202604',
+      currentYm: '202605',
+      items: [{ listNo: dupSrc.listNo, alreadyCopied: true, copiedToListNo: 'OB202605099' }],
+    });
+    await openCopyModalWithSrc();
+    await waitFor(() => expect(mockedCheckCopyDuplicates).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId(`btn-use-${dupSrc.listNo}`));
+    await waitFor(() => expect(screen.getByTestId('dup-confirm-modal')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('btn-confirm-dup-copy'));
+    await waitFor(() => expect(screen.getByTestId('dup-reminder-banner')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('btn-close-dup-reminder'));
+    expect(screen.queryByTestId('dup-reminder-banner')).toBeNull();
+    expect(screen.getByTestId('btn-save-draft')).not.toBeDisabled();
+  });
+
+  it('TS-F118-PAGE-004：確認採用未複製過之來源 → 不顯示 dup-reminder-banner', async () => {
+    mockedCheckCopyDuplicates.mockResolvedValue({
+      prevYm: '202604',
+      currentYm: '202605',
+      items: [{ listNo: dupSrc.listNo, alreadyCopied: false, copiedToListNo: null }],
+    });
+    await openCopyModalWithSrc();
+    await waitFor(() => expect(mockedCheckCopyDuplicates).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId(`btn-use-${dupSrc.listNo}`));
+
+    await waitFor(() => expect(screen.getByTestId('copy-applied-banner')).toBeInTheDocument());
+    expect(screen.queryByTestId('dup-reminder-banner')).toBeNull();
+    expect(screen.queryByTestId('dup-confirm-modal')).toBeNull();
+  });
+
+  it('TS-F118-PAGE-005（★核心 / AC-10 降級）：checkCopyDuplicates 失敗 → Modal 正常列出候選、無錯誤、複製流程不受阻擋', async () => {
+    mockedCheckCopyDuplicates.mockRejectedValue(new Error('network error'));
+    await openCopyModalWithSrc();
+    // 候選正常列出
+    expect(screen.getByTestId(`copy-row-${dupSrc.listNo}`)).toBeInTheDocument();
+    // 複製流程正常完成（不阻擋、不顯示 dup 相關 UI）
+    fireEvent.click(screen.getByTestId(`btn-use-${dupSrc.listNo}`));
+    await waitFor(() => expect(screen.getByTestId('copy-applied-banner')).toBeInTheDocument());
+    expect(screen.queryByTestId('dup-reminder-banner')).toBeNull();
+    expect(screen.queryByTestId('dup-confirm-modal')).toBeNull();
   });
 });

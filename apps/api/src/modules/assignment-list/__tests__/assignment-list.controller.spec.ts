@@ -45,6 +45,7 @@ describe('AssignmentListController — Route + RBAC + FeatureFlag', () => {
     createList: ReturnType<typeof vi.fn>;
     updateList: ReturnType<typeof vi.fn>;
     disableList: ReturnType<typeof vi.fn>;
+    checkCopyDuplicates: ReturnType<typeof vi.fn>;
   };
   let currentUser: CurrentUser = null;
   let authShouldThrow401 = false;
@@ -84,6 +85,11 @@ describe('AssignmentListController — Route + RBAC + FeatureFlag', () => {
         status: 'inactive',
         updatedAt: new Date(),
       }),
+      // F118：GET copy-duplicate-check（AD-E07-48 §5.2 / v1.1）
+      checkCopyDuplicates: vi.fn().mockResolvedValue([
+        { listNo: 'OB202604001', alreadyCopied: true, copiedToListNo: 'OB202605003' },
+        { listNo: 'OB202604002', alreadyCopied: false, copiedToListNo: null },
+      ]),
     };
 
     // 強制當前月份固定（避免 5 月時跑測試 / 6 月時跑測試行為不一致）
@@ -473,6 +479,86 @@ describe('AssignmentListController — Route + RBAC + FeatureFlag', () => {
       expect(serviceMock.listLists).toHaveBeenCalledWith(
         expect.objectContaining({ ym: '202605' }),
       );
+    });
+  });
+
+  // =========================================================================
+  // TC-F118 — GET copy-duplicate-check（路由順序 + RBAC + query 驗證）
+  //   對應 docs/specs/features/F118-copy-from-prev-month-duplicate-indicator.md §5.1.1
+  //   docs/specs/implementation-log/AD-E07-48-f117-f118-ux-refinements.md §5.1
+  //   docs/test-specs/features/F118-test.md §二 TS-F118-RBAC-001~007
+  // =========================================================================
+
+  describe('TC-F118 — GET copy-duplicate-check', () => {
+    const PATH = '/api/v1/assignment/lists/copy-duplicate-check?prevYm=202604&currentYm=202605';
+
+    it('TS-F118-RBAC-001：未登入 → 401 AUTH_TOKEN_MISSING', async () => {
+      authShouldThrow401 = true;
+      const res = await request(app.getHttpServer()).get(PATH);
+      expect(res.status).toBe(401);
+    });
+
+    it('TS-F118-RBAC-002：plain user（businessRole=null）→ 403 E07_ROLE_NOT_ASSIGNED', async () => {
+      currentUser = { userId: 'u1', role: 'user', businessRole: null };
+      const res = await request(app.getHttpServer()).get(PATH);
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('E07_ROLE_NOT_ASSIGNED');
+    });
+
+    it('TS-F118-RBAC-003：section_chief → 200（唯讀端點，非寫入）', async () => {
+      currentUser = { userId: 'sc', role: 'user', businessRole: 'section_chief' };
+      const res = await request(app.getHttpServer()).get(PATH);
+      expect(res.status).toBe(200);
+    });
+
+    it('TS-F118-RBAC-004a：director → 200', async () => {
+      currentUser = { userId: 'dir', role: 'user', businessRole: 'director' };
+      const res = await request(app.getHttpServer()).get(PATH);
+      expect(res.status).toBe(200);
+    });
+
+    it('TS-F118-RBAC-004b：admin → 200', async () => {
+      currentUser = { userId: 'adm', role: 'admin', businessRole: null };
+      const res = await request(app.getHttpServer()).get(PATH);
+      expect(res.status).toBe(200);
+    });
+
+    it('TS-F118-RBAC-005（★核心 / 路由順序）：不被任何 :listNo 動態路由吞掉 — service.checkCopyDuplicates 以 (prevYm, currentYm) 被呼叫', async () => {
+      currentUser = { userId: 'dir', role: 'user', businessRole: 'director' };
+      const res = await request(app.getHttpServer()).get(PATH);
+      expect(res.status).toBe(200);
+      expect(serviceMock.checkCopyDuplicates).toHaveBeenCalledWith('202604', '202605');
+      expect(res.body.prevYm).toBe('202604');
+      expect(res.body.currentYm).toBe('202605');
+      expect(res.body.items).toEqual([
+        { listNo: 'OB202604001', alreadyCopied: true, copiedToListNo: 'OB202605003' },
+        { listNo: 'OB202604002', alreadyCopied: false, copiedToListNo: null },
+      ]);
+    });
+
+    it('TS-F118-RBAC-006：GET 不受 FeatureFlag（ENABLE_E07_REFACTOR_PHASE3）影響（唯讀端點）', async () => {
+      currentUser = { userId: 'dir', role: 'user', businessRole: 'director' };
+      delete process.env[FLAG];
+      const res = await request(app.getHttpServer()).get(PATH);
+      expect(res.status).toBe(200);
+    });
+
+    it('TS-F118-RBAC-007a：缺 currentYm → 422 VALIDATION_ERROR', async () => {
+      currentUser = { userId: 'dir', role: 'user', businessRole: 'director' };
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/lists/copy-duplicate-check?prevYm=202604',
+      );
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
+    });
+
+    it('TS-F118-RBAC-007b：prevYm 格式非 6 碼數字 → 422 VALIDATION_ERROR', async () => {
+      currentUser = { userId: 'dir', role: 'user', businessRole: 'director' };
+      const res = await request(app.getHttpServer()).get(
+        '/api/v1/assignment/lists/copy-duplicate-check?prevYm=20260&currentYm=202605',
+      );
+      expect(res.status).toBe(422);
+      expect(res.body.error).toBe('VALIDATION_ERROR');
     });
   });
 });

@@ -1,0 +1,62 @@
+%% F118 從上月複製名單「已複製過」提示 — 判定與一致性流程
+%% 核心：判定重用 findActiveConditionDuplicate 之正規化，與儲存端 422 依建構即一致
+%% 對應 spec：features/F118-copy-from-prev-month-duplicate-indicator.md BR-1 ~ BR-8
+sequenceDiagram
+    autonumber
+    actor U as 部長或 Admin
+    participant M as 從上月複製 Modal
+    participant API as 判定端點（唯讀）
+    participant SVC as AssignmentListService
+    participant DB as 資料庫
+
+    U->>M: 開啟「從上月複製」
+    Note over M: prevYm 由 computePrevYm(currentYm) 推導<br/>currentYm 為頁面作業月，非後端系統當月
+
+    M->>API: 請求候選清單與判定，帶 currentYm
+    API->>SVC: 取得上月候選 + 本月等價判定
+
+    SVC->>DB: 查詢一：上月 active 且 condition_payload 非空之名單
+    DB-->>SVC: N 筆候選
+    SVC->>DB: 查詢二：本月 active 名單（含 condition_payload 與 card_type）
+    DB-->>SVC: M 筆本月名單
+
+    Note over SVC: BR-3 常數查詢次數<br/>於記憶體建立 簽章加卡別 對應 listNo 之索引<br/>比對階段不再觸發查詢
+
+    loop 逐筆候選（記憶體比對，無查詢）
+        SVC->>SVC: normalize(condition_payload)<br/>排除 system-fixed 欄位如 best_case（BR-5）
+        alt 簽章為空字串
+            SVC->>SVC: 不標示（AC-10 安全降級）
+        else 本月存在相同簽章且 card_type 相等
+            SVC->>SVC: alreadyCopied 為 true<br/>copiedToListNo 取自同一選取規則（BR-4）
+        else 無相符
+            SVC->>SVC: alreadyCopied 為 false
+        end
+    end
+
+    SVC-->>API: options 陣列
+    API-->>M: 每筆含 alreadyCopied 與 copiedToListNo
+
+    alt 判定查詢失敗
+        API-->>M: 降級：正常回候選清單、不含判定
+        Note over M: Modal 正常運作、不顯示提示、不顯示錯誤<br/>不得阻擋複製主流程（AC-10）
+    end
+
+    M-->>U: 已複製過者顯示徽章與目標編號<br/>例如「已複製為 OB202608003」<br/>未複製過者不顯示徽章（D-2）
+
+    U->>M: 點擊「使用此名單」
+    alt 該筆已複製過
+        M-->>U: 先呈現確認或警示<br/>說明本月已有等價名單、直接儲存將被拒
+        U->>M: 確認後繼續（不得 disable 按鈕，AC-3）
+    end
+
+    M->>M: 既有帶入行為不變（AC-8）<br/>名稱前捲月份 token、卡別、CR、條件、期間
+
+    U->>SVC: 儲存（建立名單）
+    SVC->>SVC: findActiveConditionDuplicate<br/>同一正規化與比對規則（BR-1）
+
+    alt 條件未修改且先前判定為已複製
+        SVC-->>U: 422 LIST_NO_DUPLICATE<br/>details.conflictListNo 等於 copiedToListNo
+        Note over SVC,U: AC-2 一致性：提示與 422 依建構即一致<br/>非靠測試維持
+    else 條件已修改為不等價
+        SVC-->>U: 201 建立成功
+    end

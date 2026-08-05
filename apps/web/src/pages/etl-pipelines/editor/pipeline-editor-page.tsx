@@ -49,8 +49,12 @@ export function PipelineEditorPage() {
   const { id: pipelineId } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  // 型別參數不可省略：@xyflow/react v12 之 useNodesState/useEdgesState 會由初始值
+  // 推導元素型別，傳入 `[]` 會推成 never[]，導致後續所有 node/edge 存取（.id/.data/
+  // .source…）與 ReactFlow 的 onNodesChange/onEdgesChange 全數型別錯誤（本檔 30+ 個
+  // TS2339/TS2345/TS2322 皆源於此）。
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [rawTables, setRawTables] = useState<RawTableItem[]>([]);
   const [pipelineName, setPipelineName] = useState('');
@@ -171,8 +175,11 @@ export function PipelineEditorPage() {
   );
 
   // Connection validation
+  // ReactFlow 之 IsValidConnection<Edge> 簽章為 (edge: Edge | Connection) => boolean
+  //（拖曳中傳 Connection、既有連線重連時傳 Edge）；僅宣告 Connection 會型別不符。
+  // 兩者皆具 source / target，函式體不受影響。
   const isValidConnection = useCallback(
-    (connection: Connection) => {
+    (connection: Edge | Connection) => {
       const sourceNode = nodes.find((n) => n.id === connection.source);
       const targetNode = nodes.find((n) => n.id === connection.target);
       if (!sourceNode || !targetNode) return false;
@@ -337,7 +344,7 @@ export function PipelineEditorPage() {
     }
     setTesting(true);
     try {
-      const res = await testPipeline(pipelineId);
+      await testPipeline(pipelineId);
       setToast({ title: '測試執行已開始', message: '請稍候...' });
       setTimeout(() => setToast(null), 3000);
 

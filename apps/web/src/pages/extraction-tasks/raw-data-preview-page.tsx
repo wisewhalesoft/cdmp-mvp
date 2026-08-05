@@ -16,7 +16,7 @@ import {
 import { AppLayout } from '@/components/layout/app-layout';
 import { getRawData } from '@/api/extraction-tasks';
 import { formatDateTW } from '@/utils/date-utils';
-import type { RawDataResponse, RawDataColumn } from '@cdmp/shared';
+import type { RawDataResponse } from '@cdmp/shared';
 
 type SortState = {
   sortBy: string | undefined;
@@ -116,7 +116,7 @@ export function RawDataPreviewPage() {
           {loading ? (
             <LoadingSkeleton />
           ) : !data || totalCount === 0 ? (
-            <EmptyState taskId={taskId!} />
+            <EmptyState />
           ) : (
             <>
               {/* Summary Card */}
@@ -334,7 +334,7 @@ function LoadingSkeleton() {
   );
 }
 
-function EmptyState({ taskId }: { taskId: string }) {
+function EmptyState() {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-16 text-center">
       <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-100 flex items-center justify-center">

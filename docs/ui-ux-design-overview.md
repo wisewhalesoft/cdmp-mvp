@@ -314,6 +314,10 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 | F036/US-049 目標表 Domain-Oriented 規劃 | `22-target-tables.html` | `18-pipeline-editor.html` (Load 節點屬性面板：目標表選擇+45欄位8分類折疊式對應+對應狀態統計+ETL追蹤欄位自動填充), `21-pipeline-interactions.html` (欄位對應互動展示) |
 | F046 客戶搜尋與清單 | `25-customer-360-list.html` | — |
 | F047 客戶 360 詳情 | `26-customer-360-detail.html` | — |
+| **F117 部門比例僅提供「有在職處長」之部門**（✅ 已核可 v1.1） | `29a-dept-ratio-config.html`（已併入） | 回歸關注 `29d-ready-summary.html` / `35-snapshot-detail.html`（均**不變**） |
+| **F118 從上月複製「已複製過」提示**（✅ 已核可 v1.1） | `27a-list-create-draft.html`（已併入） | 語意相關 `27b-list-edit-draft.html`（F051 本輪未改動，見 F118 A-5） |
+
+> E07（F048–F118）之原型（`27-38`）於歷次交付中逐案產出，未回填至上方 E01–E06 之檔案結構區塊；F117 / F118 之完整設計說明見文末「附錄 A」。
 
 ---
 
@@ -365,3 +369,346 @@ ETL Pipeline 管理整合為**單一頁面雙頁籤**設計（17），監控儀�
 9. **Sidebar 導航**：所有 E05 頁面的 Sidebar 應有 4 個項目，ETL Pipeline 為 active 狀態
 10. **Pipeline 儀表板覆蓋**：F035 的 5 個區塊（統計小卡/趨勢圖/執行中進度條/失敗清單/效能最差 Top 5）均在 17-pipeline-management.html 儀表板頁籤中呈現，各區塊空狀態可展示
 11. **目標表覆蓋**：F036/US-049 的 customer_core 目標表（約 45 欄位，8 分類 A~H）在 22-target-tables.html 中以分類折疊方式展示完整欄位定義（含來源對應欄），ETL 追蹤欄位以灰色+鎖定圖示+自動填充標籤區分。Load 節點屬性面板在 18-pipeline-editor.html 中展示分類式欄位對應（含對應狀態統計 Badge、已對應綠色邊框、分類折疊/展開、ETL 追蹤欄位自動填充）。Phase 2/3 目標表以灰色佔位卡片預示擴展
+
+---
+---
+
+# 附錄 A：F117 / F118 UX 精煉設計（✅ 已核可）
+
+> **狀態：Approved（2026-08-04 人工審閱閘），可據以出題（constraint ring）與實作。**
+> 本附錄涵蓋 [F117](specs/features/F117-dept-ratio-director-required-filter.md)（US-180）與
+> [F118](specs/features/F118-copy-from-prev-month-duplicate-indicator.md)（US-181）之 UI/UX 設計。
+> 原業務阻塞事項 [OQ-F117-B1](specs/open-questions.md) / [OQ-F118-B2](specs/open-questions.md) / OQ-F118-B3
+> 均已裁決；對應架構決策 [AD-E07-48 v1.1](specs/implementation-log/AD-E07-48-f117-f118-ux-refinements.md) 亦已核可。
+>
+> 版本：v1.1 / 2026-08-04（人工審閱閘：原型併回 `29a` / `27a`、三處裁決調整）
+
+## A.1 Context
+
+F117 與 F118 皆為**既有已上線流程之 UX 精煉**，非新模組：
+
+| Feature | 宿主流程（現行已上線） | 本輪增量 |
+|---|---|---|
+| F117 | [F079](specs/features/F079-set-dept-ratio.md) 部門比例設定（M03a）／原型 `29a-dept-ratio-config.html` | 可設定部門範圍限縮為「有在職處長」；孤兒部門唯讀鎖定；隱藏透明度資訊列；空狀態改寫；加總範圍重新定義 |
+| F118 | [F050](specs/features/F050-create-list-definition.md) 建立草稿名單之「從上月複製」子流程／原型 `27a-list-create-draft.html` | Modal 每筆候選加「已複製過」提示（含目標名單編號）＋二次確認＋安全降級 |
+
+兩者皆**無 schema / migration 變更**，判定皆為查詢時衍生狀態。
+
+### A.1.1 ✅ 原型檔案落點（OQ-F117-D1 已裁決）
+
+設計期為避免污染已上線行為之 ground truth，暫以 `39-f117-*.html` / `40-f118-*.html` 兩個獨立檔交付。
+**人工審閱閘裁定：併回既有 ground truth 檔**，已於 2026-08-04 執行完成：
+
+| 設計期暫存檔 | 併入 | 狀態 |
+|---|---|---|
+| `39-f117-dept-ratio-director-filter.html` | `29a-dept-ratio-config.html` | ✅ 已併入並刪除暫存檔 |
+| `40-f118-copy-duplicate-indicator.html` | `27a-list-create-draft.html` | ✅ 已併入並刪除暫存檔 |
+
+合併時依裁決另做三處調整（設計本身未重做）：
+
+1. **保留 `29a` 既有「未設代理」紅點**——「代理」與「處長」為不同業務概念，不得沿用同一視覺語彙，
+   亦不得因本 feature 而消失（OQ-F117-04）。合併後列狀態圖例為**四色點**：可編輯／唯讀鎖定／已下線／未設代理。
+2. **移除 F117 空狀態的「重新查詢」按鈕**——無對應 AC（OQ-F117-D6）。
+3. **`27a` 之 CR 開關由「複製後恢復預設啟用」改為「沿用來源設定」**——OQ-F118-B3 裁定以現行實作為準；
+   原型原本的寫法與實作相反，屬既有原型錯誤，一併修正。
+
+## A.2 設計決策
+
+| # | 決策 | 選擇 | 理由 / AC 依據 |
+|---|---|---|---|
+| D-1 | F117 三分類之視覺語彙 | 可編輯＝沿用既有樣式；孤兒＝**琥珀鎖定列**（列底 `bg-amber-50/40` ＋ `user-x` 徽章「無在職處長」＋ `lock` 圖示 ＋ 琥珀 disabled 輸入框）；無關＝**完全不渲染** | AC-1 / AC-3；BR-10 要求與「已下線」明確可區分 |
+| D-2 | 廢除既有「未設代理」紅點 | **移除**，不沿用 | OQ-F117-04：「代理」與「處長」為不同概念，紅點語意為「顯示且標示」，與三分類不相容 → 見 OQ-F117-D5 |
+| D-3 | 「已下線」與「無在職處長」並存 | **兩個獨立徽章同時渲染**（灰 `archive` ＋ 琥珀 `user-x`），置於不同欄（名稱欄 vs 處長欄） | BR-10 正交概念；A-5 之雙標示要求 |
+| D-4 | 孤兒列之操作欄 | 顯示 `—` ＋ tooltip「無在職處長，無法調整」；**不提供任何寫入操作** | A-4：spec 未定義「強制歸零」路徑，設計不得自行發明 → OQ-F117-D4 |
+| D-5 | 加總可理解性 | 加總 banner 增設「加總組成」行：`可編輯部門 X% ＋ 鎖定部門 Y%（無在職處長，值不可調整但計入加總）`，僅在 Y > 0 時顯示 | AC-5 明訂「使用者可理解為何加總已包含一個不可編輯的值」 |
+| D-6 | F117 空狀態語氣 | 明確排除「資料同步異常」誤讀：文案含「系統已完成查詢，**這不是資料同步異常**」與「無法推進」之原因說明 | AC-7；且**禁用**既有文案「目前無在職部門可設定」 |
+| D-7 | F118 提示形式 | **僅對「已複製過」渲染徽章**（靛紫 pill ＋ `copy-check` ＋ 目標編號）；未複製過不渲染任何徽章 | AC-1 ＋ spec §12.1 D-2：避免滿版徽章降低訊噪比 |
+| D-8 | F118 二次確認形式（OQ-F118-03） | **巢狀確認 Dialog**（`role="alertdialog"`，疊在 Modal 之上），非 inline 警示 | AC-3 要求「先呈現…使用者確認後才繼續」＝阻斷式；inline 文字無法構成 gate |
+| D-9 | F118 確認按鈕語氣 | 主要按鈕為 **primary 藍**「仍要以此名單為基礎建立」，非 danger 紅 | AC-3：建立衍生名單是**正當操作**，不是破壞性動作 |
+| D-10 | F118 目標編號是否可點擊 | **不可點擊**，純文字（mono） | F118 AC-4 僅要求「顯示編號」；US-181 AC-4 之導覽子句已於 spec 收斂時移除 → OQ-F118-D1 |
+| D-11 | F118 判定載入態 | 候選**先渲染**，徽章位置以 skeleton pill 佔位（~600ms），判定回來再填 | AC-7 / AC-10：判定不得阻擋 Modal；避免「先無徽章後突然出現」的閃跳 |
+| D-12 | F118 降級呈現 | 判定失敗 → **不渲染徽章、不顯示錯誤、不顯示重試** | AC-10 明訂「Modal 正常列出、僅不顯示提示」 |
+
+## A.3 色彩系統（本輪新增 token 語意，色票沿用既有系統）
+
+| 語意 | 色票 | 用途 | 與既有元素之區隔 |
+|---|---|---|---|
+| 無在職處長（鎖定） | 背景 `#FFFBEB` / 邊框 `#FCD34D` / 文字 `#92400E`（warning 家族） | F117 孤兒列徽章、鎖定輸入框、列底色、說明區塊 | vs「已下線」＝ `bg-gray-200 / text-gray-600`（灰、`archive` 圖示） |
+| 已隱藏資訊列 | `bg-blue-50` / `border-blue-200` / `text-blue-900`（primary 家族） | F117 AC-8 資訊列 | 純告知，非警示；與紅色加總錯誤 banner 區隔 |
+| 已複製過 | 背景 `#EEF2FF` / 文字 `#4338CA` / 邊框 `#C7D2FE`（indigo） | F118 徽章 | vs CR 啟用＝ `bg-green-50` / `text-#22C55E`、CR 停用＝ `bg-gray-100` / `text-gray-500`（皆為小圓點 pill，無圖示） |
+
+> 對比度：`#92400E` on `#FFFBEB` ≈ 8.6:1、`#4338CA` on `#EEF2FF` ≈ 8.1:1、藍色系文字 on `#EFF6FF` ≈ 11:1 — 均通過 WCAG 2.1 AA（4.5:1）。
+
+## A.4 檔案結構
+
+```
+prototypes/
+├── 29a-dept-ratio-config.html   # 部門比例設定 = F079 主流程 ＋ F117 有處長過濾（已併入）
+└── 27a-list-create-draft.html   # 建立草稿名單 = F050 主流程 ＋ F118 已複製過提示（已併入）
+```
+
+> **2026-08-04 人工審閱閘**：設計期的暫存檔 `39-f117-*.html` / `40-f118-*.html` 已依裁決併回上述兩個
+> ground truth 檔並刪除。合併時另依裁決調整三處：①保留 29a 既有「未設代理」紅點（與「無在職處長」
+> 為不同業務概念，不得混用視覺語彙）②移除空狀態未定義之「重新查詢」按鈕③27a 之 CR 開關由
+> 「恢復預設啟用」改為「沿用來源設定」（OQ-F118-B3 以實作為準）。
+
+兩檔皆自包含（Tailwind CDN ＋ Lucide CDN），瀏覽器可直接開啟、無 build step，與既有原型一致。
+
+**範圍聲明（重要）**：`40-*.html` **只**涵蓋 F118 增量（Modal ＋ 二次確認 ＋ 降級 ＋ 帶入結果唯讀摘要）。
+宿主頁之條件 builder、撈案期間、預估命中等區塊仍以 `27a` 為唯一 ground truth，本檔以唯讀摘要呈現，**不得**被當成那些區塊的基準。
+
+## A.5 執行順序與內容
+
+### Phase A：F117 部門比例「有處長」過濾
+
+| 檔案 | 涵蓋 AC | 關鍵 UI 元素 |
+|---|---|---|
+| `29a-dept-ratio-config.html`（F117 區塊） | AC-1 ~ AC-10 | **三分類表格**（欄位：部門代碼／部門名稱／處長／RATION (%)／預估案件數／操作，共 6 欄，沿用 F079 不增減欄）；**表頭 chip** `requireDirector = true`；**列狀態圖例**（可編輯／唯讀鎖定／已下線 三色點）；**AC-8 資訊列**；**孤兒列說明區塊**；**AC-7 空狀態**；**加總 banner ＋ 加總組成行**；**推進 Modal**（摘要含鎖定列 ＋ 孤兒警語）；**退回草稿 Modal**（沿用 F081，附 BR-11「此為孤兒部門正式出場路徑」說明）；**列狀態圖例四色點**（可編輯／唯讀鎖定／已下線／未設代理）；**角色切換器**（4 角色）；**8 個 demo 場景** |
+
+**逐列渲染規則（ring 可斷言之判定式）**
+
+| 條件 | 分類 | `data-row-kind` | 是否渲染 | 輸入框 | 操作欄 | 計入加總 |
+|---|---|---|---|---|---|---|
+| `hasActiveDirector === true` | 有處長部門 | `editable` | ✅ | 可編輯 | 清空鈕 | ✅ |
+| `!hasActiveDirector && ration > 0` | 孤兒部門 | `orphan-locked` | ✅ | `disabled` ＋ 琥珀 ＋ `lock` | `—`（tooltip） | ✅ |
+| `!hasActiveDirector && ration === 0` | 無關部門 | —（不存在於 DOM） | ❌ | — | — | ❌（恆 0，零影響） |
+
+**DOM 斷言掛點**（供 constraint ring 使用，已內建於原型）
+
+| 掛點 | 位置 | 語意 |
+|---|---|---|
+| `tr[data-dept-id]` | 每一列 | 部門代碼 |
+| `tr[data-has-active-director]` / `[data-is-ratio-editable]` | 每一列 | 對應 GET 回應同名欄位 |
+| `tr[data-row-kind]` | 每一列 | `editable` \| `orphan-locked` |
+| `tr[data-is-active]` | 每一列 | F079「已下線」判定，與上者正交 |
+| `[data-testid="hidden-depts-notice"][data-hidden-no-director-count]` | 資訊列 | AC-8 計數；`0` 時整列 `hidden` |
+| `[data-testid="no-active-director-empty-state"]` | 空狀態 | AC-7 |
+| `[data-testid="ration-input"]` / `[data-testid="ration-input-locked"]` | 輸入框 | AC-3 |
+| `[data-testid="no-active-director-badge"]` | 處長欄徽章 | AC-3 標示 |
+| `#sumBanner[data-sum][data-sum-editable][data-sum-locked]` | 加總 banner | AC-5 三個數值 |
+
+**Demo 場景 ↔ AC 對照**
+
+| # | 場景 | 資料 | 預期 |
+|---|---|---|---|
+| ① | 全部有處長 | 4 部門全有處長，30/25/25/20 | 4 列可編輯、資訊列不顯示、加總 100%、儲存＋推進皆啟用（AC-1） |
+| ② | 含隱藏無關部門 | 加 1 個無處長且 ration=0 | 仍 4 列、資訊列「有 **1** 個部門因目前無在職處長而未列出」、加總不變（AC-8 / BR-3） |
+| ③ | 含孤兒鎖定列 | XTC0=60（有處長）、XTE0=40（無處長）、XTC4=0（無處長） | 2 列（1 可編輯 ＋ 1 鎖定）、隱藏 1、加總 100 ＝ 60 ＋ 40、加總組成行顯示（AC-3 / AC-5） |
+| ④ | 孤兒＋已下線同列 | XTC9 `isActive=false` 且無處長且 ration=15 | 該列同時顯示「已下線」灰徽章與「無在職處長」琥珀徽章，仍為鎖定列（BR-10 / A-5） |
+| ⑤ | 無任何處長（無孤兒） | 3 部門全無處長且 ration=0 | 表格整區隱藏、空狀態顯示、推進 disabled ＋ 提示「無可編輯部門，無法推進」、資訊列顯示 3（AC-7） |
+| ⑥ | 空狀態＋孤兒 | XTE0=100（無處長）、XTC0=0（無處長） | 空狀態**與**鎖定列並存、加總 100 但推進仍 disabled（AC-7 末句） |
+| ⑦ | 處長視角唯讀 | 同 ③，角色 `section_chief` | 紫色唯讀 banner、比例改為純文字、儲存／推進／退回按鈕全部隱藏（AC-9） |
+| ⑧ | 後端防呆 422 | 手動觸發 | Toast：「部門 XTC4 目前無在職處長，無法配置分派比例」＋ `RATIO_DEPT_DIRECTOR_REQUIRED · HTTP 422`（AC-6，文案與 `error-handling.md` 逐字一致） |
+
+**AC-4 之呈現**：儲存 toast 於存在孤兒列時附帶「含 N 個無在職處長之鎖定部門（XTE0），其既有比例已原樣保留、未變更」。
+
+### Phase B：F118 從上月複製「已複製過」提示
+
+| 檔案 | 涵蓋 AC | 關鍵 UI 元素 |
+|---|---|---|
+| `27a-list-create-draft.html`（F118 區塊） | AC-1 ~ AC-11 | **從上月複製 Modal**（候選卡：名單編號／CR 徽章／**已複製過徽章**／名稱／卡別＋條件標籤）；**巢狀二次確認 Dialog**；**複製成功 banner**（綠）＋**AC-11 持續提醒列**（琥珀、可關閉）；**空狀態**；`Esc` 逐層關閉。**判定進行中不顯示 skeleton 佔位**（審閱裁決） |
+
+**候選卡渲染規則**
+
+| 判定狀態 | 徽章 | 按鈕 | 點擊行為 |
+|---|---|---|---|
+| `loading`（判定未回） | skeleton pill（`aria` 讀出「判定中」） | 可點 | 直接帶入（不阻擋） |
+| `alreadyCopied === true` | `已複製為 {copiedToListNo}`（靛紫 ＋ `copy-check`） | **可點（不得 disable）** | 先開二次確認 Dialog（AC-3） |
+| `alreadyCopied === false` | **無徽章** | 可點 | 直接帶入（既有流程，AC-8） |
+| 判定不可得（降級） | **無徽章、無錯誤** | 可點 | 直接帶入（AC-10） |
+
+**DOM 斷言掛點**
+
+| 掛點 | 語意 |
+|---|---|
+| `[data-testid="copy-candidate-row"]` | 每筆候選（`<button>`，**永不 disabled**） |
+| `[data-already-copied]` | `true` \| `false` \| `pending` |
+| `[data-copied-to-list-no]` | 目標名單編號（AC-4） |
+| `[data-testid="already-copied-badge"]` | 僅 `alreadyCopied=true` 時存在（spec §12.1 D-2：未複製不渲染） |
+| `[data-testid="copy-empty-state"]` | 上月無可複製名單（AC-9 回歸） |
+| `#dupConfirmModal` / `#dupSourceListNo` / `#dupTargetListNo` | 二次確認（AC-3 / AC-4） |
+| `#copiedBanner[data-variant]` | `normal` \| `already-copied` |
+
+**Demo 場景 ↔ AC 對照**
+
+| # | 場景 | 預期 |
+|---|---|---|
+| ① | 混合（1 筆已複製過） | 1 個徽章「已複製為 OB202605003」、其餘 2 筆無徽章、3 筆皆可點（AC-1 / AC-3 / AC-4） |
+| ② | 全部已複製過 | 3 個徽章、各自不同目標編號、皆可點 |
+| ③ | 全部未複製 | 0 個徽章、版面密度與現行一致（spec §12.1 D-2） |
+| ④ | 判定失敗 → 降級 | 3 筆正常列出、0 徽章、**無任何錯誤訊息**、可正常複製（AC-10） |
+| ⑤ | 簽章為空 | 「僅含系統固定條件（優質案件）」之候選 **不標示**；其條件標籤以虛線灰底標示為系統固定（AC-10 / BR-5） |
+| ⑥ | 上月無可複製名單 | 既有空狀態「上月無可複製名單」（AC-9 回歸；舊格式名單不列出） |
+
+**AC-2 之互動驗證路徑**（原型可自證的部分）：
+複製一筆「已複製過」→ 確認 → 直接「儲存草稿」→ 出現 `422 LIST_NO_DUPLICATE · conflictListNo = OB202605003`，**編號與徽章一致**；
+改按「模擬修改條件使其不再等價」→ 再儲存 → 成功（AC-3 末句）。
+
+## A.6 共用 UI 模式（本輪新增）
+
+| 模式 | 規則 |
+|---|---|
+| 唯讀鎖定列（因外部前提不成立） | 列底 `bg-amber-50/40` ＋ 欄內狀態徽章（琥珀 pill ＋ 具體原因文字）＋ 輸入框 `disabled` 並套 `.locked-orphan`（琥珀底/框）＋ 前置 `lock` 圖示 ＋ 操作欄 `—`＋tooltip ＋ 表格下方成因與解法說明區塊。**與「已停用／已下線」（灰 `archive`）在色與圖示上皆須不同** |
+| 過濾透明度資訊列 | 凡因規則過濾而使清單短少者，須顯示 `bg-blue-50` 資訊列說明「有 N 個…未列出」＋為何不影響結果；`N = 0` 時整列不渲染；純告知、不阻擋、不可關閉 |
+| 加總組成揭露 | 當合計包含使用者不可調整的部分時，於合計元件內顯示「可編輯 X% ＋ 鎖定 Y%」拆解行，Y = 0 時隱藏 |
+| 具體化空狀態 | 空狀態文案須同時回答：(1) 發生什麼 (2) **不是**什麼（排除誤讀，如「這不是資料同步異常」） (3) 後果（無法推進） (4) 可做什麼 |
+| 提示徽章 vs 狀態徽章 | 同一列若已有狀態徽章（如 CR 啟用／停用），新增之提示徽章須在**色相家族、圖示有無、文字長度**三者至少兩項不同 |
+| 唯讀提示之安全降級 | 輔助提示查詢失敗時：不顯示錯誤、不顯示重試、不阻擋主流程，僅省略提示 |
+| 阻斷式二次確認 vs inline 警示 | AC 要求「確認後才繼續」→ 用 `role="alertdialog"` 巢狀 Dialog；若僅要求「知悉」→ 用 inline banner |
+| 非破壞性二次確認之按鈕語氣 | 確認之操作若為正當業務行為（非刪除／清空），主按鈕用 primary 藍而非 danger 紅 |
+
+## A.7 Feature → 檔案對照表
+
+| Feature | AC | 主要檔案 | 也出現於 / 回歸關注 |
+|---|---|---|---|
+| F117 | AC-1 ~ AC-10 | `prototypes/29a-dept-ratio-config.html` | **回歸不變**：`29d-ready-summary.html`（AC-10）、`35-snapshot-detail.html`（AC-10 / spec §12.1 D-3）；階段流程 `27-list-definition.html` |
+| F118 | AC-1 ~ AC-11 | `prototypes/27a-list-create-draft.html` | 語意相關 `27b-list-edit-draft.html`（F051 共用 `findActiveConditionDuplicate`，本輪**未改動**） |
+
+## A.8 使用者流程
+
+### F117 — 部門比例設定（含三分類）
+
+```mermaid
+flowchart TD
+    A[部長或 Admin 進入部門比例設定頁] --> B[GET ratios dept listNo 帶 requireDirector]
+    B --> C{可編輯列數為零嗎}
+    C -->|是| D[空狀態：目前沒有任何部門具在職處長<br/>推進按鈕停用並說明原因]
+    C -->|否| E[渲染三分類表格]
+    D --> F{仍有孤兒列嗎}
+    F -->|是| E
+    F -->|否| G[僅空狀態]
+    E --> H{隱藏計數大於零嗎}
+    H -->|是| I[顯示已隱藏資訊列]
+    H -->|否| J[不顯示資訊列]
+    I --> K[加總等於可編輯列加孤兒鎖定列]
+    J --> K
+    K --> L{加總落於容忍區間嗎}
+    L -->|否| M[紅色 banner 且儲存與推進皆停用]
+    L -->|是| N[儲存啟用]
+    N --> O{可編輯列數為零嗎}
+    O -->|是| P[推進仍停用]
+    O -->|否| Q[推進啟用並開確認 Modal<br/>摘要含鎖定列與孤兒警語]
+    N --> R[儲存後 toast 註明孤兒列已原樣保留]
+```
+
+### F118 — 從上月複製（含已複製過提示）
+
+```mermaid
+flowchart TD
+    A[點擊從上月複製] --> B[既有：載入上月候選<br/>有效且已設定篩選條件]
+    B --> C[候選立即渲染，徽章位置以 skeleton 佔位]
+    C --> D[批次判定請求，一次而非逐筆]
+    D -->|成功| E{該筆已複製過嗎}
+    D -->|失敗| F[降級：不渲染徽章且不顯示錯誤]
+    E -->|是| G[渲染已複製為 目標名單編號 徽章]
+    E -->|否| H[不渲染徽章]
+    G --> I[使用者點擊該筆，按鈕永不停用]
+    H --> J[直接帶入]
+    F --> J
+    I --> K[二次確認 Dialog<br/>本月已有等價名單且直接儲存將被拒]
+    K -->|取消| C
+    K -->|仍要建立| L[帶入並於表單常駐琥珀提醒]
+    J --> M[帶入：名稱前捲月份、卡別、CR、條件、期間]
+    L --> M
+    M --> N{儲存前是否修改條件}
+    N -->|否且原為已複製| O[422 LIST_NO_DUPLICATE<br/>衝突編號等於徽章上的編號]
+    N -->|是| P[建立成功]
+```
+
+## A.9 無障礙設計（WCAG 2.1 AA）
+
+| 項目 | 做法 |
+|---|---|
+| 語意結構 | `<table>` ＋ `<caption class="sr-only">` 說明鎖定列語意；`<th scope="col">`；`<main>` / `<aside>` / `<header>` / `<nav aria-label>` |
+| 狀態播報 | 加總 banner `role="status" aria-live="polite"`（比例變動即播報）；資訊列 `role="status"`；toast 容器 `aria-live="polite"` |
+| 對話框 | 推進／退回＝`role="dialog" aria-modal="true" aria-labelledby`；F118 二次確認＝`role="alertdialog"` ＋ `aria-describedby`，開啟後焦點移至主要按鈕；`Esc` 由最上層逐層關閉 |
+| 停用控制項 | 鎖定輸入框 `disabled` ＋ `aria-label="{部門} 分派比例（唯讀鎖定：無在職處長）"` ＋ `aria-describedby` 指向成因說明區塊 |
+| 不單靠顏色 | 孤兒列同時具備：色（琥珀）＋圖示（`user-x` / `lock`）＋文字（「無在職處長」）；已下線同時具備灰色＋`archive`＋「已下線」；F118 徽章具備色＋`copy-check`＋文字含編號 |
+| 對比度 | 見 A.3；所有狀態文字皆 ≥ 4.5:1 |
+| 鍵盤 | 全互動元素為原生 `button` / `input` / `select` / `a`；`:focus-visible` 統一 2px primary outline ＋ 2px offset；候選卡為 `<button>` 可 Tab 進入並以 Enter 觸發 |
+| 圖示 | 純裝飾圖示 `aria-hidden="true"`；skeleton 佔位另附 `.sr-only`「判定中」 |
+| 表單標籤 | 角色切換器以 `<label for>` 綁定（既有原型為純文字 span，本輪修正） |
+
+## A.10 假設清單（設計層）
+
+| # | 假設 | 依據 / 風險 |
+|---|---|---|
+| DA-1 | 原型另立新檔而非就地覆寫 `29a` / `27a` | 見 A.1.1；若審閱者不同意，產物可直接搬移 |
+| DA-2 | F117「儲存」按鈕僅受加總約束；「推進」另受「可編輯列數 > 0」約束 | AC-7 僅明訂「無法推進」，未提及儲存；故場景⑥（孤兒獨自湊滿 100%）儲存啟用、推進停用 → OQ-F117-D2 |
+| DA-3 | 孤兒列不提供任何寫入操作（含清空） | A-4 未定義出場機制；設計不得發明 → OQ-F117-D4 |
+| DA-4 | 空狀態提供「重新查詢」按鈕 | AC 未要求，但空狀態若無任何出路對使用者不友善；屬設計增補 → OQ-F117-D6 |
+| DA-5 | F117 表格欄位維持 F079 現有 6 欄，不新增「狀態」欄 | 狀態以徽章內嵌於既有欄位，避免改動既有表格契約 |
+| DA-6 | F118 Modal 副標由「已準備完成名單」改為「可複製名單」 | 現行文案隱含 `stage='ready'` 過濾，與 AC-9 之權威過濾（`status='active'` ＋ 有條件）矛盾；改為中性描述以免預判 OQ-F118-B3 → OQ-F118-D2 |
+| DA-7 | F118 判定載入態以 skeleton 呈現（~600ms） | AC 未定義；避免徽章突現閃跳 → OQ-F118-D3 |
+| DA-8 | 確認複製「已複製過」來源後，表單常駐琥珀提醒 banner（`data-design-add="true"`） | 超出 AC 字面；已加 DOM 標記便於 ring 選擇是否納入 → OQ-F118-D4 |
+| DA-9 | F118 之角色可見性沿用 27a：`admin` / `director` 可用；`section_chief` / `user` 全頁封鎖 | F050 既有行為，本 feature 不變更 |
+| DA-10 | 部門「預估案件數」欄沿用 F079 之 mock 換算（總預估 × RATION） | 與 F117 無關，僅為維持宿主頁完整性 |
+
+## A.11 待人工解決之問題 — ✅ 已於 2026-08-04 人工審閱閘全數結案
+
+### A.11.1 原業務阻塞事項 — 已裁決
+
+| ID | 裁決 | 對本設計之影響 |
+|---|---|---|
+| **OQ-F117-B1** | 孤兒部門**顯示但鎖定 ＋ 後端強制保留**；①接受該列在處長派任前無法調整②**不**提供「強制歸零」（出場機制沿用 F081 退回草稿，F117 BR-11）③加總含鎖定列符合預期 | 設計維持原樣：孤兒列操作欄**留空**為正確結果，非待補；A.5 加總組成設計成立 |
+| **OQ-F118-B2** | **接受**語意等價之後果（標記＝「原樣儲存會被 422 擋下」） | 二次確認文案「若不修改條件將無法儲存」成立，不需重寫 |
+| **OQ-F118-B3** | **以現行實作為準修正三處 spec** | 確立 Modal 副標「可複製名單」與頁尾文案；另修正 27a 之 CR 開關為「沿用來源設定」（原型原本寫「恢復預設啟用」，與實作相反） |
+
+### A.11.2 設計層問題 — 已裁決
+
+| ID | 裁決 |
+|---|---|
+| **OQ-F117-04** | ✅ 琥珀鎖定列 vs 灰色已下線之區隔足夠。**但既有「未設代理」紅點必須保留**（見 OQ-F117-D5），合併後為四種狀態並存且互不混淆 |
+| **OQ-F118-03** | ✅ 接受巢狀 `alertdialog` 阻斷式二次確認 |
+| **OQ-F117-D1** | ✅ **就地併回 `29a` / `27a`**，設計期暫存檔 `39` / `40` 已刪除（見 A.1.1） |
+| **OQ-F117-D2** | ✅ 可編輯列數 = 0 時，**儲存亦停用**（F117 AC-7 已補述）。理由：孤兒列之值由伺服器保留，不需經儲存寫入，故無可儲存之變更 |
+| **OQ-F117-D3** | ✅ **非規格缺口，為刻意設計**。F081 退回草稿清空全部列（含孤兒列）正是孤兒部門的**正式出場路徑**（F117 BR-11）；與 BR-4 不衝突——BR-4 約束儲存路徑，rollback 為使用者明確發起之破壞性操作。Modal 內註記已改為此說明 |
+| **OQ-F117-D4** | ✅ 孤兒列**無寫入操作為正確設計**（F117 AC-4 已明訂不得渲染任何寫入動作，含既有「清空」鈕） |
+| **OQ-F117-D5** | ✅ **「代理」為真實且獨立的業務概念，紅點必須保留**，不得因本 feature 消失、亦不得與「無在職處長」混用視覺語彙。已於合併時復原 |
+| **OQ-F117-D6** | ✅ **移除**空狀態之「重新查詢」按鈕（無對應 AC） |
+| **OQ-F118-D1** | ✅ **刻意收斂**：目標編號為純文字不可點（F118 D-8）。理由：Modal 位於建立表單內，導航離開會丟失已填內容 |
+| **OQ-F118-D2** | ✅ 接受「可複製名單」文案（OQ-F118-B3 裁決後已無歧義） |
+| **OQ-F118-D3** | ✅ **移除** skeleton 佔位（判定為單次輕量查詢，佔位反製造閃爍） |
+| **OQ-F118-D4** | ✅ **納入正式 AC**（F118 新增 AC-11），不再是 `data-design-add` 之選配項；ring 應斷言之 |
+| **OQ-F118-D5** | ✅ 確認 F051（`27b`）**不在本輪範圍**（F118 A-5）；如需要另開 story |
+
+## A.12 關鍵參考檔案
+
+- `docs/specs/features/F117-dept-ratio-director-required-filter.md` — AC-1~10、BR-1~10、§12 裁決偏離 D-1~D-5
+- `docs/specs/features/F118-copy-from-prev-month-duplicate-indicator.md` — AC-1~10、BR-1~9、§12.1 D-1~D-5、§12.2 F050 落差
+- `docs/specs/features/F079-set-dept-ratio.md` — 宿主流程契約（衝突時以 F079 為準）
+- `docs/specs/features/F050-create-list-definition.md` — 宿主流程契約（複製子流程 AC-5 / BR-14）
+- `docs/specs/architecture-spec.md` §5.18 — AD-E07-48 資料流、核心決策、9 個不變式
+- `docs/specs/implementation-log/AD-E07-48-f117-f118-ux-refinements.md` — GET/PUT 契約增量、`checkCopyDuplicates` 設計、端點拓樸裁定
+- `docs/specs/error-handling.md` §assignment-ratio-errors — `RATIO_DEPT_DIRECTOR_REQUIRED` 文案（原型逐字採用）
+- `docs/specs/error-handling.md` §assignment-list-errors — `LIST_NO_DUPLICATE`（F118 不新增錯誤碼）
+- `docs/specs/diagrams/F117-dept-ratio-director-filter-flow.mmd` / `F118-copied-indicator-flow.mmd`
+- `docs/specs/open-questions.md` — F117/F118 節全數結案，另留 4 項不阻塞技術債（OQ-F118-05~07 / OQ-DOC-01）
+- `prototypes/29a-dept-ratio-config.html` / `prototypes/27a-list-create-draft.html` — **ground truth（F117 / F118 設計已併入）**
+
+## A.13 驗證方式
+
+1. **逐檔開啟**：兩檔以瀏覽器直接開啟即可（無 build）。已於本機靜態伺服器實測。
+2. **Console 零錯誤**：兩檔載入 ＋ 全 demo 場景切換 ＋ 全 Modal 開關，`read_console_messages(onlyErrors)` 皆為 0（已驗）。
+3. **狀態矩陣**：F117 逐一切換 8 場景，斷言 `data-row-kind` / `data-hidden-no-director-count` / `data-sum*` / 按鈕 disabled 組合（已驗，結果與 A.5 表格一致）。
+4. **F118 判定矩陣**：逐一切換 6 場景，斷言 `data-already-copied` / `data-copied-to-list-no` / 徽章數 / 候選按鈕 `disabled` 恆為 0（已驗）。
+5. **文案逐字校對**：`RATIO_DEPT_DIRECTOR_REQUIRED` 訊息、AC-8 資訊列、AC-7 空狀態標題、AC-4 徽章格式須與 spec / `error-handling.md` 逐字一致。
+6. **禁用文案檢查**：F117 頁面**不得**出現「目前無在職部門可設定」（AC-7 明令）。
+7. **色彩與區隔**：孤兒琥珀 vs 已下線灰、已複製過靛紫 vs CR 綠／灰，需在同一畫面中並置檢視（demo ④ 與 demo ① 各自可驗）。
+8. **無障礙**：鍵盤 Tab 巡覽全流程、`Esc` 逐層關閉 Dialog、螢幕閱讀器讀出鎖定原因與加總變動。
+9. **回歸**：`29d-ready-summary.html` / `35-snapshot-detail.html` 本輪**未修改**（F117 AC-10 回歸基準）；`27a` / `29a` 已於人工審閱閘併入 F118 / F117 設計。
+10. **合併後複驗（2026-08-04 已執行）**：`29a` 三場景（`all_director` / `orphan` / `empty_orphan`）斷言列數、徽章數、`hiddenCount`、按鈕 disabled、加總皆符合 AC——其中 `empty_orphan`（可編輯 0、孤兒獨自湊滿 100%）確認**儲存與推進皆 disabled**（AC-7 v1.1）；`27a` 斷言候選 3 筆／徽章 1 筆／徽章為純文字非連結、點已複製過者開二次確認且**不直接帶入**、確認後帶入並顯示 AC-11 提醒列、CR 確實**沿用來源值**（來源 `cr:false` → 開關 false）、判定不可得時候選正常列出且 0 徽章 0 攔截（AC-10）。兩檔 console 皆 0 錯誤。
+
+## A.14 交付檢核
+
+- [x] F117 / F118 各一份自包含互動原型
+- [x] 逐 AC 對照（含 spec §12 之裁決偏離，未逾越 AC）
+- [x] 三分類 / 判定四態之完整狀態展示
+- [x] 角色可見性（4 角色）
+- [x] 錯誤與降級狀態
+- [x] 無障礙掛點與焦點管理
+- [x] 供 constraint ring 使用之 DOM 斷言掛點
+- [x] 假設與待決問題全部外顯
+- [ ] **業務主管裁示 OQ-F117-B1 / OQ-F118-B2 / OQ-F118-B3**（阻塞）
+- [ ] **人工確認 A.11.2 之 13 項設計層問題**
+- [ ] 核可後併回 `29a-dept-ratio-config.html` / `27a-list-create-draft.html`

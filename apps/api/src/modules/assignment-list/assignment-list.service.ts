@@ -1344,7 +1344,11 @@ export class AssignmentListService {
     const qb = this.listRepo
       .createQueryBuilder('l')
       .where("l.status = 'active'")
-      .andWhere('l.project_workym = :ym', { ym });
+      .andWhere('l.project_workym = :ym', { ym })
+      // [F118 / AD-E07-48 §5.3 / BR-4 / I-F118-CONFLICT-ORDER-01] 決定性：
+      //   多筆同簽章候選（歷史異常資料）時恆取 list_no 字典序最小者，
+      //   使 checkCopyDuplicates 之 copiedToListNo 與本函式之 conflictListNo 一致。
+      .orderBy('l.list_no', 'ASC');
 
     if (cardType === null || cardType === undefined) {
       qb.andWhere('l.card_type IS NULL');
@@ -1372,6 +1376,104 @@ export class AssignmentListService {
       }
     }
     return null;
+  }
+
+  // -------------------------------------------------------------------------
+  // F118 / AD-E07-48 §5.2 — 從上月複製「已複製過」判定（唯讀，不落表）
+  // -------------------------------------------------------------------------
+
+  /**
+   * 以 (card_type, 簽章) 為 key 建立索引；同 key 多筆時先到先贏
+   * （呼叫端已 ORDER BY list_no ASC → 恆為 list_no 最小者，BR-4）。
+   *
+   * 簽章為空（無可比對條件，如僅含 system-fixed 條件）者不入索引：
+   * 與 findActiveConditionDuplicate「inputSig === '' → 永不衝突」對稱（AC-10）。
+   */
+  private buildConditionSignatureIndex(
+    lists: ObListDefinition[],
+    systemFixedColumnNames: Set<string>,
+  ): Map<string, string> {
+    const index = new Map<string, string>();
+    for (const l of lists) {
+      const payload =
+        l.condition_payload !== null && l.condition_payload !== undefined
+          ? l.condition_payload
+          : this.legacyEntityToConditionPayload(l);
+      const sig = this.normalizeConditionPayload(
+        payload,
+        systemFixedColumnNames,
+      );
+      if (sig === '') continue;
+      const key = `${l.card_type ?? ''}::${sig}`;
+      if (!index.has(key)) index.set(key, l.list_no);
+    }
+    return index;
+  }
+
+  /**
+   * F118（US-181）— 從上月複製「已複製過」判定。
+   *
+   * 對 `prevYm` 之全部候選（BR-9：`status='active'` AND `condition_payload IS NOT NULL`，
+   * 無 `stage='ready'` 過濾）逐筆判定其等價名單是否已存在於 `currentYm`。
+   *
+   * 不變式：
+   *   - BR-1 / I-F118-SINGLE-NORMALIZE-01：正規化 100% 重用 `normalizeConditionPayload`
+   *     （與 `findActiveConditionDuplicate` 同一份實作），故判定與建立時之 422
+   *     `LIST_NO_DUPLICATE` 雙向一致（AC-2）。
+   *   - BR-3 / I-F118-CONST-QUERY-01：查詢次數固定 3 次
+   *     （`loadSystemFixedFields` + 上月候選 + 本月 active 名單），與候選筆數 N 無關（AC-7）。
+   *   - BR-4：本月候選以 `list_no ASC` 讀取 + 先到先贏 → 多筆等價時恆取 list_no 最小者。
+   *   - BR-7：`card_type` 為判定 key 之一部分（NULL 與 NULL 相等）。
+   *   - BR-8：僅比對本月 `status='active'` 之名單。
+   *   - BR-2 / I-F118-READONLY-JUDGE-01：純唯讀，不寫入任何資料表。
+   *
+   * `currentYm` 由呼叫端帶入（AC-5），本方法**不**推導系統當月。
+   */
+  async checkCopyDuplicates(
+    prevYm: string,
+    currentYm: string,
+  ): Promise<
+    Array<{
+      listNo: string;
+      alreadyCopied: boolean;
+      copiedToListNo: string | null;
+    }>
+  > {
+    // 查詢 ①：system-fixed 欄位（best_case 等），供正規化排除（BR-5）
+    const systemFixedColumnNames = new Set(
+      (await this.loadSystemFixedFields()).map((f) => f.columnName),
+    );
+
+    // 查詢 ②：上月候選（BR-9 過濾；ORDER BY list_no ASC 使回傳順序決定性）
+    const candidates = (
+      await this.listRepo.find({
+        where: { project_workym: prevYm, status: 'active' },
+        order: { list_no: 'ASC' },
+      })
+    ).filter((l) => l.condition_payload !== null && l.condition_payload !== undefined);
+
+    // 查詢 ③：本月 active 名單（BR-8）→ 記憶體索引（BR-3：比對階段不再查詢）
+    const currentActive = await this.listRepo.find({
+      where: { project_workym: currentYm, status: 'active' },
+      order: { list_no: 'ASC' },
+    });
+    const index = this.buildConditionSignatureIndex(
+      currentActive,
+      systemFixedColumnNames,
+    );
+
+    return candidates.map((c) => {
+      const sig = this.normalizeConditionPayload(
+        c.condition_payload,
+        systemFixedColumnNames,
+      );
+      const match = sig === '' ? undefined : index.get(`${c.card_type ?? ''}::${sig}`);
+      return {
+        listNo: c.list_no,
+        alreadyCopied: match !== undefined,
+        copiedToListNo: match ?? null,
+      };
+    });
   }
 
   // -------------------------------------------------------------------------

@@ -28,3 +28,8 @@ reference/*.xlsx
 /assignment_result_*.xlsx
 /assignment_result_*.csv
 docker-compose.override.yml
+
+# Uncle-Bob constraint ring 執行期產物（不入版控）
+apps/*/coverage/
+apps/*/reports/
+apps/*/.stryker-tmp/

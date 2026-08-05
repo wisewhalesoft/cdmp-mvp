@@ -335,3 +335,61 @@ describe('DeptRatioConfigPage (29a)', () => {
     });
   });
 });
+
+/**
+ * F117 v1.1 — 頁面層：可編輯部門數 = 0 時「儲存並推進」停用（AC-7）
+ *
+ * 對應：docs/specs/features/F117-dept-ratio-director-required-filter.md AC-7
+ *       docs/test-specs/features/F117-test.md TS-F117-FE-008
+ */
+describe('DeptRatioConfigPage (F117 / AC-7)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetUser.mockReturnValue({
+      id: 'd1',
+      name: 'Director',
+      email: 'd@test',
+      role: 'user',
+      businessRole: 'director',
+      status: 'active',
+    } as any);
+    mockedGetBusinessRole.mockReturnValue('director');
+    mockedGetEffectiveIdentity.mockReturnValue({ role: 'user', businessRole: 'director' } as any);
+    mockedListLists.mockResolvedValue(mockListsResp);
+  });
+
+  afterEach(() => cleanup());
+
+  it('可編輯部門數 = 0（全為孤兒鎖定列）→「儲存並推進」按鈕 disabled 或不渲染', async () => {
+    mockedGetDeptRatios.mockResolvedValue({
+      listNo: 'OB202605003',
+      listNm: '測試名單',
+      projectWorkym: '202605',
+      stage: 'dept_ratio',
+      deptRatios: [
+        {
+          obdeptId: 'D01',
+          obdeptNm: '北一處（孤兒）',
+          ration: 100,
+          isActive: true,
+          directorName: null,
+          hasActiveDirector: false,
+          isRatioEditable: false,
+        } as any,
+      ],
+      total: 100,
+      isReadOnly: false,
+      hiddenNoDirectorCount: 0,
+    } as any);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('dept-ratio-form')).toBeInTheDocument();
+    });
+    const advanceBtn = screen.queryByTestId('btn-advance-personnel-ratio');
+    if (advanceBtn) {
+      expect(advanceBtn).toBeDisabled();
+    } else {
+      expect(advanceBtn).toBeNull();
+    }
+  });
+});

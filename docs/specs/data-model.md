@@ -970,14 +970,18 @@ F050 v2.1 提供「從上月名單複製」起點，行為規則如下：
 
 | 規則 | 說明 |
 |---|---|
-| **僅複製 `condition_payload`** | 整段 JSONB 複製至新名單；新名單需重新填寫 `list_nm` |
+| **複製 `condition_payload`** | 整段 JSONB 複製至新名單 |
+| **`list_nm` 帶入並前捲月份** | 沿用來源名稱，經 `rollForwardListName` 將名稱中之月份 token 前捲至本作業月；可自由修改（v1.20 / OQ-F118-B3 裁決，原稱「需重新填寫」與實作不符） |
+| **`card_type` 帶入** | 沿用來源卡別（v1.20 補述；三處 spec 原均未描述。[F118](features/F118-copy-from-prev-month-duplicate-indicator.md) BR-7 之 `card_type` 等價判定以此為前提） |
 | **不複製比例資料** | 部門比例（`ob_dept_pct`）/ 人員比例（`ob_empl_set`）為各自階段資料表，建立新草稿時恢復為空，需於後續 M03a / M03b 階段重新設定 |
-| **`cr_enabled` 恢復預設 `false`** | 不沿用上月設定；新名單 `cr_enabled` 恢復為欄位預設值 `false`（沿用 migration `1711360000182` 實際 `DEFAULT false`；汽車名單若需啟用 CR，須於 F050/F051 名單設定頁面由 admin 顯式設為 `true`；F102 US-154 確認，OQ-F102-3 裁示）。**注意**：原文「預設 true」為文件錯誤，entity / migration 一律為 `DEFAULT false`，無需新增 migration 修正。 |
-| **來源名單條件（v2.1 補述）** | `project_workym = targetWorkym - 1 month` AND `stage = 'ready'` AND `status = 'active'` AND `condition_payload IS NOT NULL`（避免複製到未完成的草稿、推進中、已停用名單，**或舊遷移名單**）。**舊名單不可作為複製來源**（拍板 Q4 / 拍板 2 一致性：舊名單條件需先由 Phase 3a E2 backfill 一次性轉換）；前端 dropdown 已過濾此情境，後端 defense-in-depth 違反回 422 `LEGACY_LIST_NOT_COPYABLE`（F050 v2.1 §6.1 錯誤回應表） |
+| **`cr_enabled` 沿用來源值** | **v1.20（2026-08-04 / OQ-F118-B3 裁決，以實作為準）**：複製時 `cr_enabled` **沿用來源名單設定**（`src.crEnabled ?? true`），非「恢復預設」。本檔原稱恢復預設 `false`、[F050 AC-5](features/F050-create-list-definition.md) 原稱恢復預設 `true`，兩者互相矛盾且皆與實作不符，本輪一併修正。**未變動之事實**：資料庫欄位預設仍為 `DEFAULT false`（migration `1711360000182`），F102 US-154 / OQ-F102-3 對「欄位預設值」之裁示不受本次修正影響——本列僅描述**複製流程**之帶入行為。<br>**⚠️ 另一項尚未收斂之落差（本輪未處理，非複製流程）**：建立草稿表單對**非複製**之新名單，前端 state 初值為 `crEnabled = true`（`list-create-draft-page.tsx`），與本檔「欄位預設 `false` / 需 admin 顯式開啟」之 F102 裁示不一致。此為獨立議題，已記錄於 [open-questions.md](open-questions.md) OQ-F118-05。 |
+| **來源名單條件（v1.20 修正）** | `project_workym = targetWorkym - 1 month` AND `status = 'active'` AND `condition_payload IS NOT NULL`。**v1.20（2026-08-04 / OQ-F118-B3 裁決）移除 `stage = 'ready'`**——現行 Modal 實際無此過濾，且以實作為準；此亦為 [F118](features/F118-copy-from-prev-month-duplicate-indicator.md) BR-9 之權威定義。**舊名單不可作為複製來源**（拍板 Q4 / 拍板 2 一致性：舊名單條件需先由 Phase 3a E2 backfill 一次性轉換）；前端 dropdown 已過濾此情境，後端 defense-in-depth 違反回 422 `LEGACY_LIST_NOT_COPYABLE`（F050 v2.1 §6.1 錯誤回應表） |
 | **跨年計算** | 「上月」按 calendar month 計算（例：202501 - 1 = 202412） |
 | **稽核追溯** | 來源 `list_no` 寫入 `assignment_audit_log.before_value.copyFromListNo` 欄位 |
 
-> **API 端點**：`GET /api/v1/assignment/list-definitions/copy-source-options?projectWorkym=YYYYMM`（取得可複製來源清單）+ `GET /api/v1/assignment/list-definitions/{listNo}/condition-payload`（取得來源 JSONB）+ `POST /api/v1/assignment/list-definitions`（建立時帶 `copyFromListNo` 欄位）。詳見 [F050 v2.0 §6.1 / §6.2 / §6.3](features/F050-create-list-definition.md#6-api-規格)。
+> **✅ v1.20（2026-08-04 / F118 人工審閱閘 OQ-F118-B3 已裁決）**：上表原與**現行實作**（`list-create-draft-page.tsx::handleCopyApply` + `copy-from-prev-month-modal.tsx`）存在 4 點落差，且本檔與 [F050 §4 AC-5](features/F050-create-list-definition.md) 就 `cr_enabled` 彼此矛盾（本檔稱 `false`、F050 稱 `true`、實作為沿用來源值）。**業務主管裁定以現行實作為準修正三處 spec**，本表已於本輪同步更新（`list_nm` 帶入並前捲、`cr_enabled` 沿用來源、補述 `card_type` 帶入、來源條件移除 `stage='ready'`）。裁決紀錄見 [F118 §12.1 D-7](features/F118-copy-from-prev-month-duplicate-indicator.md)。
+
+> **API 端點（v1.20 更正）**：現行實作以 `GET /api/v1/assignment/lists?ym={prevYm}`（既有清單端點）載入候選並於前端過濾；建立時 `POST` 帶 `copyFromListNo` 欄位（僅寫入 `assignment_audit_log.after_value`，**`ob_list_definition` 無此欄位**）。**⚠️ 殭屍規格**：本檔原描述之 `copy-source-options` 與 `{listNo}/condition-payload` 兩支端點**從未實作**（2026-08-04 `grep -rn "copy-source-options" apps/` 命中 0 筆），保留於此僅為歷史紀錄，**不得**作為實作依據；清理列為獨立技術債（[open-questions.md](open-questions.md) OQ-F118-01）。[F118](features/F118-copy-from-prev-month-duplicate-indicator.md) §5.1.1 之 `GET /api/v1/assignment/lists/copy-duplicate-check` 為新增之判定端點，與上述兩支殭屍端點無關。
 
 ---
 
@@ -1202,6 +1206,16 @@ PK：`(project_workym, list_no, obdeptid, ration)`
 | **單欄位區間** | 任一 `ration` 須落於 `[0, 100]`（整數或最多兩位小數）；`ration = 0` 視為有效值（表示該部門本月不分派）；違反回 422 `RATIO_OUT_OF_RANGE` |
 | **驗證執行時機** | service 層於 PUT 寫入前執行；DB 端是否額外加 CHECK constraint 由 system-architect 決議（[ASSUMPTION]） |
 | **驗證 helper** | 建議封裝為 `RatioValidationService.assertSumEquals100(ratios)` + `assertEachInRange(ratios, 0, 100)`，由 F079 PUT 與 F080 推進前置條件共用，後續 M03b 個別業務比例 spec 沿用 |
+| **驗證對象範圍（v1.19 / F117 / DRAFT）** | 加總驗證之對象為**最終持久化集合**，而非 PUT payload 本身——即「payload 列」∪「[F117 BR-4](features/F117-dept-ratio-director-required-filter.md) 伺服器端保留之孤兒列」。詳 [F117 BR-7](features/F117-dept-ratio-director-required-filter.md) |
+
+**「有無在職處長」為衍生狀態，不落表（v1.19 / 2026-08-04 / F117 / DRAFT）**：
+
+| 項目 | 說明 |
+|------|------|
+| **不新增欄位** | F117「部門是否有在職處長」之判定為**查詢時即時計算**，`ob_dept_pct` 與 `ob_emphire` **均不新增欄位**、不需 migration |
+| **判定來源** | `ob_emphire` 中 `TRIM(jfun_nm) = '處長'` AND 在職（`emphire-active.util`：`resign_date IS NULL OR resign_date >= 系統日`，哨兵 `9999-12-31`）AND `TRIM(dept_code)` 相符；同部門多位取最早 `hire_date`（沿用 F079 BR-14，**禁止另立第二套判定**） |
+| **孤兒列語意** | 「無在職處長」**且** 既有 `ration > 0` 之列稱為孤兒列；其列**必須**於覆寫式 PUT 中被保留（[F117 BR-4](features/F117-dept-ratio-director-required-filter.md)），不得因未出現於 payload 而遭 DELETE。此為資料保全不變式，非 UI 行為 |
+| **與 `isActive` 正交** | 「部門已下線」（該部門無任何在職員工）與「無在職處長」為**兩個獨立維度**，可同時成立；不可互相推導（F117 BR-10） |
 
 **stage 鎖定規則（2026-05-15 / F079 / F080 / F081 / E07 重構批次 4）**：
 

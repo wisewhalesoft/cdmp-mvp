@@ -1,6 +1,6 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { Node, Edge } from '@xyflow/react';
+import type { Node } from '@xyflow/react';
 
 /**
  * Bug: Transform Node NULL 處理 欄位選擇無法被儲存/讀取
