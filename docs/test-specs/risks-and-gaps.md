@@ -1,6 +1,6 @@
 ---
 type: test-design-risks
-last_updated: 2026-08-04
+last_updated: 2026-08-13
 ---
 
 # 風險與缺口
@@ -1536,3 +1536,60 @@ last_updated: 2026-08-04
 - **問題**：`gate:coverage:f118`（apps/web）原 `--coverage.include` 同時涵蓋 `copy-from-prev-month-modal.tsx` 與整個 `src/api/assignment-list.ts`（9 個匯出函式，橫跨 F048/F050/F051/F052/F077/F118 多個 feature），但兩個受測檔（`list-create-draft-page.test.tsx` 對 `@/api/assignment-list` 做 `vi.mock()` 自動 mock、`copy-from-prev-month-modal.test.tsx` 僅 type-only import）皆不會真正執行該模組任何函式本體。**已實測**：`assignment-list.ts` stmts 1.51% / funcs 0%；modal 檔本身單獨已達 100%/93.33%/100%/100%；聚合後 funcs 52.63% < 80% 門檻 → ERROR。若要達標須為 `listLists`/`createList`/`updateList`/`disableList`/`deleteList`/`getFullSnapshot`/`getCurrentWorkYm` 等 7 個與 F118 無關之既有函式另補契約測試——超出 F118 範圍（BR-1：判定邏輯全數在後端，前端 client 僅為 3 行 axios wrapper）。
 - **裁決**：**採納**。(1) 新增 `apps/web/src/api/__tests__/assignment-list-copy-duplicate-check.test.ts`——沿用既有 `sampling-preview-clients.test.ts` 之慣例（僅 mock `../client`，`checkCopyDuplicates` 函式本體真實執行），驗證 GET URL / params 形狀（`{ prevYm, currentYm }`，AC-5）與 response passthrough，補上 F118 新增 API client 函式原本缺少的直接單元測試。(2) `gate:coverage:f118` 移除 `--coverage.include=src/api/assignment-list.ts`（該檔案為多 feature 共用之大檔，非 F118 專屬變更面，比照後端 dispute #2/#3 之「不得把既有大檔整檔強行納入單一 feature 門檻」原則），改為僅對 `copy-from-prev-month-modal.tsx` 設定覆蓋率門檻（其本身已是 F118 新增/修改之真正變更面），並將新增之 client 契約測試加入 gate 執行清單（實際跑但不對其設檔案級覆蓋率門檻）。**已實測**：3 檔 81 tests 全綠，`copy-from-prev-month-modal.tsx` stmts/branch/funcs/lines = 100/93.33/100/100，全數通過門檻。
 - **風險等級**：已解決。
+
+## F116 v1.1 樞紐分析頁籤 UX 精修測試風險與待決問題（AD-E07-49，2026-08-13 新增）
+
+> 完整測試設計見 [features/F116-test.md](features/F116-test.md)（US-182，**37 個新場景**：後端
+> Unit/Integration 21 + 前端 Component 16）。F116 v1.1 spec / AD-E07-49 之業務裁決已於 2026-08-13
+> 人工審閱閘核可。以下記錄本輪測試基礎設施層級之刻意範圍簡化與設計裁量，均不阻擋 TDD 進入實作。
+
+### R-F116-01（範圍簡化，使用者明確指示，非缺口）：本輪僅產出 vitest 束縛環
+
+- **決策**：team-lead 於 2026-08-13 明確指示「test-generator 本次只做 vitest / jest 測試撰寫」，
+  故本輪**不**建立 Playwright E2E fidelity 測試、**不**設定 Stryker mutation 門檻、**不**設定
+  dependency-cruiser / ESLint 複雜度 / coverage gate script、**不**呼叫 `ring-setup` skill。標準
+  test-generator 角色定義（束縛環四要素）本應涵蓋此四項，本項記錄係為避免此簡化被日後讀者誤判為
+  「test-generator 疏漏」。
+- **風險等級**：低（使用者決策，非技術缺口）。**若日後需要完整束縛環**：可比照 F117/F118 之
+  `ring-setup` 既有落地（`e2e/`、`apps/api/stryker.*.conf.json`、`.dependency-cruiser.cjs`、
+  `eslint.ring.config.cjs`）直接擴充涵蓋範圍，無需重新 bootstrap 工具鏈。
+
+### R-F116-02（低，已驗證解法，記錄供未來同型場景參考）：SQLite 無法直接重現 `ob_emphire` 重複 `emp_id` 之 join fan-out 情境
+
+- **問題**：I-F116-EMPHIRE-DEDUP-01（TS-F116-018）要求測試「`ob_emphire` 同 `emp_id` 兩列時，
+  `getPivot` 之 `COUNT(*)` 不得被重複計入」，但 `synchronize:true` 建出的 SQLite 表對 `emp_id` 有
+  真實 PK/UNIQUE 索引，`repo.save()`/`repo.insert()` 皆會在重複插入時拋錯或（`insert()` 之
+  multi-row VALUES 會展開整個 entity 欄位集合）因表結構精簡而報 `no such column`。
+- **解法（已驗證，見 F116-test.md §1.2 TS-F116-018 技術筆記）**：獨立一份 `:memory:` DB → `DataSource
+  .query('DROP TABLE ob_emphire')` + 無 PK 之 `CREATE TABLE`（僅含查詢實際用到的 5 欄）→ 以 **raw
+  SQL `INSERT`**（非任何 TypeORM repo 方法，完全繞過 entity metadata）寫入重複列。已實測此手法對
+  現行（v1.0）未去重查詢正確重現缺陷（`grandTotal` 回傳 6 而非真實 3），證明手法本身有效、非測試
+  誤判。
+- **風險等級**：低，已解決；記錄手法供其他 feature 之類似「模擬違反 PK 約束之髒資料」測試需求參考。
+
+### R-F116-03（低，設計裁量，非缺口）：前端測試 test-id 由 test-generator 定義
+
+- **問題**：prototype `35-snapshot-detail.html` 之 `#panel-pivot` 使用 `data-pv-*` 系列屬性（如
+  `data-pv-cell="total"`、`data-pv-row="dept"`），但既有 v1.0 React 元件已建立**另一套**
+  `data-testid` 命名慣例（`pivot-table`/`pivot-dept-{name}`/`pivot-mode-pct` 等），二者非同一套。
+- **決策**：延續既有 React 元件之 `data-testid` 慣例（而非改採 prototype 原生 `data-pv-*` 詞彙），
+  新增 `pivot-emp-{emplid}`/`pivot-total-row`/`pivot-cell-total`/`pivot-cell-list-{listNo}`/
+  `pivot-header-*`/`pivot-dim-*`/`pivot-workday-*`/`pivot-newcomer-badge`（完整清單見
+  F116-test.md「本文件新定義之 test-id」節），理由：避免同一元件混用兩套選擇器慣例造成後續維護
+  混淆；`data-testid` 為既有 v1.0 測試已建立之唯一選擇器管道。
+- **風險等級**：低，資訊性記錄（比照 F118 R-F118 系列「新定義 test-id」之既有慣例）。
+
+### R-F116-04（低，測試邊界說明，非缺口）：I-F116-CALENDAR-SHARE-01 未獨立測試 `computeWorkingDayRatios` 複用本身
+
+- **問題**：AD-E07-49 §7 之 I-F116-CALENDAR-SHARE-01 要求 `workingDays` 必須透過既有
+  `computeWorkingDayRatios`（`CalendarSource='weekday'`）取得，禁止另立第二套週末/假日判斷邏輯。
+  本輪未直接斷言「`getPivot` 呼叫了 `computeWorkingDayRatios`」（該函式已由 `stage0-estimate.service
+  .spec.ts` 獨立驗證其行為，重新驗證屬重複測試），而是以 TS-F116-020 之月界邊界資料（混合工作日/
+  例假日/跨月日）間接驗證 `workingDays` 數值正確性——若實作另立第二套判準（例如純週一至週五、未排
+  除國定假日），該案例會因 07-02 被誤判為工作日（若改用「純週一至週五」判準，07-02 為週四仍算工作
+  日，數值不會偏離）而不易被此間接測試偵測到所有可能的錯誤變體。
+- **決策**：暫不視為阻擋項——I-F116-CALENDAR-SHARE-01 之核心風險（誤用 `Date` 物件導致 UTC+8 邊界
+  漏算，T-3）已由 TS-F116-020 之月界資料直接覆蓋；「換一套判準邏輯」風險相對低，因 AD 已明文要求
+  複用既有 exported 函式（架構層級裁定，非行為層級可測項）。若日後需要更嚴格驗證，可補一則 spy
+  `computeWorkingDayRatios` 呼叫次數/參數之測試。
+- **風險等級**：低，記錄供未來加強參考。
