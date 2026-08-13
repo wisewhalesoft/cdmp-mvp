@@ -1,10 +1,14 @@
 ---
 type: architecture-spec
-version: "2.29"
+version: "2.30"
 status: draft
-last_updated: 2026-08-04
-covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105, F108, F109, F110, F117, F118]
+last_updated: 2026-08-13
+covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105, F108, F109, F110, F116, F117, F118]
 ---
+
+> **v2.30 / 2026-08-13 變更摘要（AD-E07-49：F116 v1.1 樞紐分析頁籤 — 職稱／新人標註／總計欄置前／工作天模式）**：
+>
+> 新增 **§5.19「F116 v1.1 樞紐分析頁籤架構決策（AD-E07-49）」** 與決策記錄 [`implementation-log/AD-E07-49-f116-v1.1-pivot-newcomer-workday.md`](implementation-log/AD-E07-49-f116-v1.1-pivot-newcomer-workday.md)。裁定 F116 v1.1 spec §12 之 A-1~A-5：**確認**（不推翻）A-1（工作天 `ceil(cnt/workingDays)` 換算為前端展示轉換，與既有佔比換算 BR-3 同構，不下推後端以免每層資料結構翻倍）、A-3（不回傳 `hireDate`，最小曝光面）、A-5（維度切換為純前端 UI state，不持久化）；**具體化** A-2（`workingDays` 複用 `assignment-list/stage0-estimate.service.ts` 匯出之純函式 `computeWorkingDayRatios`，比照 `assignment-run-pipeline.service.ts:53` 既有跨模組「只共用 pure function、不共用 injectable class」慣例，`I-RUN-EST-01` 延伸為第四消費者，不需在 `assignment.module.ts` 新增 `imports: [AssignmentListModule]`）；**推翻** A-4 之 spec 假設——查證 v1.0 現行 `getPivot` 之 TS 端 `Map` 聚合僅保證「輸出節點不重複」，不保證「`ob_emphire` 潛在重複 `emp_id` 列造成 join fan-out 時計數不被重複計入」，改為 SQL 層以 `ROW_NUMBER() OVER (PARTITION BY emp_id) = 1` 去重 derived table 取代直接 `LEFT JOIN ob_emphire`，使外層 `COUNT(*)` 天然正確。新增 5 個不變式（`I-F116-CALENDAR-SHARE-01` / `I-F116-EMPHIRE-DEDUP-01` / `I-F116-CEIL-PER-CELL-01` / `I-F116-NO-ACTIVE-FILTER-01` / `I-F116-CLIENT-STATE-01`）。無 schema / migration 變更。covers 補入 F116（v1.0 上線時未曾補列）。**A-4 為 HOW 層級修正，不影響 F116 spec 契約，不需回頭修訂 spec。**
 
 > **v2.29 / 2026-08-04 變更摘要（AD-E07-48：F117 部門比例「有處長」過濾 + F118 從上月複製「已複製過」提示 — 🔴 DRAFT，待人工審閱）**：
 >
@@ -122,12 +126,12 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 
 | Agent 角色 | 建議閱讀章節 |
 |-----------|------------|
-| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月名單分派執行流程、**5.13 月名單分派執行模型重構**、**§5.14 Stage 3/4 真實比例分派**、**§5.15 Stage 0 試算頁業務化重設計**、**§5.18 F117/F118 UX 精煉（DRAFT，待人工審閱後方可用於出題）**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、**AD-E07-29（確定性排序鍵表 / st4_exchange 廢除 / 警告通道 / AC-12~18 測試策略）**、**AD-E07-36（端點拓樸 / Guard 接線 / DTO shape / I-DEPT-SCOPE-01 / I-DEPT-ORDER-01 / OQ 裁定）**、**AD-E07-48（F117/F118，DRAFT）**、10. 技術棧決策 |
-| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**AD-E07-16（F072 應用層 Transaction）**、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、**E07-G M02 擴充 Migration 設計（D-CT-01/02/03 + D11 驗證 SQL）**、10. 技術棧決策 |
+| Test Designer | 2. 系統上下文、3. 邏輯架構（含 3.9 C360 模組、3.10 E07 Assignment Module）、5. 整合與通訊（5.6 Pipeline 執行流程、5.11 C360 查詢流程、5.12 E07 月名單分派執行流程、**5.13 月名單分派執行模型重構**、**§5.14 Stage 3/4 真實比例分派**、**§5.15 Stage 0 試算頁業務化重設計**、**§5.18 F117/F118 UX 精煉（DRAFT，待人工審閱後方可用於出題）**、**§5.19 F116 v1.1 樞紐分析頁籤（職稱/新人/總計欄置前/工作天模式）**）、**AD-E07-28（§6 estimate≡run 共用 / JS↔SQL 等價測試 / I-RUN-EST-01 / I-PORT-01 / I-IDEM-01 不變式）**、**AD-E07-29（確定性排序鍵表 / st4_exchange 廢除 / 警告通道 / AC-12~18 測試策略）**、**AD-E07-36（端點拓樸 / Guard 接線 / DTO shape / I-DEPT-SCOPE-01 / I-DEPT-ORDER-01 / OQ 裁定）**、**AD-E07-48（F117/F118，DRAFT）**、**AD-E07-49（F116 v1.1：workingDays 共用 helper / ob_emphire 去重 join / isNewcomerAtWorkym 純函式 / I-RUN-EST-01 第四消費者）**、10. 技術棧決策 |
+| TDD Developer | 3. 邏輯架構（ETL Pipeline 模組 AD-E05-1~5、C360 模組 AD-E06-1~5、E07 Assignment Module AD-E07-1~7、**AD-E07-16（F072 應用層 Transaction）**、**前端路由與 Sidebar AD-E02-4**）、4. 資料架構（EtlPipeline/Version/Log 實體、customer_core 說明、ob_* 表、assignment_* 表）、5. 整合與通訊、6. NFR 對應、**E07-G M02 擴充 Migration 設計（D-CT-01/02/03 + D11 驗證 SQL）**、**AD-E07-49（F116 v1.1 樞紐分析：`getPivot` 去重 derived table SQL 重構 + `workingDays`/`isNewcomerAtWorkym` 純函式設計）**、10. 技術棧決策 |
 | UI/UX Designer | 2. 系統上下文、3. 邏輯架構（前端模組，含 C360 頁面、E07 面板、**AD-E02-4 Sidebar 元件架構**、**AD-E02-4-F Assignment Sidebar IA v2.3 重整決策**）、10. 技術棧決策（React Flow） |
 | DevOps / CI/CD | 7. 部署與執行時期視圖、**5.13.7（cdmp-worker 容器 / pg-boss schema / docker-compose 變更 / dev synchronize vs prod migration）**、**AD-E07-28 §7~8（pg-boss schema migration 固定、worker entrypoint、不引入 Redis）**、10. 技術棧決策 |
 | Product Analyst | 8. 風險（風險 6-9 為 E05 新增、風險 12 為 E06 新增、**風險 13~16 為 E07 M02 擴充新增**）、9. 待決事項（9.4 E05 已決議、9.5 E05 假設、9.6 E07 已決議） |
-| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月名單分派執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月名單分派架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）**；**§5.13 + AD-E07-28（月名單分派執行模型重構：pg-boss worker 抽離 + Stage 1~4 SQL 下推；P1/P2/P3 階段邊界；estimate≡run 共用 buildStage1Sql / I-RUN-EST-01；JS↔SQL 等價測試取代 RGv2-005；year-above portability 選項 C / I-PORT-01；冪等 I-IDEM-01；cancellation poller + orphan reaper；OQ-AD28-01~06）**；**§5.14 + AD-E07-29（F101 Stage 3/4 真實比例分派：三維分組 FLOOR + 確定性差額補足；st4_exchange 廢除 I-NO-ST4-EXCHANGE；ASSIGNDAY calculateDailyEstimate 共享；確定性排序鍵 obdeptid/emplid/orgno+appl_no；警告通道 skipped_cases.warnings；OQ-F101-01~05 全裁定；I-DET-01 / I-PIPELINE-STAGE-ORDER）**；**AD-E07-48（F117/F118 UX 精煉，🔴 DRAFT，待人工審閱：`computeActiveDirectorMap` 共用 helper / PUT 孤兒保留演算法 / `checkCopyDuplicates` 常數查詢設計 / `findActiveConditionDuplicate` ORDER BY 修正 / 9 個不變式）** |
+| E07 TDD Developer | 3.10 E07 Assignment Module（AD-E07-1~7）、4. 資料架構（ob_* 表定義、assignment_run/snapshot/audit_log）、5.12 E07 月名單分派執行流程、**附錄 E07-A~F**（資料來源分層、Migration 設計、ETL 設計、月名單分派架構、PostgreSQL function 設計、開發前檢核）；**AD-E07-13（ob_pool_data 結構修正：PK 重設、list_no 移除）**；**AD-E07-10-L（fn_calc_tier_level customer_core / ob_arreturndf_min_cap LEFT JOIN 約定與 column_name 對應規則表）**；**AD-E07-15（HM 計分卡獨立化：不借用 M 設定；ob_levelcard_version 缺 HM 計分；E07-F P5 HM 驗收前置條件）**；**data-model.md `#ob-tier-entity` CARD_TYPE 覆蓋率表（M3/HC/C3 ob_tier seed 規範）**；**AD-E07-21（OBPOOLDATA_LIST ETL 設計）**；**AD-E07-22（Stage 1 補完整：MONTH_CNT / 去重 / 特殊 DELETE）**；**AD-E07-23（Stage 1 完整鏈 Dry-run 架構）**；**AD-E07-24（分階段交付計劃與 DP 決策點彙總）**；**AD-E07-25（ob_pool_data_list 單源化：全 DP Resolved）**；**AD-E07-26（特例規則 SP 落差修正：全 DP Resolved）**；**AD-E07-27（F097 作業月語意統一：target_work_ym 分離 / SystemService 收斂 / AssignmentWorkYmContext / 過去月 guard / 去重視窗對齊）**；**AD-E07-18 §18.12（US-144 best_case 系統固定篩選條件 Design A：is_system_fixed schema + injectSystemFixedConditions call-stack + deactivation guard + M-B1 / M-B2 migration）**；**§5.13 + AD-E07-28（月名單分派執行模型重構：pg-boss worker 抽離 + Stage 1~4 SQL 下推；P1/P2/P3 階段邊界；estimate≡run 共用 buildStage1Sql / I-RUN-EST-01；JS↔SQL 等價測試取代 RGv2-005；year-above portability 選項 C / I-PORT-01；冪等 I-IDEM-01；cancellation poller + orphan reaper；OQ-AD28-01~06）**；**§5.14 + AD-E07-29（F101 Stage 3/4 真實比例分派：三維分組 FLOOR + 確定性差額補足；st4_exchange 廢除 I-NO-ST4-EXCHANGE；ASSIGNDAY calculateDailyEstimate 共享；確定性排序鍵 obdeptid/emplid/orgno+appl_no；警告通道 skipped_cases.warnings；OQ-F101-01~05 全裁定；I-DET-01 / I-PIPELINE-STAGE-ORDER）**；**AD-E07-48（F117/F118 UX 精煉，🔴 DRAFT，待人工審閱：`computeActiveDirectorMap` 共用 helper / PUT 孤兒保留演算法 / `checkCopyDuplicates` 常數查詢設計 / `findActiveConditionDuplicate` ORDER BY 修正 / 9 個不變式）**；**AD-E07-49（F116 v1.1 樞紐分析職稱/新人/總計欄置前/工作天模式：`getPivot` 改 LEFT JOIN 去重 derived table `ROW_NUMBER() PARTITION BY emp_id` 防 join fan-out 重複計數 / `workingDays` 複用 `computeWorkingDayRatios`，I-RUN-EST-01 第四消費者 / `isNewcomerAtWorkym` TS 端純函式 / 5 個不變式）** |
 
 ## 目錄
 
@@ -2735,6 +2739,64 @@ F117／F118 皆無 PG-only 依賴（不涉及 `customer_core` / `TABLESAMPLE`）
 #### 5.18.7 風險與待人工確認事項（摘要）
 
 完整清單見 AD §10。摘要：(1) F117 BR-5「孤兒列鎖定」與 OQ-F117-B1 可能裁示之「強制歸零」操作有潛在牴觸，建議業務裁示時一併評估是否需要 API 層新增專屬操作（R-1）；(2) §5.3 對既有 `findActiveConditionDuplicate` 加入 `ORDER BY` 屬於對已上線程式碼的修改，建議 TDD 階段補回歸測試（R-2）；(3) F118 端點設計使 Modal 開啟維持兩次請求，已於 AD 中權衡並判斷「與 OQ-F118-B3 解耦」之價值更高（R-3）；(4) `copy-source-options` 殭屍端點本輪未清除，待 OQ-F118-B3 裁示時一併處理（R-4）。
+
+---
+
+### 5.19 F116 v1.1 樞紐分析頁籤架構決策（AD-E07-49）
+
+> 完整設計（`getPivot` SQL 重構、`workingDays` 共用 helper、`isNewcomerAtWorkym` 純函式、response 契約增量、5 個不變式、風險與殘留議題）：見
+> [`implementation-log/AD-E07-49-f116-v1.1-pivot-newcomer-workday.md`](implementation-log/AD-E07-49-f116-v1.1-pivot-newcomer-workday.md)。
+> 本節為架構主文概要，供 Test Designer / TDD Developer 快速定位。
+
+#### 5.19.1 背景
+
+F116 v1.0（2026-07-14 上線）之樞紐分析頁籤（`AssignmentRunReportService.getPivot`）以「部門名稱 × 員編 × 名單代號」聚合分派結果計數。US-182（2026-08-13 人工閘門裁定）疊加三項 UX 精修：員編列補職稱＋新人標註、總計欄移至最左（純前端渲染順序）、新增「整月／工作天」第二維度。F116 v1.1 spec §12 留 5 項 HOW 層級事項（A-1~A-5）予 architect 裁定，其中 A-4 推翻 spec 對現行程式碼行為的假設，其餘四項為確認／具體化，皆不需回頭修訂 spec 契約。
+
+#### 5.19.2 資料流
+
+```mermaid
+graph TD
+    A["GET runs/:runId/pivot"] --> B["run = runRepo.findOne(runId)\n404 若不存在（既有，不變）"]
+    B --> C["qb：r LEFT JOIN (去重 ob_emphire derived table, rn=1)\nGROUP BY dept_name/emplid/emp_nm/jfun_nm/hire_date/list_no\nscope 條件（既有，不變）"]
+    C --> D["TS Map 聚合（既有結構）\n+ jfunNm 直接投影\n+ isNewcomerAtWorkym(hireDate, project_workym)"]
+    B --> E["loadWorkingDays(run.project_workym)\n複用 computeWorkingDayRatios（I-RUN-EST-01 第四消費者）"]
+    D --> F["PivotResponse\n+ projectWorkym + workingDays\n+ 逐 emplid jfunNm/isNewcomer"]
+    E --> F
+    F --> G["前端：整月/工作天 toggle（純前端 ceil(cnt/workingDays)）\n計數/佔比 toggle（既有，前端）\n總計欄置左（純渲染順序）"]
+
+    classDef unchanged fill:#e8e8e8,stroke:#888
+    classDef new fill:#d4f4dd,stroke:#2a9d5c
+    class A,B unchanged
+    class C,D,E,F,G new
+```
+
+#### 5.19.3 核心決策摘要（A-1 ~ A-5）
+
+| # | 議題 | 裁定 | 是否推翻 spec |
+|---|---|---|---|
+| A-1 | `ceil(cnt/workingDays)` 運算歸屬 | **確認前端換算**：與既有「佔比」換算（BR-3）同構，後端只需多回 2 個純量（`projectWorkym`/`workingDays`）；下推後端需在 `depts[]`/`emplids[]`/`grandByList` 每層新增一份平行數值，對 O(1) 純數學轉換是不必要的 payload 膨脹 | 否 |
+| A-2 | `workingDays` 查詢複用策略 | **複用 `computeWorkingDayRatios`**（`assignment-list/stage0-estimate.service.ts` 匯出純函式），比照 `assignment-run-pipeline.service.ts:53` 既有跨模組 import 慣例與 `loadWorkingDayRatios(ym)`（同檔案 988-1001 行）查詢範本；不注入 `Stage0EstimateService`、不新增 `assignment.module.ts` 之 `imports: [AssignmentListModule]`。`I-RUN-EST-01` 延伸為第四消費者 | 否（具體化） |
+| A-3 | 是否回傳 `hireDate` | **確認不回傳**；`isNewcomer` 布林已足夠，最小曝光面 | 否 |
+| A-4 | `ob_emphire` 同 `emp_id` 重複列防禦 | **推翻 spec 假設**：v1.0 現行 TS `Map` 聚合僅保證「輸出節點不重複」，不保證「join fan-out 時計數不被重複計入」；改 SQL 層以 `ROW_NUMBER() OVER (PARTITION BY emp_id) = 1` 去重 derived table 取代直接 `LEFT JOIN ob_emphire`，使 `COUNT(*)` 天然正確 | **是（HOW 層級，不影響 spec 契約）** |
+| A-5 | 前端維度狀態持久化 | **確認不需要**；純 UI state，v1.1 未提出持久化需求 | 否 |
+
+#### 5.19.4 不變式
+
+| 不變式 | 說明 |
+|---|---|
+| **I-F116-CALENDAR-SHARE-01** | `workingDays` 必須透過 `computeWorkingDayRatios` 取得，禁止另立第二套週末/假日判準；`I-RUN-EST-01` 第四消費者 |
+| **I-F116-EMPHIRE-DEDUP-01** | pivot 查詢對 `ob_emphire` 之 join 必須經 `emp_id` 去重 derived table，禁止直接 `LEFT JOIN ob_emphire` 原表，避免 join fan-out 使計數被重複計入 |
+| **I-F116-CEIL-PER-CELL-01** | 工作天換算須逐格獨立計算（前端），不得先加總再 ceil、亦不得先 ceil 再加總（BR-14） |
+| **I-F116-NO-ACTIVE-FILTER-01** | pivot 查詢與 `workingDays` 計算皆不得引入 `emphire-active.util` 或 `resign_date` 條件（BR-9／T-6） |
+| **I-F116-CLIENT-STATE-01** | 整月/工作天與計數/佔比之 UI 狀態純前端記憶體 state，不落地、不進 URL query、不進 session |
+
+#### 5.19.5 非功能與測試邊界（摘要）
+
+查詢次數由 1（+scope 1）增為 2（+scope 1），新增之 `ob_calendar` 查詢為單月固定筆數（≤31 列），非隨結果集規模增長；回應體積增量僅於 `emplids[]` 層級（人力規模數十至數百節點），遠低於 F055 OOM／getSummary 45s 案例量級；`ROW_NUMBER() OVER (PARTITION BY ...)` 為 ANSI SQL，SQLite/MSSQL/PG 皆支援，無 dialect-only 測試分支需求。完整分析見 AD §8。
+
+#### 5.19.6 風險（摘要）
+
+完整清單見 AD §9。摘要：(1) `workingDays` 查詢邏輯與既有 `AssignmentRunPipelineService.loadWorkingDayRatios` 物理上為兩份同構程式碼，列為技術債，本輪不強制重構（R-1）；(2) `ROW_NUMBER() OVER (PARTITION BY ...)` 為新引入至 `getPivot` 之視窗函式語法，ANSI 標準、測試邊界不受影響（R-2）；(3) A-4 之 derived table 修正屬對 v1.0 已上線查詢的修改，`emp_id` 為 PK 理論上為 no-op、行為對現有正確資料零改變，建議 TDD 階段對 v1.0 既有回歸測試保持綠燈作為驗收條件之一（R-3）。
 
 ---
 

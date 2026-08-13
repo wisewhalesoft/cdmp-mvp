@@ -1,12 +1,20 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.36"
-date: 2026-08-04
+version: "3.38"
+date: 2026-08-13
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **v3.38 / 2026-08-13 / F116 v1.0 → v1.1（US-182，樞紐分析頁籤 UX 精修）**：依已核可 US-182（OQ-1~OQ-8 於 2026-08-13 人工閘門全數裁定）**升版既有 [F116-snapshot-pivot-analysis.md](features/F116-snapshot-pivot-analysis.md) 為 v1.1**（不開新 F 編號、不改檔名、不改端點路徑、**不需 migration、不新增錯誤碼**）。三項增修：①員編列「員編－姓名－**職稱**」＋**新人**標註（職稱來源唯一 `ob_emphire.jfun_nm`，**禁用** `title_name`；新人判定基準日＝run `project_workym` **月初**、判定式 `hire_date > 基準日 − 3 個月` **嚴格未滿**、`hire_date` NULL 不標註、**不做在職過濾**——離職者仍完整顯示）②「總計」**欄**最右→**最左**（總計**列**維持最下不動）③新增「**整月／工作天**」第二維度（`workingDays` = `ob_calendar.rest_flg='0'` 落於 `project_workym` 當月之列數；每格 `ceil(整月計數 ÷ workingDays)`，**每格獨立套用**故總計不必然等於各格之和；合法組合僅 `整月-計數`／`整月-佔比`／`工作天-計數`；`workingDays = 0` → 全表 `-`，禁 `NaN`/`Infinity`）。
+> - **AC 編號政策**：v1.0 AC-1~AC-5 編號保留（AC-1 / AC-2 條文標【v1.1 修訂】），新增 AC-6~AC-11；spec §4.1 附 US-182 AC-1~AC-6 ↔ F116 AC 對應表。BR 由 4 條擴為 17 條（新增 BR-5~BR-16，BR-17 為 v1.0 排序規則明列）。
+> - **API 契約（`GET /api/v1/assignment/runs/:runId/pivot`）僅新增欄位、無破壞性變更**：top-level `projectWorkym` / `workingDays`；`depts[].emplids[]` 新增 `jfunNm`（`string | null`）/ `isNewcomer`（`boolean`）。
+> - **支援文件更新**：`data-model.md` v1.18→**v1.20**（`ob_emphire` 補「F116 v1.1 使用模式」段：`jfun_nm` vs `title_name` 取錯欄位警示、`hire_date` 新人判定、**禁止**在職過濾、重複列防禦；`ob_calendar` 補 F116 月工作日數規則與 `workingDays = 0` 降級語意；兩表相關功能補列 F116）。**無 schema 變更**。
+> - **刻意未動（邊界）**：`architecture-spec.md` pivot 契約段落（system-architect）；`prototypes/35-snapshot-detail.html`（ui-ux-designer；分隔符號／職稱缺值呈現／新人 badge 樣式／`workingDays=0` 提示措辭皆為**純視覺**，US-182 OQ-3 裁定 authority = prototype）；code / test（tdd-implementation / test-generator）。
+> - **⚠ 交 system-architect 之 5 項（F116 §12）**：A-1 工作天換算運算歸屬（spec 預設**前端換算**，延續 BR-3）／A-2 `workingDays` 是否複用 `stage0-estimate.service.ts` 之 `resolveCalendarDay`（跨模組依賴 `assignment` → `assignment-list`，語意須與 F049 不分叉）／A-3 是否加回 `hireDate`（預設不回）／A-4 `ob_emphire` 重複 `emp_id` 裂列防禦（`jfun_nm`/`hire_date` 進 SELECT 即須進 GROUP BY）／A-5 維度狀態是否持久化（預設否）。
+> - **登錄落差未變**：F116 仍未列入下方「快速統計」與 feature 對照表（既有落差，見 v3.36 banner 第 ③ 點與 §快速統計 ⚠ 註）。
 
 > **✅ v3.37 / 2026-08-04 / F117 + F118 兩個 E07 UX 精煉 feature（US-180 / US-181）— 已通過人工審閱閘，可進入 TDD**
 >

@@ -31,13 +31,22 @@
     .pv-table tbody td { border-bottom: 1px solid #EEF2F6; }
     .pv-head { position: sticky; top: 0; z-index: 3; background: #F1F5F9; border-bottom: 1px solid #E5E7EB; }
     .pv-first { position: sticky; left: 0; z-index: 2; border-right: 1px solid #E5E7EB; min-width: 200px; }
-    .pv-last  { position: sticky; right: 0; z-index: 2; border-left: 1px solid #E5E7EB; }
-    .pv-head.pv-first, .pv-head.pv-last { z-index: 4; }
+    /* v1.1（F116 BR-11）：「總計」欄由最右移至最左，緊接列標籤欄之後，並與列標籤欄一併凍結。
+       左側偏移 = 列標籤欄實際寬度，由 pvSyncStickyOffset() 於每次 render 後量測寫入 --pv-first-w。 */
+    .pv-total-col { position: sticky; left: var(--pv-first-w, 200px); z-index: 2; border-right: 2px solid #CBD5E1; }
+    .pv-head.pv-first, .pv-head.pv-total-col { z-index: 4; }
     .pv-dept-row td { background: #F3F4F6; }
     .pv-dept-row:hover td { background: #E7EAEE; }
     .pv-emp-row td, .pv-other-row td { background: #FFFFFF; }
     .pv-emp-row:hover td, .pv-other-row:hover td { background: #F8FAFC; }
     .pv-total-row td { background: #EFF6FF; border-top: 2px solid #DBEAFE; }
+    /* 凍結的總計欄底色：必須不透明（sticky），且比同列其他格略深以標示彙總欄 */
+    .pv-head.pv-total-col { background: #E2E8F0; }
+    .pv-dept-row td.pv-total-col { background: #E7EAEE; }
+    .pv-dept-row:hover td.pv-total-col { background: #DDE1E6; }
+    .pv-emp-row td.pv-total-col, .pv-other-row td.pv-total-col { background: #F8FAFC; }
+    .pv-emp-row:hover td.pv-total-col, .pv-other-row:hover td.pv-total-col { background: #F1F5F9; }
+    .pv-total-row td.pv-total-col { background: #DBEAFE; }
     .pv-table thead .pv-head + .pv-head { min-width: 92px; }
   </style>
 </head>
@@ -521,28 +530,48 @@
                   <span class="text-sm font-semibold text-gray-700">樞紐分析</span>
                   <span class="text-xs text-gray-400">值：<span id="pivotValueLabel">計數 - 案號</span></span>
                 </div>
-                <p class="text-xs text-gray-500 mt-1">各部門／承辦人員（列）× 名單代號（欄）的分派案件數交叉表，可展開部門檢視所屬員編。</p>
+                <p class="text-xs text-gray-500 mt-1">各部門／承辦人員（列）× 名單代號（欄）的分派案件數交叉表，可展開部門檢視所屬員編；「總計」欄固定於最左側。</p>
                 <p class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
                   <i data-lucide="info" class="w-3 h-3 shrink-0"></i>
                   對應「結果摘要」匯出 Excel 的樞紐分析頁（工作表2）· 示範資料採 legacy 202607 分派名單
                 </p>
               </div>
-              <div class="flex items-center gap-2 shrink-0">
+              <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                 <button onclick="pivotExpandAll(true)" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50 transition">
                   <i data-lucide="chevrons-down" class="w-3.5 h-3.5"></i>全部展開
                 </button>
                 <button onclick="pivotExpandAll(false)" class="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-700 border border-border rounded-md hover:bg-gray-50 transition">
                   <i data-lucide="chevrons-up" class="w-3.5 h-3.5"></i>全部收合
                 </button>
-                <div class="inline-flex rounded-md border border-border overflow-hidden" role="group" aria-label="計數或佔比切換">
-                  <button id="pv-mode-count" onclick="setPivotMode('count')" class="px-3 py-1.5 text-xs font-medium bg-primary text-white transition">計數</button>
-                  <button id="pv-mode-pct" onclick="setPivotMode('pct')" class="px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 transition border-l border-border">佔比</button>
+                <!-- v1.1：期間維度（整月／工作天） -->
+                <div class="inline-flex items-center gap-1.5">
+                  <span class="text-[10px] font-medium text-gray-400">期間</span>
+                  <div class="inline-flex rounded-md border border-border overflow-hidden" role="group" aria-label="整月或工作天切換">
+                    <button id="pv-dim-full" type="button" data-pv-dim-full onclick="setPivotDim('full')" class="px-3 py-1.5 text-xs font-medium transition bg-primary text-white">整月</button>
+                    <button id="pv-dim-workday" type="button" data-pv-dim-workday onclick="setPivotDim('workday')" class="px-3 py-1.5 text-xs font-medium transition border-l border-border text-gray-600 hover:bg-gray-50">工作天</button>
+                  </div>
+                </div>
+                <div class="inline-flex items-center gap-1.5">
+                  <span class="text-[10px] font-medium text-gray-400">值</span>
+                  <div class="inline-flex rounded-md border border-border overflow-hidden" role="group" aria-label="計數或佔比切換">
+                    <button id="pv-mode-count" type="button" data-pv-mode-count onclick="setPivotMode('count')" class="px-3 py-1.5 text-xs font-medium transition bg-primary text-white">計數</button>
+                    <button id="pv-mode-pct" type="button" data-pv-mode-pct onclick="setPivotMode('pct')" class="px-3 py-1.5 text-xs font-medium transition border-l border-border text-gray-600 hover:bg-gray-50">佔比</button>
+                  </div>
                 </div>
               </div>
+              <!-- v1.1：工作天模式說明／缺工作日資料提示（僅於「工作天」模式顯示） -->
+              <div id="pivotWorkdayInfo" data-pv-workday-info class="hidden basis-full w-full items-start gap-1.5 px-3 py-2 rounded-md bg-blue-50 border border-blue-100 text-[11px] text-gray-600">
+                <i data-lucide="info" class="w-3.5 h-3.5 text-primary mt-px shrink-0"></i>
+                <span id="pivotWorkdayInfoText"></span>
+              </div>
+              <div id="pivotWorkdayWarn" data-pv-workday-warning class="hidden basis-full w-full items-start gap-1.5 px-3 py-2 rounded-md bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 mt-px shrink-0"></i>
+                <span>本月無工作日資料，無法換算每工作天數量。請改用「整月」檢視。</span>
+              </div>
             </div>
-            <!-- pivot 表格（列標籤與表頭固定，欄可橫向捲動） -->
+            <!-- pivot 表格（列標籤欄＋總計欄固定於左側，名單代號欄可橫向捲動） -->
             <div class="pv-wrap">
-              <table class="pv-table w-full text-sm">
+              <table id="pivotTable" class="pv-table w-full text-sm">
                 <thead id="pivotThead"></thead>
                 <tbody id="pivotTbody"></tbody>
                 <tfoot id="pivotTfoot"></tfoot>
@@ -550,12 +579,23 @@
             </div>
           </div>
 
+          <!-- 原型示範開關（非產品功能）：切換 ob_calendar 工作日資料有／無，用以檢視 workingDays = 0 的降級呈現 -->
+          <div class="mt-3 flex items-center flex-wrap gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg bg-gray-50/60" data-prototype-demo="true">
+            <span class="text-[10px] font-semibold text-gray-400 tracking-wider">原型示範</span>
+            <span class="text-[11px] text-gray-500">工作日資料（ob_calendar 202607）：</span>
+            <button id="pv-demo-wd-on" type="button" onclick="setPivotDemoWorkingDays(21)" class="px-2 py-1 text-[11px] font-medium rounded border border-primary bg-primary text-white transition">正常（21 天）</button>
+            <button id="pv-demo-wd-off" type="button" onclick="setPivotDemoWorkingDays(0)" class="px-2 py-1 text-[11px] font-medium rounded border border-border text-gray-600 hover:bg-gray-50 transition">缺漏（0 天）</button>
+            <span class="text-[10px] text-gray-400">切至「工作天」即可檢視兩種呈現。此為原型示範開關，產品不提供。</span>
+          </div>
+
           <!-- footer note -->
           <div class="mt-4 flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
             <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
             <div>
               <p class="font-medium text-gray-700 mb-0.5">關於樞紐分析</p>
-              <p>此交叉表以「案號」計數彙總各部門 / 承辦人員在各名單代號的分派件數，結構與「結果摘要」匯出 Excel 的樞紐分析頁一致。切換「佔比」可檢視占父層比例（部門列為占欄總計、員編列為占所屬部門同欄），空白格代表該員編在該名單無分派案件。</p>
+              <p>此交叉表以「案號」計數彙總各部門 / 承辦人員在各名單代號的分派件數，結構與「結果摘要」匯出 Excel 的樞紐分析頁一致。「總計」欄固定於最左側、「總計」列固定於最下方。切換「佔比」可檢視占父層比例（部門列為占欄總計、員編列為占所屬部門同欄），顯示「-」的格代表該員編在該名單無分派案件。</p>
+              <p class="mt-1">員編列顯示「員編 - 姓名 - 職稱」；到職未滿三個月者於列尾標註「新人」（以本次分派作業月份的月初為基準日認定）。無職稱資料時省略職稱不留空位，「(空白)」分組不顯示職稱與新人標註。</p>
+              <p class="mt-1">「期間」切換為「工作天」時，每格顯示該月每個工作日要撥打的名單數量，計算方式為「整月計數 ÷ 當月工作日數」後無條件進位到整數；此模式不提供「佔比」。<strong class="font-medium text-gray-700">進位是逐格獨立計算，因此「總計」欄與「總計」列不會等於各格相加，屬正常現象，並非資料錯誤。</strong>若當月無工作日資料，數值一律顯示「-」。</p>
             </div>
           </div>
         </div>
@@ -660,6 +700,8 @@
         document.getElementById('panel-' + n).classList.toggle('hidden', n !== name);
       });
       lucide.createIcons();
+      // pivot panel 由 hidden 轉為可見時才量得到列標籤欄寬度，需重新校準凍結總計欄的偏移
+      if (name === 'pivot') pvSyncStickyOffset();
     }
 
     // ===== 樞紐分析（Pivot）=====
@@ -667,33 +709,49 @@
     // 示範資料採 legacy 202607 分派名單樞紐（工作表2）。每個部門的 colTotals 為該部門各名單的案件數，
     // 具名員編列 + 「其他 N 位員編」聚合列（= colTotal − 具名列合計），確保列小計 / 欄總計 / 總計皆對得起來。
     const PIVOT_LISTS = ['OB202607001','OB202607002','OB202607003','OB202607004','OB202607006','OB202607007','OB202607008','OB202607009','OB202607010','OB202607011','OB202607012','OB202607013'];
+    // v1.1（US-182）：emps 增列 jfun（= API `jfunNm`，職稱，可為 null）與 newcomer（= API `isNewcomer`）。
+    //   · 20501 王大明：jfun = null（職稱缺值示範）
+    //   · 22159 陳志明：newcomer = true（新人標註示範）
+    //   · 30112 黃雅婷：jfun = null 且 newcomer = true（兩個邊界同時發生）
+    //   · 「(空白)」部門／員編（BR-2 / BR-10）：jfun = null、newcomer = false，一律不顯示職稱與新人標註
+    // 空格慣例：counts 為 null＝該員編在該名單無分派案件（對應 API `byList` 無該 key），三種模式一律顯示「-」。
+    // 示範資料刻意不含數值 0 的格：真實 API 之 byList 由 GROUP BY 產生，計數為 0 的 key 不會出現。
     const PIVOT_DEPTS = [
       { dept: '中區電銷1', otherEmps: 24,
         colTotals: [3400,2600,2400,2900,380,720,620,1750,1300,1150,1350,1362],
         emps: [
-          { id: '20501', nm: '王大明', counts: [46,34,32,37,30,59,9,22,null,null,17,24] },
-          { id: '21557', nm: '林淑芬', counts: [360,271,249,300,30,59,62,176,69,61,null,null] },
-          { id: '22159', nm: '陳志明', counts: [446,340,310,374,30,59,76,220,null,null,null,null] },
+          { id: '20501', nm: '王大明', jfun: null,        newcomer: false, counts: [46,34,32,37,30,59,9,22,null,null,17,24] },
+          { id: '21557', nm: '林淑芬', jfun: '資深業務專員', newcomer: false, counts: [360,271,249,300,30,59,62,176,69,61,null,null] },
+          { id: '22159', nm: '陳志明', jfun: '業務專員',   newcomer: true,  counts: [446,340,310,374,30,59,76,220,null,null,null,null] },
         ] },
       { dept: '北區電銷1', otherEmps: 38,
         colTotals: [6200,5200,4600,5600,640,1180,1320,3400,1900,1640,1650,1650],
         emps: [
-          { id: '20988', nm: '張美玲', counts: [780,610,540,690,60,120,140,410,180,150,220,190] },
-          { id: '21744', nm: '李國華', counts: [1020,880,760,940,70,130,160,520,240,210,260,240] },
+          { id: '20988', nm: '張美玲', jfun: '業務襄理', newcomer: false, counts: [780,610,540,690,60,120,140,410,180,150,220,190] },
+          { id: '21744', nm: '李國華', jfun: '業務主任', newcomer: false, counts: [1020,880,760,940,70,130,160,520,240,210,260,240] },
         ] },
       { dept: '南區電銷', otherEmps: 18,
         colTotals: [2200,1800,1600,2000,240,420,480,1200,680,560,700,660],
         emps: [
-          { id: '30112', nm: '黃雅婷', counts: [180,150,130,170,20,40,44,110,60,50,64,52] },
+          { id: '30112', nm: '黃雅婷', jfun: null, newcomer: true, counts: [180,150,130,170,20,40,44,110,60,50,64,52] },
         ] },
       { dept: '北區電銷2', otherEmps: 12,
         colTotals: [1560,1280,1120,1420,160,300,340,860,460,380,470,410],
         emps: [
-          { id: '40233', nm: '吳建宏', counts: [120,100,88,110,14,26,30,72,40,32,42,36] },
+          { id: '40233', nm: '吳建宏', jfun: '業務專員', newcomer: false, counts: [120,100,88,110,14,26,30,72,40,32,42,36] },
+        ] },
+      // BR-2：dept / emplid 為空 → 歸組「(空白)」，排序置末
+      { dept: '(空白)', otherEmps: 0,
+        colTotals: [40,30,20,20,5,8,6,10,4,3,5,4],
+        emps: [
+          { id: '(空白)', nm: null, jfun: null, newcomer: false, counts: [40,30,20,20,5,8,6,10,4,3,5,4] },
         ] },
     ];
 
-    let pivotMode = 'count';                 // 'count' | 'pct'
+    let pivotMode = 'count';                 // 'count' | 'pct'（值）
+    let pivotDim  = 'full';                  // 'full' | 'workday'（期間，v1.1 新增）
+    const PIVOT_PROJECT_WORKYM = '202607';   // = API `projectWorkym`
+    let PIVOT_WORKING_DAYS = 21;             // = API `workingDays`（202607 工作日數；原型示範開關可切為 0）
     const pivotExpanded = new Set([0]);      // 預設展開第一個部門（中區電銷1）
     const PV_DASH = '<span class="text-gray-300">-</span>';
 
@@ -703,26 +761,106 @@
     const pvGrandCol    = c => PIVOT_DEPTS.reduce((s, d) => s + d.colTotals[c], 0);
     const PIVOT_GRAND   = PIVOT_DEPTS.reduce((s, d) => s + pvDeptTotal(d), 0);
 
-    // 依模式輸出單格：計數 = 千分位；佔比 = value / 父層 * 100（0.0%）
+    // 依模式輸出單格：
+    //   整月-計數 = 千分位；整月-佔比 = value / 父層 * 100（0.0%）
+    //   工作天-計數 = ceil(整月計數 ÷ workingDays)（BR-13）；workingDays = 0 → 「-」（BR-15）
+    // 無分派案件的格（值為 null）在三種模式下一律顯示「-」。
     function pvVal(v, parent) {
       if (v == null) return PV_DASH;
+      if (pivotDim === 'workday') {
+        if (PIVOT_WORKING_DAYS <= 0) return PV_DASH;
+        return Math.ceil(v / PIVOT_WORKING_DAYS).toLocaleString();
+      }
       if (pivotMode === 'pct') return parent ? (v / parent * 100).toFixed(1) + '%' : PV_DASH;
       return Number(v).toLocaleString();
     }
 
+    // 左上角格的簡短值標籤（三種合法組合，BR-16）
+    function pvValueLabel() {
+      if (pivotDim === 'workday') return '每工作天 - 案號';
+      return pivotMode === 'pct' ? '佔比 - 案號' : '計數 - 案號';
+    }
+    // 工具列「值：」的完整值說明
+    function pvValueLabelLong() {
+      if (pivotDim === 'workday') {
+        return PIVOT_WORKING_DAYS > 0
+          ? `每工作天 - 案號（÷ ${PIVOT_WORKING_DAYS} 個工作日，無條件進位）`
+          : '每工作天 - 案號（本月無工作日資料）';
+      }
+      return pivotMode === 'pct' ? '佔比 - 案號（占父層比）' : '計數 - 案號';
+    }
+
+    // 員編列標籤：員編 - 姓名 - 職稱 [新人]
+    // 職稱（jfun）為 null / 空字串 → 省略職稱與其分隔符號，不留空位（AC-8）
+    function pvEmpLabel(e) {
+      let h = `<span class="mono-sub text-xs text-gray-500" data-pv-emplid-text>${e.id}</span>`;
+      if (e.nm) h += `<span class="text-gray-300" aria-hidden="true">-</span><span class="text-xs font-medium text-gray-700" data-pv-empnm>${e.nm}</span>`;
+      if (e.jfun) h += `<span class="text-gray-300" aria-hidden="true">-</span><span class="text-xs text-gray-500" data-pv-jfunnm>${e.jfun}</span>`;
+      if (e.newcomer) h += `<span data-pv-newcomer="true" class="shrink-0 whitespace-nowrap inline-flex items-center gap-0.5 ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200"><i data-lucide="user-plus" class="w-2.5 h-2.5"></i>新人</span>`;
+      return h;
+    }
+
+    // segmented 按鈕外觀（含 disabled 樣態）
+    function pvSeg(btn, on, disabled, extra) {
+      if (!btn) return;
+      btn.className = 'px-3 py-1.5 text-xs font-medium transition ' + (extra ? extra + ' ' : '') +
+        (disabled ? 'text-gray-300 bg-gray-50 cursor-not-allowed' : on ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50');
+      btn.disabled = !!disabled;
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (disabled) { btn.setAttribute('aria-disabled', 'true'); btn.title = '「工作天」模式不提供佔比'; }
+      else { btn.removeAttribute('aria-disabled'); btn.removeAttribute('title'); }
+    }
+
+    // 同步工具列控制項狀態（每次 render 都重跑，避免 thead 重建後標籤被覆寫）
+    function pvSyncControls() {
+      const workday = pivotDim === 'workday';
+      pvSeg(document.getElementById('pv-dim-full'), !workday, false, '');
+      pvSeg(document.getElementById('pv-dim-workday'), workday, false, 'border-l border-border');
+      pvSeg(document.getElementById('pv-mode-count'), pivotMode === 'count', false, '');
+      pvSeg(document.getElementById('pv-mode-pct'), pivotMode === 'pct', workday, 'border-l border-border');
+
+      const vl = document.getElementById('pivotValueLabel'); if (vl) vl.textContent = pvValueLabelLong();
+
+      const info = document.getElementById('pivotWorkdayInfo');
+      const warn = document.getElementById('pivotWorkdayWarn');
+      const showInfo = workday && PIVOT_WORKING_DAYS > 0;
+      const showWarn = workday && PIVOT_WORKING_DAYS <= 0;
+      document.getElementById('pivotWorkdayInfoText').textContent =
+        `本月工作日 ${PIVOT_WORKING_DAYS} 天；每格 = 整月計數 ÷ ${PIVOT_WORKING_DAYS} 後無條件進位。進位是逐格獨立計算，因此「總計」欄與「總計」列不會等於各格相加，屬正常現象。`;
+      info.classList.toggle('hidden', !showInfo); info.classList.toggle('flex', showInfo);
+      warn.classList.toggle('hidden', !showWarn); warn.classList.toggle('flex', showWarn);
+
+      const t = document.getElementById('pivotTable');
+      if (t) {
+        t.setAttribute('data-pv-dim', pivotDim);
+        t.setAttribute('data-pv-mode', pivotMode);
+        t.setAttribute('data-pv-working-days', String(PIVOT_WORKING_DAYS));
+        t.setAttribute('data-pv-project-workym', PIVOT_PROJECT_WORKYM);
+      }
+    }
+
+    // 凍結總計欄的左側偏移 = 列標籤欄實際寬度（內容含職稱／新人標註，寬度非固定值）
+    function pvSyncStickyOffset() {
+      const th = document.querySelector('#pivotThead .pv-first');
+      if (!th) return;
+      const w = th.getBoundingClientRect().width;
+      if (w > 0) document.documentElement.style.setProperty('--pv-first-w', Math.round(w) + 'px');
+    }
+
     function renderPivot() {
       const n = PIVOT_LISTS.length;
-      const valLabel = pivotMode === 'pct' ? '佔比 - 案號' : '計數 - 案號';
+      pvSyncControls();
 
-      // 表頭（單列，sticky top；左上角格 sticky top+left）
+      // 表頭（單列，sticky top；左上角格與總計欄 sticky top+left）
+      // v1.1 欄序（BR-11）：列標籤 → 總計 → 名單代號（升冪）
       document.getElementById('pivotThead').innerHTML =
         '<tr>' +
-        `<th class="pv-head pv-first text-left px-3 py-2 align-bottom">
-           <div class="text-[10px] font-normal text-gray-400" id="pivotCornerLabel">${valLabel}</div>
+        `<th scope="col" data-pv-col="label" class="pv-head pv-first text-left px-3 py-2 align-bottom">
+           <div class="text-[10px] font-normal text-gray-400" id="pivotCornerLabel">${pvValueLabel()}</div>
            <div class="text-xs font-semibold text-gray-700">部門 / 員編</div>
          </th>` +
-        PIVOT_LISTS.map(l => `<th class="pv-head px-3 py-2 text-right"><span class="mono-sub text-[11px] font-semibold text-gray-600">${l}</span></th>`).join('') +
-        `<th class="pv-head pv-last px-3 py-2 text-right text-xs font-semibold text-gray-700">總計</th>` +
+        `<th scope="col" data-pv-col="total" class="pv-head pv-total-col px-3 py-2 text-right text-xs font-semibold text-gray-700">總計</th>` +
+        PIVOT_LISTS.map(l => `<th scope="col" data-pv-col="list" data-pv-list="${l}" class="pv-head px-3 py-2 text-right"><span class="mono-sub text-[11px] font-semibold text-gray-600">${l}</span></th>`).join('') +
         '</tr>';
 
       // 資料列
@@ -732,8 +870,8 @@
         const deptTotal = pvDeptTotal(d);
         const totalEmps = d.emps.length + d.otherEmps;
 
-        // 部門列（可點擊展開／收合）
-        rows += `<tr class="pv-dept-row cursor-pointer" onclick="togglePivotDept(${di})">`;
+        // 部門列（可點擊展開／收合）— 不顯示職稱與新人標註
+        rows += `<tr class="pv-dept-row cursor-pointer" data-pv-row="dept" data-pv-dept="${d.dept}" aria-expanded="${open}" onclick="togglePivotDept(${di})">`;
         rows += `<td class="pv-first px-3 py-2 text-left">
             <span class="inline-flex items-center gap-1.5">
               <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-gray-500 transition-transform" style="transform:rotate(${open ? 90 : 0}deg)"></i>
@@ -742,62 +880,62 @@
               <span class="text-[10px] text-gray-400 font-normal">${totalEmps} 位員編</span>
             </span>
           </td>`;
+        rows += `<td data-pv-cell="total" class="pv-total-col px-3 py-2 text-right mono-sub tabular-nums text-xs font-bold text-gray-800">${pvVal(deptTotal, PIVOT_GRAND)}</td>`;
         for (let c = 0; c < n; c++) {
-          rows += `<td class="px-3 py-2 text-right mono-sub tabular-nums text-xs font-semibold text-gray-700">${pvVal(d.colTotals[c], pvGrandCol(c))}</td>`;
+          rows += `<td data-pv-cell="list" data-pv-list="${PIVOT_LISTS[c]}" class="px-3 py-2 text-right mono-sub tabular-nums text-xs font-semibold text-gray-700">${pvVal(d.colTotals[c], pvGrandCol(c))}</td>`;
         }
-        rows += `<td class="pv-last px-3 py-2 text-right mono-sub tabular-nums text-xs font-bold text-gray-800">${pvVal(deptTotal, PIVOT_GRAND)}</td>`;
         rows += '</tr>';
 
         if (open) {
           // 具名員編列
           d.emps.forEach(e => {
             const empTotal = e.counts.reduce((s, v) => s + (v || 0), 0);
-            rows += '<tr class="pv-emp-row">';
+            rows += `<tr class="pv-emp-row" data-pv-row="emp" data-pv-dept="${d.dept}" data-pv-emplid="${e.id}">`;
             rows += `<td class="pv-first px-3 py-1.5 text-left">
                 <span class="inline-flex items-center gap-1.5 pl-6">
                   <i data-lucide="user" class="w-3 h-3 text-gray-400 shrink-0"></i>
-                  <span class="mono-sub text-xs text-gray-500">${e.id}</span>
-                  <span class="text-xs text-gray-700">${e.nm || ''}</span>
+                  ${pvEmpLabel(e)}
                 </span>
               </td>`;
+            rows += `<td data-pv-cell="total" class="pv-total-col px-3 py-1.5 text-right mono-sub tabular-nums text-xs font-semibold text-gray-700">${pvVal(empTotal, deptTotal)}</td>`;
             for (let c = 0; c < n; c++) {
-              rows += `<td class="px-3 py-1.5 text-right mono-sub tabular-nums text-xs text-gray-600">${pvVal(e.counts[c], d.colTotals[c])}</td>`;
+              rows += `<td data-pv-cell="list" data-pv-list="${PIVOT_LISTS[c]}" class="px-3 py-1.5 text-right mono-sub tabular-nums text-xs text-gray-600">${pvVal(e.counts[c], d.colTotals[c])}</td>`;
             }
-            rows += `<td class="pv-last px-3 py-1.5 text-right mono-sub tabular-nums text-xs font-semibold text-gray-700">${pvVal(empTotal, deptTotal)}</td>`;
             rows += '</tr>';
           });
-          // 其他員編聚合列
+          // 其他員編聚合列（非單一人員，不顯示職稱與新人標註）
           if (d.otherEmps > 0) {
             const namedTotal = d.emps.reduce((s, e) => s + e.counts.reduce((a, v) => a + (v || 0), 0), 0);
             const othersTotal = deptTotal - namedTotal;
-            rows += '<tr class="pv-other-row">';
+            rows += `<tr class="pv-other-row" data-pv-row="other" data-pv-dept="${d.dept}">`;
             rows += `<td class="pv-first px-3 py-1.5 text-left">
                 <span class="inline-flex items-center gap-1.5 pl-6 text-xs text-gray-400 italic">
                   <i data-lucide="more-horizontal" class="w-3 h-3"></i>
                   其他 ${d.otherEmps} 位員編
                 </span>
               </td>`;
+            rows += `<td data-pv-cell="total" class="pv-total-col px-3 py-1.5 text-right mono-sub tabular-nums text-xs text-gray-400 italic">${pvVal(othersTotal, deptTotal)}</td>`;
             for (let c = 0; c < n; c++) {
-              rows += `<td class="px-3 py-1.5 text-right mono-sub tabular-nums text-xs text-gray-400 italic">${pvVal(pvOthersCell(d, c), d.colTotals[c])}</td>`;
+              rows += `<td data-pv-cell="list" data-pv-list="${PIVOT_LISTS[c]}" class="px-3 py-1.5 text-right mono-sub tabular-nums text-xs text-gray-400 italic">${pvVal(pvOthersCell(d, c), d.colTotals[c])}</td>`;
             }
-            rows += `<td class="pv-last px-3 py-1.5 text-right mono-sub tabular-nums text-xs text-gray-400 italic">${pvVal(othersTotal, deptTotal)}</td>`;
             rows += '</tr>';
           }
         }
       });
       document.getElementById('pivotTbody').innerHTML = rows;
 
-      // 總計列
-      let ft = '<tr class="pv-total-row">';
+      // 總計列（BR-11：維持在表格最下方，不隨總計欄移動）
+      let ft = '<tr class="pv-total-row" data-pv-row="total">';
       ft += `<td class="pv-first px-3 py-2 text-left text-xs font-bold text-gray-800">總計</td>`;
+      ft += `<td data-pv-cell="total" class="pv-total-col px-3 py-2 text-right mono-sub tabular-nums text-xs font-bold text-primary">${pvVal(PIVOT_GRAND, PIVOT_GRAND)}</td>`;
       for (let c = 0; c < n; c++) {
-        ft += `<td class="px-3 py-2 text-right mono-sub tabular-nums text-xs font-bold text-gray-800">${pvVal(pvGrandCol(c), PIVOT_GRAND)}</td>`;
+        ft += `<td data-pv-cell="list" data-pv-list="${PIVOT_LISTS[c]}" class="px-3 py-2 text-right mono-sub tabular-nums text-xs font-bold text-gray-800">${pvVal(pvGrandCol(c), PIVOT_GRAND)}</td>`;
       }
-      ft += `<td class="pv-last px-3 py-2 text-right mono-sub tabular-nums text-xs font-bold text-primary">${pivotMode === 'pct' ? '100.0%' : Number(PIVOT_GRAND).toLocaleString()}</td>`;
       ft += '</tr>';
       document.getElementById('pivotTfoot').innerHTML = ft;
 
       lucide.createIcons();
+      pvSyncStickyOffset();
     }
 
     function togglePivotDept(di) {
@@ -810,18 +948,26 @@
       renderPivot();
     }
     function setPivotMode(mode) {
+      if (pivotDim === 'workday' && mode === 'pct') return; // BR-16：工作天-佔比為非法組合
       pivotMode = mode;
-      const count = document.getElementById('pv-mode-count');
-      const pct = document.getElementById('pv-mode-pct');
-      count.classList.toggle('bg-primary', mode === 'count');
-      count.classList.toggle('text-white', mode === 'count');
-      count.classList.toggle('text-gray-600', mode !== 'count');
-      pct.classList.toggle('bg-primary', mode === 'pct');
-      pct.classList.toggle('text-white', mode === 'pct');
-      pct.classList.toggle('text-gray-600', mode !== 'pct');
-      const label = mode === 'pct' ? '佔比 - 案號' : '計數 - 案號';
-      const vl = document.getElementById('pivotValueLabel'); if (vl) vl.textContent = label + (mode === 'pct' ? '（占父層比）' : '');
-      renderPivot(); // renderPivot 會依 pivotMode 重建左上角格標籤
+      renderPivot();
+    }
+    // v1.1：期間維度切換。切至「工作天」時佔比自動回落計數並 disabled；切回「整月」時佔比恢復可用（AC-10）
+    function setPivotDim(dim) {
+      pivotDim = dim;
+      if (dim === 'workday') pivotMode = 'count';
+      renderPivot();          // 不動 pivotExpanded：切換維度不重置展開狀態（AC-3）
+    }
+    // 原型示範開關：模擬 ob_calendar 有／無該月工作日資料
+    function setPivotDemoWorkingDays(days) {
+      PIVOT_WORKING_DAYS = days;
+      const on = document.getElementById('pv-demo-wd-on');
+      const off = document.getElementById('pv-demo-wd-off');
+      const ON  = 'px-2 py-1 text-[11px] font-medium rounded border border-primary bg-primary text-white transition';
+      const OFF = 'px-2 py-1 text-[11px] font-medium rounded border border-border text-gray-600 hover:bg-gray-50 transition';
+      on.className  = days > 0 ? ON : OFF;
+      off.className = days > 0 ? OFF : ON;
+      renderPivot();
     }
 
     function downloadSnapshot() {
@@ -865,6 +1011,8 @@
     renderPivot();
     switchSnapTab('config');
     lucide.createIcons();
+    window.addEventListener('resize', pvSyncStickyOffset);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(pvSyncStickyOffset);
   </script>
   <script>
     // ===== Sidebar collapsible：客戶名單分派 =====
