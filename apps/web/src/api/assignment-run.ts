@@ -562,6 +562,10 @@ export async function getResultPage(
 export interface PivotEmplidNode {
   emplid: string;
   empNm: string | null;
+  /** F116 v1.1.1（BR-5 反轉）：職稱（ob_emphire.title_name，非 jfun_nm）；無值 → null。 */
+  titleName?: string | null;
+  /** F116 v1.1（BR-6~BR-8）：到職未滿三個月（以 run 之 project_workym 月初為基準日）。 */
+  isNewcomer?: boolean;
   total: number;
   byList: Record<string, number>;
 }
@@ -573,6 +577,10 @@ export interface PivotDeptNode {
 }
 export interface PivotResponse {
   runId: string;
+  /** F116 v1.1：該 run 之作業年月（YYYYMM）。 */
+  projectWorkym?: string;
+  /** F116 v1.1（BR-12）：當月工作日數；ob_calendar 缺該月資料 → 0。 */
+  workingDays?: number;
   listNos: string[];
   depts: PivotDeptNode[];
   grandByList: Record<string, number>;
