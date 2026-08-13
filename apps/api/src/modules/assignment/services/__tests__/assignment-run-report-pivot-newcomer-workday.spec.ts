@@ -14,6 +14,10 @@
  *
  * v1.0 既有測試（assignment-run-report-pivot.spec.ts）維持不變、不弱化，作為 AD-E07-49 §9 R-3
  * 要求之「無重複 emp_id 情境」回歸保護；本檔僅新增 v1.1 場景。
+ *
+ * 【v1.1.1 更正，2026-08-13】職稱來源由 `ob_emphire.jfun_nm` 改為 `ob_emphire.title_name`；
+ * API 欄位 `jfunNm` → `titleName`（BR-5 整條反轉，理由與 dev MSSQL 317 筆實測數據見 spec §1.2）。
+ * 本檔已同步更新：BR-5/AC-6 群組之陷阱值方向掉頭（現為「不得誤取 jfun_nm」），其餘場景僅欄名更名。
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
@@ -171,8 +175,12 @@ describe('AssignmentRunReportService.getPivot — F116 v1.1（US-182）', () => 
     await env.app.close();
   });
 
-  describe('BR-5 / AC-6：職稱來源唯一為 jfun_nm（禁止誤取 title_name）', () => {
-    const runId = 'f116v11-jfun-run';
+  describe('BR-5 / AC-6【v1.1.1 反轉】：職稱來源唯一為 title_name（禁止誤取 jfun_nm）', () => {
+    // v1.1.1 更正（2026-08-13，spec §1.2）：dev MSSQL 317 筆實測 jfun_nm 91% 為「營業一般職」
+    // （職能分類，於樞紐列標籤無辨識度），title_name 才是真正職稱。BR-5 條文整條反轉：現為
+    // 「來源唯一 title_name、禁用 jfun_nm」。每筆 fixture 之 jfun_nm 與 title_name 刻意帶不同值，
+    // 避免兩者恰巧相同而矇混掉取錯欄位的紅燈。
+    const runId = 'f116v11-title-run';
 
     beforeAll(async () => {
       await env.runRepo.save(env.runRepo.create(mkRun(runId, '202607')));
@@ -181,22 +189,22 @@ describe('AssignmentRunReportService.getPivot — F116 v1.1（US-182）', () => 
           emp_id: 'JF001',
           dept_name: '中區電銷1',
           emp_nm: '測試甲',
-          jfun_nm: '業務專員',
-          title_name: '科長', // 陷阱值：與 jfun_nm 刻意不同，若實作誤取此欄斷言會失敗
+          title_name: '業務專員',
+          jfun_nm: '營業一般職', // 陷阱值：與 title_name 刻意不同，若實作誤取此欄斷言會失敗
         } as Partial<ObEmphire>),
         env.emphireRepo.create({
           emp_id: 'JF002',
           dept_name: '中區電銷1',
           emp_nm: '測試乙',
-          jfun_nm: null,
-          title_name: '副理',
+          title_name: null,
+          jfun_nm: '營業一般職', // 陷阱值：title_name=NULL 但 jfun_nm 有值，不得誤 fallback
         } as Partial<ObEmphire>),
         env.emphireRepo.create({
           emp_id: 'JF003',
           dept_name: '中區電銷1',
           emp_nm: '測試丙',
-          jfun_nm: '',
-          title_name: '襄理',
+          title_name: '',
+          jfun_nm: '處長', // 陷阱值：title_name=空字串但 jfun_nm 有值，不得誤 fallback
         } as Partial<ObEmphire>),
       ]);
       await env.resultRepo.save([
@@ -206,23 +214,23 @@ describe('AssignmentRunReportService.getPivot — F116 v1.1（US-182）', () => 
       ]);
     });
 
-    it('TS-F116-010（★核心）：jfunNm 來源為 jfun_nm，不得為 title_name', async () => {
+    it('TS-F116-010（★核心）：titleName 來源為 title_name，不得為 jfun_nm', async () => {
       const res = await env.service.getPivot(runId, null);
       const emp = res.depts[0].emplids.find((e) => e.emplid === 'JF001')!;
-      expect(emp.jfunNm).toBe('業務專員');
-      expect(emp.jfunNm).not.toBe('科長');
+      expect(emp.titleName).toBe('業務專員');
+      expect(emp.titleName).not.toBe('營業一般職');
     });
 
-    it('TS-F116-011：jfun_nm 為 NULL → jfunNm 契約值為 null（AC-8）', async () => {
+    it('TS-F116-011：title_name 為 NULL → titleName 契約值為 null（AC-8，即使 jfun_nm 有值也不得 fallback）', async () => {
       const res = await env.service.getPivot(runId, null);
       const emp = res.depts[0].emplids.find((e) => e.emplid === 'JF002')!;
-      expect(emp.jfunNm).toBeNull();
+      expect(emp.titleName).toBeNull();
     });
 
-    it('TS-F116-012：jfun_nm 為空字串 → jfunNm 契約值為 null（BR-5）', async () => {
+    it('TS-F116-012：title_name 為空字串 → titleName 契約值為 null（BR-5，即使 jfun_nm 有值也不得 fallback）', async () => {
       const res = await env.service.getPivot(runId, null);
       const emp = res.depts[0].emplids.find((e) => e.emplid === 'JF003')!;
-      expect(emp.jfunNm).toBeNull();
+      expect(emp.titleName).toBeNull();
     });
   });
 
@@ -277,7 +285,8 @@ describe('AssignmentRunReportService.getPivot — F116 v1.1（US-182）', () => 
           emp_id: 'ED002',
           dept_name: '南區電銷',
           emp_nm: '已離職',
-          jfun_nm: '資深專員',
+          title_name: '資深專員',
+          jfun_nm: '營業一般職', // 陷阱值：與 title_name 刻意不同
           hire_date: new Date('2020-01-01'),
           resign_date: new Date('2021-06-30'), // 非哨兵值，明確代表非在職
         } as Partial<ObEmphire>),
@@ -296,24 +305,24 @@ describe('AssignmentRunReportService.getPivot — F116 v1.1（US-182）', () => 
       expect(emp.isNewcomer).toBe(false);
     });
 
-    it('TS-F116-016（★核心 / I-F116-NO-ACTIVE-FILTER-01）：已離職員編仍完整顯示 empNm/jfunNm/isNewcomer 與分派筆數，不得被在職過濾排除', async () => {
+    it('TS-F116-016（★核心 / I-F116-NO-ACTIVE-FILTER-01）：已離職員編仍完整顯示 empNm/titleName/isNewcomer 與分派筆數，不得被在職過濾排除', async () => {
       const res = await env.service.getPivot(runId, null);
       const dept = res.depts.find((d) => d.deptName === '南區電銷')!;
       const emp = dept.emplids.find((e) => e.emplid === 'ED002')!;
       // 若實作誤引入 emphire-active.util 或 resign_date 過濾（BR-9/T-6 明文禁止），此員編會從結果消失
       expect(emp).toBeDefined();
       expect(emp.empNm).toBe('已離職');
-      expect(emp.jfunNm).toBe('資深專員');
+      expect(emp.titleName).toBe('資深專員');
       expect(emp.isNewcomer).toBe(false); // hire_date=2020-01-01 遠早於門檻，非新人
       expect(emp.total).toBe(2); // OB1 x1 + OB2 x1，計數不因離職被歸零或濾除
       expect(emp.byList).toEqual({ OB1: 1, OB2: 1 });
     });
 
-    it('TS-F116-017：「(空白)」分組（無 ob_emphire 對應）→ jfunNm=null、isNewcomer=false（BR-10）', async () => {
+    it('TS-F116-017：「(空白)」分組（無 ob_emphire 對應）→ titleName=null、isNewcomer=false（BR-10）', async () => {
       const res = await env.service.getPivot(runId, null);
       const blank = res.depts.find((d) => d.deptName === '(空白)')!;
       const emp = blank.emplids.find((e) => e.emplid === '99999')!;
-      expect(emp.jfunNm).toBeNull();
+      expect(emp.titleName).toBeNull();
       expect(emp.isNewcomer).toBe(false);
     });
   });
@@ -411,7 +420,10 @@ describe('I-F116-EMPHIRE-DEDUP-01：ob_emphire 同 emp_id 重複列防禦', () =
     const ds = dedupEnv.app.get(DataSource);
     await ds.query('DROP TABLE ob_emphire');
     await ds.query(
-      `CREATE TABLE ob_emphire (emp_id varchar, dept_name varchar, emp_nm varchar, jfun_nm varchar, hire_date date)`,
+      // v1.1.1：title_name（非 jfun_nm）為職稱來源欄位（BR-5 反轉），本測試不斷言職稱內容本身，
+      // 僅需與 getPivot 查詢實際 SELECT 的欄位集合一致（title_name/hire_date），避免因欄名不符
+      // 產生 "no such column" 而使本測試以錯誤原因紅燈
+      `CREATE TABLE ob_emphire (emp_id varchar, dept_name varchar, emp_nm varchar, title_name varchar, hire_date date)`,
     );
     // 以純 raw SQL INSERT（非 TypeORM repo.save()/insert()）寫入重複 emp_id 兩列：
     // repo.save() 對非資料庫產生 PK 之 entity 會先送出存在性檢查 SELECT、repo.insert() 之
@@ -419,7 +431,7 @@ describe('I-F116-EMPHIRE-DEDUP-01：ob_emphire 同 emp_id 重複列防禦', () =
     // 本測試刻意精簡的 5 欄表而報 "no such column"。改用 raw SQL 完全繞過 entity metadata，
     // 僅參照本測試實際建立的欄位（此為本測試 fixture 本身之 wiring 需求，非斷言內容）。
     await ds.query(
-      `INSERT INTO ob_emphire (emp_id, dept_name, emp_nm, jfun_nm) VALUES (?, ?, ?, ?), (?, ?, ?, ?)`,
+      `INSERT INTO ob_emphire (emp_id, dept_name, emp_nm, title_name) VALUES (?, ?, ?, ?), (?, ?, ?, ?)`,
       ['50001', '中區電銷1', '測試重複', '業務專員', '50001', '中區電銷1', '測試重複', '業務專員'],
     );
     await dedupEnv.runRepo.save(dedupEnv.runRepo.create(mkRun(runId, '202607')));

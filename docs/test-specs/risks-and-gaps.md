@@ -1593,3 +1593,23 @@ last_updated: 2026-08-13
   複用既有 exported 函式（架構層級裁定，非行為層級可測項）。若日後需要更嚴格驗證，可補一則 spy
   `computeWorkingDayRatios` 呼叫次數/參數之測試。
 - **風險等級**：低，記錄供未來加強參考。
+
+### R-F116-05（已解決，2026-08-13）：BR-5 職稱來源反轉（v1.1.1），已在 tdd-implementation 初版實作之後追加更正
+
+- **問題**：F116 spec 於 v1.1.1（2026-08-13）將職稱來源由 `ob_emphire.jfun_nm` 反轉為
+  `ob_emphire.title_name`（使用者 dev MSSQL 實機檢視、317 筆實測數據佐證，見 spec §1.2）。此時
+  tdd-implementation 已依更正前之 v1.1 完成初版實作並提交（commit `bbba920`）。
+- **處置**：test-generator 依 spec v1.1.1 + AD-E07-49（同步更新版）+ prototype（示範資料已換真實
+  `title_name` 值）重新調整兩份測試檔：BR-5/AC-6 群組（TS-F116-010/011/012）之陷阱值方向掉頭（現
+  為「不得誤取 `jfun_nm`」，每筆 fixture 之 `jfun_nm`/`title_name` 刻意帶不同值避免矇混）；
+  TS-F116-016/017/033 等其餘場景之欄位參照由 `jfunNm`/`jfun_nm` 全面更名為 `titleName`/`title_name`；
+  TS-F116-018 之無 PK 重建表欄名同步更名為 `title_name`，以對齊查詢實際會 SELECT 的欄位。
+- **實測結果**（對更正前已提交的 commit `bbba920` 重跑）：後端 6 紅／15 綠、前端 1 紅／20 綠——紅的
+  全部精確對應職稱來源（其中 TS-F116-018 因 production 仍 `SELECT e.jfun_nm` 而該欄已不存在於本測試
+  更正後的重建表，直接拋 `SqliteError: no such column: emp.jfun_nm`，訊號比單純 `undefined` 更強）；
+  其餘既已正確實作之行為（新人判定/workingDays/scope/欄序/ceil/client-state）維持綠燈，證明本次更正
+  範圍精準、未波及無關場景。型別 gate（`tsc --noEmit`）產出之 `titleName does not exist` 錯誤數
+  （後端 6／前端 7）與紅燈場景數一一對應，無其餘型別錯誤。
+- **風險等級**：已解決。tdd-implementation 後續只需將 `getPivot` 查詢與 `PivotEmplidNode`/
+  `PivotResponse` 型別、`SnapshotPivotView` 渲染欄位由 `jfun_nm`/`jfunNm` 改為 `title_name`/
+  `titleName` 即可轉綠，其餘既有邏輯不受影響。

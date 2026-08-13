@@ -4,7 +4,7 @@ feature_id: F116
 feature_name: 快照詳情 — 樞紐分析頁籤 v1.1（職稱／新人標註／總計欄置前／工作天模式）
 priority: P2
 related_spec: /docs/specs/features/F116-snapshot-pivot-analysis.md
-spec_version: "1.1"
+spec_version: "1.1.1"
 related_architecture: /docs/specs/implementation-log/AD-E07-49-f116-v1.1-pivot-newcomer-workday.md
 covers:
   - F116
@@ -27,6 +27,15 @@ last_updated: 2026-08-13
 > 案例、`snapshot-pivot-view.test.tsx` 前端 5 案例）**維持不變、不弱化**；本文件僅描述 v1.1（US-182）
 > 新增之場景，兩份既有檔案作為 AD-E07-49 §9 R-3 要求之「無重複 emp_id 情境」回歸保護，已於本輪
 > 重新執行確認**維持全綠**（詳見「紅燈驗證」節）。
+>
+> **【v1.1.1 更正，2026-08-13】職稱來源反轉**：使用者於 dev MSSQL 實機檢視後更正職稱來源欄位
+> `ob_emphire.jfun_nm` → **`ob_emphire.title_name`**；API 回應欄位 `jfunNm` → **`titleName`**。
+> BR-5 之易錯點方向**整條反轉**（理由與 317 筆實測分佈見 spec §1.2）。本文件與兩份測試檔已同步
+> 更新：BR-5/AC-6 相關場景之陷阱值方向掉頭（現為「不得誤取 `jfun_nm`」），其餘場景僅欄名更名。
+> **本次更正發生於 tdd-implementation 已完成初版實作之後**（`git log` 顯示 commit `bbba920`
+> 「feat(e07): F116 v1.1 樞紐分析…」已提交，仍使用舊欄名 `jfun_nm`/`jfunNm`），因此本輪重新執行
+> 顯示「僅職稱相關場景紅、其餘場景綠」的混合結果，這是**預期且正確**的訊號（其餘場景已被正確
+> 實作，職稱來源尚待 tdd-implementation 跟進此更正），非測試邏輯錯誤——詳見「紅燈驗證」節。
 
 ---
 
@@ -96,14 +105,14 @@ AD-E07-49 §4（架構文件明文交付之介面契約，依 blindness-practica
 
 | # | 場景 | 依據 |
 |---|---|---|
-| TS-F116-010（★核心） | `jfunNm` 來源為 `jfun_nm`，同一員編 `title_name` 刻意設為不同值，斷言不得取到 `title_name` | BR-5、AC-6 |
-| TS-F116-011 | `jfun_nm=NULL` → `jfunNm` 契約值為 `null` | AC-8、BR-5 |
-| TS-F116-012 | `jfun_nm=''`（空字串）→ `jfunNm` 契約值為 `null` | BR-5 |
+| TS-F116-010（★核心） | `titleName` 來源為 `title_name`，同一員編 `jfun_nm` 刻意設為不同值，斷言不得取到 `jfun_nm`【v1.1.1 反轉】 | BR-5、AC-6 |
+| TS-F116-011 | `title_name=NULL` → `titleName` 契約值為 `null`（即使 `jfun_nm` 有值也不得 fallback） | AC-8、BR-5 |
+| TS-F116-012 | `title_name=''`（空字串）→ `titleName` 契約值為 `null`（同上，`jfun_nm` 有值也不得 fallback） | BR-5 |
 | TS-F116-013 | `hire_date` 恰等於門檻日 → `isNewcomer=false`（嚴格大於） | BR-7 |
 | TS-F116-014 | `hire_date` 門檻日+1天 → `isNewcomer=true` | BR-7 |
 | TS-F116-015 | `hire_date=NULL` → `isNewcomer=false` | BR-8 |
-| TS-F116-016（★核心 / I-F116-NO-ACTIVE-FILTER-01） | 員編 `resign_date` 有值（非哨兵、明確已離職）但該 run 有分派筆數 → 仍完整顯示 `empNm`/`jfunNm`/`isNewcomer`/計數，若實作誤加在職過濾該員編會從結果消失 | BR-9、T-6 |
-| TS-F116-017 | 「(空白)」分組（無 `ob_emphire` 對應）→ `jfunNm=null`、`isNewcomer=false` | BR-10 |
+| TS-F116-016（★核心 / I-F116-NO-ACTIVE-FILTER-01） | 員編 `resign_date` 有值（非哨兵、明確已離職）但該 run 有分派筆數 → 仍完整顯示 `empNm`/`titleName`/`isNewcomer`/計數，若實作誤加在職過濾該員編會從結果消失 | BR-9、T-6 |
+| TS-F116-017 | 「(空白)」分組（無 `ob_emphire` 對應）→ `titleName=null`、`isNewcomer=false` | BR-10 |
 | TS-F116-020（★核心 / T-3 邊界） | `workingDays` 僅計入 `project_workym` 當月 `rest_flg=0` 之列；混合 202606/07/08 邊界日（06-30/07-01/07-02/07-03/07-31/08-01）驗證月界不漏含首尾日、不誤含跨月日 | BR-12、T-3 |
 | TS-F116-021 | `projectWorkym` 回傳值取自 `run.project_workym` | §5.1.1 |
 | TS-F116-022（★核心） | `ob_calendar` 該月無資料 → `workingDays=0`（型別 `number`，非 `null`/`undefined`） | AC-11、BR-15 |
@@ -115,9 +124,13 @@ PK/UNIQUE 約束，會擋下重複插入；為重現「ETL full-replace 同步�
 情境，本場景使用**獨立**一份 `:memory:` DB（不與其他場景共用 `env`），以 `DataSource.query()` 執行
 `DROP TABLE` + 無 PK 之 `CREATE TABLE`，再以 raw SQL `INSERT`（非 `repo.save()`/`repo.insert()`，兩者
 皆會因整個 `ObEmphire` entity 欄位集合與精簡表不符而報 `no such column`）寫入重複列。此 raw DDL
-手法沿用既有 `c360.service.spec.ts` 已驗證之慣例。**實測結果**：對現行（v1.0）未去重之查詢執行本
-情境，`grandTotal` 回傳 `6`（真實應為 `3`）——**empirically 證實 AD-E07-49 §2 事實 4 所述之 join
-fan-out 缺陷確實存在**，是本輪紅燈驗證中訊號最強的一個案例。
+手法沿用既有 `c360.service.spec.ts` 已驗證之慣例。**首次實測結果**（更正前）：對現行（v1.0）未去重
+之查詢執行本情境，`grandTotal` 回傳 `6`（真實應為 `3`）——**empirically 證實 AD-E07-49 §2 事實 4 所述
+之 join fan-out 缺陷確實存在**，是首輪紅燈驗證中訊號最強的一個案例。**v1.1.1 更正後**：重建表之欄名
+已改為 `title_name`（對齊查詢實際 SELECT 的欄位，本測試不斷言職稱內容本身，僅需欄名一致），對「已
+實作但尚未套用本次更正」之現行程式碼（selects `e.jfun_nm`）重跑會拋 `SqliteError: no such column:
+emp.jfun_nm`——這同樣是紅得有道理（直接證明實作仍讀舊欄名），待 tdd-implementation 把查詢改為
+`e.title_name` 後即可正常執行。
 
 ---
 
@@ -130,7 +143,7 @@ fan-out 缺陷確實存在**，是本輪紅燈驗證中訊號最強的一個案�
 | TS-F116-030（★核心） | 職稱顯示於員編列，呈現順序為「員編 → 姓名 → 職稱」（分隔符號本身不斷言，authority=prototype） | AC-6 |
 | TS-F116-031 | `isNewcomer=true` → 員編列顯示 `pivot-newcomer-badge`，內文含「新人」 | AC-7 |
 | TS-F116-032 | `isNewcomer=false` → 不顯示 `pivot-newcomer-badge` | AC-7 |
-| TS-F116-033 | `jfunNm=null` → 不顯示職稱文字，但員編／姓名整列仍正常顯示（不得整列消失） | AC-8 |
+| TS-F116-033 | `titleName=null` → 不顯示職稱文字，但員編／姓名整列仍正常顯示（不得整列消失） | AC-8 |
 | TS-F116-034 | 「(空白)」分組員編列不顯示職稱與新人標註，計數仍正常顯示 | AC-8、BR-10 |
 | TS-F116-035（★核心） | 表頭欄序為「列標籤 → 總計 → 名單代號（升冪）」（`pivot-header-*` DOM 出現順序） | AC-9、BR-11 |
 | TS-F116-036 | 「總計」列（橫向）不受總計欄（縱向）移動影響，展開全部部門後仍維持在表格最下方 | AC-9、BR-11 |
@@ -151,22 +164,38 @@ fan-out 缺陷確實存在**，是本輪紅燈驗證中訊號最強的一個案�
 
 ---
 
-## 紅燈驗證（實際執行結果，2026-08-13）
+## 紅燈驗證
+
+### 首輪（2026-08-13，更正前，ring 剛建立、production 尚未實作）
 
 - **後端**：`npx vitest run assignment-run-report-pivot-newcomer-workday.spec.ts` → **21/21 紅**。
   8 個純函式案例因 `isNewcomerAtWorkym is not a function`（未匯出）；12 個整合案例因回應缺少
   `jfunNm`/`isNewcomer`/`workingDays`/`projectWorkym` 欄位（`undefined`）；TS-F116-018 因現行未去重
-  查詢實際回傳 `grandTotal=6`（應為 `3`）而紅，訊號最強（見上）。
-- **後端 v1.0 回歸**：`assignment-run-report-pivot.spec.ts` 重新執行 → **3/3 綠**，無回歸。
+  查詢實際回傳 `grandTotal=6`（應為 `3`）而紅，訊號最強。
 - **前端**：`npx vitest run snapshot-pivot-view-newcomer-workday.test.tsx` → **16/16 紅**，均因新
-  test-id（`pivot-emp-*`/`pivot-dim-*`/`pivot-total-row`/`pivot-header-*`/`pivot-newcomer-badge`/
-  `pivot-workday-*`）尚未存在於元件輸出而找不到元素，逐一以 `-t` 隔離重跑確認錯誤訊息均為
-  `Unable to find an element by: [data-testid="..."]`，非測試本身之型別/引用錯誤。
-- **前端 v1.0 回歸**：`snapshot-pivot-view.test.tsx` 重新執行 → **5/5 綠**，無回歸（僅既有、與本輪
-  無關之 React `key` prop 警告，非本輪引入）。
-- **型別 gate**：`tsc --noEmit`（後端 `tsconfig.json`、前端 `tsconfig.json`）分別對兩份新檔過濾輸出，
-  確認全部型別錯誤皆為預期之「新欄位/新匯出尚不存在」（`TS2305`/`TS2339`/`TS2353`），無測試檔自身
-  之型別錯誤或誤用。
+  test-id 尚未存在於元件輸出而找不到元素。
+- v1.0 回歸兩檔皆維持全綠（3/3、5/5）。
+
+### 二輪（2026-08-13，v1.1.1 更正後，此時 production 已由 tdd-implementation 完成初版實作——
+commit `bbba920`「feat(e07): F116 v1.1 樞紐分析…」，但仍使用更正前之 `jfun_nm`/`jfunNm`）
+
+> 本輪重跑呈現「僅職稱來源相關場景紅、其餘全綠」的**混合結果**——這是預期且正確的訊號：
+> tdd-implementation 已正確實作新人判定／workingDays／scope／欄序／ceil 等其餘全部行為，只有
+> BR-5 職稱來源尚待跟進本次更正。以下逐項列出，避免被誤判為測試邏輯錯誤。
+
+- **後端**：`npx vitest run` → **6 紅 / 15 綠**（21 個場景）。紅的 6 個精確對應職稱來源：
+  TS-F116-010/011/012（BR-5/AC-6 群組，`titleName` 回傳 `undefined`，因現行程式碼仍輸出
+  `jfunNm` 而非 `titleName`）、TS-F116-016/017（同上，斷言 `emp.titleName` 撲空）、TS-F116-018
+  （★最強訊號：現行 SQL 仍 `SELECT e.jfun_nm`，但本測試已將重建之 `ob_emphire` 表欄名改為
+  `title_name` 以對齊更正後契約，故直接拋 `SqliteError: no such column: emp.jfun_nm`——直接證明
+  production 查詢仍讀舊欄名）。其餘 15 個（新人判定、workingDays 計算與邊界、scope 獨立性）皆綠。
+- **前端**：`npx vitest run` → **1 紅 / 20 綠**（16 個 v1.1 + 5 個 v1.0 中的 v1.1 部分；v1.0 五個
+  全綠）。唯一紅的是 TS-F116-030（★核心，斷言員編列須顯示 `'業務專員'` 文字），因現行元件仍以
+  `jfunNm` 欄位渲染、mock fixture 已改用 `titleName`，元件找不到對應欄位而完全不渲染職稱 span，
+  DOM 中查無該文字。其餘（新人標註、`(空白)` 邊界、欄序、工作天模式、client-state）因不依賴職稱
+  「非空值是否正確顯示」而不受影響，皆綠。
+- **型別 gate**：`tsc --noEmit`（後端/前端）分別產出 6 個／7 個 `titleName does not exist on type
+  PivotEmplidNode` 錯誤，與上述紅燈案例數一一對應，無其餘型別錯誤或誤用。
 
 ---
 

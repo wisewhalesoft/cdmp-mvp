@@ -215,8 +215,8 @@ const RESULT_PAGE_MAX_SIZE = 200;
 export interface PivotEmplidNode {
   emplid: string;
   empNm: string | null;
-  /** F116 v1.1（BR-5）：職稱，來源唯一為 ob_emphire.jfun_nm；NULL/空字串 → null。 */
-  jfunNm: string | null;
+  /** F116 v1.1.1（BR-5 反轉）：職稱，來源唯一為 ob_emphire.title_name；NULL/空字串 → null。 */
+  titleName: string | null;
   /** F116 v1.1（BR-6/BR-7/BR-8）：到職未滿三個月（以 project_workym 月初為基準日）。 */
   isNewcomer: boolean;
   total: number;
@@ -566,7 +566,7 @@ export class AssignmentRunReportService {
             .select('emp.emp_id', 'emp_id')
             .addSelect('emp.dept_name', 'dept_name')
             .addSelect('emp.emp_nm', 'emp_nm')
-            .addSelect('emp.jfun_nm', 'jfun_nm')
+            .addSelect('emp.title_name', 'title_name')
             .addSelect('emp.hire_date', 'hire_date')
             .addSelect('ROW_NUMBER() OVER (PARTITION BY emp.emp_id ORDER BY emp.emp_id)', 'rn')
             .from('ob_emphire', 'emp'),
@@ -576,7 +576,7 @@ export class AssignmentRunReportService {
       .select('e.dept_name', 'deptName')
       .addSelect('r.emplid', 'emplid')
       .addSelect('e.emp_nm', 'empNm')
-      .addSelect('e.jfun_nm', 'jfunNm') // v1.1 AC-6 / BR-5：職稱唯一來源，不得取 title_name
+      .addSelect('e.title_name', 'titleName') // v1.1.1 AC-6 / BR-5：職稱唯一來源，不得取 jfun_nm（職能分類）
       .addSelect('e.hire_date', 'hireDate') // v1.1 AC-7：僅供 TS 端算 isNewcomer，不回傳（A-3）
       .addSelect('r.list_no', 'listNo')
       .addSelect('COUNT(*)', 'cnt')
@@ -584,7 +584,7 @@ export class AssignmentRunReportService {
       .groupBy('e.dept_name')
       .addGroupBy('r.emplid')
       .addGroupBy('e.emp_nm')
-      .addGroupBy('e.jfun_nm')
+      .addGroupBy('e.title_name')
       .addGroupBy('e.hire_date')
       .addGroupBy('r.list_no');
 
@@ -601,7 +601,7 @@ export class AssignmentRunReportService {
       deptName: string | null;
       emplid: string | null;
       empNm: string | null;
-      jfunNm: string | null;
+      titleName: string | null;
       hireDate: Date | string | null;
       listNo: string;
       cnt: number | string;
@@ -610,7 +610,7 @@ export class AssignmentRunReportService {
     // ---- in-memory 聚合為巢狀結構 ----
     interface EmpAgg {
       empNm: string | null;
-      jfunNm: string | null;
+      titleName: string | null;
       isNewcomer: boolean;
       total: number;
       byList: Map<string, number>;
@@ -644,13 +644,13 @@ export class AssignmentRunReportService {
       dept.byList.set(listNo, (dept.byList.get(listNo) ?? 0) + cnt);
 
       // BR-5：空字串等同無值 → null；BR-8/BR-10：無主檔對應 → hireDate null → isNewcomer false
-      const jfunNm = row.jfunNm ? String(row.jfunNm) : null;
+      const titleName = row.titleName ? String(row.titleName) : null;
 
       let emp = dept.emplids.get(emplid);
       if (!emp) {
         emp = {
           empNm: row.empNm ?? null,
-          jfunNm,
+          titleName,
           isNewcomer: isNewcomerAtWorkym(row.hireDate, projectWorkym),
           total: 0,
           byList: new Map(),
@@ -658,7 +658,7 @@ export class AssignmentRunReportService {
         dept.emplids.set(emplid, emp);
       }
       if (emp.empNm == null && row.empNm != null) emp.empNm = row.empNm;
-      if (emp.jfunNm == null && jfunNm != null) emp.jfunNm = jfunNm;
+      if (emp.titleName == null && titleName != null) emp.titleName = titleName;
       emp.total += cnt;
       emp.byList.set(listNo, (emp.byList.get(listNo) ?? 0) + cnt);
     }
@@ -682,7 +682,7 @@ export class AssignmentRunReportService {
           .map(([emplid, e]) => ({
             emplid,
             empNm: e.empNm,
-            jfunNm: e.jfunNm,
+            titleName: e.titleName,
             isNewcomer: e.isNewcomer,
             total: e.total,
             byList: mapToObj(e.byList),

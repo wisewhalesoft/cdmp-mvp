@@ -562,8 +562,8 @@ export async function getResultPage(
 export interface PivotEmplidNode {
   emplid: string;
   empNm: string | null;
-  /** F116 v1.1（BR-5）：職稱（ob_emphire.jfun_nm）；無值 → null。 */
-  jfunNm?: string | null;
+  /** F116 v1.1.1（BR-5 反轉）：職稱（ob_emphire.title_name，非 jfun_nm）；無值 → null。 */
+  titleName?: string | null;
   /** F116 v1.1（BR-6~BR-8）：到職未滿三個月（以 run 之 project_workym 月初為基準日）。 */
   isNewcomer?: boolean;
   total: number;

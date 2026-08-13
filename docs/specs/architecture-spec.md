@@ -9,6 +9,8 @@ covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011
 > **v2.30 / 2026-08-13 變更摘要（AD-E07-49：F116 v1.1 樞紐分析頁籤 — 職稱／新人標註／總計欄置前／工作天模式）**：
 >
 > 新增 **§5.19「F116 v1.1 樞紐分析頁籤架構決策（AD-E07-49）」** 與決策記錄 [`implementation-log/AD-E07-49-f116-v1.1-pivot-newcomer-workday.md`](implementation-log/AD-E07-49-f116-v1.1-pivot-newcomer-workday.md)。裁定 F116 v1.1 spec §12 之 A-1~A-5：**確認**（不推翻）A-1（工作天 `ceil(cnt/workingDays)` 換算為前端展示轉換，與既有佔比換算 BR-3 同構，不下推後端以免每層資料結構翻倍）、A-3（不回傳 `hireDate`，最小曝光面）、A-5（維度切換為純前端 UI state，不持久化）；**具體化** A-2（`workingDays` 複用 `assignment-list/stage0-estimate.service.ts` 匯出之純函式 `computeWorkingDayRatios`，比照 `assignment-run-pipeline.service.ts:53` 既有跨模組「只共用 pure function、不共用 injectable class」慣例，`I-RUN-EST-01` 延伸為第四消費者，不需在 `assignment.module.ts` 新增 `imports: [AssignmentListModule]`）；**推翻** A-4 之 spec 假設——查證 v1.0 現行 `getPivot` 之 TS 端 `Map` 聚合僅保證「輸出節點不重複」，不保證「`ob_emphire` 潛在重複 `emp_id` 列造成 join fan-out 時計數不被重複計入」，改為 SQL 層以 `ROW_NUMBER() OVER (PARTITION BY emp_id) = 1` 去重 derived table 取代直接 `LEFT JOIN ob_emphire`，使外層 `COUNT(*)` 天然正確。新增 5 個不變式（`I-F116-CALENDAR-SHARE-01` / `I-F116-EMPHIRE-DEDUP-01` / `I-F116-CEIL-PER-CELL-01` / `I-F116-NO-ACTIVE-FILTER-01` / `I-F116-CLIENT-STATE-01`）。無 schema / migration 變更。covers 補入 F116（v1.0 上線時未曾補列）。**A-4 為 HOW 層級修正，不影響 F116 spec 契約，不需回頭修訂 spec。**
+>
+> **同日更正（2026-08-13，隨 F116 spec v1.1.1 / AD-E07-49 v1.1）**：使用者實機檢視 dev MSSQL 317 筆資料後更正職稱來源——`ob_emphire.jfun_nm`（91% 為「營業一般職」，職能分類無辨識度）→ **`ob_emphire.title_name`**（業務專員／業務襄理／業務副理…13 種有意義分佈，符合「員編－姓名－職稱」原始意圖）；API 欄位 `jfunNm` → **`titleName`**。§5.19 mermaid 資料流圖與 AD-E07-49 之 SQL 示意／不變式表已同步改為 `title_name`/`titleName`。純欄位替換，型別同為 `nvarchar`（`title_name` 長度 30 vs `jfun_nm` 15）、NULL 特性相同（皆 12 筆 NULL），**不影響**先前 A-1~A-5 任何裁定，亦不需新增不變式（詳見 AD §10 變更紀錄 v1.1 列）。
 
 > **v2.29 / 2026-08-04 變更摘要（AD-E07-48：F117 部門比例「有處長」過濾 + F118 從上月複製「已複製過」提示 — 🔴 DRAFT，待人工審閱）**：
 >
@@ -2757,10 +2759,10 @@ F116 v1.0（2026-07-14 上線）之樞紐分析頁籤（`AssignmentRunReportServ
 ```mermaid
 graph TD
     A["GET runs/:runId/pivot"] --> B["run = runRepo.findOne(runId)\n404 若不存在（既有，不變）"]
-    B --> C["qb：r LEFT JOIN (去重 ob_emphire derived table, rn=1)\nGROUP BY dept_name/emplid/emp_nm/jfun_nm/hire_date/list_no\nscope 條件（既有，不變）"]
-    C --> D["TS Map 聚合（既有結構）\n+ jfunNm 直接投影\n+ isNewcomerAtWorkym(hireDate, project_workym)"]
+    B --> C["qb：r LEFT JOIN (去重 ob_emphire derived table, rn=1)\nGROUP BY dept_name/emplid/emp_nm/title_name/hire_date/list_no\nscope 條件（既有，不變）"]
+    C --> D["TS Map 聚合（既有結構）\n+ titleName 直接投影\n+ isNewcomerAtWorkym(hireDate, project_workym)"]
     B --> E["loadWorkingDays(run.project_workym)\n複用 computeWorkingDayRatios（I-RUN-EST-01 第四消費者）"]
-    D --> F["PivotResponse\n+ projectWorkym + workingDays\n+ 逐 emplid jfunNm/isNewcomer"]
+    D --> F["PivotResponse\n+ projectWorkym + workingDays\n+ 逐 emplid titleName/isNewcomer"]
     E --> F
     F --> G["前端：整月/工作天 toggle（純前端 ceil(cnt/workingDays)）\n計數/佔比 toggle（既有，前端）\n總計欄置左（純渲染順序）"]
 

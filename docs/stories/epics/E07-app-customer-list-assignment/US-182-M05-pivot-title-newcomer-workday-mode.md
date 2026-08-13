@@ -1,7 +1,7 @@
 ---
 last-updated: 2026-08-13
 version: v1.1-draft
-change-summary: "F116 v1.1：快照詳情『樞紐分析』頁籤 UX 精修 — 員編列補職稱＋新人標註、總計欄移至最前、新增『整月/工作天』第二維度。OQ-1~OQ-8 已由使用者於 2026-08-13 人工閘門全數裁定，AC 已回寫為確定條文，READY，待 spec-writer 產出 F116 v1.1 spec。"
+change-summary: "F116 v1.1：快照詳情『樞紐分析』頁籤 UX 精修 — 員編列補職稱＋新人標註、總計欄移至最前、新增『整月/工作天』第二維度。OQ-1~OQ-8 已由使用者於 2026-08-13 人工閘門全數裁定，AC 已回寫為確定條文。2026-08-13 使用者實機檢視後再更正職稱來源 jfun_nm → title_name（見文末變更紀錄）。READY，待 spec-writer 產出 F116 v1.1 spec。"
 ---
 
 # US-182：樞紐分析頁籤 UX 精修 — 職稱／新人標註／總計欄置前／工作天模式（F116 v1.1）
@@ -44,8 +44,9 @@ change-summary: "F116 v1.1：快照詳情『樞紐分析』頁籤 UX 精修 — 
 
 - **Given** 使用者於快照詳情「樞紐分析」頁籤，已展開任一部門列
 - **When** 檢視該部門下的員編列
-- **Then** 每一列除既有「員編＋姓名」外，另顯示**職稱**，來源為 `ob_emphire.JFUN_NM`（非 `TITLE_NAME`）
+- **Then** 每一列除既有「員編＋姓名」外，另顯示**職稱**，來源為 `ob_emphire.TITLE_NAME`（非 `JFUN_NM`；`JFUN_NM` 為職能分類非職稱，2026-08-13 使用者實機檢視後更正，見文末變更紀錄）
 - **And** 三者的呈現順序與串接方式為「員編－姓名－職稱」
+- **And** API 回應對應欄位命名為 `titleName`（對齊來源欄名 `title_name`，與既有 `empNm` / `deptName` 命名慣例一致）
 
 ### AC-2：未滿三個月標註「新人」
 
@@ -60,7 +61,7 @@ change-summary: "F116 v1.1：快照詳情『樞紐分析』頁籤 UX 精修 — 
 
 ### AC-3：職稱／新人標註的邊界情境
 
-- **Given** 員編對應之 `ob_emphire.JFUN_NM` 為 NULL 或空字串
+- **Given** 員編對應之 `ob_emphire.TITLE_NAME` 為 NULL 或空字串
 - **Then** 職稱欄位以空白／預留 placeholder 呈現（不得整列消失、不得報錯）
 - **Given** 員編對應之 `ob_emphire.HIRE_DATE` 為 NULL
 - **Then** 不顯示「新人」標註（無法判定到職資歷，不臆測）
@@ -121,7 +122,7 @@ change-summary: "F116 v1.1：快照詳情『樞紐分析』頁籤 UX 精修 — 
 | sticky 首欄＋表頭、水平捲動 | 不變（新增「職稱」欄與「工作天」模式不應迫使頁面本體橫向捲動） |
 | 總計行（表格最下方一列） | 「總計欄」（縱向、最右→最左）與「總計列」（橫向、最下）為兩個不同軸；[[OQ-8]] RESOLVED：本次**只移動總計欄**（最右→最左），**總計列維持在表格最下方不動**，變動最小化 |
 | 處長轄區 scope（`scopeByCreator`，只回轄區內 emplid，不回 403） | 不變；職稱／新人標註／工作天換算僅套用於既有 scoped 後的資料列，不擴大或縮小可見範圍 |
-| API 回應結構（`listNos` / `depts[].emplids[]` / `grandByList` / `grandTotal`） | 是否需擴充欄位（如 `jfunNm`、`isNewcomer`、`workday` 相關數值）由 spec-writer / system-architect 依本 story AC 設計，本 story 不預先定義契約 |
+| API 回應結構（`listNos` / `depts[].emplids[]` / `grandByList` / `grandTotal`） | 是否需擴充欄位（如 `titleName`、`isNewcomer`、`workday` 相關數值）由 spec-writer / system-architect 依本 story AC 設計，本 story 不預先定義契約 |
 | 運算歸屬（前端換算 vs 後端下推） | 現行佔比為前端換算；工作天換算之運算歸屬（前端 or 後端）由 system-architect 決定，本 story 只定義使用者可見結果 |
 
 ---
@@ -172,6 +173,16 @@ change-summary: "F116 v1.1：快照詳情『樞紐分析』頁籤 UX 精修 — 
 
 ---
 
+## 變更紀錄
+
+### 2026-08-13（使用者實機檢視後更正）：職稱來源 `jfun_nm` → `title_name`
+
+- **更正內容**：AC-1 職稱欄位來源由 `ob_emphire.JFUN_NM` 改為 `ob_emphire.TITLE_NAME`；對應 API 回應欄位命名由 `jfunNm` 改為 `titleName`。
+- **理由**：使用者於 dev MSSQL 實測 317 筆 `ob_emphire` 資料後發現，`JFUN_NM` 91%（289/317）皆為「營業一般職」，屬**職能分類**，放進樞紐表列標籤幾乎無辨識度；`TITLE_NAME` 才是真正的**職稱**（業務專員／業務襄理／業務副理…等 13 種有意義分佈），符合「員編－姓名－職稱」原始需求意圖。兩欄 NULL 筆數相同（各 12 筆），故 AC-3 職稱缺值邊界條文語意不變。
+- **定性**：需求層更正（來源欄位認知錯誤），非實作缺陷；未牽動 AC-2（新人標註）、AC-4（總計欄置前）、AC-5/AC-6（工作天模式）之任何裁定結論。
+
+---
+
 ## 相依性
 
 - **Blocked By**：[F116](../../../specs/features/F116-snapshot-pivot-analysis.md) v1.0（快照詳情樞紐分析頁籤，已上線）
@@ -184,7 +195,7 @@ change-summary: "F116 v1.1：快照詳情『樞紐分析』頁籤 UX 精修 — 
 
 - [x] Open Questions（OQ-1 ~ OQ-8）全數由使用者裁定（2026-08-13），結論已回寫本文件
 - [ ] spec-writer 依裁定結論將 F116 spec 升版至 v1.1（含 AC、API 契約異動）
-- [ ] system-architect 確認資料來源（`ob_emphire.JFUN_NM`/`HIRE_DATE`、工作日曆規則）與現行架構相容，並更新 architecture-spec 之 pivot 契約段落
+- [ ] system-architect 確認資料來源（`ob_emphire.TITLE_NAME`/`HIRE_DATE`、工作日曆規則）與現行架構相容，並更新 architecture-spec 之 pivot 契約段落
 - [ ] ui-ux-designer 更新 `prototypes/35-snapshot-detail.html` 樞紐分析頁籤（職稱欄／新人標註／總計欄位置／整月-工作天 toggle）
 - [ ] AC-1 ~ AC-6 全數轉換為可執行測試並通過（由 test-generator / tdd-implementation 執行）
 - [ ] 既有 F116 v1.0 回歸測試（計數/佔比、展開收合、處長 scope、空結果）不受影響

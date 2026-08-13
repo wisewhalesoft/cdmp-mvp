@@ -19,7 +19,7 @@ import { getPivot, type PivotResponse } from '@/api/assignment-run';
  * 含總計欄（最左）／總計列（最下）、整月/工作天 toggle、計數/佔比 toggle、sticky 首欄與表頭。
  *
  * v1.1（US-182）：
- *   - AC-6：員編列顯示「員編 → 姓名 → 職稱」（職稱來源為 API jfunNm，即 ob_emphire.jfun_nm）
+ *   - AC-6：員編列顯示「員編 → 姓名 → 職稱」（職稱來源為 API titleName，即 ob_emphire.title_name）
  *   - AC-7：isNewcomer=true → 顯示「新人」標註（判定於後端，前端不重算）
  *   - AC-9 / BR-11：總計「欄」移至最左（列標籤欄之後、名單代號欄之前）；總計「列」維持最下
  *   - AC-10 / BR-13、BR-14：工作天模式每格 = ceil(整月計數 ÷ workingDays)，逐格獨立進位
@@ -376,12 +376,12 @@ export function SnapshotPivotView({ runId }: { runId: string }) {
                                   <span className="text-gray-800">{e.empNm}</span>
                                 </>
                               )}
-                              {e.jfunNm && (
+                              {e.titleName && (
                                 <>
                                   <span className="text-gray-300" aria-hidden="true">
                                     -
                                   </span>
-                                  <span className="text-[11px] text-gray-500">{e.jfunNm}</span>
+                                  <span className="text-[11px] text-gray-500">{e.titleName}</span>
                                 </>
                               )}
                               {e.isNewcomer && (

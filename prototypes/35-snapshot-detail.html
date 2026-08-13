@@ -709,42 +709,48 @@
     // 示範資料採 legacy 202607 分派名單樞紐（工作表2）。每個部門的 colTotals 為該部門各名單的案件數，
     // 具名員編列 + 「其他 N 位員編」聚合列（= colTotal − 具名列合計），確保列小計 / 欄總計 / 總計皆對得起來。
     const PIVOT_LISTS = ['OB202607001','OB202607002','OB202607003','OB202607004','OB202607006','OB202607007','OB202607008','OB202607009','OB202607010','OB202607011','OB202607012','OB202607013'];
-    // v1.1（US-182）：emps 增列 jfun（= API `jfunNm`，職稱，可為 null）與 newcomer（= API `isNewcomer`）。
-    //   · 20501 王大明：jfun = null（職稱缺值示範）
-    //   · 22159 陳志明：newcomer = true（新人標註示範）
-    //   · 30112 黃雅婷：jfun = null 且 newcomer = true（兩個邊界同時發生）
-    //   · 「(空白)」部門／員編（BR-2 / BR-10）：jfun = null、newcomer = false，一律不顯示職稱與新人標註
+    // v1.1（US-182）：emps 增列 titleName（= API `titleName`，職稱，來源 `ob_emphire.title_name`，可為 null）
+    // 與 newcomer（= API `isNewcomer`）。
+    //   ⚠ 職稱來源為 `title_name`，**不是** `jfun_nm`（v1.1.1 使用者更正，勿改回）。實測 dev MSSQL 317 筆中
+    //     舊來源有 91%（289/317）為「營業一般職」，屬職能分類、放進列標籤無辨識度；title_name 才是真正職稱。
+    //   · 20501 王大明：titleName = null（職稱缺值示範）
+    //   · 21557 林淑芬：titleName = 最長職稱「業務專員(電銷)」＋ newcomer = true（版面最寬組合）
+    //   · 30112 黃雅婷：titleName = null 且 newcomer = true（兩個邊界同時發生）
+    //   · 40233 吳建宏：最長職稱但無新人標註
+    //   · 「(空白)」部門／員編（BR-2 / BR-10）：titleName = null、newcomer = false，不顯示職稱與新人標註
+    // 職稱值取自 dev MSSQL `ob_emphire.title_name` 之真實分佈（業務專員 126／業務專員(電銷) 98／
+    // 業務襄理 27／業務副理 15／業務主任 10／…／NULL 12），使版面寬度評估貼近實際。
     // 空格慣例：counts 為 null＝該員編在該名單無分派案件（對應 API `byList` 無該 key），三種模式一律顯示「-」。
     // 示範資料刻意不含數值 0 的格：真實 API 之 byList 由 GROUP BY 產生，計數為 0 的 key 不會出現。
     const PIVOT_DEPTS = [
       { dept: '中區電銷1', otherEmps: 24,
         colTotals: [3400,2600,2400,2900,380,720,620,1750,1300,1150,1350,1362],
         emps: [
-          { id: '20501', nm: '王大明', jfun: null,        newcomer: false, counts: [46,34,32,37,30,59,9,22,null,null,17,24] },
-          { id: '21557', nm: '林淑芬', jfun: '資深業務專員', newcomer: false, counts: [360,271,249,300,30,59,62,176,69,61,null,null] },
-          { id: '22159', nm: '陳志明', jfun: '業務專員',   newcomer: true,  counts: [446,340,310,374,30,59,76,220,null,null,null,null] },
+          { id: '20501', nm: '王大明', titleName: null,             newcomer: false, counts: [46,34,32,37,30,59,9,22,null,null,17,24] },
+          { id: '21557', nm: '林淑芬', titleName: '業務專員(電銷)', newcomer: true,  counts: [360,271,249,300,30,59,62,176,69,61,null,null] },
+          { id: '22159', nm: '陳志明', titleName: '業務專員',       newcomer: false, counts: [446,340,310,374,30,59,76,220,null,null,null,null] },
         ] },
       { dept: '北區電銷1', otherEmps: 38,
         colTotals: [6200,5200,4600,5600,640,1180,1320,3400,1900,1640,1650,1650],
         emps: [
-          { id: '20988', nm: '張美玲', jfun: '業務襄理', newcomer: false, counts: [780,610,540,690,60,120,140,410,180,150,220,190] },
-          { id: '21744', nm: '李國華', jfun: '業務主任', newcomer: false, counts: [1020,880,760,940,70,130,160,520,240,210,260,240] },
+          { id: '20988', nm: '張美玲', titleName: '業務襄理', newcomer: false, counts: [780,610,540,690,60,120,140,410,180,150,220,190] },
+          { id: '21744', nm: '李國華', titleName: '業務副理', newcomer: false, counts: [1020,880,760,940,70,130,160,520,240,210,260,240] },
         ] },
       { dept: '南區電銷', otherEmps: 18,
         colTotals: [2200,1800,1600,2000,240,420,480,1200,680,560,700,660],
         emps: [
-          { id: '30112', nm: '黃雅婷', jfun: null, newcomer: true, counts: [180,150,130,170,20,40,44,110,60,50,64,52] },
+          { id: '30112', nm: '黃雅婷', titleName: null, newcomer: true, counts: [180,150,130,170,20,40,44,110,60,50,64,52] },
         ] },
       { dept: '北區電銷2', otherEmps: 12,
         colTotals: [1560,1280,1120,1420,160,300,340,860,460,380,470,410],
         emps: [
-          { id: '40233', nm: '吳建宏', jfun: '業務專員', newcomer: false, counts: [120,100,88,110,14,26,30,72,40,32,42,36] },
+          { id: '40233', nm: '吳建宏', titleName: '業務專員(電銷)', newcomer: false, counts: [120,100,88,110,14,26,30,72,40,32,42,36] },
         ] },
       // BR-2：dept / emplid 為空 → 歸組「(空白)」，排序置末
       { dept: '(空白)', otherEmps: 0,
         colTotals: [40,30,20,20,5,8,6,10,4,3,5,4],
         emps: [
-          { id: '(空白)', nm: null, jfun: null, newcomer: false, counts: [40,30,20,20,5,8,6,10,4,3,5,4] },
+          { id: '(空白)', nm: null, titleName: null, newcomer: false, counts: [40,30,20,20,5,8,6,10,4,3,5,4] },
         ] },
     ];
 
@@ -791,11 +797,11 @@
     }
 
     // 員編列標籤：員編 - 姓名 - 職稱 [新人]
-    // 職稱（jfun）為 null / 空字串 → 省略職稱與其分隔符號，不留空位（AC-8）
+    // 職稱（titleName，來源 ob_emphire.title_name）為 null / 空字串 → 省略職稱與其分隔符號，不留空位（AC-8）
     function pvEmpLabel(e) {
       let h = `<span class="mono-sub text-xs text-gray-500" data-pv-emplid-text>${e.id}</span>`;
       if (e.nm) h += `<span class="text-gray-300" aria-hidden="true">-</span><span class="text-xs font-medium text-gray-700" data-pv-empnm>${e.nm}</span>`;
-      if (e.jfun) h += `<span class="text-gray-300" aria-hidden="true">-</span><span class="text-xs text-gray-500" data-pv-jfunnm>${e.jfun}</span>`;
+      if (e.titleName) h += `<span class="text-gray-300" aria-hidden="true">-</span><span class="text-xs text-gray-500" data-pv-titlename>${e.titleName}</span>`;
       if (e.newcomer) h += `<span data-pv-newcomer="true" class="shrink-0 whitespace-nowrap inline-flex items-center gap-0.5 ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200"><i data-lucide="user-plus" class="w-2.5 h-2.5"></i>新人</span>`;
       return h;
     }

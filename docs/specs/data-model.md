@@ -1,12 +1,14 @@
 ---
 spec-id: data-model
 title: 資料模型
-version: "1.20"
+version: "1.21"
 date: 2026-08-13
 status: Draft
 ---
 
-> **v1.20（2026-08-13 / US-182 / F116 v1.1）**：**無 schema 變更、無 migration**。僅補齊既有欄位之使用說明：`ob_emphire` 新增「F116 v1.1 使用模式」（職稱來源**唯一**為 `jfun_nm`，**禁用** `title_name`；`hire_date` 用於新人判定，基準日＝run `project_workym` 月初、判定式 `hire_date > 基準日 − 3 個月` 嚴格未滿；**不得**施加 `resign_date` 在職過濾）；`ob_calendar` 用途補「F116 v1.1 月工作日數換算」（`rest_flg='0'` 且 `calendar_date` 落於 `project_workym` 當月；查無該月 → `workingDays = 0`，屬可容忍降級非錯誤）。兩表「相關功能」補列 F116。
+> **v1.21（2026-08-13 / US-182 / F116 v1.1.1 — 職稱來源更正）**：`ob_emphire` 之「F116 使用模式」段**職稱來源反轉**：由 `jfun_nm` 改為 **`title_name`**，並改為 **禁用 `jfun_nm`**。理由：使用者於 dev MSSQL 實機檢視後更正——317 筆實測 `jfun_nm` 91%（289/317）為「營業一般職」屬**職能分類**無辨識度，`title_name` 才是真正職稱（13 種有意義分佈）。API 欄位隨之由 `jfunNm` 更名 `titleName`。兩欄 NULL 筆數相同（各 12），**缺值邊界語意不變**。**無 schema 變更、無 migration**。
+
+> **v1.20（2026-08-13 / US-182 / F116 v1.1）**：**無 schema 變更、無 migration**。僅補齊既有欄位之使用說明：`ob_emphire` 新增「F116 使用模式」（職稱來源＋`hire_date` 新人判定＋禁在職過濾；職稱來源欄位已於 v1.21 更正，以 v1.21 為準；`hire_date` 用於新人判定，基準日＝run `project_workym` 月初、判定式 `hire_date > 基準日 − 3 個月` 嚴格未滿；**不得**施加 `resign_date` 在職過濾）；`ob_calendar` 用途補「F116 v1.1 月工作日數換算」（`rest_flg='0'` 且 `calendar_date` 落於 `project_workym` 當月；查無該月 → `workingDays = 0`，屬可容忍降級非錯誤）。兩表「相關功能」補列 F116。
 
 > **v1.18（2026-07-02 / AD-E07-37 定案）**：System Architect 裁定 F109 §12.2 全部 5 個 Open Question，詳見 [`implementation-log/AD-E07-37-f109-customer-source-filter.md`](implementation-log/AD-E07-37-f109-customer-source-filter.md)。schema 定案（無變更，確認 spec-writer v1.17 草擬型別）：`data_source VARCHAR(20) NOT NULL DEFAULT 'ob_pool_data'` + PG CHECK（SQLite 無 CHECK，應用層保證，同 `field_type` 慣例）；既有 7 筆透過 `ALTER TABLE ADD COLUMN ... DEFAULT` 自動 backfill（免 UPDATE 陳述式）；migration 編號 **m305**（`AddDataSourceToPooldataFieldWhitelist`，schema-only）+ **m306**（`SeedCustomerCoreFilterFields`，8 筆白名單 + 106 筆可選值 seed，`ON CONFLICT DO NOTHING` 冪等）。**新增**：`ob_list_definition.condition_payload.conditions[]` JSONB schema 補 `dataSource?: 'ob_pool_data' | 'customer_core'`（optional，F109 上線前既有名單無此 key）——寫入時由 `AssignmentListService.stampConditionDataSource` 固化；讀取時缺值以靜態常數 `CUSTOMER_CORE_COLUMN_NAMES` fallback 判定，兩者皆不 runtime 查白名單（維持 BR-6「Stage 1 不 join 白名單」）。**不需要**對既有 `condition_payload` 做 backfill migration（F109 前不可能有 customer_core 欄名存在於舊 payload，白名單驗證已擋）。
 
@@ -1859,11 +1861,11 @@ PK：`appl_no` [ASSUMPTION] 原表（`OB_ARRETURNDF_MIN_CAP`）無 PK constraint
 >
 > **F082 v1.2 使用模式（PO 決議 F082-A 落地，2026-05-16）**：F082 業務員清單來源為 `appdb.ob_emphire` **全取**（不過濾 `resign_date`）；每筆員工 service 層即時計算 `isResigned = (resign_date IS NOT NULL)`；F082 GET response `employees[].isResigned` 由此衍生；UI 顯示「離職」badge；per-DEPT 比例驗算排除 `isResigned = true` 員工；既有 `ob_empl_set` ration 紀錄保留供歷史追溯，不自動清除。
 >
-> **F116 v1.1 使用模式（US-182 拍板，2026-08-13）**：快照詳情「樞紐分析」頁籤依 `emp_id` LEFT JOIN 補員編列的顯示資訊，使用三個既有欄位，**不新增欄位、不需 migration**：
-> - **職稱**：來源**唯一**為 `jfun_nm`（職務名稱）。⚠ **禁止**改用 `title_name`（職稱名稱）——兩欄並存且語意相近，取錯欄位為已知易錯點（F116 BR-5）。
+> **F116 v1.1.1 使用模式（US-182 拍板，2026-08-13；職稱來源同日更正）**：快照詳情「樞紐分析」頁籤依 `emp_id` LEFT JOIN 補員編列的顯示資訊，使用三個既有欄位，**不新增欄位、不需 migration**：
+> - **職稱**：來源**唯一**為 `title_name`（職稱名稱）。⚠ **禁止**改用 `jfun_nm`（職務名稱）——`jfun_nm` 為**職能分類**非職稱（dev MSSQL 317 筆實測：91% 為「營業一般職」，僅 9 種值且無辨識度），`title_name` 才是真正職稱（業務專員 126／業務專員(電銷) 98／業務襄理 27／業務副理 15…共 13 種）。兩欄並存且語意相近，取錯欄位為已知易錯點（F116 v1.1 曾誤定為 `jfun_nm`，2026-08-13 使用者實機檢視後更正為 v1.1.1；F116 BR-5）。兩欄 NULL 筆數相同（各 12），缺值邊界語意不受此更正影響。
 > - **新人判定**：來源 `hire_date`。基準日 = 該 run `assignment_run.project_workym` 之**當月 1 日**；判定式 `hire_date > 基準日 − 3 個月`（**嚴格大於**，恰滿 3 個月不算新人）；`hire_date` 為 NULL → 一律不標註。月份位移與比較於 **TS 端 date-only** 計算，不下推 MSSQL `DATEADD`/`DATEDIFF`（F116 BR-6 ~ BR-8 / T-2）。
 > - **不做在職過濾**：F116 呈現的是歷史 run 快照之分派事實，**禁止**於 pivot 查詢引入 `emphire-active.util` 或任何 `resign_date` 條件；離職者仍須完整顯示姓名／職稱／新人標註（F116 BR-9 / T-6）。此與本表「在職員工判定條件」之一般規則刻意不同，勿混用。
-> - **重複列防禦**：`jfun_nm` / `hire_date` 進 SELECT 即須進 GROUP BY（MSSQL 嚴格要求）；PK 為 `emp_id` 理論上不重複，但本表為 ETL full replace 同步表，聚合結果須確保同一 `emplid` 收斂為單一節點、計數不重複累加（F116 T-4 / ⚠ A-4）。
+> - **重複列防禦**：`title_name` / `hire_date` 進 SELECT 即須進 GROUP BY（MSSQL 嚴格要求）；PK 為 `emp_id` 理論上不重複，但本表為 ETL full replace 同步表，聚合結果須確保同一 `emplid` 收斂為單一節點、計數不重複累加（F116 T-4 / ⚠ A-4）。
 
 PK：`emp_id` [ASSUMPTION] 原 OBEMPHIRE 表無 PK constraint，遷移時補建 `PRIMARY KEY (emp_id)` 以利 join。
 
@@ -1906,7 +1908,7 @@ Integration test 共用 fixture factory 模組 `apps/api/test/fixtures/ob-emphir
 
 **測試使用最低必要欄位**：`emp_id` / `emp_nm` / `dept_code` / `resign_date`（其他欄位可 NULL；fixture factory 預設帶入合理值）。詳見 [F082 v1.3 §11 測試 Fixture 策略](features/F082-set-personnel-ratio.md#11-實作-checklist)。
 
-**相關功能**：[F058](features/F058-edit-personnel-ratio.md)、[F061](features/F061-trigger-assignment-run.md)、[F063](features/F063-view-run-result-summary.md)、[F064](features/F064-export-assignment-result.md)、[F082 v1.3](features/F082-set-personnel-ratio.md)（per-DEPT 比例驗算 + 離職員工 isResigned flag + 全員離職邊界）、[F116 v1.1](features/F116-snapshot-pivot-analysis.md)（樞紐分析員編列職稱 `jfun_nm` + 新人判定 `hire_date`；不做在職過濾）
+**相關功能**：[F058](features/F058-edit-personnel-ratio.md)、[F061](features/F061-trigger-assignment-run.md)、[F063](features/F063-view-run-result-summary.md)、[F064](features/F064-export-assignment-result.md)、[F082 v1.3](features/F082-set-personnel-ratio.md)（per-DEPT 比例驗算 + 離職員工 isResigned flag + 全員離職邊界）、[F116 v1.1.1](features/F116-snapshot-pivot-analysis.md)（樞紐分析員編列職稱 `title_name` + 新人判定 `hire_date`；不做在職過濾）
 
 ---
 

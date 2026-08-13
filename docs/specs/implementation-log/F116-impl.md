@@ -2,7 +2,7 @@
 type: implementation-log
 feature_id: F116
 feature_name: 快照詳情 — 樞紐分析頁籤（v1.1：職稱／新人標註／總計欄置前／工作天模式）
-spec_version: "1.1"
+spec_version: "1.1.1"
 related_spec: /docs/specs/features/F116-snapshot-pivot-analysis.md
 related_architecture: /docs/specs/implementation-log/AD-E07-49-f116-v1.1-pivot-newcomer-workday.md
 related_test_design: /docs/test-specs/features/F116-test.md
@@ -15,6 +15,35 @@ last_updated: 2026-08-13
 > 本輪僅實作 v1.1 增量（US-182）。v1.0 已於 2026-07-14 上線，其既有行為（聚合語意、排序、
 > 處長 scope、404）未變更；v1.0 既有測試（後端 3 案例、前端 5 案例）維持全綠作為回歸保護
 > （AD-E07-49 §9 R-3 驗收條件）。**本輪未新增、未修改、未刪除任何測試檔**。
+>
+> **本文件已依 v1.1.1 更正（2026-08-13）通篇改為 `titleName` / `title_name`**，更正經過見文末
+> 「v1.1.1 更正紀錄」。
+
+## v1.1.1 更正紀錄（2026-08-13）— 職稱來源 `jfun_nm` → `title_name`
+
+**觸發**：使用者實機檢視後發現職稱欄無辨識度。dev MSSQL 317 筆實測顯示 `jfun_nm` 91% 為
+「營業一般職」（**職能分類**，非職稱），`title_name` 才是真正職稱（業務專員／業務襄理／業務副理…
+13 種有意義分佈，最長 8 字「業務專員(電銷)」）。spec 升版 v1.1.1，**BR-5 整條反轉**為
+「來源唯一 `title_name`、**禁用** `jfun_nm`」；API 欄位 `jfunNm` **更名**為 `titleName`。
+
+**定性**：需求層更正（來源欄位認知錯誤），非實作缺陷。未牽動新人判定（BR-6~BR-8）、總計欄位置
+（BR-11）、工作天模式（BR-12~BR-16）之任何裁定；不新增/移除欄位、不需 migration、不新增錯誤碼。
+
+**生產碼異動（純欄位更名，3 支檔案）**：
+
+| 檔案 | 異動 |
+|---|---|
+| `assignment-run-report.service.ts` | 去重 derived table 之 `emp.jfun_nm → emp.title_name`；外層 `SELECT e.jfun_nm AS jfunNm → e.title_name AS titleName`；`GROUP BY e.jfun_nm → e.title_name`；`PivotEmplidNode.jfunNm → titleName`；raw row 型別與 TS 端聚合投影同步 |
+| `apps/web/src/api/assignment-run.ts` | 前端 `PivotEmplidNode.jfunNm? → titleName?`（維持 optional，理由同 D-3） |
+| `snapshot-pivot-view.tsx` | 渲染條件與內容 `e.jfunNm → e.titleName` |
+
+**未做 fallback**：`title_name` 為 NULL／空字串時契約值即 `null`，**不**回退取 `jfun_nm`
+（TS-F116-011 / 012 之 fixture 刻意讓 `jfun_nm` 於此情境仍有值以偵測誤 fallback）。去重 derived
+table 之欄位清單亦已移除 `jfun_nm`（TS-F116-018 重建之精簡表僅有 `title_name`，若仍 SELECT
+`jfun_nm` 會拋 `SqliteError: no such column`）。
+
+**驗證**：後端 21/21、前端 16/16 全綠；v1.0 回歸 3/3、5/5 維持全綠；後端（排除 `*.mssql.spec.ts`）
+196 檔 2881 pass / 0 fail；前端 128 檔 1647 pass / 0 fail；兩端 tsc 皆過。測試檔異動為零。
 
 ## Test Results Summary
 
@@ -27,12 +56,12 @@ last_updated: 2026-08-13
 | TS-F116-003 | 接受 `Date` 與 `'YYYY-MM-DD'` 兩種輸入，結果一致（T-2） | PASS |
 | TS-F116-004 | 判定不隨系統當日漂移（`vi.setSystemTime` 相差 4 年） | PASS |
 | TS-F116-005 | 跨年份曆月位移（`202601` → 門檻 `2025-10-01`） | PASS |
-| TS-F116-010 | `jfunNm` 來源為 `jfun_nm`，非 `title_name`（BR-5） | PASS |
-| TS-F116-011 / 012 | `jfun_nm` NULL／空字串 → `jfunNm = null` | PASS |
+| TS-F116-010 | `titleName` 來源為 `title_name`，非 `jfun_nm`（BR-5 v1.1.1 反轉） | PASS |
+| TS-F116-011 / 012 | `title_name` NULL／空字串 → `titleName = null` | PASS |
 | TS-F116-013 / 014 | 門檻日 → false；門檻日+1 → true（嚴格大於） | PASS |
 | TS-F116-015 | `hire_date=NULL` → `isNewcomer=false` | PASS |
 | TS-F116-016 | 已離職員編仍完整顯示（I-F116-NO-ACTIVE-FILTER-01 / T-6） | PASS |
-| TS-F116-017 | 「(空白)」分組 → `jfunNm=null`、`isNewcomer=false`（BR-10） | PASS |
+| TS-F116-017 | 「(空白)」分組 → `titleName=null`、`isNewcomer=false`（BR-10） | PASS |
 | TS-F116-018 | `ob_emphire` 重複 `emp_id` 不 fan-out（I-F116-EMPHIRE-DEDUP-01） | PASS |
 | TS-F116-020 | `workingDays` 月界正確（06-30／08-01 不計入，07-01／07-31 計入，T-3） | PASS |
 | TS-F116-021 | `projectWorkym` 取自 `run.project_workym` | PASS |
@@ -45,7 +74,7 @@ last_updated: 2026-08-13
 |---|---|---|
 | TS-F116-030 | 員編 → 姓名 → 職稱 之呈現順序（AC-6） | PASS |
 | TS-F116-031 / 032 | `isNewcomer` true/false → 顯示／不顯示 `pivot-newcomer-badge` | PASS |
-| TS-F116-033 / 034 | `jfunNm=null`、「(空白)」分組之降級呈現（AC-8 / BR-10） | PASS |
+| TS-F116-033 / 034 | `titleName=null`、「(空白)」分組之降級呈現（AC-8 / BR-10） | PASS |
 | TS-F116-035 / 036 | 欄序 `列標籤 → 總計 → 名單代號`；總計列維持最下（AC-9 / BR-11） | PASS |
 | TS-F116-037 / 038 | 工作天 `ceil(cnt ÷ workingDays)`、逐格獨立（I-F116-CEIL-PER-CELL-01） | PASS |
 | TS-F116-039 / 040 / 041 | 工作天下佔比 disabled、值回落計數、切回整月恢復（BR-16） | PASS |
@@ -69,7 +98,7 @@ last_updated: 2026-08-13
 
 | 檔案 | 類型 | 說明 |
 |---|---|---|
-| `apps/api/src/modules/assignment/services/assignment-run-report.service.ts` | modified | `PivotEmplidNode` 增 `jfunNm`/`isNewcomer`、`PivotResponse` 增 `projectWorkym`/`workingDays`；新增匯出純函式 `isNewcomerAtWorkym`；`getPivot` join 改去重 derived table 並擴充 `jfun_nm`/`hire_date`；新增 private `loadWorkingDays(ym)` |
+| `apps/api/src/modules/assignment/services/assignment-run-report.service.ts` | modified | `PivotEmplidNode` 增 `titleName`/`isNewcomer`、`PivotResponse` 增 `projectWorkym`/`workingDays`；新增匯出純函式 `isNewcomerAtWorkym`；`getPivot` join 改去重 derived table 並擴充 `title_name`/`hire_date`；新增 private `loadWorkingDays(ym)` |
 | `apps/web/src/api/assignment-run.ts` | modified | 前端 `PivotResponse`／`PivotEmplidNode` 型別副本補 v1.1 欄位（optional，見「架構決策 D-3」） |
 | `apps/web/src/pages/assignment/_components/snapshot-pivot-view.tsx` | modified | 總計欄置左、期間（整月／工作天）segmented toggle、工作天逐格 `ceil`、`workingDays=0` 降級與提示區塊、員編列職稱與「新人」標註、v1.1 test-id |
 

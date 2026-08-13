@@ -14,6 +14,10 @@
  *
  * v1.0 既有測試（snapshot-pivot-view.test.tsx）維持不變、不弱化；本檔僅新增 v1.1 場景。
  *
+ * 【v1.1.1 更正，2026-08-13】職稱來源由 `ob_emphire.jfun_nm` 改為 `ob_emphire.title_name`；
+ * API 欄位 `jfunNm` → `titleName`（BR-5 整條反轉，理由見 spec §1.2）。前端僅原樣渲染 API 回應
+ * 欄位、不涉來源欄位判斷，故本檔僅為欄位更名，無斷言方向反轉。
+ *
  * 本檔新定義之 test-id（prototype 僅以原生 id/class 標註處，由本檔裁定，前端實作須依此命名，
  * 沿用既有 `pivot-dept-{deptName}` 之命名風格）：
  *   - `pivot-emp-{emplid}`：員編列容器（平行於既有 `pivot-dept-{deptName}`）
@@ -37,7 +41,7 @@ vi.mock('@/api/assignment-run');
 const mockedGetPivot = vi.mocked(runApi.getPivot);
 
 // 基準情境：對齊 v1.0 既有 pivot() fixture 之部門/員編結構，額外補上 v1.1 欄位
-// （jfunNm=null 與 isNewcomer=true 同時發生於 20502，比照 prototype PIVOT_DEPTS 之
+// （titleName=null 與 isNewcomer=true 同時發生於 20502，比照 prototype PIVOT_DEPTS 之
 // 30112 黃雅婷「兩個邊界同時發生」示範案例，35-snapshot-detail.html:715）
 function pivotV11(): runApi.PivotResponse {
   return {
@@ -51,8 +55,8 @@ function pivotV11(): runApi.PivotResponse {
         total: 4,
         byList: { OB1: 3, OB2: 1 },
         emplids: [
-          { emplid: '20501', empNm: '王大明', jfunNm: '業務專員', isNewcomer: false, total: 3, byList: { OB1: 2, OB2: 1 } },
-          { emplid: '20502', empNm: '林淑芬', jfunNm: null, isNewcomer: true, total: 1, byList: { OB1: 1 } },
+          { emplid: '20501', empNm: '王大明', titleName: '業務專員', isNewcomer: false, total: 3, byList: { OB1: 2, OB2: 1 } },
+          { emplid: '20502', empNm: '林淑芬', titleName: null, isNewcomer: true, total: 1, byList: { OB1: 1 } },
         ],
       },
       {
@@ -60,15 +64,15 @@ function pivotV11(): runApi.PivotResponse {
         total: 2,
         byList: { OB1: 1, OB2: 1 },
         emplids: [
-          { emplid: '30001', empNm: '陳志明', jfunNm: '業務襄理', isNewcomer: false, total: 2, byList: { OB1: 1, OB2: 1 } },
+          { emplid: '30001', empNm: '陳志明', titleName: '業務襄理', isNewcomer: false, total: 2, byList: { OB1: 1, OB2: 1 } },
         ],
       },
       {
-        // BR-2/BR-10：「(空白)」分組，無 ob_emphire 對應 → jfunNm=null、isNewcomer=false
+        // BR-2/BR-10：「(空白)」分組，無 ob_emphire 對應 → titleName=null、isNewcomer=false
         deptName: '(空白)',
         total: 1,
         byList: { OB1: 1 },
-        emplids: [{ emplid: '(空白)', empNm: null, jfunNm: null, isNewcomer: false, total: 1, byList: { OB1: 1 } }],
+        emplids: [{ emplid: '(空白)', empNm: null, titleName: null, isNewcomer: false, total: 1, byList: { OB1: 1 } }],
       },
     ],
     grandByList: { OB1: 5, OB2: 2 },
@@ -91,13 +95,13 @@ function pivotWorkdayFixture(): runApi.PivotResponse {
         deptName: 'Α部門',
         total: 4,
         byList: { OB1: 1, OB2: 3 },
-        emplids: [{ emplid: 'E1', empNm: '甲', jfunNm: null, isNewcomer: false, total: 4, byList: { OB1: 1, OB2: 3 } }],
+        emplids: [{ emplid: 'E1', empNm: '甲', titleName: null, isNewcomer: false, total: 4, byList: { OB1: 1, OB2: 3 } }],
       },
       {
         deptName: 'Β部門',
         total: 2,
         byList: { OB2: 2 },
-        emplids: [{ emplid: 'E2', empNm: '乙', jfunNm: null, isNewcomer: false, total: 2, byList: { OB2: 2 } }],
+        emplids: [{ emplid: 'E2', empNm: '乙', titleName: null, isNewcomer: false, total: 2, byList: { OB2: 2 } }],
       },
     ],
     grandByList: { OB1: 1, OB2: 5 },
@@ -118,7 +122,7 @@ function pivotZeroWorkdayFixture(): runApi.PivotResponse {
         total: 5,
         byList: { OB1: 5 },
         emplids: [
-          { emplid: '20501', empNm: '王大明', jfunNm: '業務專員', isNewcomer: false, total: 5, byList: { OB1: 5 } },
+          { emplid: '20501', empNm: '王大明', titleName: '業務專員', isNewcomer: false, total: 5, byList: { OB1: 5 } },
         ],
       },
     ],
@@ -166,7 +170,7 @@ describe('SnapshotPivotView — F116 v1.1（US-182）', () => {
   });
 
   describe('AC-8：職稱／新人標註之邊界情境', () => {
-    it('TS-F116-033：jfunNm=null → 不顯示職稱文字，但員編／姓名整列仍正常顯示（不得整列消失）', async () => {
+    it('TS-F116-033：titleName=null → 不顯示職稱文字，但員編／姓名整列仍正常顯示（不得整列消失）', async () => {
       mockedGetPivot.mockResolvedValue(pivotV11());
       render(<SnapshotPivotView runId="R001" />);
       await waitFor(() => expect(screen.getByTestId('pivot-table')).toBeInTheDocument());

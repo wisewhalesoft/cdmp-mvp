@@ -6,14 +6,14 @@ source-story: US-181（v1.0，待建）、US-182（v1.1 — 職稱／新人標�
 epic: E07 — 客戶名單分派
 module: M05 執行歷史 / 快照詳情
 priority: P2
-version: "1.1"
+version: "1.1.1"
 date: 2026-08-13
 status: Draft
 ---
 
 # F116: 快照詳情 — 樞紐分析頁籤
 
-Priority: P2 | Status: Draft | Last Updated: 2026-08-13
+Priority: P2 | Status: Draft | Last Updated: 2026-08-13（v1.1.1）
 
 > **目的**：於「客戶名單分派 > 執行歷史 > 快照詳情」（[[F066]]）新增**第 4 個頁籤「樞紐分析」**，以互動式交叉表呈現分派結果的「部門名稱 × 承辦人員 × 名單代號」案件數，對齊「結果摘要」匯出 Excel 之樞紐分析頁（F108 / legacy `reference/202607 分派名單.xlsx` 工作表2）。
 >
@@ -36,11 +36,28 @@ Priority: P2 | Status: Draft | Last Updated: 2026-08-13
 
 | # | 變更 | 拍板來源 | 影響 |
 |---|---|---|---|
-| 增修-1 | 員編列由「員編＋姓名」擴充為「**員編－姓名－職稱**」，並對**未滿三個月**之員編標註「新人」 | US-182 AC-1 / AC-2 / AC-3；OQ-1（基準日＝`project_workym` 月初）、OQ-2（嚴格未滿）、OQ-3（視覺交 ui-ux-designer）RESOLVED 2026-08-13 | BR-5 ~ BR-10、AC-6 ~ AC-8、API 回應新增 `jfunNm` / `isNewcomer` |
+| 增修-1 | 員編列由「員編＋姓名」擴充為「**員編－姓名－職稱**」，並對**未滿三個月**之員編標註「新人」 | US-182 AC-1 / AC-2 / AC-3；OQ-1（基準日＝`project_workym` 月初）、OQ-2（嚴格未滿）、OQ-3（視覺交 ui-ux-designer）RESOLVED 2026-08-13 | BR-5 ~ BR-10、AC-6 ~ AC-8、API 回應新增 `titleName` / `isNewcomer` |
 | 增修-2 | 「總計」**欄**由表格最右移至**最左**（緊接列標籤欄之後）；「總計」**列**維持在表格最下方**不動** | US-182 AC-4；OQ-8（只移欄不移列）RESOLVED 2026-08-13 | BR-11、AC-9；**純呈現順序調整，API 契約不變** |
 | 增修-3 | 新增 **整月／工作天** 第二維度：工作天模式每格值 = `ceil(該格整月計數 ÷ 該月工作日數)`；工作天模式下**停用佔比** | US-182 AC-5 / AC-6；OQ-4（`ob_calendar.rest_flg='0'`）、OQ-5（平均攤提）、OQ-6（ceil）、OQ-7（停用佔比，合法組合 3 種）RESOLVED 2026-08-13 | BR-12 ~ BR-16、AC-10 ~ AC-11、API 回應新增 `projectWorkym` / `workingDays` |
 
 **v1.1 不做之事（明確排除）**：不同步變更 F108 匯出樞紐頁（若需要應另立 story，見 §8）；不變更 `listNos` / `depts` / `byList` / `grandByList` / `grandTotal` 之既有語意與排序；不變更處長 scope 規則；不對 `ob_emphire` 加在職過濾（見 BR-9）。
+
+### 1.2 變更紀錄
+
+#### v1.1.1（2026-08-13）— 職稱來源更正：`jfun_nm` → `title_name`
+
+- **更正內容**：職稱來源欄位由 `ob_emphire.jfun_nm` 改為 **`ob_emphire.title_name`**；API 回應欄位由 `jfunNm` 改名為 **`titleName`**（對齊來源欄名，並與既有 `empNm` / `deptName` 命名慣例一致）。BR-5 之「易錯點」方向**整條反轉**：現為「來源唯一 `title_name`、**禁用** `jfun_nm`」。
+- **來源**：使用者於 dev MSSQL 實機檢視 F116 v1.1 後提出更正；上游 [US-182](../../stories/epics/E07-app-customer-list-assignment/US-182-M05-pivot-title-newcomer-workday-mode.md) 已同步更新（AC-1 / AC-3 / 相容性影響表 / 變更紀錄）。
+- **理由（dev MSSQL 317 筆 `ob_emphire` 實測）**：
+
+  | 欄位 | 分佈 | 判定 |
+  |---|---|---|
+  | `jfun_nm` | 289/317（**91%**）為「營業一般職」；其餘 處長 4／臨時人員 4／營業課長 3／部長 1／約聘人員 1／營業襄理 1／副處長 1／事務一般職 1；NULL 12 | **職能分類**，放進樞紐列標籤幾乎無辨識度 → 不符需求意圖 |
+  | `title_name` | 業務專員 126／業務專員(電銷) 98／業務襄理 27／業務副理 15／業務主任 10／業務課長 5／電話行銷主任 5／臨時人員 4／課長 4／業務經理 4／副課長 2／領組 1／襄理 1／經理 1；NULL 12；最長 8 字 | **真正的職稱**，符合「員編－姓名－職稱」原始意圖 |
+
+- **邊界語意不變**：兩欄 NULL 筆數相同（各 12），故 AC-8 職稱缺值條文與 BR-10「(空白)」節點語意**完全不變**，僅欄位名替換。
+- **定性**：**需求層更正**（來源欄位認知錯誤），非實作缺陷。**未牽動**新人判定（BR-6~BR-8）、總計欄位置（BR-11）、工作天模式（BR-12~BR-16）之任何裁定結論；不新增/移除欄位（`jfunNm` → `titleName` 為**更名**）；仍不需 migration、不新增錯誤碼。
+- **⚠ 連動提醒（非本 spec 範圍）**：`architecture-spec.md` 之 pivot 契約段落與 `implementation-log/AD-E07-49-*` 之 SQL / 不變式章節寫有 `jfun_nm` / `jfunNm`，須由 **system-architect** 同步；既有實作與測試（`assignment-run-report.service.ts` / `snapshot-pivot-view.tsx` 及對應 spec 檔）由 tdd-implementation / test-generator 同步。
 
 ## 2. User Story
 
@@ -84,9 +101,9 @@ Priority: P2 | Status: Draft | Last Updated: 2026-08-13
 ### AC-6【v1.1 新增】：員編列顯示職稱（US-182 AC-1）
 - **Given** 使用者於樞紐分析頁籤展開任一部門列
 - **When** 檢視該部門下的員編列
-- **Then** 每一員編列除「員編＋姓名」外，另顯示**職稱**，資料來源為 `ob_emphire.jfun_nm`（**不得**取 `ob_emphire.title_name`；該表兩欄同時存在）
+- **Then** 每一員編列除「員編＋姓名」外，另顯示**職稱**，資料來源為 `ob_emphire.title_name`（**不得**取 `ob_emphire.jfun_nm`；該表兩欄同時存在，`jfun_nm` 為職能分類非職稱，見 BR-5）
 - **And** 呈現順序為「員編 → 姓名 → 職稱」
-- **And** API 回應之 `depts[].emplids[].jfunNm` 即為該員編 `ob_emphire.jfun_nm` 之原值（無值 → `null`）
+- **And** API 回應之 `depts[].emplids[].titleName` 即為該員編 `ob_emphire.title_name` 之原值（無值 → `null`）
 - **And** 分隔符號與版式屬純視覺，authority = `prototypes/35-snapshot-detail.html`（本 spec 不定義）
 
 ### AC-7【v1.1 新增】：未滿三個月標註「新人」（US-182 AC-2）
@@ -109,14 +126,14 @@ Priority: P2 | Status: Draft | Last Updated: 2026-08-13
 - **And** 判定結果固定不隨檢視當日時間漂移（同一 run 於任何日期查詢皆得相同 `isNewcomer`）
 
 ### AC-8【v1.1 新增】：職稱／新人標註之邊界情境（US-182 AC-3）
-- **Given** `ob_emphire.jfun_nm` 為 NULL 或空字串
-- **Then** `jfunNm = null`；該列仍完整呈現（不得整列消失、不得報錯），職稱位置之呈現方式由 prototype 決定
+- **Given** `ob_emphire.title_name` 為 NULL 或空字串
+- **Then** `titleName = null`；該列仍完整呈現（不得整列消失、不得報錯），職稱位置之呈現方式由 prototype 決定
 - **Given** `ob_emphire.hire_date` 為 NULL
 - **Then** `isNewcomer = false`（不臆測資歷）
 - **Given** 員編已離職（`ob_emphire.resign_date` 有值／依 `emphire-active.util` 判定為非在職）但該 run 結果中仍有其分派筆數
 - **Then** 該員編列**仍正常顯示**姓名／職稱／新人標註（**不得**加入任何在職過濾，見 BR-9）
 - **Given** 部門或員編依 BR-2 歸組為「(空白)」（`ob_emphire` 無對應主檔列）
-- **Then** 該節點 `jfunNm = null`、`isNewcomer = false`，不顯示職稱與新人標註
+- **Then** 該節點 `titleName = null`、`isNewcomer = false`，不顯示職稱與新人標註
 
 ### AC-9【v1.1 新增】：總計欄移至最左（US-182 AC-4）
 - **Given** 使用者於樞紐分析頁籤
@@ -178,7 +195,7 @@ Priority: P2 | Status: Draft | Last Updated: 2026-08-13
 聚合來源：`ob_monthly_run_result r` LEFT JOIN `ob_emphire e ON e.emp_id = r.emplid`，
 `GROUP BY e.dept_name, r.emplid, e.emp_nm, r.list_no`（COUNT(*)）。**不 join `ob_pool_data`**（樞紐不需 pool 業務欄）。dept/emplid 為 NULL/空 → 歸組 `(空白)`。
 
-**【v1.1 增修】** 為取得職稱與到職日，SELECT / GROUP BY 需擴充 `e.jfun_nm`、`e.hire_date`（見 §10 技術約束 T-4，含重複 `emp_id` 之裂列風險）。**不得**因此加入任何 `resign_date` 過濾（BR-9）。
+**【v1.1 增修】** 為取得職稱與到職日，SELECT / GROUP BY 需擴充 `e.title_name`、`e.hire_date`（見 §10 技術約束 T-4，含重複 `emp_id` 之裂列風險）。**不得**擴充 `e.jfun_nm`（BR-5）；**不得**因此加入任何 `resign_date` 過濾（BR-9）。
 
 **Response — 200 OK**（v1.1 欄位以 `// v1.1` 標示）
 
@@ -197,7 +214,7 @@ Priority: P2 | Status: Draft | Last Updated: 2026-08-13
         {
           "emplid": "20501",
           "empNm": "王大明",
-          "jfunNm": "業務專員",
+          "titleName": "業務專員",
           "isNewcomer": false,
           "total": 310,
           "byList": { "OB202607001": 46 }
@@ -216,14 +233,14 @@ Priority: P2 | Status: Draft | Last Updated: 2026-08-13
 |---|---|---|---|---|
 | `projectWorkym` | `string` | top-level | 該 run 之作業年月（`YYYYMM`，取自 `assignment_run.project_workym`）。供前端顯示與工作天換算之月份佐證 | 必填；恆有值（run 存在即有） |
 | `workingDays` | `number` | top-level | 該 `projectWorkym` 當月工作日數 = `COUNT(*) FROM ob_calendar WHERE rest_flg='0' AND calendar_date` 落在當月（見 BR-12） | `ob_calendar` 缺該月資料 → `0`（**不得** `null` / `undefined` / 負值） |
-| `jfunNm` | `string \| null` | `depts[].emplids[]` | 該員編職稱，來源 `ob_emphire.jfun_nm` | 無主檔對應 / NULL / 空字串 → `null`；「(空白)」節點 → `null` |
+| `titleName` | `string \| null` | `depts[].emplids[]` | 該員編職稱，來源 `ob_emphire.title_name`（**非** `jfun_nm`，見 BR-5） | 無主檔對應 / NULL / 空字串 → `null`；「(空白)」節點 → `null` |
 | `isNewcomer` | `boolean` | `depts[].emplids[]` | 是否為新人（BR-6 / BR-7 判定結果） | `hire_date` NULL 或無主檔對應 → `false`；「(空白)」節點 → `false`（**不得** `null`） |
 
 **運算歸屬**：
 
 | 項目 | 歸屬 | 說明 |
 |---|---|---|
-| `jfunNm` | **後端** | 直接取自 join 結果 |
+| `titleName` | **後端** | 直接取自 join 結果 |
 | `isNewcomer` | **後端** | 後端依 `project_workym` + `hire_date` 計算布林值；`hire_date` 本身**不**回傳（不擴大資料曝光面） |
 | `workingDays` | **後端** | 後端查 `ob_calendar` 一次算出 |
 | 工作天每格數值 `ceil(cnt / workingDays)` | **前端**（spec 預設，延續 BR-3） | 後端只回整月計數與 `workingDays`，維持單一數據源；⚠ 見 §12 A-1 |
@@ -253,12 +270,12 @@ Priority: P2 | Status: Draft | Last Updated: 2026-08-13
 | BR-2 | v1.0 | dept/emplid 為空 → 歸組「(空白)」，排序置末 |
 | BR-3 | v1.0 | 佔比為前端換算；後端僅回計數（單一數據源、避免重算漂移） |
 | BR-4 | v1.0 | 處長 scope 同 F066：縮小集合、不回 403 |
-| BR-5 | **v1.1** | 職稱來源**唯一**為 `ob_emphire.jfun_nm`。**禁止**使用 `ob_emphire.title_name`（該表兩欄並存，取錯欄位為已知易錯點）。`jfun_nm` 為 NULL 或空字串 → 契約值 `null` |
+| BR-5 | **v1.1.1（反轉）** | 職稱來源**唯一**為 `ob_emphire.title_name`。**禁止**使用 `ob_emphire.jfun_nm` —— `jfun_nm` 為**職能分類**非職稱（dev MSSQL 317 筆實測 91% 為「營業一般職」，於樞紐列標籤無辨識度），`title_name` 才是真正職稱（業務專員／業務襄理／業務副理…13 種有意義分佈）。該表兩欄並存且語意相近，取錯欄位為已知易錯點（v1.1 曾誤定為 `jfun_nm`，2026-08-13 使用者實機檢視後更正，見 §1.2）。`title_name` 為 NULL 或空字串 → 契約值 `null` |
 | BR-6 | **v1.1** | 新人判定**基準日** = 該 run `project_workym` 之**當月 1 日**（例：`202607` → `2026-07-01`）。基準日**不得**取系統當日、run 執行日或月底；快照為歷史資料，判定結果須固定不隨檢視時間漂移 |
 | BR-7 | **v1.1** | 新人**判定式** = `hire_date > (基準日 − 3 個月)`（**嚴格大於**）。恰滿 3 個月（`hire_date == 基準日 − 3 個月`）**不**算新人。門檻日以曆月位移計算（`2026-07-01 − 3 個月 = 2026-04-01`）；比較以**日期（date-only）**語意進行，不含時分秒、不受時區位移影響 |
 | BR-8 | **v1.1** | `hire_date` 為 NULL（或員編無 `ob_emphire` 對應列）→ `isNewcomer = false`，不臆測資歷 |
 | BR-9 | **v1.1** | **不得**對 `ob_emphire` 施加在職過濾。本功能依 `emp_id` 補資料（職稱／姓名／到職日），呈現的是**歷史 run 快照的分派事實**；離職者（`resign_date` 有值／`emphire-active.util` 判定非在職）仍須完整顯示職稱與新人標註。**禁止**在 pivot 查詢引入 `emphire-active.util` 或任何 `resign_date` 條件 |
-| BR-10 | **v1.1** | 「(空白)」節點（BR-2）無 `ob_emphire` 主檔對應 → `jfunNm = null`、`isNewcomer = false`，不顯示職稱與新人標註 |
+| BR-10 | **v1.1** | 「(空白)」節點（BR-2）無 `ob_emphire` 主檔對應 → `titleName = null`、`isNewcomer = false`，不顯示職稱與新人標註 |
 | BR-11 | **v1.1** | 交叉表欄序 = `列標籤` → `總計` → `名單代號（升冪）`。「總計」**列**維持在表格最下方；本規則**僅**規範欄軸位置，不改動列軸 |
 | BR-12 | **v1.1** | 工作日數 `workingDays` = `ob_calendar` 中 `rest_flg = '0'` 且 `calendar_date` 落於 `project_workym` 當月（該月 1 日 ~ 該月末日，含頭尾）之列數。沿用既有 `weekday` CalendarSource 判準（排除週末＋國定假日），與 F049 Stage 0 每日試算同一套規則 |
 | BR-13 | **v1.1** | 工作天模式每格值 = `ceil(該格整月計數 ÷ workingDays)`（無條件進位到整數）。**不**採 `assignday` 逐日實際分佈 |
@@ -276,7 +293,7 @@ Priority: P2 | Status: Draft | Last Updated: 2026-08-13
 - 員編列：員編（灰色小 mono）+ 姓名（主要）+ **【v1.1】職稱** + **【v1.1】「新人」標註**。
 - **【v1.1】以下屬純視覺決策，由 ui-ux-designer 於 prototype 定案，本 spec 不定義**（US-182 OQ-3 RESOLVED）：
   - 「員編－姓名－職稱」之分隔符號與排版
-  - `jfunNm = null` 時之呈現（空白 / placeholder / dash）
+  - `titleName = null` 時之呈現（空白 / placeholder / dash）
   - 「新人」標註樣式（badge / 文字 / 顏色）
   - `workingDays = 0` 提示訊息之確切措辭與位置
   - 新增職稱欄與工作天 toggle 不得迫使頁面本體橫向捲動（既有約束延續）
@@ -311,7 +328,7 @@ Priority: P2 | Status: Draft | Last Updated: 2026-08-13
 | T-1 | 資料庫為 **MSSQL**（非 PostgreSQL）。所有日期運算須採 MSSQL 相容語意，或明確在 TS 端計算 | 專案已全面 PG → MSSQL 遷移，PG 專屬語法（如 `EXTRACT(DOW)`、`::date`、`INTERVAL '3 months'`）不可用 |
 | T-2 | **新人判定（BR-6 / BR-7）之月份位移與日期比較一律在 TS 端計算**，不得下推為 SQL `DATEADD` / `DATEDIFF` 條件 | 避免 MSSQL 日期函式與 JS 端語意分岐；亦保持 SQLite e2e 相容（同 `resolveCalendarDay` 之既有慣例：日期以 UTC date-only 處理） |
 | T-3 | 查詢 `ob_calendar` 之月份區間須以 **`'YYYY-MM-DD'` 字串邊界**（該月 1 日 ~ 該月末日）比較，**不得**傳入 JS `Date` 物件作為 TypeORM `Between` 參數 | 已知陷阱：`Date` 物件經 UTC+8 換算會漏掉邊界日 |
-| T-4 | pivot 查詢擴充 `e.jfun_nm` / `e.hire_date` 時，兩欄須同時進 SELECT 與 GROUP BY（MSSQL 嚴格要求）。若 `ob_emphire` 存在同一 `emp_id` 之重複列，將導致既有 `(deptName, emplid, listNo)` 聚合裂為多列、計數被重複計入 —— 實作須確保聚合結果對同一 `emplid` 仍收斂為單一節點 | `ob_emphire` PK 為 `emp_id`（data-model §ob-emphire），理論上不重複；但為 ETL full replace 同步表，須有防禦（見 §12 A-4） |
+| T-4 | pivot 查詢擴充 `e.title_name` / `e.hire_date` 時，兩欄須同時進 SELECT 與 GROUP BY（MSSQL 嚴格要求）。若 `ob_emphire` 存在同一 `emp_id` 之重複列，將導致既有 `(deptName, emplid, listNo)` 聚合裂為多列、計數被重複計入 —— 實作須確保聚合結果對同一 `emplid` 仍收斂為單一節點 | `ob_emphire` PK 為 `emp_id`（data-model §ob-emphire），理論上不重複；但為 ETL full replace 同步表，須有防禦（見 §12 A-4） |
 | T-5 | **`apps/api` 不得 `import ... from '@cdmp/shared'`** | 容器內無 symlink → `TS2307` → nest 啟動失敗；本機 `tsc` 會假性通過。跨端 DTO 由 api 自持本地型別副本（現行 `PivotResponse` 等介面即定義於 `assignment-run-report.service.ts`） |
 | T-6 | **禁止**在 pivot 查詢引入在職過濾（`emphire-active.util` / `resign_date` 條件） | BR-9；離職者之歷史分派事實仍須完整呈現 |
 | T-7 | v1.1 **不需 migration**、**不新增錯誤碼**、**不新增資料表/欄位** | 所有新增資訊皆為既有欄位之讀取或衍生計算 |
@@ -326,11 +343,11 @@ Priority: P2 | Status: Draft | Last Updated: 2026-08-13
 | 角色非部長/處長 | 403 `E07_ROLE_NOT_ASSIGNED` | 錯誤態 | §5.1 |
 | 處長無轄區 | 200，`depts = []`、`grandTotal = 0`、`workingDays` 仍為真實值 | 空態 | AC-4 |
 | `ob_calendar` 無該月資料 | 200，`workingDays = 0`（**非**錯誤、**非** `null`） | 工作天模式全表 `-` + 工具列提示；整月模式正常 | AC-11、BR-15 |
-| `jfun_nm` NULL / 空字串 | `jfunNm = null` | 職稱位置依 prototype 呈現，列不消失 | AC-8、BR-5 |
+| `title_name` NULL / 空字串 | `titleName = null` | 職稱位置依 prototype 呈現，列不消失 | AC-8、BR-5 |
 | `hire_date` NULL | `isNewcomer = false` | 不顯示「新人」 | AC-8、BR-8 |
-| 員編無 `ob_emphire` 對應列 | `empNm = null`、`jfunNm = null`、`isNewcomer = false` | 僅顯示員編 | AC-8、BR-8 |
-| 「(空白)」部門／員編分組 | `jfunNm = null`、`isNewcomer = false`；計數與換算比照一般分組 | 不顯示職稱／新人；工作天換算照常 | AC-8、AC-11、BR-10 |
-| 員編已離職 | 照常回傳 `empNm` / `jfunNm` / `isNewcomer` | 照常顯示 | AC-8、BR-9 |
+| 員編無 `ob_emphire` 對應列 | `empNm = null`、`titleName = null`、`isNewcomer = false` | 僅顯示員編 | AC-8、BR-8 |
+| 「(空白)」部門／員編分組 | `titleName = null`、`isNewcomer = false`；計數與換算比照一般分組 | 不顯示職稱／新人；工作天換算照常 | AC-8、AC-11、BR-10 |
+| 員編已離職 | 照常回傳 `empNm` / `titleName` / `isNewcomer` | 照常顯示 | AC-8、BR-9 |
 | run 有結果但整月計數為 0 之格 | `byList` 無該 key（同 v1.0） | 工作天模式該格 `0`（`ceil(0/n) = 0`） | AC-10、BR-13 |
 | 使用者於 `工作天-計數` 下重新載入頁面 | 不涉後端 | 維度狀態為前端 UI state，不需持久化（v1.1 未要求記憶） | — |
 
