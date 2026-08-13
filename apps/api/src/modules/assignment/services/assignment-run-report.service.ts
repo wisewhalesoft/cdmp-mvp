@@ -14,6 +14,10 @@ import { AssignmentRunSnapshot } from '@/database/entities/assignment-run-snapsh
 import { AssignmentAuditLog } from '@/database/entities/assignment-audit-log.entity';
 import { ObDeptPct } from '@/database/entities/ob-dept-pct.entity';
 import { ObMonthlyRunResult } from '@/database/entities/ob-monthly-run-result.entity';
+import { ObCalendar } from '@/database/entities/ob-calendar.entity';
+// F116 v1.1 / I-F116-CALENDAR-SHARE-01：工作日判準唯一來源（I-RUN-EST-01 第四消費者）。
+// 比照 assignment-run-pipeline.service.ts 既有慣例：跨模組只共用 pure function，不注入 class。
+import { computeWorkingDayRatios } from '@/modules/assignment-list/stage0-estimate.service';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
 import {
   SectionChiefScopeService,
@@ -211,6 +215,10 @@ const RESULT_PAGE_MAX_SIZE = 200;
 export interface PivotEmplidNode {
   emplid: string;
   empNm: string | null;
+  /** F116 v1.1（BR-5）：職稱，來源唯一為 ob_emphire.jfun_nm；NULL/空字串 → null。 */
+  jfunNm: string | null;
+  /** F116 v1.1（BR-6/BR-7/BR-8）：到職未滿三個月（以 project_workym 月初為基準日）。 */
+  isNewcomer: boolean;
   total: number;
   byList: Record<string, number>;
 }
@@ -222,10 +230,50 @@ export interface PivotDeptNode {
 }
 export interface PivotResponse {
   runId: string;
+  /** F116 v1.1：該 run 之作業年月（YYYYMM，取自 assignment_run.project_workym）。 */
+  projectWorkym: string;
+  /** F116 v1.1（BR-12）：projectWorkym 當月工作日數；ob_calendar 缺該月資料 → 0（非 null）。 */
+  workingDays: number;
   listNos: string[];
   depts: PivotDeptNode[];
   grandByList: Record<string, number>;
   grandTotal: number;
+}
+
+/**
+ * F116 v1.1 BR-6 / BR-7 / BR-8：新人判定純函式。
+ *
+ * 基準日 = `projectWorkym` 當月 1 日（BR-6，**不**取系統當日／run 執行日，快照判定結果不隨檢視
+ * 時間漂移）；門檻日 = 基準日以曆月位移減 3 個月（BR-7）；`hire_date` **嚴格大於**門檻日才算新人
+ * （恰滿 3 個月不算）。`hire_date` 為 NULL → false（BR-8，不臆測資歷）。
+ *
+ * T-2：月份位移與日期比較一律在 TS 端以 UTC date-only 語意計算，不下推 SQL DATEADD / DATEDIFF
+ * （避免 MSSQL 與 SQLite 語意分岐）。
+ */
+export function isNewcomerAtWorkym(
+  hireDate: Date | string | null | undefined,
+  projectWorkym: string,
+): boolean {
+  if (!hireDate) return false;
+  const y = parseInt(projectWorkym.slice(0, 4), 10);
+  const m = parseInt(projectWorkym.slice(4, 6), 10);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return false;
+  // BR-6：基準日 = 當月 1 日；BR-7：門檻日 = 基準日 − 3 個月（曆月位移）
+  const threshold = new Date(Date.UTC(y, m - 1 - 3, 1));
+  const hire =
+    typeof hireDate === 'string'
+      ? (() => {
+          const [hy, hm, hd] = hireDate
+            .slice(0, 10)
+            .split('-')
+            .map((v) => parseInt(v, 10));
+          return new Date(Date.UTC(hy, (hm || 1) - 1, hd || 1));
+        })()
+      : new Date(
+          Date.UTC(hireDate.getUTCFullYear(), hireDate.getUTCMonth(), hireDate.getUTCDate()),
+        );
+  if (Number.isNaN(hire.getTime())) return false;
+  return hire.getTime() > threshold.getTime();
 }
 
 /**
@@ -503,19 +551,41 @@ export class AssignmentRunReportService {
       });
     }
 
+    // v1.1：新人判定基準月份（BR-6）與工作日數（BR-12）之單一月份來源
+    const projectWorkym = String(run.project_workym ?? '');
+
     const repo = this.dataSource.getRepository(ObMonthlyRunResult);
+    // I-F116-EMPHIRE-DEDUP-01（AD-E07-49 §4.2）：ob_emphire 為 ETL full-replace 同步表，若同一
+    // emp_id 出現重複列，直接 LEFT JOIN 原表會使每筆結果列 fan-out，外層 COUNT(*) 被重複計入。
+    // 改 join 一個 ROW_NUMBER() PARTITION BY emp_id = 1 之去重 derived table，使 join 嚴格 1:1。
     const qb = repo
       .createQueryBuilder('r')
-      .leftJoin('ob_emphire', 'e', 'e.emp_id = r.emplid')
+      .leftJoin(
+        (sub) =>
+          sub
+            .select('emp.emp_id', 'emp_id')
+            .addSelect('emp.dept_name', 'dept_name')
+            .addSelect('emp.emp_nm', 'emp_nm')
+            .addSelect('emp.jfun_nm', 'jfun_nm')
+            .addSelect('emp.hire_date', 'hire_date')
+            .addSelect('ROW_NUMBER() OVER (PARTITION BY emp.emp_id ORDER BY emp.emp_id)', 'rn')
+            .from('ob_emphire', 'emp'),
+        'e',
+        'e.emp_id = r.emplid AND e.rn = 1',
+      )
       .select('e.dept_name', 'deptName')
       .addSelect('r.emplid', 'emplid')
       .addSelect('e.emp_nm', 'empNm')
+      .addSelect('e.jfun_nm', 'jfunNm') // v1.1 AC-6 / BR-5：職稱唯一來源，不得取 title_name
+      .addSelect('e.hire_date', 'hireDate') // v1.1 AC-7：僅供 TS 端算 isNewcomer，不回傳（A-3）
       .addSelect('r.list_no', 'listNo')
       .addSelect('COUNT(*)', 'cnt')
       .where('r.run_id = :runId', { runId })
       .groupBy('e.dept_name')
       .addGroupBy('r.emplid')
       .addGroupBy('e.emp_nm')
+      .addGroupBy('e.jfun_nm')
+      .addGroupBy('e.hire_date')
       .addGroupBy('r.list_no');
 
     if (this.scope.shouldFilter(actor)) {
@@ -531,15 +601,24 @@ export class AssignmentRunReportService {
       deptName: string | null;
       emplid: string | null;
       empNm: string | null;
+      jfunNm: string | null;
+      hireDate: Date | string | null;
       listNo: string;
       cnt: number | string;
     }>();
 
     // ---- in-memory 聚合為巢狀結構 ----
+    interface EmpAgg {
+      empNm: string | null;
+      jfunNm: string | null;
+      isNewcomer: boolean;
+      total: number;
+      byList: Map<string, number>;
+    }
     interface DeptAgg {
       total: number;
       byList: Map<string, number>;
-      emplids: Map<string, { empNm: string | null; total: number; byList: Map<string, number> }>;
+      emplids: Map<string, EmpAgg>;
     }
     const deptMap = new Map<string, DeptAgg>();
     const listSet = new Set<string>();
@@ -564,12 +643,22 @@ export class AssignmentRunReportService {
       dept.total += cnt;
       dept.byList.set(listNo, (dept.byList.get(listNo) ?? 0) + cnt);
 
+      // BR-5：空字串等同無值 → null；BR-8/BR-10：無主檔對應 → hireDate null → isNewcomer false
+      const jfunNm = row.jfunNm ? String(row.jfunNm) : null;
+
       let emp = dept.emplids.get(emplid);
       if (!emp) {
-        emp = { empNm: row.empNm ?? null, total: 0, byList: new Map() };
+        emp = {
+          empNm: row.empNm ?? null,
+          jfunNm,
+          isNewcomer: isNewcomerAtWorkym(row.hireDate, projectWorkym),
+          total: 0,
+          byList: new Map(),
+        };
         dept.emplids.set(emplid, emp);
       }
       if (emp.empNm == null && row.empNm != null) emp.empNm = row.empNm;
+      if (emp.jfunNm == null && jfunNm != null) emp.jfunNm = jfunNm;
       emp.total += cnt;
       emp.byList.set(listNo, (emp.byList.get(listNo) ?? 0) + cnt);
     }
@@ -593,6 +682,8 @@ export class AssignmentRunReportService {
           .map(([emplid, e]) => ({
             emplid,
             empNm: e.empNm,
+            jfunNm: e.jfunNm,
+            isNewcomer: e.isNewcomer,
             total: e.total,
             byList: mapToObj(e.byList),
           })),
@@ -600,11 +691,50 @@ export class AssignmentRunReportService {
 
     return {
       runId,
+      projectWorkym,
+      // AC-4 v1.1 補充：workingDays 為 run 月份屬性，與處長 scope 無關
+      workingDays: await this.loadWorkingDays(projectWorkym),
       listNos,
       depts,
       grandByList: mapToObj(grandByList),
       grandTotal,
     };
+  }
+
+  /**
+   * F116 v1.1 BR-12：查 project_workym 當月工作日數（rest_flg='0'）。
+   *
+   * I-F116-CALENDAR-SHARE-01：判準複用 `computeWorkingDayRatios`（CalendarSource='weekday'），
+   * 不另立第二套週末／假日判斷（I-RUN-EST-01 第四消費者）；查詢邊界比照既有
+   * `AssignmentRunPipelineService.loadWorkingDayRatios(ym)`：以 `'YYYY-MM-DD'` 字串邊界比較
+   * （T-3，不得傳 JS Date 物件給 TypeORM，UTC+8 換算會漏掉邊界日）。
+   *
+   * ob_calendar 缺該月資料 → 0（AC-11 / BR-15，非錯誤、非 null）。工作日數為樞紐分析的**輔助
+   * 欄位**（僅影響「工作天」維度換算），查詢本身若失敗亦降級為 0 並記 warn，不使整份 pivot 失敗
+   * ——與「查無資料不是錯誤」同一原則（spec §5.1 註）。
+   */
+  private async loadWorkingDays(ym: string): Promise<number> {
+    if (!/^\d{6}$/.test(ym ?? '')) return 0;
+    const y = parseInt(ym.slice(0, 4), 10);
+    const m = parseInt(ym.slice(4, 6), 10);
+    const startYmd = `${ym.slice(0, 4)}-${ym.slice(4, 6)}-01`;
+    const endDate = new Date(Date.UTC(y, m, 0));
+    const endYmd = `${endDate.getUTCFullYear()}-${String(endDate.getUTCMonth() + 1).padStart(2, '0')}-${String(endDate.getUTCDate()).padStart(2, '0')}`;
+    try {
+      const rows = await this.dataSource
+        .getRepository(ObCalendar)
+        .createQueryBuilder('c')
+        .select(['c.calendar_date AS calendar_date', 'c.rest_flg AS rest_flg'])
+        .where('c.calendar_date BETWEEN :s AND :e', { s: startYmd, e: endYmd })
+        .getRawMany<{ calendar_date: Date | string; rest_flg: string }>();
+      // computeWorkingDayRatios 已在內部濾除非工作日，回傳陣列僅含工作日 → length 即工作日數
+      return computeWorkingDayRatios(rows).length;
+    } catch (err) {
+      this.logger.warn(
+        `getPivot: ob_calendar 查詢失敗（ym=${ym}），workingDays 降級為 0：${(err as Error)?.message}`,
+      );
+      return 0;
+    }
   }
 
   // -------------------------------------------------------------------------
