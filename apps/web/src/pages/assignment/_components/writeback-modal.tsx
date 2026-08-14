@@ -17,8 +17,11 @@ import {
  *
  * 對應 prototype: prototypes/35-snapshot-detail.html（回寫預覽 modal）
  *
- * 流程：開啟即呼叫 preview（dry-run，不寫入）→ 顯示將更新筆數 / 涵蓋名單 / 外部連線狀態
+ * 流程：開啟即呼叫 preview（dry-run，不寫入）→ 顯示將更新筆數 / 涵蓋名單 / 外部連線與寫入權限狀態
  * → 使用者勾選二次確認 → 「確認回寫」呼叫 execute（真實寫入）→ 顯示結果 / 錯誤。
+ *
+ * 前置阻擋：連線不可用、或 preview 明確探測到無更新權限（`writePermission === false`）時，
+ * 停用確認框與執行鈕並顯示可行動提示，避免使用者按下後才收到對方系統的拒絕。
  */
 
 function extractMessage(err: unknown, fallback: string): string {
@@ -74,12 +77,15 @@ export function WritebackModal({
     }
   };
 
-  const canExecute =
-    !!preview &&
-    preview.connectionAvailable &&
-    confirmed &&
-    !executing &&
-    !result;
+  /**
+   * 回寫前置阻擋：連線不可用、或已探測到「明確無更新權限」。
+   * `writePermission === null` 為未知（探測失敗）→ 不阻擋，交由 execute 的 422 回報。
+   */
+  const blockedByConnection = !!preview && !preview.connectionAvailable;
+  const blockedByPermission = !!preview && preview.writePermission === false;
+  const blocked = blockedByConnection || blockedByPermission;
+
+  const canExecute = !!preview && !blocked && confirmed && !executing && !result;
 
   return (
     <div
@@ -180,13 +186,26 @@ export function WritebackModal({
                     </p>
                   </div>
 
-                  {!preview.connectionAvailable && (
+                  {blockedByConnection && (
                     <div
                       data-testid="writeback-conn-warning"
                       className="rounded-lg p-3 bg-red-50 border border-red-200 flex items-start gap-2 text-xs text-red-800"
                     >
                       <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
                       <span>電銷系統連線尚未就緒，暫時無法執行回寫。請先於「資料來源」設定並測試連線。</span>
+                    </div>
+                  )}
+
+                  {blockedByPermission && (
+                    <div
+                      data-testid="writeback-perm-warning"
+                      className="rounded-lg p-3 bg-red-50 border border-red-200 flex items-start gap-2 text-xs text-red-800"
+                    >
+                      <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>
+                        電銷系統可連線，但回寫帳號目前<strong>沒有更新名單表的權限</strong>，執行會被對方系統拒絕。
+                        請聯繫 IT／DBA 為回寫帳號開通名單表（OBPOOLDATA_LIST）的更新權限後再執行。
+                      </span>
                     </div>
                   )}
 
@@ -205,7 +224,7 @@ export function WritebackModal({
                       type="checkbox"
                       data-testid="writeback-confirm-checkbox"
                       checked={confirmed}
-                      disabled={!preview.connectionAvailable}
+                      disabled={blocked}
                       onChange={(e) => setConfirmed(e.target.checked)}
                       className="rounded border-gray-300"
                     />

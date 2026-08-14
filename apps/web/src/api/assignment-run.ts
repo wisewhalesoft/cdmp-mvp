@@ -606,6 +606,12 @@ export interface WritebackPreviewResponse {
   sample: Array<Record<string, string | null>>;
   notMatched: number | null;
   connectionAvailable: boolean;
+  /**
+   * 回寫帳號對電銷系統名單表是否具更新權限（後端唯讀探測）。
+   *   - `false`：明確無權限 → 前端先行擋下並提示洽 IT 開通
+   *   - `null`：未知（連線不可用 / 探測失敗）→ 不阻擋，由 execute 的 422 兜底
+   */
+  writePermission: boolean | null;
 }
 
 export interface WritebackResultResponse {

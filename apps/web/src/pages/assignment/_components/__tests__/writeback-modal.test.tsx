@@ -19,6 +19,7 @@ function preview(overrides: Partial<runApi.WritebackPreviewResponse> = {}) {
     sample: [],
     notMatched: null,
     connectionAvailable: true,
+    writePermission: true,
     ...overrides,
   } as runApi.WritebackPreviewResponse;
 }
@@ -66,6 +67,50 @@ describe('WritebackModal (F115)', () => {
     );
     expect(screen.getByTestId('writeback-confirm-checkbox')).toBeDisabled();
     expect(screen.getByTestId('writeback-execute-btn')).toBeDisabled();
+  });
+
+  it('無更新權限 → 顯示可行動提示且確認框／執行鈕停用', async () => {
+    mockedPreview.mockResolvedValue(preview({ writePermission: false }));
+    render(<WritebackModal runId="R001" onClose={() => {}} />);
+    await waitFor(() =>
+      expect(screen.getByTestId('writeback-perm-warning')).toBeInTheDocument(),
+    );
+    expect(screen.getByTestId('writeback-perm-warning')).toHaveTextContent(/IT／DBA/);
+    // 連線本身是好的 → 不應顯示連線警告（兩者原因不同，訊息不可混用）
+    expect(screen.queryByTestId('writeback-conn-warning')).not.toBeInTheDocument();
+    expect(screen.getByTestId('writeback-confirm-checkbox')).toBeDisabled();
+    expect(screen.getByTestId('writeback-execute-btn')).toBeDisabled();
+  });
+
+  it('權限未知（writePermission=null）→ 不阻擋，仍可執行', async () => {
+    mockedPreview.mockResolvedValue(preview({ writePermission: null }));
+    render(<WritebackModal runId="R001" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('writeback-preview-total')).toBeInTheDocument());
+    expect(screen.queryByTestId('writeback-perm-warning')).not.toBeInTheDocument();
+    expect(screen.getByTestId('writeback-confirm-checkbox')).toBeEnabled();
+    fireEvent.click(screen.getByTestId('writeback-confirm-checkbox'));
+    expect(screen.getByTestId('writeback-execute-btn')).toBeEnabled();
+  });
+
+  it('execute 遭權限拒絕 → 顯示後端 422 的可行動訊息', async () => {
+    mockedPreview.mockResolvedValue(preview({ writePermission: null }));
+    mockedExecute.mockRejectedValue({
+      response: {
+        data: {
+          error: 'WRITEBACK_PERMISSION_DENIED',
+          message:
+            '回寫帳號對電銷系統名單表（OBPOOLDATA_LIST）無更新權限，本次未寫入任何資料；請聯繫 IT／DBA 開通後再執行',
+        },
+      },
+    });
+    render(<WritebackModal runId="R001" onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('writeback-preview-total')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('writeback-confirm-checkbox'));
+    fireEvent.click(screen.getByTestId('writeback-execute-btn'));
+    await waitFor(() =>
+      expect(screen.getByTestId('writeback-error')).toHaveTextContent(/無更新權限/),
+    );
+    expect(screen.getByTestId('writeback-error')).toHaveTextContent(/未寫入任何資料/);
   });
 
   it('execute 失敗顯示錯誤（如連線未設定）', async () => {
