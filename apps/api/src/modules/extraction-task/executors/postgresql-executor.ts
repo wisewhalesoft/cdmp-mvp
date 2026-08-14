@@ -54,7 +54,8 @@ export class PostgreSQLExecutor extends BaseExecutor {
   async listTables(params: { datasourceId: string; schema: string }): Promise<string[]> {
     return this.withConnection(params.datasourceId, async (client) => {
       const result = await client.query(
-        `SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY table_name`,
+        // 檢視（VIEW）亦為合法擷取來源；僅列 BASE TABLE 會讓既有 view 任務在編輯頁下拉選單顯示空白。
+        `SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type IN ('BASE TABLE', 'VIEW') ORDER BY table_name`,
         [params.schema],
       );
       return result.rows.map((row: any) => row.table_name);

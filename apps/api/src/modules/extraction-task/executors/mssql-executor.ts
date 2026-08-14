@@ -74,7 +74,9 @@ export class MSSQLExecutor extends BaseExecutor {
       const result = await pool.request()
         .input('schema', params.schema)
         .query(
-          `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = @schema AND TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME`,
+          // 檢視（VIEW）亦為合法擷取來源（例：V_OB_CUST_CASE_SUMMARY），
+          // 僅列 BASE TABLE 會讓既有 view 任務在編輯頁下拉選單找不到對應選項而顯示空白。
+          `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = @schema AND TABLE_TYPE IN ('BASE TABLE', 'VIEW') ORDER BY TABLE_NAME`,
         );
       return result.recordset.map((row: any) => row.TABLE_NAME);
     });

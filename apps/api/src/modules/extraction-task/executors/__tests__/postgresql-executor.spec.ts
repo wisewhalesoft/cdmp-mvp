@@ -89,6 +89,20 @@ describe('PostgreSQLExecutor', () => {
     expect(result).toEqual(['users', 'orders']);
   });
 
+  it('should include views (table_type = VIEW) in listTables', async () => {
+    mockQuery.mockResolvedValue({
+      rows: [{ table_name: 'users' }, { table_name: 'v_cust_case_summary' }],
+    });
+
+    const result = await executor.listTables({ datasourceId: 'ds-pg', schema: 'public' });
+
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining("table_type IN ('BASE TABLE', 'VIEW')"),
+      ['public'],
+    );
+    expect(result).toEqual(['users', 'v_cust_case_summary']);
+  });
+
   // --- getSourceTableMetadata ---
   it('should query columns and primary keys', async () => {
     mockQuery

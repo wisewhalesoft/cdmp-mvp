@@ -100,6 +100,25 @@ describe('MSSQLExecutor', () => {
     expect(result).toEqual(['customers', 'orders']);
   });
 
+  it('should include views (TABLE_TYPE = VIEW) in listTables', async () => {
+    mockRequestQuery.mockResolvedValue({
+      recordset: [
+        { TABLE_NAME: 'customers' },
+        { TABLE_NAME: 'V_OB_CUST_CASE_SUMMARY' },
+      ],
+    });
+
+    const result = await executor.listTables({ datasourceId: 'ds-ms', schema: 'dbo' });
+
+    expect(mockRequestQuery).toHaveBeenCalledWith(
+      expect.stringContaining("TABLE_TYPE IN ('BASE TABLE', 'VIEW')"),
+    );
+    expect(mockRequestQuery).not.toHaveBeenCalledWith(
+      expect.stringContaining("TABLE_TYPE = 'BASE TABLE'"),
+    );
+    expect(result).toEqual(['customers', 'V_OB_CUST_CASE_SUMMARY']);
+  });
+
   // --- getSourceTableMetadata ---
   it('should query INFORMATION_SCHEMA.COLUMNS and PK with @schema, @table params', async () => {
     mockRequestQuery
