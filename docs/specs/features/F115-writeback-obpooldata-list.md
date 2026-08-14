@@ -124,8 +124,21 @@ Legacy 無「一支回寫 SP」；`OBPOOLDATA_LIST`（`[OB].[dbo].[OBPOOLDATA_LI
 
 | 方法 | 路由 | 權限 | 說明 |
 |---|---|---|---|
-| POST | `/api/v1/assignment/runs/:runId/writeback/preview` | DirectorGuard | dry-run，**不寫入**。回 `{ runId, totalToWrite, byListNo:[{listNo,count}], sample:[…前 N 列…], notMatched, connectionAvailable }`。`notMatched` 由對外部**唯讀** SELECT 探測（連線不可用 → `null` + `connectionAvailable:false`）。 |
-| POST | `/api/v1/assignment/runs/:runId/writeback` | DirectorGuard | 實際回寫。body `{ confirm: true }`（缺/false → 422）。回 `{ runId, updated, notMatched, failed, byListNo }`。連線未設定 → 422 `WRITEBACK_CONNECTION_NOT_CONFIGURED`。 |
+| POST | `/api/v1/assignment/runs/:runId/writeback/preview` | DirectorGuard | dry-run，**不寫入**。回 `{ runId, totalToWrite, byListNo:[{listNo,count}], sample:[…前 N 列…], notMatched, connectionAvailable, writePermission }`。`notMatched` 由對外部**唯讀** SELECT 探測（連線不可用 → `null` + `connectionAvailable:false`）。 |
+| POST | `/api/v1/assignment/runs/:runId/writeback` | DirectorGuard | 實際回寫。body `{ confirm: true }`（缺/false → 422）。回 `{ runId, updated, notMatched, failed, byListNo }`。連線未設定 → 422 `WRITEBACK_CONNECTION_NOT_CONFIGURED`；外部拒絕 UPDATE → 422 `WRITEBACK_PERMISSION_DENIED`；其他外部寫入錯誤 → 422 `WRITEBACK_EXTERNAL_WRITE_FAILED`。 |
+
+### 7.2 失敗語意（v0.3，2026-08-14 補強）
+
+實測事故：DBA 尚未授 UPDATE 權限時，mssql `RequestError`（SQL Server error 229，`The UPDATE permission was denied on the object 'OBPOOLDATA_LIST'…`）直接冒泡，前端只收到 `{"statusCode":500,"message":"Internal server error"}`，無從判斷是權限、連線或程式問題。補強後：
+
+| 情境 | 端點 | 回應 |
+|---|---|---|
+| 帳號無目標表 UPDATE 權限 | preview | `writePermission:false`（唯讀 `fn_my_permissions` 探測）→ 前端停用確認框並提示洽 IT／DBA 開通 |
+| 帳號無目標表 UPDATE 權限 | execute | 422 `WRITEBACK_PERMISSION_DENIED`（含驅動原文於 `detail`） |
+| 其他外部寫入錯誤（逾時 / 欄位長度 / 死結…） | execute | 422 `WRITEBACK_EXTERNAL_WRITE_FAILED`（message 附驅動訊息） |
+| 連線不可用 / 權限探測本身失敗 | preview | `writePermission:null`＝**未知**，不阻擋執行（避免誤擋），由 execute 的 422 兜底 |
+
+**原子性**：上述兩種 execute 失敗皆在套用 `result_status` 與寫稽核**之前**早退 → CDMP 端維持 `PENDING`、不寫 `WRITEBACK` 稽核，可原樣重試（不會把未寫入的列誤標 `SUCCESS`）。
 
 **execute 演算法**：讀 CDMP `ob_monthly_run_result`（run 全列）→ 依 `list_no` 分批（預設 500/批）→ 每批於外部連線建 `#wb` 暫存表 + 多列 INSERT（參數化）→ `UPDATE t SET OB_DEPT/OB_EMPLID/EMPLID_DEPTID/ASSIGNDAY/CARD_LEVEL/TIER_LEVEL/IS_CR/CR_ID/CR_NM FROM OBPOOLDATA_LIST t INNER JOIN #wb s ON t.LIST_NO=s.list_no AND t.ORGNO=s.orgno AND t.APPL_NO=s.appl_no`（`rowsAffected`=matched）→ LEFT JOIN 反查 not-matched keys → 回填 CDMP `result_status`（matched=SUCCESS / not-matched=FAILED）→ 寫 `assignment_audit_log`（action=`WRITEBACK`）。整體以 dev「資料來源」已驗證之 `APYHFC16.OB` datasource（`CryptoUtil.decrypt` 密碼、`mssql.ConnectionPool`）連線。
 
@@ -135,7 +148,7 @@ Legacy 無「一支回寫 SP」；`OBPOOLDATA_LIST`（`[OB].[dbo].[OBPOOLDATA_LI
 
 - CDMP 與 `APYHFC16.OB` 為**不同 SQL Server**（OB=172.20.202.193 / CDMP=172.20.202.212），無 linked server → 開**獨立 mssql 連線**（不可 3-part 跨庫）。
 - **重用 ETL 外部連線機制**：`datasources` 表已 seed `APYHFC16.OB`（host/db/user 齊；密碼 UI 填、AES 加密）；**dev 已於「資料來源」測試可連**。回寫服務以 datasource `name='APYHFC16.OB'` 解析、`CryptoUtil.decrypt` 密碼、`new mssql.ConnectionPool`（比照 `MSSQLExecutor.withConnection`）開連線；**新增寫入方法**（既有 executor 僅讀）。不新增 app 層 DataSource、不新增 env。
-- **寫入權限（非程式）**：`APYHFC16.OB` 連線帳號（`CDMPT`）目前供唯讀擷取；DBA 須授予 `OB.dbo.OBPOOLDATA_LIST` 之 UPDATE 權限，execute 才能真正寫入。
+- **寫入權限（非程式）**：`APYHFC16.OB` 連線帳號（`CDMPT`）原僅供唯讀擷取（`db_datareader`）；DBA 須授予 `OB.dbo.OBPOOLDATA_LIST` 之 UPDATE 權限（`GRANT UPDATE ON dbo.OBPOOLDATA_LIST TO CDMPT`），execute 才能真正寫入。2026-08-14 首次實機執行即因此失敗（見 §7.2）；已請 DBA 開通，程式端亦補上 preview 探測與 422 對應。
 - **安全**：preview 對外部只做唯讀 SELECT（探測 not-matched）；execute 為真實生產寫入，須 UI 二次確認；開發 session **不觸發真實寫入**（僅單元測試 mock 外部連線）。
 
 ---
@@ -152,7 +165,7 @@ Legacy 無「一支回寫 SP」；`OBPOOLDATA_LIST`（`[OB].[dbo].[OBPOOLDATA_LI
 | OQ-6 | `ASSIGNDAY` 格式 | CDMP `assignday`（月跑 `YYYYMMDD`）原值直送外部 `ASSIGNDAY`。 |
 | OQ-7 | 分批大小 | 依 `list_no` 分批、每批預設 500 列（可調常數，未壓測）。 |
 | OQ-8 | 是否清空 legacy 當月舊分派 | 本實作**不清空**（純 UPDATE 覆寫既有列分派欄）；需比照 legacy 清空另議。 |
-| OQ-9 | 部分失敗 | per-batch 執行、不整體 rollback；連線未設定 → 422 早退。DBA 未授寫權 → execute 拋錯，preview 仍可（唯讀）。 |
+| OQ-9 | 部分失敗 | per-batch 執行、不整體 rollback；連線未設定 → 422 早退。DBA 未授寫權 → preview 以 `writePermission:false` 先擋、execute 回 422 `WRITEBACK_PERMISSION_DENIED` 且不動 `result_status`／不寫稽核（§7.2）。 |
 
 ---
 
