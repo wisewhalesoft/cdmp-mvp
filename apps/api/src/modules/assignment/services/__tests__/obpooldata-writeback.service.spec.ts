@@ -4,10 +4,15 @@
  * 對應 spec：docs/specs/features/F115-writeback-obpooldata-list.md §7.1
  *   - TC-WB-PREVIEW-001：preview 回 totalToWrite / byListNo / sample / notMatched=null / connectionAvailable
  *   - TC-WB-PREVIEW-002：連線探測失敗 → connectionAvailable=false（優雅降級）
+ *   - TC-WB-PREVIEW-003：連線可用但無 UPDATE 權限 → writePermission=false（供前端先行擋下）
+ *   - TC-WB-PREVIEW-004：權限探測本身失敗 → writePermission=null（未知，不誤擋）
  *   - TC-WB-EXEC-001：confirm 缺 → 422 WRITEBACK_CONFIRM_REQUIRED
  *   - TC-WB-EXEC-002：外部連線未設定 → 422 WRITEBACK_CONNECTION_NOT_CONFIGURED
  *   - TC-WB-EXEC-003：成功回寫 → updated/notMatched 正確、result_status 轉 SUCCESS/FAILED、稽核 WRITEBACK
  *   - TC-WB-EXEC-004：run 不存在 → 404；未完成 → 422 NOT_COMPLETED
+ *   - TC-WB-EXEC-005：外部拒絕 UPDATE（SQL 229）→ 422 WRITEBACK_PERMISSION_DENIED，且 result_status
+ *     維持 PENDING、不寫稽核、連線已關閉（2026-08-14 事故：原本冒泡成無資訊 500）
+ *   - TC-WB-EXEC-006：其他外部寫入錯誤 → 422 WRITEBACK_EXTERNAL_WRITE_FAILED（附驅動訊息）
  *   - TC-WB-BATCH-001：writeBatches 以 fake pool 發出含 OBPOOLDATA_LIST 的 UPDATE，正確彙總 matched/not-matched
  */
 
@@ -106,6 +111,7 @@ function makeFakePool(recordsetsPerQuery: Array<Array<Record<string, string>>>) 
   let idx = 0;
   return {
     queries,
+    closed: false,
     request() {
       return {
         input() {
@@ -119,9 +125,40 @@ function makeFakePool(recordsetsPerQuery: Array<Array<Record<string, string>>>) 
       };
     },
     async close() {
-      /* noop */
+      this.closed = true;
     },
   };
+}
+
+/** Fake mssql pool：query 一律拋出指定錯誤（模擬外部庫拒絕 / 驅動錯誤）。 */
+function makeThrowingPool(error: unknown) {
+  return {
+    closed: false,
+    request() {
+      return {
+        input() {
+          return this;
+        },
+        async query() {
+          throw error;
+        },
+      };
+    },
+    async close() {
+      this.closed = true;
+    },
+  };
+}
+
+/** mssql `RequestError` 形狀（權限不足：SQL Server error 229）。 */
+function makePermissionDeniedError() {
+  const err = new Error(
+    "The UPDATE permission was denied on the object 'OBPOOLDATA_LIST', database 'OB', schema 'dbo'.",
+  ) as Error & { code: string; number: number };
+  err.name = 'RequestError';
+  err.code = 'EREQUEST';
+  err.number = 229;
+  return err;
 }
 
 describe('ObpooldataWritebackService (F115)', () => {
@@ -140,7 +177,10 @@ describe('ObpooldataWritebackService (F115)', () => {
     it('TC-WB-PREVIEW-001：回 totalToWrite / byListNo / sample / notMatched=null / connectionAvailable', async () => {
       await seedRun(env);
       await seedResults(env);
-      vi.spyOn(env.service as any, 'probeConnection').mockResolvedValue(true);
+      vi.spyOn(env.service as any, 'probeExternal').mockResolvedValue({
+        connectionAvailable: true,
+        writePermission: true,
+      });
 
       const res = await env.service.preview(RUN_ID, null);
       expect(res.totalToWrite).toBe(3);
@@ -152,14 +192,67 @@ describe('ObpooldataWritebackService (F115)', () => {
       expect(res.sample[0].applNo).toBe('A1');
       expect(res.notMatched).toBeNull();
       expect(res.connectionAvailable).toBe(true);
+      expect(res.writePermission).toBe(true);
     });
 
-    it('TC-WB-PREVIEW-002：連線探測失敗 → connectionAvailable=false', async () => {
+    it('TC-WB-PREVIEW-002：連線探測失敗 → connectionAvailable=false、writePermission=null', async () => {
       await seedRun(env);
       await seedResults(env);
-      vi.spyOn(env.service as any, 'probeConnection').mockResolvedValue(false);
+      vi.spyOn(env.service as any, 'openExternalPool').mockRejectedValue(
+        new Error('connect ETIMEDOUT'),
+      );
       const res = await env.service.preview(RUN_ID, null);
       expect(res.connectionAvailable).toBe(false);
+      expect(res.writePermission).toBeNull();
+    });
+
+    it('TC-WB-PREVIEW-003：連線可用但無 UPDATE 權限 → writePermission=false', async () => {
+      await seedRun(env);
+      await seedResults(env);
+      // SELECT 1 → ok；fn_my_permissions 探測 → can_update=0
+      const fakePool = makeFakePool([[{ ok: '1' }], [{ can_update: '0' }]]);
+      vi.spyOn(env.service as any, 'openExternalPool').mockResolvedValue(fakePool);
+
+      const res = await env.service.preview(RUN_ID, null);
+      expect(res.connectionAvailable).toBe(true);
+      expect(res.writePermission).toBe(false);
+      // 探測必須是唯讀的：不得對目標表發出任何 DML
+      const sql = fakePool.queries.join('\n');
+      expect(sql).toMatch(/fn_my_permissions/i);
+      expect(sql).not.toMatch(
+        /\b(UPDATE|INSERT\s+INTO|DELETE\s+FROM)\s+(dbo\.)?OBPOOLDATA_LIST/i,
+      );
+      expect(fakePool.closed).toBe(true);
+    });
+
+    it('TC-WB-PREVIEW-004：權限探測失敗 → writePermission=null（未知，不誤擋）', async () => {
+      await seedRun(env);
+      await seedResults(env);
+      let call = 0;
+      const flakyPool = {
+        closed: false,
+        request() {
+          return {
+            input() {
+              return this;
+            },
+            async query() {
+              call += 1;
+              if (call === 1) return { recordset: [{ ok: 1 }] };
+              throw new Error("The user does not have permission to perform this action.");
+            },
+          };
+        },
+        async close() {
+          this.closed = true;
+        },
+      };
+      vi.spyOn(env.service as any, 'openExternalPool').mockResolvedValue(flakyPool);
+
+      const res = await env.service.preview(RUN_ID, null);
+      expect(res.connectionAvailable).toBe(true);
+      expect(res.writePermission).toBeNull();
+      expect(flakyPool.closed).toBe(true);
     });
   });
 
@@ -223,6 +316,48 @@ describe('ObpooldataWritebackService (F115)', () => {
       ).rejects.toMatchObject({
         response: { error: ERROR_CODES.ASSIGNMENT_RUN_NOT_COMPLETED },
       });
+    });
+
+    it('TC-WB-EXEC-005：外部拒絕 UPDATE → 422 PERMISSION_DENIED、狀態不變、無稽核、連線關閉', async () => {
+      await seedRun(env);
+      await seedResults(env);
+      const fakePool = makeThrowingPool(makePermissionDeniedError());
+      vi.spyOn(env.service as any, 'openExternalPool').mockResolvedValue(fakePool);
+
+      await expect(
+        env.service.execute(RUN_ID, { confirm: true }, { userId: 'u-director' }),
+      ).rejects.toMatchObject({
+        status: 422,
+        response: { error: ERROR_CODES.WRITEBACK_PERMISSION_DENIED },
+      });
+
+      // 未寫入外部 → CDMP 端不得被標成 SUCCESS（維持 PENDING 可原樣重試）
+      const rows = await env.resultRepo.find({ where: { run_id: RUN_ID } });
+      expect(rows.every((r) => r.result_status === 'PENDING')).toBe(true);
+      expect(await env.auditRepo.count()).toBe(0);
+      expect(fakePool.closed).toBe(true);
+    });
+
+    it('TC-WB-EXEC-006：其他外部寫入錯誤 → 422 EXTERNAL_WRITE_FAILED（附驅動訊息）', async () => {
+      await seedRun(env);
+      await seedResults(env);
+      const fakePool = makeThrowingPool(new Error('Timeout: Request failed to complete in 30000ms'));
+      vi.spyOn(env.service as any, 'openExternalPool').mockResolvedValue(fakePool);
+
+      await expect(
+        env.service.execute(RUN_ID, { confirm: true }, { userId: 'u-director' }),
+      ).rejects.toMatchObject({
+        status: 422,
+        response: {
+          error: ERROR_CODES.WRITEBACK_EXTERNAL_WRITE_FAILED,
+          message: expect.stringContaining('Timeout'),
+        },
+      });
+
+      const rows = await env.resultRepo.find({ where: { run_id: RUN_ID } });
+      expect(rows.every((r) => r.result_status === 'PENDING')).toBe(true);
+      expect(await env.auditRepo.count()).toBe(0);
+      expect(fakePool.closed).toBe(true);
     });
   });
 

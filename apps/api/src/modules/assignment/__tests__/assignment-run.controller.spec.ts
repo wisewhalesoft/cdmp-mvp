@@ -157,6 +157,7 @@ describe('AssignmentRunController — RBAC + Routes', () => {
         sample: [],
         notMatched: null,
         connectionAvailable: true,
+        writePermission: true,
       }),
       execute: vi.fn().mockResolvedValue({
         runId: 'run-uuid-1',
@@ -606,6 +607,8 @@ describe('AssignmentRunController — RBAC + Routes', () => {
       );
       expect(res.body.totalToWrite).toBe(2);
       expect(res.body.connectionAvailable).toBe(true);
+      // 前端據此在按下執行前就擋掉無權限情境（F115 2026-08-14 補強）
+      expect(res.body.writePermission).toBe(true);
     });
 
     it('director execute confirm=true → writeback.execute', async () => {

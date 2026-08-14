@@ -1,4 +1,5 @@
 import {
+  HttpException,
   Injectable,
   Logger,
   NotFoundException,
@@ -26,6 +27,11 @@ import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
  * - preview：CDMP-only 統計 + 連線唯讀探測（不寫入）。execute：真實外部寫入（需 confirm）。
  *
  * ⚠️ execute 為外部**生產庫**不可逆寫入；連線未設定/無寫權 → 422。開發環境不觸發真實寫入。
+ *
+ * 失敗語意（2026-08-14 補強）：外部庫回權限不足時，preview 於 `writePermission=false` 先行示警，
+ * execute 轉 422 `WRITEBACK_PERMISSION_DENIED`（原本 mssql `RequestError` 冒泡成無資訊 500）；
+ * 其餘外部寫入錯誤轉 422 `WRITEBACK_EXTERNAL_WRITE_FAILED` 並附驅動訊息。兩者皆在套用
+ * `result_status` / 寫稽核**之前**早退，CDMP 端維持 PENDING 可原樣重試。
  */
 
 /** 回寫目標之外部 datasource 名稱（seeded 於 datasources.json）。 */
@@ -34,6 +40,24 @@ const EXTERNAL_DATASOURCE_NAME = 'APYHFC16.OB';
 const INSERT_BATCH_SIZE = 150;
 /** preview 樣本列數。 */
 const SAMPLE_SIZE = 20;
+/** 回寫目標表（外部庫，dbo schema）。 */
+const TARGET_TABLE = 'dbo.OBPOOLDATA_LIST';
+/**
+ * SQL Server 權限不足錯誤碼：229 = 物件權限被拒（`The UPDATE permission was denied on the
+ * object 'OBPOOLDATA_LIST'…`）、230 = 資料行權限被拒。此兩者為「未授權」而非程式錯誤，
+ * 必須轉 422 帶可行動訊息，不可讓驅動例外冒泡成無資訊 500（2026-08-14 實測事故）。
+ */
+const SQL_PERMISSION_DENIED_ERROR_NUMBERS = new Set([229, 230]);
+/**
+ * 寫入權限唯讀探測：`fn_my_permissions` 僅查目前登入者對目標表之有效權限，本身不寫入。
+ * 大小寫／前後空白皆正規化（外部庫 collation 未知，BIN collation 下直接等值比較會漏判）。
+ */
+const WRITE_PERMISSION_PROBE_SQL = `
+  SELECT CASE WHEN EXISTS (
+    SELECT 1 FROM fn_my_permissions('${TARGET_TABLE}', 'OBJECT')
+    WHERE UPPER(LTRIM(RTRIM(permission_name))) = 'UPDATE'
+  ) THEN 1 ELSE 0 END AS can_update;
+`;
 
 /** #wb 暫存欄序（與 UPDATE / INSERT 對應）。 */
 const WB_COLUMNS = [
@@ -70,6 +94,18 @@ export interface WritebackPreview {
   notMatched: number | null;
   /** 外部連線是否可用（唯讀 SELECT 1 探測）。 */
   connectionAvailable: boolean;
+  /**
+   * 回寫帳號對目標表是否具 UPDATE 權限（唯讀 `fn_my_permissions` 探測）。
+   *   - `true`／`false`：探測成功之明確結果
+   *   - `null`：連線不可用或探測本身失敗 → **未知**，不阻擋執行（由 execute 的 422 兜底）
+   */
+  writePermission: boolean | null;
+}
+
+/** 外部連線唯讀探測結果（preview 用；一次連線同時取連線可用性與寫入權限）。 */
+export interface ExternalProbeResult {
+  connectionAvailable: boolean;
+  writePermission: boolean | null;
 }
 
 export interface WritebackResult {
@@ -127,7 +163,7 @@ export class ObpooldataWritebackService {
       .getMany();
     const sample = sampleRows.map((r) => this.toSampleObject(r));
 
-    const connectionAvailable = await this.probeConnection();
+    const probe = await this.probeExternal();
 
     return {
       runId,
@@ -135,7 +171,8 @@ export class ObpooldataWritebackService {
       byListNo,
       sample,
       notMatched: null,
-      connectionAvailable,
+      connectionAvailable: probe.connectionAvailable,
+      writePermission: probe.writePermission,
     };
   }
 
@@ -184,12 +221,12 @@ export class ObpooldataWritebackService {
       const res = await this.writeBatches(pool, rows);
       matched = res.matched;
       notMatchedKeys = res.notMatchedKeys;
+    } catch (err) {
+      // 外部寫入失敗（含未授權）→ 轉可行動之 422 早退；不套用 result_status、不寫稽核，
+      // 讓 CDMP 端維持 PENDING 可原樣重試（避免把未寫入的列誤標 SUCCESS）。
+      throw this.toWriteFailureException(err);
     } finally {
-      try {
-        await pool.close();
-      } catch {
-        /* ignore */
-      }
+      await this.closeQuietly(pool);
     }
 
     await this.applyResultStatus(runId, notMatchedKeys);
@@ -357,24 +394,87 @@ export class ObpooldataWritebackService {
     return pool;
   }
 
-  /** preview 用：唯讀探測外部連線是否可用（SELECT 1）。失敗回 false（優雅降級）。 */
-  protected async probeConnection(): Promise<boolean> {
+  /**
+   * preview 用：單一連線內唯讀探測「連線可用性」+「目標表 UPDATE 權限」。全程不寫入。
+   *
+   * 權限探測失敗（如帳號無法呼叫 `fn_my_permissions`）視為**未知**（`null`）而非無權限 —
+   * 優雅降級：不誤擋合法回寫，真正無權限時仍由 execute 的 422 兜底。
+   */
+  protected async probeExternal(): Promise<ExternalProbeResult> {
     let pool: any;
     try {
       pool = await this.openExternalPool();
       await pool.request().query('SELECT 1 AS ok');
-      return true;
     } catch {
-      return false;
-    } finally {
-      if (pool) {
-        try {
-          await pool.close();
-        } catch {
-          /* ignore */
-        }
-      }
+      await this.closeQuietly(pool);
+      return { connectionAvailable: false, writePermission: null };
     }
+
+    let writePermission: boolean | null = null;
+    try {
+      const res = await pool.request().query(WRITE_PERMISSION_PROBE_SQL);
+      const row = res?.recordset?.[0];
+      if (row && row.can_update !== undefined && row.can_update !== null) {
+        writePermission = Number(row.can_update) === 1;
+      }
+    } catch (err) {
+      this.logger.warn(
+        `回寫寫入權限探測失敗（視為未知，不阻擋執行）：${(err as Error).message}`,
+      );
+    } finally {
+      await this.closeQuietly(pool);
+    }
+
+    return { connectionAvailable: true, writePermission };
+  }
+
+  private async closeQuietly(pool: any): Promise<void> {
+    if (!pool) return;
+    try {
+      await pool.close();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  /**
+   * 外部寫入例外 → 可行動之 HTTP 例外。
+   *   - 權限不足（SQL 229/230 或訊息含 permission was denied）→ 422 WRITEBACK_PERMISSION_DENIED
+   *   - 其他驅動錯誤 → 422 WRITEBACK_EXTERNAL_WRITE_FAILED（附原始訊息供排錯）
+   * 兩者皆不再讓 mssql `RequestError` 冒泡成無訊息的 500。
+   */
+  private toWriteFailureException(err: unknown): Error {
+    if (err instanceof HttpException) return err;
+
+    const e = err as {
+      number?: number;
+      originalError?: { info?: { number?: number } };
+      message?: string;
+    };
+    const sqlNumber = e?.number ?? e?.originalError?.info?.number;
+    const detail = e?.message ?? String(err);
+
+    const isPermissionDenied =
+      (sqlNumber !== undefined && SQL_PERMISSION_DENIED_ERROR_NUMBERS.has(sqlNumber)) ||
+      /permission\s+was\s+denied/i.test(detail);
+
+    if (isPermissionDenied) {
+      this.logger.error(
+        `回寫遭外部資料庫拒絕（權限不足，未寫入任何資料）：${detail}`,
+      );
+      return new UnprocessableEntityException({
+        error: ERROR_CODES.WRITEBACK_PERMISSION_DENIED,
+        message: ERROR_MESSAGES.WRITEBACK_PERMISSION_DENIED,
+        detail,
+      });
+    }
+
+    this.logger.error(`回寫外部寫入失敗：${detail}`);
+    return new UnprocessableEntityException({
+      error: ERROR_CODES.WRITEBACK_EXTERNAL_WRITE_FAILED,
+      message: `${ERROR_MESSAGES.WRITEBACK_EXTERNAL_WRITE_FAILED}：${detail}`,
+      detail,
+    });
   }
 
   /**
@@ -447,12 +547,12 @@ export class ObpooldataWritebackService {
         t.OB_DEPT = s.ob_dept, t.OB_EMPLID = s.ob_emplid, t.EMPLID_DEPTID = s.emplid_deptid,
         t.ASSIGNDAY = s.assignday, t.CARD_LEVEL = s.card_level, t.TIER_LEVEL = s.tier_level,
         t.IS_CR = s.is_cr, t.CR_ID = s.cr_id, t.CR_NM = s.cr_nm
-      FROM dbo.OBPOOLDATA_LIST t
+      FROM ${TARGET_TABLE} t
       INNER JOIN @wb s
         ON t.LIST_NO = s.list_no AND t.ORGNO = s.orgno AND t.APPL_NO = s.appl_no;
       SELECT s.list_no, s.orgno, s.appl_no
       FROM @wb s
-      LEFT JOIN dbo.OBPOOLDATA_LIST t
+      LEFT JOIN ${TARGET_TABLE} t
         ON t.LIST_NO = s.list_no AND t.ORGNO = s.orgno AND t.APPL_NO = s.appl_no
       WHERE t.APPL_NO IS NULL;
     `;
