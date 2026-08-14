@@ -105,6 +105,20 @@ describe('EditExtractionTaskPage', () => {
       expect(screen.getByLabelText('來源資料表')).toHaveValue('customers');
     });
 
+    it('should still display sourceTable when it is absent from the table list (e.g. a view)', async () => {
+      renderPage({ sourceTable: 'V_OB_CUST_CASE_SUMMARY' });
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('來源 Schema')).toHaveValue('dbo');
+      });
+
+      const select = screen.getByLabelText('來源資料表');
+      expect(select).toHaveValue('V_OB_CUST_CASE_SUMMARY');
+      expect(
+        within(select).getByRole('option', { name: 'V_OB_CUST_CASE_SUMMARY' }),
+      ).toBeInTheDocument();
+    });
+
     it('should show correct breadcrumb', async () => {
       renderPage();
 

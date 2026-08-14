@@ -473,6 +473,13 @@ export function EditExtractionTaskPage() {
 
   const cronPreview = scheduleValue ? cronToReadable(scheduleValue) : null;
 
+  // 受控 select 的 value 若在 options 中無對應項，瀏覽器會顯示空白，讓使用者誤以為設定遺失。
+  // 來源物件可能不在清單內（例：檢視／同義字、來源表已被刪除或改名、權限不足），
+  // 故補一個 fallback option 讓原值始終可見。
+  const currentSourceTable = watch('sourceTable');
+  const missingSourceTableOption =
+    currentSourceTable && !tables.includes(currentSourceTable) ? currentSourceTable : null;
+
   // Generate hour/minute/day options
   const hourOptions = Array.from({ length: 24 }, (_, i) => i);
   const minuteOptions = Array.from({ length: 12 }, (_, i) => i * 5);
@@ -661,6 +668,11 @@ export function EditExtractionTaskPage() {
                             ? '請先選擇 Schema'
                             : '請選擇'}
                       </option>
+                      {missingSourceTableOption && (
+                        <option key={missingSourceTableOption} value={missingSourceTableOption}>
+                          {missingSourceTableOption}
+                        </option>
+                      )}
                       {tables.map((t) => (
                         <option key={t} value={t}>{t}</option>
                       ))}
