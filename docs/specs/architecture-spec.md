@@ -2802,6 +2802,40 @@ graph TD
 
 ---
 
+### 5.20 F119 類別型篩選欄位文字比對運算子架構決策（AD-E07-50）
+
+> 完整設計（`buildCategoricalOperatorFragment` 單一 SQL 落點契約、LIKE 跳脫超集策略與 PG/MSSQL 等價論證、`normalizeConditionPayload` `:catop:` 簽章擴充、`caseyear` 排除裁定、8 個不變式、檔案異動清單、風險與待裁決事項）：見
+> [`implementation-log/AD-E07-50-categorical-text-match-operators.md`](implementation-log/AD-E07-50-categorical-text-match-operators.md)。
+> 本節為架構主文概要，供 Test Designer / TDD Developer 快速定位；本節與 §18.5「Stage 1 動態 SQL 演算法」互補——§18.5 描述路徑 A/B 之基礎 fragment 產生（`IN`/`BETWEEN`），本節描述在其上疊加的 categorical 運算子擴充，兩者不衝突、`caseyear` wildcard 規則（§18.5.1）不受影響。
+
+#### 5.20.1 背景
+
+F119（US-183，2026-08-18 通過人工審閱閘）於既有 categorical 條件之 `IN` 語意外，新增 `contains`/`not_contains`/`equals` 三種文字比對運算子，`ob_pool_data`/`customer_core`/`customer_financial` 三來源全支援。純加性 `condition_payload` schema 擴充（`operator`/`keyword` 兩個 optional key），無 migration、無新端點、不新增錯誤碼。
+
+#### 5.20.2 核心決策摘要（SA-1 ~ SA-7 + 2 項自行發現裁定）
+
+| # | 議題 | 裁定 | 是否推翻 spec |
+|---|---|---|---|
+| SA-1 | `data-model.md` 補述 | 已依 F119 §5.1 欄位契約表提交 v1.22 | 否 |
+| SA-2 | LIKE 跳脫技術手段 | 跳脫超集策略（`\`/`%`/`_`/`[`/`]`/`^`），單一共用 helper，**不依 dialect 分支**——PG 對字元類字元（`[`/`]`/`^`）之跳脫為安全 no-op，兩方言逐字元等價可證明而非估計 | 否（具體化） |
+| SA-3 | PG 路徑是否同步擴充 | **確認同步**；並額外將 SQL 產生收斂為 `buildCategoricalOperatorFragment()` 單一共用函式，供 composer + customer_core（PG/MSSQL 兩檔）+ customer_financial 四處呼叫，避免「四處重複實作靠測試守住等價」 | 否（範圍擴大） |
+| SA-4 | `normalizeConditionPayload` 抽出 | **推翻 spec 建議**：維持 `AssignmentListService` private method，不抽出獨立檔案——查證全部 4 個呼叫端皆在同一 class 內，`I-F118-SINGLE-NORMALIZE-01`（AD-E07-48）已有明文先例，F119 無新增跨模組呼叫需求佐證抽取必要性 | **是（HOW 層級，不影響 spec 契約）** |
+| SA-5 | AC-13 修正範圍（OQ-183-03） | 確認**不分觸發原因**一律渲染 `STAGE0_LIST_ESTIMATE_PARTIAL`；同一 warning code、同一產生路徑，技術上無法分流 | 否 |
+| SA-6 | 效能防護下限 | 確認本輪**不引入**新機制；未來若 Stage 1 實測逾時，記錄 Full-Text Search / `pg_trgm` 為候選方向（非本輪設計） | 否 |
+| SA-7 | `keyword` 快照固化往返 | 確認 F050 §6.2 `full-snapshot` 端點型別 passthrough 安全（index signature，無遺失風險） | 否 |
+| — | `caseyear` 排除文字運算子 | **自行發現並裁定**：`caseyear`→`year_cnt`（INTEGER）排除文字運算子，驗證層 422 攔截——PG `LIKE` 對 integer 無隱式轉型會拋型別錯誤，且既有 `'99'` wildcard 規則對文字運算子無定義 | spec 未觸及此欄位 |
+| — | AC-6 互斥驗證分層 | **自行發現並裁定**：置於 service 層而非 DTO 層——`class-validator` `@ValidateIf` 同屬性多組互斥條件之組合語意不可靠 | spec 未指定分層 |
+
+#### 5.20.3 不變式（摘要）
+
+`I-CATOP-SINGLE-FRAGMENT-01`（單一 SQL 落點擴大至四處呼叫端）/ `I-CATOP-OPERATOR-FALLBACK-01`（BR-11 前後端各自單一 fallback）/ `I-CATOP-SIG-BACKCOMPAT-01`（`:catop:` 簽章前綴互斥 + 向後相容位元相等）/ `I-CATOP-NULL-MATRIX-01`（BR-6 八格中僅一格顯式）/ `I-CATOP-ESCAPE-SINGLE-01`（跳脫超集單一實作）/ `I-CATOP-CASEYEAR-EXCLUDE-01` / `I-CATOP-DISPLAY-SINGLE-01`（BR-10 前端單一格式化函式）/ `I-CATOP-VALIDATION-LAYER-01`（互斥驗證限定 service 層）。完整說明見 AD §7。
+
+#### 5.20.4 待裁決（摘要）
+
+完整內容見 AD §11。**⚠️ AC-15「快照條件顯示」與現況程式碼不符**：`assignment_run_snapshot`（`buildConfigPayload()`）從未捕捉 `condition_payload`，F066 快照詳情頁「設定」頁籤（`snapshot-config-view.tsx`）無對應渲染邏輯——此非「格式擴充」而是「功能尚未建置」，需 team lead 裁決是否納入本 feature 範圍或回頭修訂 F119 spec descope（AD 建議 descope，理由：已鎖定名單之 `condition_payload` 唯讀，「名單詳情 Drawer」之即時讀取已能達到等同效果）。此項**不阻塞**其餘 SA 裁定之實作。
+
+---
+
 ## 6. 非功能需求架構對應
 
 ### 6.1 安全性（NFR-001）
@@ -5198,6 +5232,8 @@ graph TD
 | `categorical` | `"ob_pool_data"."${colName}" IN (:...vals_${idx})` | `vals_${idx}: string[]` |
 | `numeric` | `"ob_pool_data"."${colName}" BETWEEN :min_${idx} AND :max_${idx}` | `min_${idx}: number, max_${idx}: number` |
 | `date` | `"ob_pool_data"."${colName}" BETWEEN :dateStart_${idx} AND :dateEnd_${idx}` | `dateStart_${idx}: string, dateEnd_${idx}: string` |
+
+> **v1.22 補註（2026-08-18 / F119 / AD-E07-50）**：categorical fragment 之 `IN` 語意（上表）自 F119 起為 `operator` 缺漏或 `'in'` 時之特例；新增 `contains`/`not_contains`/`equals` 三運算子，SQL 產生統一經 `buildCategoricalOperatorFragment()` 單一函式（`stage1-query-composer.ts`），三來源（`ob_pool_data`/`customer_core`/`customer_financial`）共用，`caseyear` 之 wildcard 規則（§18.5.1，下同）不受影響、亦不支援文字運算子。完整設計見 §5.20 / [AD-E07-50](implementation-log/AD-E07-50-categorical-text-match-operators.md)，本節（D1~D4 原始設計）內容維持不變。
 
 ###### §18.5.1 特殊欄位比對規則（拍板 OQ-TEST-001）
 
