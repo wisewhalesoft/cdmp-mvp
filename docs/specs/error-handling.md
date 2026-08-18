@@ -1,10 +1,13 @@
 ---
 spec-id: error-handling
 title: 錯誤處理規範
-version: "1.18"
-date: 2026-08-04
+version: "1.20"
+date: 2026-08-18
 status: Draft
 ---
+
+> **🟡 v1.20 修訂（2026-08-18 / F119 AC-13 / BR-13）**：`#assignment-run-warnings` 補登 **`STAGE0_LIST_ESTIMATE_PARTIAL`** —— 該警告碼自 F049 v2.0（AD-E07-36 OQ-F049-07）引入、程式碼早已產生（`apps/api/src/modules/assignment-list/stage0-estimate.service.ts:557-570`），但**從未登錄於本檔**，屬既有登錄落差。[F119](features/F119-categorical-text-match-operators.md) AC-13 要求前端渲染此警告，補登後下游實作方有權威契約可循。**不新增 HTTP 錯誤碼**（本碼為 API 回應內之警告項，非錯誤）。同輪順修 frontmatter `version` 之落差（原停在 `1.18`，而頂部 banner 已為 v1.19）。
+> - **⚠ 併同發現（本輪未回填）**：Stage 0 部門估算之 `warnings[]` 尚有 3 個同樣未登錄之警告碼——`SCOPE_UNRESOLVED`（`stage0-estimate.service.ts:496`）、`DEPT_HEADCOUNT_ZERO`（`:707`）、`CALENDAR_EMPTY`（`:724`），另有獨立回應欄位 `poolWarning = 'POOL_COUNT_LOW'`。本輪僅補登 F119 直接相依之 `STAGE0_LIST_ESTIMATE_PARTIAL`；其餘 3 碼之補登建議另排一次專責 pass（同類文件債見 [open-questions.md](open-questions.md) OQ-DOC-01）。
 
 > **✅ v1.19 修訂（2026-08-04 / US-180 / F117）— 已核可**：`#assignment-ratio-errors` 新增 `RATIO_DEPT_DIRECTOR_REQUIRED`（422）：部門比例設定 PUT 之 payload 對「無在職處長且無既有非零比例」之部門配置 `ration > 0` 時拋出（defense-in-depth，正常前端流程不應觸發）。對應 [F117 AC-6 / BR-6](features/F117-dept-ratio-director-required-filter.md)。F117 已於 2026-08-04 人工審閱閘核可（v1.1），本碼為最終契約。同輪另更正 `LIST_NO_DUPLICATE` 之過時描述（原稱 `prod_kind + card_type`，實為「完整條件集相等 + card_type」）。**F118 經審查不新增錯誤碼**（唯讀提示；重複攔截仍由既有 `LIST_NO_DUPLICATE` 負責）。
 
@@ -339,8 +342,10 @@ E07 錯誤碼涵蓋名單定義、計分設定、分派比例、分派執行、�
 | RUN_REPORT_SKIPPED_CASES | F061 月名單分派 Stage 2 計分 | 月名單分派完成，但有 {skippedCaseCount} 筆案件因無對應計分卡（邊緣 CARD_TYPE）被跳過 | **v1.0 / 2026-05-16 / OQ-E07-29-A 落地（F061 v1.2 引入）**：Stage 2 遭遇無計分規則之邊緣 CARD_TYPE（如 HB / SEB / SEC），跳過該案件不拋錯；月名單分派仍 `status = 'completed'`；跳過案件清單儲存於 `assignment_run.report_payload.skippedCases[]` JSONB（結構詳見 [F061 BR-13](features/F061-trigger-assignment-run.md#6-商業規則)）；前端可於 F062 / F063 顯示黃色警示 banner，提供「查看跳過案件清單」展開連結 | F061 v1.2, F062, F063 |
 | WHITELIST_OPTION_INACTIVE | 月名單分派 Stage 1 預檢 / F050 / F051 名單儲存 | 名單條件引用之可選值「{optionValue}」（{columnName}）已被停用 | **v1.0 / 2026-05-16 / 衍生補修新增；v1.15 / 2026-05-20 引用版號更新**：F076 v1.5 將某 categorical 欄位之可選值軟停用（`is_active = false`）後，既有名單若引用 inactive 值，**月名單分派 Stage 1 不阻擋**（沿用 F076 v1.5 BR-4 不回溯規則）；可於月名單分派報告 `report_payload.warnings[]` 補 warning 條目，或於 F050 v2.1 / F051 v2.1 名單儲存時於 response body 附加 `warnings: [{ code: "WHITELIST_OPTION_INACTIVE", affectedFields: [...] }]`（F050 v2.1 BR-9 / F051 v2.1 BR-12；非阻擋儲存）。**非 HTTP 錯誤碼**；前端應於名單編輯頁列出受影響條件值；後端不主動清理 `condition_payload` 之 inactive 值（由業務手動處理）| F076 v1.5, F050 v2.1, F051 v2.1, F061 |
 | SCORING_INTEGRITY_WARN | F061 月名單分派 Stage 2 前（`ScoringIntegrityCheckService`）| 計分設定完整性警告：{affectedCount} 個維度之 match_type 與 score 記錄不一致，月名單分派繼續但結果可能有誤 | **v1.3 / 2026-05-18 / F061 v1.3 新增（非 HTTP 錯誤碼）**：Stage 2 執行前，`ScoringIntegrityCheckService.checkAndWarn()` 稽核所有 active 版本之 `ob_levelcard_column` 與對應 `ob_levelcard_score`；若發現 `MATCH_TYPE_FIELD_MISMATCH`（match_type 與 level1 / level2_s 填值規則衝突）或 `CATEGORY_DUPLICATE`（同 column_name 下 level1 重複），**不拋錯、月名單分派繼續**；警告寫入：(a) `assignment_audit_log`（`action = 'SCORING_INTEGRITY_WARN'`，JSONB 含 issues 陣列）；(b) `assignment_run.report_payload.warningSummary.SCORING_INTEGRITY_WARN`（含 `affectedCount` + `details[]`）；前端 F062 / F063 結果頁於 `warningSummary.SCORING_INTEGRITY_WARN.affectedCount > 0` 時顯示黃色 integrity 警示 banner，提示業務人員至 M02 計分設定頁修正 | F061 v1.3, F062, F063, F054 |
+| STAGE0_LIST_ESTIMATE_PARTIAL | Stage 0 部門維度估算（`Stage0EstimateService`，非月名單分派執行期）| 名單 {list_no} 估算逾時，已從本次合計排除。 | **v1.20 / 2026-08-18 / 補登既有警告碼（F049 v2.0 / AD-E07-36 OQ-F049-07 引入，程式碼於 `apps/api/src/modules/assignment-list/stage0-estimate.service.ts:557-570`）**：`GET /api/v1/assignment/stage0/dept-estimate` 於個別名單之 `list_total` 無物化值（`ob_list_definition.stage0_estimate_count IS NULL`）而需即時 `COUNT` 時，該筆查詢若超過 `raceTimeout` 門檻，**不拋錯、不阻擋整體回應**；該名單自 `listTotals` 排除（即**不計入**部門合計與人均），並於回應之 `warnings[]` 追加一則本警告。<br>**Payload 結構**（`warnings[]` 元素，三個欄位）：<br>`{ "code": "STAGE0_LIST_ESTIMATE_PARTIAL", "listNo": "OB202608003", "message": "名單 OB202608003 估算逾時，已從本次合計排除。" }`<br>**與本表其他警告之差異**：本碼**不**寫入 `assignment_run.report_payload`（Stage 0 估算為月名單分派**執行前**之試算 API，無 `assignment_run` 紀錄），而是直接置於該 GET 端點之回應 body。<br>**逾時可能觸發之典型原因**：篩選範圍寬鬆之名單、以及 [F119](features/F119-categorical-text-match-operators.md) 之文字比對運算子（`LIKE '%關鍵字%'` 無法使用索引，對約 167 萬列之 `ob_pool_data` 為全表掃描）。<br>**與 `STAGE0_ESTIMATE_TIMEOUT`（500，見 `#assignment-misc-errors`）之區別**：後者為**單一名單試算端點**之 HTTP 錯誤（整個請求失敗）；本碼為**部門矩陣端點**之部分降級（其餘名單之合計仍正常回傳） | F049 v2.0, [F119 AC-13 / BR-13](features/F119-categorical-text-match-operators.md) |
 
 **前端展示建議**：
+- `STAGE0_LIST_ESTIMATE_PARTIAL`：Stage 0 部門估算頁（`stage0-estimate-page.tsx`）**必須**渲染此警告，且須讓使用者辨識**是哪一張名單**（`listNo`）逾時、以及**合計數字未涵蓋該名單**；多張名單同時逾時時每一張皆須可辨識，不得只顯示一則泛用訊息而遺失 `listNo`。**禁止**靜默丟棄——後端已排除該名單卻不提示，會使業務主管把不完整的合計誤讀為完整值（[F119 AC-13 / BR-13](features/F119-categorical-text-match-operators.md)；沿用專案「逾時靜默回 0 / 空白造成業務誤判」之既有教訓）。呈現位置與樣式（名單列 inline / 頁首彙總提示 / 兩者兼具）由 ui-ux-designer 定案（US-183 OQ-183-01）；警告之顯示不得阻擋頁面其餘內容渲染
 - `RUN_REPORT_SKIPPED_CASES`：F062 進度頁完成後 / F063 結果摘要頁頂部，黃色 banner「⚠ 月名單分派完成，但有 N 筆案件被跳過」+「查看詳情」按鈕展開 `report_payload.skippedCases[]` 清單
 - `WHITELIST_OPTION_INACTIVE`：F050 / F051 名單編輯頁之篩選條件區塊，受影響條件值旁顯示「⚠ 已停用」標籤；F062 月名單分派完成後若有此警告，於結果摘要頁顯示「{N} 份名單之條件含已停用可選值（不影響月名單分派結果）」
 

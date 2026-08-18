@@ -7,15 +7,15 @@ epic: E07
 module: M01 名單定義（草稿階段篩選條件建構子流程，涵蓋建立草稿與編輯草稿兩進入點）
 priority: P1
 version: "1.1"
-date: 2026-08-19
+date: 2026-08-18
 status: Draft
 ---
 
 # F119: 類別型篩選欄位新增文字比對運算子（包含 / 不包含 / 完全等於）
 
-Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Updated: 2026-08-19
+Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Updated: 2026-08-18
 
-> **v1.1（2026-08-19 / AC-15 descope —— 快照條件顯示移出範圍）**：v1.0 AC-15 / §5.2 / BR-10 以「月跑快照條件檢視為既有顯示端、本輪僅需擴充顯示格式」為前提，**該前提經 system-architect 追查後推翻**：快照 `config_payload.listDefinitions[]` 從未攜帶 `condition_payload`（`assignment-run-pipeline.service.ts:1802-1806` 僅 5 欄），前端 6 個 snapshot 元件對 `conditionPayload` / `columnName` **零命中**——快照根本不顯示篩選條件，屬 [F066](F066-view-run-snapshot-detail.md) **既有功能缺口**而非顯示格式問題。**使用者已裁決 descope 並另開票**。本版變更：
+> **v1.1（2026-08-18 / AC-15 descope —— 快照條件顯示移出範圍）**：v1.0 AC-15 / §5.2 / BR-10 以「月跑快照條件檢視為既有顯示端、本輪僅需擴充顯示格式」為前提，**該前提經 system-architect 追查後推翻**：快照 `config_payload.listDefinitions[]` 從未攜帶 `condition_payload`（`assignment-run-pipeline.service.ts:1802-1806` 僅 5 欄），前端 6 個 snapshot 元件對 `conditionPayload` / `columnName` **零命中**——快照根本不顯示篩選條件，屬 [F066](F066-view-run-snapshot-detail.md) **既有功能缺口**而非顯示格式問題。**使用者已裁決 descope 並另開票**。本版變更：
 > 1. **AC-15 縮為兩個真實顯示端**：名單詳情 Drawer（`ListDetailDrawer.tsx:296`）與名單定義列表（`list-definition-page.tsx:188`）；移除快照條件檢視。
 > 2. **§5.2** 受影響端點表：`full-snapshot` 一列註明其為 Drawer 之**即時讀取**來源（非月跑凍結快照）；月跑快照相關端點改列為**不受影響**並附技術理由。
 > 3. **BR-10** 消費端清單移除「快照條件檢視」——**本規則之核心價值（單一共用格式化函式、禁止各頁自拼字串）不變**，且明訂日後補齊快照條件顯示時須複用同一函式。
@@ -204,7 +204,8 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 - **Given** 個別名單於 Stage 0 部門維度估算之 `estimateListCount` 查詢逾時，後端已依現況邏輯將該名單自 `listTotals` 排除並產生 warning `{ code: 'STAGE0_LIST_ESTIMATE_PARTIAL', listNo, message }`（`stage0-estimate.service.ts:557-570`）
 - **When** 使用者檢視 Stage 0 部門估算頁
 - **Then** 該 warning 須被渲染出來，使用者可辨識「哪一張名單估算逾時」與「本次合計未涵蓋該名單」
-- **And** 前端**不得**丟棄該 warning——現況 `stage0-estimate-page.tsx` 僅渲染 `SCOPE_UNRESOLVED` / `CALENDAR_EMPTY` / `POOL_COUNT_LOW` / `HEADCOUNT_ZERO` 四種，`STAGE0_LIST_ESTIMATE_PARTIAL` 完全未呈現，導致合計數字被誤讀為完整值
+- **And** 前端**不得**丟棄該 warning——現況 `stage0-estimate-page.tsx` 僅處理 `SCOPE_UNRESOLVED`（`:177`）、`CALENDAR_EMPTY`（`:447`）與獨立欄位 `poolWarning = 'POOL_COUNT_LOW'`（`:467`），`STAGE0_LIST_ESTIMATE_PARTIAL` 完全未呈現，導致合計數字被誤讀為完整值
+- **And** 契約來源：本 warning 已登錄於 [error-handling.md#assignment-run-warnings](../error-handling.md#assignment-run-warnings)（v1.20 補登，含 payload 結構與前端呈現要求）
 - **And** 渲染須沿用既有 warning 呈現管道（不另建平行機制）；**確切呈現位置與樣式**（列內 inline / 頁首彙總 / 兩者兼具）由 ui-ux-designer 定案（US-183 §不含範圍）
 - **And** 多張名單同時逾時時，每一張皆須可辨識（不得只顯示一則泛用訊息而遺失 `listNo`）
 - **And** warning 之顯示**不阻擋**頁面其餘內容渲染
@@ -411,7 +412,7 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 - **宿主 spec**：[F050 §5.4 `condition_payload` JSON Schema](F050-create-list-definition.md) / [F050 BR-6 / BR-7](F050-create-list-definition.md) / [F051](F051-edit-list-definition.md)
 - **資料模型**：[data-model.md#ob_list_definitionobmlistdf--名單定義](../data-model.md#ob_list_definitionobmlistdf--名單定義)（**待 system-architect 補述 `operator` / `keyword`，見 §12.1 SA-1**）
 - **錯誤代碼**：[error-handling.md#assignment-list-errors](../error-handling.md#assignment-list-errors)（`VALIDATION_ERROR` / `LIST_NO_DUPLICATE`；本 feature **不新增**）
-- **警告紀錄**：`STAGE0_LIST_ESTIMATE_PARTIAL` 為既有 warning（AC-13 僅要求渲染），產生邏輯於 `stage0-estimate.service.ts:557-570`、決策記錄於 [architecture-spec.md](../architecture-spec.md) §5.15 / [AD-E07-36](../implementation-log/AD-E07-v3.6-f049-stage0-dept-matrix.md) OQ-F049-07。⚠️ **該 warning code 未登錄於 [error-handling.md#assignment-run-warnings](../error-handling.md#assignment-run-warnings)**（已查證，該節現有三碼：`RUN_REPORT_SKIPPED_CASES` / `WHITELIST_OPTION_INACTIVE` / `SCORING_INTEGRITY_WARN`）——屬既有登錄落差，建議由 system-architect 於本輪一併補登（§12.1 SA-5 連帶）
+- **警告紀錄**：[error-handling.md#assignment-run-warnings](../error-handling.md#assignment-run-warnings) —— **`STAGE0_LIST_ESTIMATE_PARTIAL` 已於 error-handling.md v1.20（2026-08-18）補登**（含 payload 結構 `{ code, listNo, message }`、與 `STAGE0_ESTIMATE_TIMEOUT` 之區別、前端呈現要求）。產生邏輯於 `stage0-estimate.service.ts:557-570`，決策來源為 [architecture-spec.md](../architecture-spec.md) §5.15 / [AD-E07-36](../implementation-log/AD-E07-v3.6-f049-stage0-dept-matrix.md) OQ-F049-07。AC-13 僅要求**前端渲染**此既有 warning，不新增偵測邏輯
 - **待決事項**：[open-questions.md](../open-questions.md) §「F119 類別型文字比對運算子（2026-08-18）」
 - **圖表**：[diagrams/F119-categorical-operator-flow.mmd](../diagrams/F119-categorical-operator-flow.mmd)
 - **Prototype**：`prototypes/27a-list-create-draft.html` / `prototypes/27b-list-edit-draft.html` / `prototypes/30-stage0-estimate.html`
@@ -556,5 +557,5 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 
 | 版本 | 日期 | 變更內容 |
 |---|---|---|
-| v1.1 | 2026-08-19 | **AC-15 descope：快照條件顯示移出範圍**（使用者裁決）。v1.0 誤將「月跑快照條件檢視」列為既有顯示端；經查證快照 `config_payload.listDefinitions[]` 從未攜帶 `condition_payload`（`assignment-run-pipeline.service.ts:1802-1806`）、前端 snapshot 元件零條件渲染邏輯——屬 [F066](F066-view-run-snapshot-detail.md) 既有功能缺口，非顯示格式問題，另開票處理。AC-15 縮為名單詳情 Drawer + 名單定義列表兩端；§5.2 端點表、BR-10 消費端、§7 / §8 / §10 / §11 同步縮減；§12.1 SA-7 收斂為 no-op；新增 §13.3 A-7 完整記錄技術證據與 descope 理由。**AC / BR 總數不變（18 / 15）**，仍無 migration / 無新端點 / 無新錯誤碼。US-183 AC-13 之對應 descope 由 product-analyst 執行，本輪未改 US-183 |
+| v1.1 | 2026-08-18 | **AC-15 descope：快照條件顯示移出範圍**（使用者裁決）。v1.0 誤將「月跑快照條件檢視」列為既有顯示端；經查證快照 `config_payload.listDefinitions[]` 從未攜帶 `condition_payload`（`assignment-run-pipeline.service.ts:1802-1806`）、前端 snapshot 元件零條件渲染邏輯——屬 [F066](F066-view-run-snapshot-detail.md) 既有功能缺口，非顯示格式問題，另開票處理。AC-15 縮為名單詳情 Drawer + 名單定義列表兩端；§5.2 端點表、BR-10 消費端、§7 / §8 / §10 / §11 同步縮減；§12.1 SA-7 收斂為 no-op；新增 §13.3 A-7 完整記錄技術證據與 descope 理由。**AC / BR 總數不變（18 / 15）**，仍無 migration / 無新端點 / 無新錯誤碼。US-183 AC-13 之對應 descope 由 product-analyst 執行，本輪未改 US-183 |
 | v1.0 | 2026-08-18 | 初版（DRAFT，依已通過人工審閱閘之 US-183 v1.2 撰寫）。18 AC / 15 BR；US-183 之 16 AC 逐條展開並新增 2 條（AC-6 後端互斥防呆、AC-11 零可選值欄位可用性，理由見 §13.1 D-4 / D-5）。核心裁定：D-1 採 categorical 子屬性而非新增 `fieldType`；D-6 一致性範圍自「三處」擴為**五條執行路徑**（查證 `buildStage1WhereConditions` 呼叫端）；D-7 重複判定簽章採 `:catop:` 區段並附無碰撞論證與向後相容硬性回歸要求。**不新增錯誤碼、不新增端點、不需 migration**。§12 列出交付 system-architect 之 7 項（含 `data-model.md` 補述）與 F050 之 3 處加性補述建議（**本輪刻意未改寫 F050**，沿用 F118 §12.2 慣例） |

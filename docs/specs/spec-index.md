@@ -1,12 +1,19 @@
 ---
 spec-id: CDMP-INDEX
 title: SPEC 文件索引
-version: "3.40"
+version: "3.41"
 date: 2026-08-18
 status: Draft
 ---
 
 # CDMP MVP — SPEC 文件索引
+
+> **🟡 v3.41 / 2026-08-18 / F119 v1.0 → v1.1（AC-15 descope）＋ error-handling.md v1.20（補登遺漏 warning code）**：
+> - **[F119](features/F119-categorical-text-match-operators.md) v1.0 → v1.1**：**AC-15 之「快照條件顯示」descope**（使用者裁決，另開票）。v1.0 誤以「月跑快照條件檢視為既有顯示端、本輪僅需擴充格式」為前提；經 system-architect 追查並複核推翻——快照 `config_payload.listDefinitions[]` **從未攜帶** `condition_payload`（`assignment-run-pipeline.service.ts:1802-1806` 僅 `listNo` / `listNm` / `cardType` / `crEnabled` / `caseStatus`），前端 6 個 snapshot 元件對 `conditionPayload` / `columnName` **零命中**。**這不是顯示格式問題，是功能從未實作**，屬 [F066](features/F066-view-run-snapshot-detail.md) 既有缺口。AC-15 縮為兩個**真實**顯示端（名單詳情 Drawer `ListDetailDrawer.tsx:296`、名單定義列表 `list-definition-page.tsx:188`）；§5.2 端點表、BR-10 消費端、§7 / §8 / §10 / §11 同步縮減；§12.1 **SA-7 收斂為 no-op**（其「條件固化於快照」之前提同屬誤判）；新增 **§13.3 A-7** 完整記錄技術證據、定性與 descope 理由。**BR-10 核心價值不變**（單一格式化函式、禁止各頁自拼字串），並明訂日後補齊快照條件顯示時須複用同一函式。**AC / BR 總數不變（18 / 15）**，仍無 migration / 無新端點 / 無新錯誤碼
+> - **`error-handling.md` v1.19 → v1.20**：`#assignment-run-warnings` **補登 `STAGE0_LIST_ESTIMATE_PARTIAL`**（該碼自 F049 v2.0 / AD-E07-36 OQ-F049-07 引入、程式碼早已產生於 `stage0-estimate.service.ts:557-570`，但從未登錄）。登錄內容含觸發條件、payload 結構 `{ code, listNo, message }`、訊息文案、**與 `STAGE0_ESTIMATE_TIMEOUT`（500）之區別**（後者為單一名單端點之整體失敗，本碼為部門矩陣端點之部分降級）、以及前端呈現要求（引用 [F119 AC-13 / BR-13](features/F119-categorical-text-match-operators.md)）。同輪順修該檔 frontmatter `version` 落差（原停在 1.18，頂部 banner 已為 v1.19）
+> - **`open-questions.md` v2.8 → v2.9**：新增 **OQ-F119-06**（快照未記錄條件 → ✅ 已裁決 descope、另開票掛 F066）；**OQ-F119-05 標 ✅ 已解決**（warning 已補登）
+> - **併同發現（本輪未回填）**：Stage 0 部門估算端點之 `warnings[]` 尚有 `SCOPE_UNRESOLVED` / `DEPT_HEADCOUNT_ZERO` / `CALENDAR_EMPTY` 三碼、及獨立欄位 `poolWarning = 'POOL_COUNT_LOW'` 同樣未登錄於 error-handling.md；本輪僅補登 F119 直接相依之一碼，其餘建議另排專責 pass
+> - **刻意未動（邊界）**：`docs/stories/**`（US-183 AC-13 之對應 descope 由 product-analyst 執行）；`implementation-log/AD-E07-50-*`、`architecture-spec.md`、`data-model.md`（system-architect）；prototype、code、test
 
 > **🟡 v3.40 / 2026-08-18 / 新建 F119 類別型篩選欄位文字比對運算子（US-183 v1.2）— DRAFT，待人工審閱閘**：依已通過人工審閱閘之 US-183 v1.2（16 AC / 16 TC 為最終業務契約）新建 **F119**（M01 名單定義，草稿階段篩選條件建構子）。類別型條件在既有「勾選可選值清單」（`IN`）之外新增三種文字比對運算子（`contains` / `not_contains` / `equals`），單一關鍵字，`ob_pool_data` / `customer_core` / `customer_financial` 三來源全支援。
 > - **新建 v1.0（DRAFT）**：[F119-categorical-text-match-operators.md](features/F119-categorical-text-match-operators.md)（18 AC / 15 BR）
@@ -392,7 +399,7 @@ status: Draft
 | F077 | [F077-month-switch-and-stage-overview.md](features/F077-month-switch-and-stage-overview.md) | 月份切換與名單五階段總覽（M01 入口互動補強，合併 US-104 + US-105；**v1.4 / 2026-05-27**：F097 月份預設改 `target_work_ym`（下月）、UI 標籤「分派作業月份」、順修 BR-7 C-4 殘留舊文字） | US-104, US-105, US-143 | P0-MVP（**v1.4**）|
 | F078 | [F078-draft-advance-to-dept-ratio.md](features/F078-draft-advance-to-dept-ratio.md) | **草稿階段推進至部門比例設定（五階段流程引擎之第一個推進操作）** | US-108 | P0-MVP（**新增 v1.0**）|
 | F118 | [F118-copy-from-prev-month-duplicate-indicator.md](features/F118-copy-from-prev-month-duplicate-indicator.md) | ✅ **Approved v1.1**：從上月複製名單顯示「已複製過」提示（v1.0 / 2026-08-04 / US-181）。判定裁定採**語意等價**（重用 `findActiveConditionDuplicate` 之 F050 v2.2「完整條件集相等 + card_type」規則），使提示與儲存端 422 `LIST_NO_DUPLICATE` **依建構即一致**且直接提供目標名單編號；**不需 migration、不新增錯誤碼**（衍生狀態不落表）。禁 N+1（常數查詢 + 記憶體簽章索引）、判定失敗安全降級不阻擋主流程。**已裁決**：OQ-F118-B2＝接受「編輯條件後不再標記」之語意；OQ-F118-B3＝以實作為準修正三處 spec。端點定案 `GET /api/v1/assignment/lists/copy-duplicate-check?prevYm&currentYm` | US-181 | P1（**v1.1 Approved**）|
-| F119 | [F119-categorical-text-match-operators.md](features/F119-categorical-text-match-operators.md) | ⚠️ **DRAFT v1.0**：類別型篩選欄位新增文字比對運算子（v1.0 / 2026-08-18 / US-183 v1.2）。categorical 條件於既有 `IN`（勾選可選值）之外新增 `contains` / `not_contains` / `equals`，單一關鍵字，`ob_pool_data` / `customer_core` / `customer_financial` 三來源全支援。**schema 純加性擴充**（`condition_payload` 新增 optional `operator` / `keyword`，JSON 欄位 → **無 migration**，缺漏 `operator` ≡ `in`）；**SQL 僅一個共用落點** `buildCategoricalFragment`（被 **5 條執行路徑**共用 → AC-14 一致性依建構即成立），客戶兩來源依 `I-CC/CF-COMPOSER-SCOPE-01` 各自擴充且**禁新增 NULL 特判**；**NULL 語意八格中唯一例外＝`ob_pool_data` × `not_contains` 保留 NULL**（業務裁定），客戶來源沿用 `I-CC/CF-NULL-EXCLUDE-01` 全排除；重複判定簽章擴充 `欄位:catop:運算子:關鍵字`（與 `:cat:` 前綴互斥可證無碰撞，舊資料輸出逐字元不變）；`STAGE0_LIST_ESTIMATE_PARTIAL` 為**後端既有** warning，僅要求前端渲染。18 AC / 15 BR；**不新增錯誤碼**（重用 `VALIDATION_ERROR` 422）、**不新增端點**。7 項交 system-architect（含 `data-model.md` 補述 SA-1、LIKE 跳脫手段 SA-2） | US-183 | P1（**v1.0 DRAFT**）|
+| F119 | [F119-categorical-text-match-operators.md](features/F119-categorical-text-match-operators.md) | ⚠️ **DRAFT v1.1**：類別型篩選欄位新增文字比對運算子（v1.0 / 2026-08-18 / US-183 v1.2；**v1.1 / 2026-08-18 AC-15 descope —— 快照條件顯示移出範圍**，經查證快照 `config_payload` 從未攜帶 `condition_payload`、前端 snapshot 元件零條件渲染，屬 [F066](features/F066-view-run-snapshot-detail.md) 既有功能缺口而非顯示格式問題，使用者裁決另開票；AC-15 縮為名單詳情 Drawer + 名單定義列表兩端，AC / BR 總數不變）。categorical 條件於既有 `IN`（勾選可選值）之外新增 `contains` / `not_contains` / `equals`，單一關鍵字，`ob_pool_data` / `customer_core` / `customer_financial` 三來源全支援。**schema 純加性擴充**（`condition_payload` 新增 optional `operator` / `keyword`，JSON 欄位 → **無 migration**，缺漏 `operator` ≡ `in`）；**SQL 僅一個共用落點** `buildCategoricalFragment`（被 **5 條執行路徑**共用 → AC-14 一致性依建構即成立），客戶兩來源依 `I-CC/CF-COMPOSER-SCOPE-01` 各自擴充且**禁新增 NULL 特判**；**NULL 語意八格中唯一例外＝`ob_pool_data` × `not_contains` 保留 NULL**（業務裁定），客戶來源沿用 `I-CC/CF-NULL-EXCLUDE-01` 全排除；重複判定簽章擴充 `欄位:catop:運算子:關鍵字`（與 `:cat:` 前綴互斥可證無碰撞，舊資料輸出逐字元不變）；`STAGE0_LIST_ESTIMATE_PARTIAL` 為**後端既有** warning，僅要求前端渲染。18 AC / 15 BR；**不新增錯誤碼**（重用 `VALIDATION_ERROR` 422）、**不新增端點**。7 項交 system-architect（含 `data-model.md` 補述 SA-1、LIKE 跳脫手段 SA-2） | US-183 | P1（**v1.0 DRAFT**）|
 
 #### M02 計分設定（5 Tab 結構，2026-05-14 擴充）
 
