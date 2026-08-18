@@ -20,6 +20,8 @@
 
 import type { ObListDefinitionConditionItem } from '@/database/entities/ob-list-definition.entity';
 import {
+  buildCategoricalOperatorFragment,
+  resolveCategoricalOperator,
   resolveConditionDataSource,
   SAFE_COLUMN_NAME_RE,
   type Stage1ComposerWarning,
@@ -74,18 +76,19 @@ export function buildCustomerFinancialClause(
     }
 
     // categorical（has_guarantor：Y/N）：直接值比對；不得 COALESCE（NULL IN (...) = NULL → 排除）
+    // F119 / AD-E07-50 §3.3（呼叫端 4）：四運算子一律委派 buildCategoricalOperatorFragment
     if (cond.fieldType === 'categorical') {
-      if (!Array.isArray(cond.values) || cond.values.length === 0) {
-        pushWarning({
-          code: 'EMPTY_VALUES',
-          columnName: cond.columnName,
-          reason: 'values missing or empty',
-        });
-        continue;
-      }
-      const p = `cfCat${idx++}`;
-      whereFragments.push(`(cf.${cond.columnName} IN (:...${p}))`);
-      params[p] = cond.values;
+      const built = buildCustomerFinancialCategorical(
+        cond,
+        `cf.${cond.columnName}`,
+        `cfCat${idx}`,
+        pushWarning,
+      );
+      if (!built) continue;
+      idx += 1;
+      // I-CF-NULL-EXCLUDE-01 + I-CATOP-NULL-MATRIX-01（七格之一）：not_contains 不得新增 IS NULL 特判
+      whereFragments.push(`(${built.fragment})`);
+      Object.assign(params, built.params);
       continue;
     }
 
@@ -130,4 +133,54 @@ export function buildCustomerFinancialClause(
     whereFragments,
     params,
   };
+}
+
+/**
+ * F119 / AD-E07-50 §3.3（呼叫端 4）：customer_financial categorical 條件之 SQL 片段。
+ *
+ * 四運算子一律委派 `buildCategoricalOperatorFragment`（I-CATOP-SINGLE-FRAGMENT-01），
+ * 本函式僅負責輸入完整性檢查 + warning；`nullKeptOnNotContains: false`
+ * （I-CATOP-NULL-MATRIX-01 七格之一，NULL 由 SQL 三值邏輯天然排除）。
+ */
+function buildCustomerFinancialCategorical(
+  cond: ObListDefinitionConditionItem,
+  colExpr: string,
+  paramName: string,
+  pushWarning: (w: Stage1ComposerWarning) => void,
+): { fragment: string; params: Record<string, unknown> } | null {
+  const operator = resolveCategoricalOperator(cond.operator);
+  if (operator === 'in') {
+    if (!Array.isArray(cond.values) || cond.values.length === 0) {
+      pushWarning({
+        code: 'EMPTY_VALUES',
+        columnName: cond.columnName,
+        reason: 'values missing or empty',
+      });
+      return null;
+    }
+    return buildCategoricalOperatorFragment({
+      colExpr,
+      operator,
+      values: cond.values,
+      paramName,
+      nullKeptOnNotContains: false,
+    });
+  }
+
+  const keyword = typeof cond.keyword === 'string' ? cond.keyword.trim() : '';
+  if (keyword.length === 0) {
+    pushWarning({
+      code: 'EMPTY_VALUES',
+      columnName: cond.columnName,
+      reason: 'keyword missing or empty for text match operator',
+    });
+    return null;
+  }
+  return buildCategoricalOperatorFragment({
+    colExpr,
+    operator,
+    keyword,
+    paramName,
+    nullKeptOnNotContains: false,
+  });
 }

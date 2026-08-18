@@ -126,6 +126,111 @@ export function resolveConditionDataSource(cond: {
  */
 const CASEYEAR_WILDCARD = '99';
 
+// ---------------------------------------------------------------------------
+// F119 / US-183 / AD-E07-50 §3.2 / §3.3 — categorical 文字比對運算子
+// ---------------------------------------------------------------------------
+
+/** BR-1：categorical 條件之四種合法比對運算子（命名不得更動）。 */
+export type CategoricalOperator = 'in' | 'contains' | 'not_contains' | 'equals';
+
+/** 三種文字比對運算子（相對於既有 `in` 核取清單語意）。 */
+const TEXT_OPERATORS: ReadonlySet<CategoricalOperator> = new Set<CategoricalOperator>([
+  'contains',
+  'not_contains',
+  'equals',
+]);
+
+/**
+ * BR-11 / I-CATOP-OPERATOR-FALLBACK-01：缺漏 `operator` 之預設值解讀「唯一」落點。
+ *
+ * 任何消費端（SQL 建構 / 簽章 / 驗證）皆須透過本函式取得 operator；禁止各自寫
+ * `cond.operator ?? 'in'`——分散預設正是「顯式 in 與缺漏 in 行為分歧」（AC-17 風險點）之成因。
+ * 非四值集合內之任何輸入（含 undefined / null / '' / 非法字串）一律視為缺漏 → `'in'`。
+ */
+export function resolveCategoricalOperator(raw: unknown): CategoricalOperator {
+  return raw === 'contains' || raw === 'not_contains' || raw === 'equals' ? raw : 'in';
+}
+
+/** operator 是否為三種文字比對運算子之一（先經 resolveCategoricalOperator 正規化）。 */
+export function isTextCategoricalOperator(raw: unknown): boolean {
+  return TEXT_OPERATORS.has(resolveCategoricalOperator(raw));
+}
+
+/** LIKE 樣式跳脫字元（SQL 文字中以固定字面 `ESCAPE '\'` 宣告）。 */
+const LIKE_ESCAPE_CHAR = '\\';
+
+/**
+ * BR-7 / I-CATOP-ESCAPE-SINGLE-01：LIKE 樣式跳脫之**唯一**實作。
+ *
+ * 跳脫字元集固定為 `\` `%` `_` `[` `]` `^`（跳脫字元本身排在最前處理，避免雙重跳脫），
+ * **不依 dialect 增減**：`[` / `]` / `^` 之字元類語意僅 MSSQL 有，但 ANSI `ESCAPE` 之語意為
+ * 「跳脫字元 + 下一字元 = 該字元之字面值」，與該字元原本是否特殊無關——對 PG 而言跳脫一個
+ * 本來就不特殊的字元是安全的 no-op，兩方言因此產生逐字元相同之比對結果（AD-E07-50 §3.2）。
+ */
+export function escapeLikeKeyword(raw: string): string {
+  return raw.replace(/[\\%_[\]^]/g, (ch) => `${LIKE_ESCAPE_CHAR}${ch}`);
+}
+
+/** buildCategoricalOperatorFragment 之輸入（AD-E07-50 §3.3）。 */
+export interface CategoricalOperatorFragmentInput {
+  /**
+   * 完整欄位引用表達式：composer 傳入引號欄名（如 "prod_kind"）；客戶來源建構器傳入其
+   * alias 前綴欄位或衍生後運算式（見 stage1-customer-core-clause.ts /
+   * stage1-customer-financial-clause.ts，本檔不得出現該類 SQL 片段——I-CC-COMPOSER-SCOPE-01）。
+   */
+  colExpr: string;
+  operator: CategoricalOperator;
+  values?: string[];
+  /** 已由呼叫端（validateConditionPayload 等）保證：文字運算子時非空、trim 後 1~100 字元。 */
+  keyword?: string;
+  paramName: string;
+  /** BR-6 八格矩陣中唯一顯式格：僅 ob_pool_data 來源之 not_contains 為 true。 */
+  nullKeptOnNotContains: boolean;
+}
+
+/**
+ * BR-4 / BR-5 / I-CATOP-SINGLE-FRAGMENT-01：四運算子之 SQL 產生**唯一**落點。
+ *
+ * composer（`ob_pool_data`）、`buildCustomerCoreClause`（PG + MSSQL 兩檔）、
+ * `buildCustomerFinancialClause` 四個呼叫端皆呼叫本函式，禁止各自實作關鍵字比對或 NULL 判斷。
+ *
+ * BR-6 NULL 八格矩陣：八格中僅「`ob_pool_data` × `not_contains`」（`nullKeptOnNotContains=true`）
+ * 顯式保留 NULL；其餘七格依賴 SQL 三值邏輯天然排除，不得新增任何 `IS NULL` / `COALESCE` 特判
+ * ——`nullKeptOnNotContains=false` 分支即為那七格之單一共用程式碼路徑。
+ *
+ * @returns fragment + params；`in` 且 values 為空時回傳 null（既有邊界不變）
+ */
+export function buildCategoricalOperatorFragment(
+  input: CategoricalOperatorFragmentInput,
+): { fragment: string; params: Record<string, unknown> } | null {
+  const { colExpr, operator, values, keyword, paramName, nullKeptOnNotContains } = input;
+
+  if (operator === 'in') {
+    if (!Array.isArray(values) || values.length === 0) return null;
+    return { fragment: `${colExpr} IN (:...${paramName})`, params: { [paramName]: values } };
+  }
+
+  if (operator === 'equals') {
+    // BR-7：`=` 天然無萬用字元語意，關鍵字原樣綁定，不經跳脫機制。
+    return { fragment: `${colExpr} = :${paramName}`, params: { [paramName]: keyword } };
+  }
+
+  const likeParam = `%${escapeLikeKeyword(keyword ?? '')}%`;
+  if (operator === 'contains') {
+    return {
+      fragment: `${colExpr} LIKE :${paramName} ESCAPE '\\'`,
+      params: { [paramName]: likeParam },
+    };
+  }
+
+  // not_contains（BR-6 唯一顯式格：ob_pool_data 保留 NULL；客戶來源沿用既有天然排除）
+  const notLike = `${colExpr} NOT LIKE :${paramName} ESCAPE '\\'`;
+  return {
+    fragment: nullKeptOnNotContains ? `(${colExpr} IS NULL OR ${notLike})` : notLike,
+    params: { [paramName]: likeParam },
+  };
+}
+
 /**
  * §18.5 路徑 B：5 個 backward-compat entity column 與 ob_pool_data 欄位映射。
  *
@@ -350,13 +455,14 @@ function buildPathB(list: ObListDefinition): Stage1QueryFragment {
 
 /**
  * 建構 categorical fragment：
- *   - 一般欄位 → `"colName" IN (:...catN)`
- *   - 波 4 將補 caseyear wildcard 例外處理
+ *   - 一般欄位 `in` → `"colName" IN (:...catN)`
+ *   - 一般欄位文字運算子（F119）→ `"colName" LIKE/NOT LIKE/=`（經 buildCategoricalOperatorFragment）
+ *   - caseyear wildcard 例外處理（僅服務 `in`，見 AD-E07-50 §3.8）
  *
  * @returns fragment + params，或 null 表示此 condition 無效（skip）
  */
 function buildCategoricalFragment(
-  cond: { columnName: string; values?: string[] },
+  cond: { columnName: string; values?: string[]; operator?: unknown; keyword?: unknown },
   paramIdx: number,
   warnings: Stage1ComposerWarning[],
 ): { fragment: string; params: Record<string, unknown> } | null {
@@ -370,6 +476,45 @@ function buildCategoricalFragment(
     return null;
   }
 
+  // F119 / BR-11：operator 之解讀一律經唯一 fallback 落點
+  const operator = resolveCategoricalOperator(cond.operator);
+
+  // F119 / AD-E07-50 §3.8 / I-CATOP-CASEYEAR-EXCLUDE-01：caseyear 對應 year_cnt（INTEGER），
+  //   文字運算子於 PG 端直接型別錯誤且 '99' wildcard 規則僅對 IN 有定義 → 排除。
+  //   主要防線在驗證層（validateConditionPayload / validateConditionsForPreview）；
+  //   此處為 defense-in-depth：不嘗試建構 SQL，改為 skip + warning。
+  if (cond.columnName === 'caseyear' && operator !== 'in') {
+    warnings.push({
+      code: 'EMPTY_VALUES',
+      columnName: cond.columnName,
+      reason: 'caseyear does not support text match operators (maps to integer year_cnt)',
+    });
+    return null;
+  }
+
+  // F119：文字比對運算子（contains / not_contains / equals）—— 經唯一 SQL 落點建構
+  if (operator !== 'in') {
+    const keyword = typeof cond.keyword === 'string' ? cond.keyword.trim() : '';
+    if (keyword.length === 0) {
+      warnings.push({
+        code: 'EMPTY_VALUES',
+        columnName: cond.columnName,
+        reason: 'keyword missing or empty for text match operator',
+      });
+      return null;
+    }
+    const textCol = PATH_A_COLUMN_MAPPING[cond.columnName] ?? cond.columnName;
+    // BR-6：ob_pool_data 為八格矩陣中唯一顯式保留 NULL 之來源（not_contains）
+    return buildCategoricalOperatorFragment({
+      colExpr: `"${textCol}"`,
+      operator,
+      keyword,
+      paramName: `cat${paramIdx}`,
+      nullKeptOnNotContains: true,
+    });
+  }
+
+  // ── 以下為既有 `in` 路徑（AC-17：行為逐字不變）────────────────────────────
   if (!Array.isArray(cond.values) || cond.values.length === 0) {
     warnings.push({
       code: 'EMPTY_VALUES',
@@ -409,11 +554,14 @@ function buildCategoricalFragment(
   //   與路徑 B PATH_B_MAPPING 一致，確保 estimate 與月名單分派 Stage 1 逐欄位相同。
   const poolDataCol = PATH_A_COLUMN_MAPPING[cond.columnName] ?? cond.columnName;
 
-  const paramName = `cat${paramIdx}`;
-  return {
-    fragment: `"${poolDataCol}" IN (:...${paramName})`,
-    params: { [paramName]: cond.values },
-  };
+  // I-CATOP-SINGLE-FRAGMENT-01：`in` 亦經唯一 SQL 落點（輸出與 F119 上線前逐字元相同）
+  return buildCategoricalOperatorFragment({
+    colExpr: `"${poolDataCol}"`,
+    operator: 'in',
+    values: cond.values,
+    paramName: `cat${paramIdx}`,
+    nullKeptOnNotContains: true,
+  });
 }
 
 /**

@@ -1725,3 +1725,55 @@ last_updated: 2026-08-13
   `INFORMATION_SCHEMA` collation 查證兩案例綠燈，其餘因函式未匯出紅燈），未依賴全套件併跑結果。
 - **風險等級**：已解決。記錄供未來讀者理解為何 F119 測試設計文件出現「先聲明本輪範圍不含真實
   MSSQL」又「補一份 .mssql.spec.ts」的表面矛盾——這是對環境情報更正的即時回應，非規劃反覆。
+
+### R-F119-08（已解決，2026-08-18）：tdd-implementation 團隊模式測試爭議裁決——1 件測試自身缺陷、1 件測試遺漏真實 prototype 行為
+
+- **背景**：後端 7 檔 79 案例、前端 utils/kanban/stage0 全綠後，implementer（`impl-f119`）依團隊
+  模式規矩（不自行修改測試）提報兩件爭議，request test-generator 裁決。
+
+- **爭議 1（F119-FE-010，採納，判定為測試自身缺陷，非業務/prototype 爭議）**：
+  `list-create-draft-page.test.tsx` F119-FE-010（AC-17：IN 條件送出時 payload 不含 operator key）
+  查詢 `value-checkbox-0-0`，但該案例所屬 describe 之 `mockedListOptions` 對 `prod_kind` 之 mock
+  為 `optionValue: '01'`（非 `'0'`）——本檔既有 test-id 慣例為 `value-checkbox-{條件列 idx}-
+  {optionValue}`，本檔既有測試（L372/424/577）對 `optionValue: '01'` 之 mock 皆查
+  `value-checkbox-0-01`，`-0-0` 在此 mock 下不可達。test-generator 核對 mock 定義（自己撰寫的
+  fixture，位於同一 describe 之 `beforeEach`）確認 implementer 之判讀完全正確，屬撰寫時的
+  testid 筆誤（易與同檔 caseyear 案例之 `value-checkbox-0-0`——因 caseyear 選項值恰為 `'0'`——
+  混淆所致）。已修正兩處為 `value-checkbox-0-01`，**AC-17 斷言本體
+  （`'operator' in cond === false`）未改動**。裁決後對現行實作重跑：轉綠，同時證明
+  implementer 之 `toConditionItem`／payload 組裝邏輯（IN 形態不寫入 `operator` key，附錄 C C-17）
+  正確。
+
+- **爭議 2（F119-EDIT-002，採納，判定為測試遺漏真實 prototype 行為，非設計偏離／非測試過嚴）**：
+  implementer 指出 `list-edit-draft-page.test.tsx` F119-EDIT-002 載入一筆 `not_contains` +
+  非空關鍵字 `勁便利` 之條件，直接 `fireEvent.change` 切至 `in` 並斷言面板立即切換，但
+  prototype `27a/27b` 之 `setCondOperator()`／附錄 C C-3~C-5 明訂「跨形態切換（IN↔文字運算子）
+  且另一側『有內容』時，須先彈出二次確認 modal（`operator-switch-confirm-modal` /
+  `operator-switch-loss` / `operator-switch-confirm`），確認後才套用切換；僅另一側為空時才直接
+  切換」。test-generator **重新開啟 `prototypes/27a-list-create-draft.html` 原始碼**（第 1062~1080
+  行 `setCondOperator()`）逐行核對，確認：`const crossForm = isTextOperator(cur) !==
+  isTextOperator(next); const willLose = isTextOperator(cur) ? trimKeyword(c.keyword) !== '' :
+  (c.values||[]).length > 0; if (crossForm && willLose) { ...openOpSwitchConfirm(id, next); return;
+  }`——本案例之 `cur='not_contains'`（文字）、`next='in'`，`crossForm=true`；`willLose` 取決於
+  `trimKeyword(c.keyword)!==''`，載入之關鍵字為非空字串 `勁便利` → `willLose=true` →
+  **必然**進入確認分支，測試斷言「立即切換」與 prototype 原始碼確定不符，implementer 之判讀正確。
+  **裁決**：採 implementer 提出之選項 (b)（實作補上確認 modal，而非移除本測試以配合「立即切換」
+  的臨時佔位實作）——理由：確認 modal 是 spec ground truth（prototype）明訂之行為，非本輪 F119
+  自行新增之臆測，移除斷言等同讓真實需求悄悄漏測。F119-EDIT-002 改為斷言「未確認前面板不得切換 +
+  `operator-switch-loss` 內容含關鍵字（附錄 C C-5：損失清單須列出將被清除的內容本身）+ 點擊
+  `operator-switch-confirm` 後才切換」；新增 F119-EDIT-002b 作為對照組，覆蓋「剛加入條件、兩側皆
+  空 → 不彈窗」路徑（C-3 之另一半行為），**刻意採獨立路徑**（實際新增一個 `prod_kind` 條件測試，
+  而非依賴 EDIT-002 之確認流程來清空狀態），避免兩個測試互相依賴、其中一個失敗連帶拖垮另一個。
+  裁決後對現行實作重跑：F119-EDIT-002 為**真紅**（implementer 目前暫以「立即切換、不確認」佔位
+  等待裁決，尚未補上確認 modal，紅燈原因正確——功能未實作，非測試寫錯）；F119-EDIT-002b 為
+  **真綠**（該「兩側皆空直接切換」路徑 implementer 已正確實作，與建立頁 F119-FE-002/003 之既有
+  行為一致）。
+
+- **後續**：implementer 需依裁決 2 補上二次確認 modal（沿用既有 `_components/category-switch-
+  confirm-modal.tsx` 形制，附錄 C C-4 已論證為何是「確認」而非 undo——AC-5「不得殘留於表單狀態」
+  之硬性要求使 undo 之暫存區本身即違規）。F119-FE-002/FE-003（建立頁）不受影響，因其切換情境下
+  另一側恆為空（剛加入條件之常態路徑），兩種設計下皆綠，implementer 訊息已正確指出此點。
+
+- **風險等級**：已解決（裁決已下達並更新測試檔+文件；等待 implementer 補實作 F119-EDIT-002 之
+  確認 modal 後轉綠）。記錄本次裁決過程供未來讀者理解 `list-edit-draft-page.test.tsx` 為何多出
+  一個「002b」編號（非跳號筆誤，是 dispute 裁決後新增之對照組）。

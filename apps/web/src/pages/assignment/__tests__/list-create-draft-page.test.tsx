@@ -1672,8 +1672,9 @@ describe('F119 — 類別型條件文字比對運算子（建立草稿頁）', (
 
     await addCondition('prod_kind');
     fireEvent.click(screen.getByTestId('btn-open-values-0'));
-    await waitFor(() => expect(screen.getByTestId('value-checkbox-0-0')).toBeInTheDocument());
-    fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+    // f109Fixture 之 prod_kind 選項 optionValue 為 '01'（非 '0'）→ testid 為 value-checkbox-0-01
+    await waitFor(() => expect(screen.getByTestId('value-checkbox-0-01')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('value-checkbox-0-01'));
 
     fireEvent.click(screen.getByTestId('btn-save-draft'));
     await waitFor(() => expect(mockedCreateList).toHaveBeenCalledTimes(1));

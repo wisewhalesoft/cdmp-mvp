@@ -21,6 +21,8 @@
 
 import type { ObListDefinitionConditionItem } from '@/database/entities/ob-list-definition.entity';
 import {
+  buildCategoricalOperatorFragment,
+  resolveCategoricalOperator,
   resolveConditionDataSource,
   SAFE_COLUMN_NAME_RE,
   type Stage1ComposerWarning,
@@ -87,36 +89,20 @@ export function buildCustomerCoreClause(
     }
 
     // gender + 5 個 _desc 欄：直接值比對（BR-7；gender 值為代碼 1/2/3，其餘為中文值）
-    if (DIRECT_MATCH_COLUMNS.has(cond.columnName)) {
-      if (!Array.isArray(cond.values) || cond.values.length === 0) {
-        pushWarning({
-          code: 'EMPTY_VALUES',
-          columnName: cond.columnName,
-          reason: 'values missing or empty',
-        });
-        continue;
-      }
-      const p = `ccCat${catIdx++}`;
-      // 不得 COALESCE（I-CC-NULL-EXCLUDE-01）：NULL IN (...) = NULL → 排除
-      whereFragments.push(`(cc.${cond.columnName} IN (:...${p}))`);
-      params[p] = cond.values;
-      continue;
-    }
-
-    // cpost_city：LEFT3 縣市級衍生（BR-6）
-    if (cond.columnName === 'cpost_city') {
-      if (!Array.isArray(cond.values) || cond.values.length === 0) {
-        pushWarning({
-          code: 'EMPTY_VALUES',
-          columnName: cond.columnName,
-          reason: 'values missing or empty',
-        });
-        continue;
-      }
-      const p = `ccCat${catIdx++}`;
-      // LEFT(NULL,3)=NULL → NULL IN (...) = NULL → 排除（不得 COALESCE）
-      whereFragments.push(`(LEFT(cc.cpost_city, 3) IN (:...${p}))`);
-      params[p] = cond.values;
+    // F119：`cpost_city` 之 LEFT3 衍生運算式亦適用同一組運算子（AD-E07-50 §3.3 呼叫端 2 / A-3）
+    if (DIRECT_MATCH_COLUMNS.has(cond.columnName) || cond.columnName === 'cpost_city') {
+      // LEFT3 縣市級衍生（BR-6）：四運算子皆套用「與 in 相同之衍生後運算式」
+      const colExpr =
+        cond.columnName === 'cpost_city'
+          ? 'LEFT(cc.cpost_city, 3)'
+          : `cc.${cond.columnName}`;
+      const built = buildCustomerCoreCategorical(cond, colExpr, `ccCat${catIdx}`, pushWarning);
+      if (!built) continue;
+      catIdx += 1;
+      // 不得 COALESCE / 不得新增 IS NULL 特判（I-CC-NULL-EXCLUDE-01 + I-CATOP-NULL-MATRIX-01
+      //   七格之二）：NULL IN (...) / NULL LIKE / NULL NOT LIKE 皆求值 NULL → 三值邏輯天然排除
+      whereFragments.push(`(${built.fragment})`);
+      Object.assign(params, built.params);
       continue;
     }
 
@@ -168,4 +154,55 @@ export function buildCustomerCoreClause(
 /** Date → 'YYYY-MM-DD'（AGE 基準日字串，供 :ccWorkdt::date 綁定）。 */
 function toIsoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * F119 / AD-E07-50 §3.3（呼叫端 2）：customer_core categorical 條件之 SQL 片段。
+ *
+ * 四運算子一律委派 `buildCategoricalOperatorFragment`（I-CATOP-SINGLE-FRAGMENT-01），
+ * 本函式僅負責「輸入完整性檢查 + warning」——不得自行拼裝 LIKE 樣式或 NULL 判斷。
+ * `nullKeptOnNotContains: false`：客戶來源沿用既有天然排除（I-CC-NULL-EXCLUDE-01 /
+ * I-CATOP-NULL-MATRIX-01 七格之一），`not_contains` 亦不得新增 IS NULL 特判。
+ */
+function buildCustomerCoreCategorical(
+  cond: ObListDefinitionConditionItem,
+  colExpr: string,
+  paramName: string,
+  pushWarning: (w: Stage1ComposerWarning) => void,
+): { fragment: string; params: Record<string, unknown> } | null {
+  const operator = resolveCategoricalOperator(cond.operator);
+  if (operator === 'in') {
+    if (!Array.isArray(cond.values) || cond.values.length === 0) {
+      pushWarning({
+        code: 'EMPTY_VALUES',
+        columnName: cond.columnName,
+        reason: 'values missing or empty',
+      });
+      return null;
+    }
+    return buildCategoricalOperatorFragment({
+      colExpr,
+      operator,
+      values: cond.values,
+      paramName,
+      nullKeptOnNotContains: false,
+    });
+  }
+
+  const keyword = typeof cond.keyword === 'string' ? cond.keyword.trim() : '';
+  if (keyword.length === 0) {
+    pushWarning({
+      code: 'EMPTY_VALUES',
+      columnName: cond.columnName,
+      reason: 'keyword missing or empty for text match operator',
+    });
+    return null;
+  }
+  return buildCategoricalOperatorFragment({
+    colExpr,
+    operator,
+    keyword,
+    paramName,
+    nullKeptOnNotContains: false,
+  });
 }

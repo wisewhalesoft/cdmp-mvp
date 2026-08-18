@@ -63,7 +63,7 @@ last_updated: 2026-08-18
 | 前端測試檔（`_utils` 純函式） | `apps/web/src/pages/assignment/_utils/__tests__/f119-labels.test.ts`（新建，6 案例：`OPERATOR_LABEL`/`operatorLabel()`） |
 | | `f119-condition-summary.test.ts`（新建，7 案例：`formatConditionSummary()`，採 AC-15 例句而非 AD §3.6 樣板，見 C-Q1） |
 | 前端測試檔（Page 整合，追加既有檔案） | `list-create-draft-page.test.tsx` 追加 `describe('F119 — ...')`（12 案例：AC-1/AC-5（含 C-6 文字↔文字不清除）/AC-8/AC-11/AC-12/caseyear/AC-17） |
-| | `list-edit-draft-page.test.tsx` 追加 `describe('F119 — ...')`（3 案例：AC-18 一致性抽樣） |
+| | `list-edit-draft-page.test.tsx` 追加 `describe('F119 — ...')`（4 案例：AC-18 一致性抽樣，含 2026-08-18 dispute 裁決後強化之確認 modal 案例，見 §五末） |
 | | `list-kanban-page.test.tsx` 追加 `describe('F119 — ...')`（3 案例：AC-15/AC-17 Kanban chip + Detail Drawer） |
 | | `stage0-estimate-page.test.tsx` 追加 `describe('F119 — ...')`（4 案例：AC-13/BR-13） |
 | Mutation / Metric | **本輪未產出**（team lead 明確排除範圍）。建議下輪若納入，Stryker mutate 範圍應為 `buildCategoricalOperatorFragment`/`escapeLikeKeyword`（單一 SQL 落點，投資報酬率最高） |
@@ -236,7 +236,8 @@ last_updated: 2026-08-18
 | 案例 | 對應 |
 |---|---|
 | F119-EDIT-001（★核心）：載入既有 not_contains 條件 → 運算子與關鍵字正確帶入 | AC-18 |
-| F119-EDIT-002：切回 in → 與建立頁行為一致 | AC-5 / AC-18 |
+| F119-EDIT-002（★核心，2026-08-18 dispute 裁決強化）：載入之關鍵字非空 → 切回 IN 須先彈出二次確認 modal（附錄 C C-3~C-5），未確認前面板不得切換、損失清單含關鍵字內容，確認後才切換 | AC-5 / AC-18 |
+| F119-EDIT-002b（2026-08-18 新增，對照組）：剛加入條件兩側皆空 → 不彈窗，獨立路徑 | AC-5 / AC-18 |
 | F119-EDIT-003：caseyear 排除與建立頁一致 | AC-18 |
 
 ### `list-kanban-page.test.tsx` — `describe('F119 — 條件顯示（Kanban chip + Detail Drawer，AC-15/BR-10/AC-17）')`
@@ -278,8 +279,8 @@ last_updated: 2026-08-18
 **前端**（`npm run test --workspace=apps/web`）：
 - `f119-labels.test.ts`：6 red（`operatorLabel is not a function`）
 - `f119-condition-summary.test.ts`：模組解析失敗（`../condition-summary` 檔案不存在，7 個案例皆無法收集，等同全紅——原因正確：新檔案尚未建立）
-- `list-create-draft-page.test.tsx` 追加區塊：12 red / 0 green
-- `list-edit-draft-page.test.tsx` 追加區塊：3 red / 0 green
+- `list-create-draft-page.test.tsx` 追加區塊：12 red / 0 green（實作完成後重跑：F119-FE-010 修正 testid 後轉綠，其餘全綠，見下方 dispute 記錄）
+- `list-edit-draft-page.test.tsx` 追加區塊：4 red / 0 green（實作完成後重跑：F119-EDIT-002 因缺二次確認 modal 為真紅，F119-EDIT-002b 轉綠，其餘見下方 dispute 記錄）
 - `list-kanban-page.test.tsx` 追加區塊：2 red / 1 green（F119-KANBAN-002 正控制組）
 - `stage0-estimate-page.test.tsx` 追加區塊：3 red / 1 green（F119-STAGE0-002 正控制組）
 
@@ -294,6 +295,26 @@ last_updated: 2026-08-18
 （`resolveCategoricalOperator`/`escapeLikeKeyword`/`buildCategoricalOperatorFragment`/
 `OPERATOR_LABEL`/`operatorLabel`/`../condition-summary` 模組），**無**任何測試檔自身邏輯造成
 之型別錯誤。
+
+### 團隊模式測試爭議裁決（2026-08-18，tdd-implementation 提報）
+
+後端 7 檔 79 案例、前端 utils/kanban/stage0 全綠後，implementer 提報兩件測試側爭議，裁決如下（完整
+技術脈絡見 `risks-and-gaps.md` R-F119-08）：
+
+1. **F119-FE-010 testid 誤植（採納，判定測試自身缺陷）**：`value-checkbox-0-0` 與該 describe 之
+   mock（`prod_kind` optionValue `'01'`）不符，本檔既有慣例（L372/424/577）皆證實應為
+   `value-checkbox-0-01`。已修正兩處，AC-17 斷言本體（`'operator' in cond === false`）未改動。
+2. **F119-EDIT-002 遺漏 prototype 確認 modal 行為（採納，判定測試遺漏真實行為，非設計偏離）**：
+   重讀 `prototypes/27a-list-create-draft.html` 之 `setCondOperator()` 原始碼確認——跨形態切換
+   （IN↔文字）且另一側「有內容」時，`crossForm && willLose` 為真，須先呼叫
+   `openOpSwitchConfirm()` 顯示二次確認 modal（附錄 C C-3~C-5），並非立即切換。原測試（載入
+   `not_contains` + 非空關鍵字 `勁便利` 之條件，直接切至 `in` 並斷言面板立即切換）與此不符。
+   採 implementer 建議之選項 (b)：F119-EDIT-002 改為斷言「未確認前面板不得切換、
+   `operator-switch-loss` 內容含關鍵字、確認後才切換」；新增 F119-EDIT-002b 覆蓋「剛加入條件
+   兩側皆空 → 不彈窗」對照組（採獨立路徑：實際新增一個 `prod_kind` 條件，而非依賴 EDIT-002 之
+   確認流程清空狀態，避免測試間依賴）。
+   - 裁決後重跑：F119-EDIT-002 為真紅（implementer 目前暫以「立即切換、不確認」佔位，待補二次
+     確認 modal）；F119-EDIT-002b 為真綠（該路徑 implementer 已正確實作）。
 
 ---
 
@@ -322,7 +343,7 @@ last_updated: 2026-08-18
 | AC-2 | MATRIX-002/006, T-1 |
 | AC-3（★核心） | MATRIX-003/007, T-2 |
 | AC-4 | MATRIX-004/008, T-5, SIG-CATOP-004 |
-| AC-5（★核心） | F119-FE-002/002b/003, F119-EDIT-002 |
+| AC-5（★核心） | F119-FE-002/002b/003, F119-EDIT-002/002b |
 | AC-6（★核心） | T-9a~c |
 | AC-7 | （單一關鍵字為 schema 型別本身之結構保證，見 F119 §5.1 `keyword: string`；無獨立可測負向案例，已記錄） |
 | AC-8（★核心） | T-8a~e, F119-FE-004 |
@@ -335,5 +356,5 @@ last_updated: 2026-08-18
 | AC-15（★核心） | SUMMARY-001/002/006, F119-KANBAN-001, F119-DRAWER-001 |
 | AC-16 | T-13~T-16 |
 | AC-17（★核心） | LABEL-005/006, SUMMARY-007, T-11/T-12, F119-FE-010, F119-KANBAN-002 |
-| AC-18 | F119-EDIT-001~003 |
+| AC-18 | F119-EDIT-001~003（含 002b） |
 | I-CATOP-CASEYEAR-EXCLUDE-01 | CASEYEAR-CREATE-001, CASEYEAR-PREVIEW-001, F119-FE-009, F119-EDIT-003 |

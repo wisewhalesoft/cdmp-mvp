@@ -44,6 +44,13 @@ import {
   type AppliedSpecialRule,
 } from '@/api/assignment-list';
 import { useConditionDecoder } from '../_hooks/use-condition-decoder';
+import { formatConditionSummary, toSummaryDecoder } from '../_utils/condition-summary';
+import {
+  isTextOperator,
+  operatorLabel,
+  resolveCategoricalOperator,
+  trimKeyword,
+} from '../_utils/labels';
 
 /** 拆解 legacy 多值字串（'$$' 分隔）並逐值解碼，回傳中文「、」串接（查無回傳原碼）。 */
 function decodeLegacyMulti(
@@ -297,12 +304,33 @@ function UserConditions({ data }: { data: FullSnapshotResponse }) {
   if (conditions.length === 0) {
     return <p className="text-sm text-gray-500 italic">無篩選條件</p>;
   }
+  // F119 / BR-10 / I-CATOP-DISPLAY-SINGLE-01：標題行即條件描述字串，唯一格式化來源
+  const summaryDecoder = toSummaryDecoder(decoder);
   return (
     <ul className="space-y-2 text-xs text-gray-700">
       {conditions.map((c: ConditionItem, idx: number) => (
         <li key={idx} className="border border-gray-200 rounded p-2">
-          <div className="font-semibold text-gray-800">{decoder.decodeField(c.columnName)}</div>
-          {c.fieldType === 'categorical' && (
+          <div className="font-semibold text-gray-800" data-condition-summary>
+            {formatConditionSummary(c, summaryDecoder)}
+          </div>
+          {c.fieldType === 'categorical' && isTextOperator(c.operator) && (
+            // F119 / 附錄 C C-15：運算子徽章（靛紫＝比對方式）＋ 關鍵字徽章（藍＝內容）
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              <span
+                data-condition-operator={resolveCategoricalOperator(c.operator)}
+                className="inline-block px-1.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-[10px] font-medium"
+              >
+                {operatorLabel(c.operator)}
+              </span>
+              <span
+                data-condition-keyword
+                className="inline-block px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[10px]"
+              >
+                {trimKeyword(c.keyword)}
+              </span>
+            </div>
+          )}
+          {c.fieldType === 'categorical' && !isTextOperator(c.operator) && (
             <div className="text-gray-600 mt-0.5">
               {decoder.decodeValues(c.columnName, c.values ?? []).join('、')}
             </div>

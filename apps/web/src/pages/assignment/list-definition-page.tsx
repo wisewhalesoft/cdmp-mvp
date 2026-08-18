@@ -50,6 +50,7 @@ import {
   useConditionDecoder,
   type ConditionDecoder,
 } from './_hooks/use-condition-decoder';
+import { formatConditionSummary, toSummaryDecoder } from './_utils/condition-summary';
 
 /**
  * F048 v2.0 / F050 v2.2 / F049 v1.1 / F052 v2.1 / F061 v1.4 / F077 v1.3 / F081/F085/F089
@@ -123,27 +124,19 @@ const STAGE_BAR_COLOR: Record<ListStage, string> = {
  * Condition chips 短描述：取前 2 個 condition，超過顯示 +N。
  * 欄位名稱與（類別型）值代碼皆經 decoder 轉為使用者友善中文；查無對照回傳原始代碼。
  */
+/**
+ * F119 / BR-10 / I-CATOP-DISPLAY-SINGLE-01：條件描述字串一律由 `formatConditionSummary()`
+ * 產生（含文字運算子），本處不得自拼——既有 `IN []` 類顯示缺陷正源於各頁各自組字串。
+ * 過長時以 CSS `truncate` + `title` 收斂（附錄 C C-14），不做字串層截斷。
+ */
 function renderConditionChips(
   conditions: ConditionItem[],
   decoder: ConditionDecoder,
 ): { chips: string[]; extra: number } {
-  const head = conditions.slice(0, 2);
-  const chips = head.map((c) => {
-    const name = decoder.decodeField(c.columnName);
-    if (c.fieldType === 'categorical') {
-      const all = c.values ?? [];
-      const vs = decoder.decodeValues(c.columnName, all.slice(0, 2)).join('/');
-      const more = all.length > 2 ? `+${all.length - 2}` : '';
-      return `${name}：${vs}${more}`;
-    }
-    if (c.fieldType === 'numeric') {
-      return `${name}：${c.min}~${c.max}`;
-    }
-    if (c.fieldType === 'date') {
-      return `${name}：${c.dateStart}~${c.dateEnd}`;
-    }
-    return name;
-  });
+  const summaryDecoder = toSummaryDecoder(decoder);
+  const chips = conditions
+    .slice(0, 2)
+    .map((c) => formatConditionSummary(c, summaryDecoder));
   return { chips, extra: Math.max(0, conditions.length - 2) };
 }
 
@@ -219,7 +212,9 @@ function KanbanCard({
             {chips.map((chip, idx) => (
               <span
                 key={idx}
-                className="inline-block px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[10px]"
+                data-condition-summary
+                title={chip}
+                className="inline-block max-w-full truncate align-bottom px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[10px]"
               >
                 {chip}
               </span>
