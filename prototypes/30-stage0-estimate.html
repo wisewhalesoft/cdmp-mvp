@@ -168,6 +168,7 @@
         <button onclick="applyScenario('holiday')" id="demo-holiday" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">連假情境（含週末）</button>
         <button onclick="applyScenario('headcount0')" id="demo-headcount0" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">某部門未配置人力</button>
         <button onclick="applyScenario('scopeNull')" id="demo-scopeNull" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">處長無轄區</button>
+        <button onclick="applyScenario('listPartial')" id="demo-listPartial" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">名單估算逾時（合計不完整）</button>
         <span class="ml-auto text-[10px] text-gray-400">切換「部長／處長／一般使用者」請用右上角角色選單 · mock 互動不發 API</span>
       </div>
 
@@ -239,6 +240,23 @@
               <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
             </div>
             <p id="calHelp" class="text-xs text-gray-400 mt-1">僅安排週一至週五的正常上班日，排除週末與國定假日。</p>
+          </div>
+        </div>
+
+        <!-- ============================================================
+             名單估算逾時（部分合計）— STAGE0_LIST_ESTIMATE_PARTIAL
+             F119 AC-13 / BR-13；契約見 error-handling.md#assignment-run-warnings（v1.20 補登）
+             後端已將逾時名單自 listTotals 排除，前端不得靜默丟棄此警告，
+             否則使用者會把「不完整的合計」誤讀為完整值。
+             位置決策：置於警告區塊最上方 —— 它影響本頁「所有」數字的可信度，
+             其餘 4 種警告（資料池偏低 / 缺口 / 在職人數 0 / 處長無轄區）僅影響局部。
+             ============================================================ -->
+        <div id="listPartialWarn" class="hidden items-start gap-2 p-3 bg-amber-50 border border-amber-300 rounded-lg text-sm text-gray-700" data-testid="stage0-list-partial-warning">
+          <i data-lucide="hourglass" class="w-4 h-4 text-warning mt-0.5 shrink-0"></i>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold text-amber-900">本頁合計未涵蓋 <span id="listPartialCount" data-testid="stage0-partial-count">0</span> 張名單（估算逾時）</p>
+            <ul id="listPartialItems" class="mt-1.5 space-y-1"></ul>
+            <p class="text-xs text-amber-800 mt-2">下方件數、人均與每日明細皆<strong>不含</strong>上列名單，請勿據以判定整體工作量。可改以「名單篩選」單獨試算該名單，或聯繫 IT 檢查索引後重新整理。</p>
           </div>
         </div>
 
@@ -403,6 +421,7 @@
       threshold: 18,          // 每人每日上限（業務設定；未設定時為 null → 不標紅）
       scenario: 'normal',
       poolLow: false,
+      listPartial: false,     // F119 AC-13：demo 開關 —— 是否模擬個別名單估算逾時
       selectedDept: 'ALL'     // 月曆當前檢視部門：'ALL'（全部門合計）或部門代號；處長鎖定轄區
     };
 
@@ -421,6 +440,21 @@
         { listNo: 'OB202606004', name: LIST_NAMES.OB202606004, total: 7500,  ration: { XVE1: 40, XVE2: 30, XVE3: 20, XVE4: 10 } }
       ];
     }
+    // ===================================================================
+    // F119 AC-13 / BR-13：STAGE0_LIST_ESTIMATE_PARTIAL
+    //   後端於個別名單 estimateListCount 逾時時，將該名單自 listTotals 排除並回一則
+    //   warning：{ code, listNo, message }（stage0-estimate.service.ts:557-570）。
+    //   本頁 mock 以 demo 場景重現；message 逐字採用 error-handling.md v1.20 之契約文案。
+    // ===================================================================
+    const PARTIAL_TIMEOUT_LISTS = ['OB202606002', 'OB202606004'];
+    function partialExcludedListNos() { return state.listPartial ? PARTIAL_TIMEOUT_LISTS.slice() : []; }
+    function stage0PartialWarnings() {
+      // 單一名單檢視時，僅呈現該名單之警告（後端亦只會估算該名單）
+      return partialExcludedListNos()
+        .filter(no => state.listFilter === 'ALL' || state.listFilter === no)
+        .map(no => ({ code: 'STAGE0_LIST_ESTIMATE_PARTIAL', listNo: no, message: '名單 ' + no + ' 估算逾時，已從本次合計排除。' }));
+    }
+
     function currentLists() {
       let lists = baseLists().map(l => ({ ...l, ration: { ...l.ration } }));
       if (state.scenario === 'gap') {
@@ -430,6 +464,9 @@
       } else if (state.scenario === 'headcount0') {
         lists.forEach(l => { l.ration.AM000 = 8; l.ration.XVE4 = Math.max(0, (l.ration.XVE4 || 0) - 8); });
       }
+      // F119 AC-13：估算逾時之名單已被後端自 listTotals 排除 —— 合計、人均、月曆皆不含其件數
+      const excluded = partialExcludedListNos();
+      if (excluded.length) lists = lists.filter(l => excluded.indexOf(l.listNo) < 0);
       if (state.listFilter !== 'ALL') lists = lists.filter(l => l.listNo === state.listFilter);
       return lists;
     }
@@ -561,6 +598,7 @@
       renderCalLegend(isChief);
       renderCalendar(isChief);
       renderAuxTable(isChief);
+      renderListPartialWarn();
       renderPoolWarn();
       renderGapAndHeadcount(activeDepts, isChief);
       lucide.createIcons();
@@ -587,13 +625,17 @@
       const valClass = opts.danger ? 'text-red-600' : (opts.warn ? 'text-orange-600' : 'text-gray-900');
       const icon = opts.icon || 'circle';
       const iconColor = opts.iconColor || 'text-blue-500';
+      // F119 AC-13：合計數字本身標示「不完整」，避免使用者只看 KPI 而錯過上方警告
+      const badge = opts.badge
+        ? `<span class="ml-2 align-middle inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300" title="${opts.badgeTitle || ''}" data-testid="kpi-incomplete-badge"><i data-lucide="hourglass" class="w-2.5 h-2.5"></i>${opts.badge}</span>`
+        : '';
       return `
         <div class="bg-white rounded-xl border border-border shadow-sm p-4">
           <div class="flex items-center justify-between mb-2">
             <span class="text-xs text-gray-500">${label}</span>
             <i data-lucide="${icon}" class="w-4 h-4 ${iconColor}"></i>
           </div>
-          <div class="text-2xl font-bold tabular ${valClass}">${value}</div>
+          <div class="text-2xl font-bold tabular ${valClass}">${value}${badge}</div>
           <p class="text-xs text-gray-400 mt-1">${sub}</p>
         </div>`;
     }
@@ -605,17 +647,22 @@
       const peaks = stats.map(s => s.peak).filter(v => v !== null);
       const peakAll = peaks.length ? Math.max(...peaks) : null;
       const over = state.threshold !== null && peakAll !== null && peakAll > state.threshold;
+      // F119 AC-13：件數合計卡在有逾時名單時標示「不完整」
+      const partial = stage0PartialWarnings();
+      const partialOpts = partial.length
+        ? { badge: '不完整', badgeTitle: '未涵蓋 ' + partial.length + ' 張估算逾時的名單：' + partial.map(w => w.listNo).join('、') }
+        : {};
       const cards = [];
 
       cards.push(kpiCard('本月可分派天數', computed.workingDays, `依「${calLabel}」計算`, { icon: 'calendar-check', iconColor: 'text-blue-500' }));
 
       if (isChief) {
         const scope = stats[0] || { monthCases: 0, headcount: 0 };
-        cards.push(kpiCard('轄區本月件數', scope.monthCases.toLocaleString(), '您轄區部門本月分派合計', { icon: 'inbox', iconColor: 'text-emerald-500' }));
+        cards.push(kpiCard('轄區本月件數', scope.monthCases.toLocaleString(), '您轄區部門本月分派合計', { icon: 'inbox', iconColor: 'text-emerald-500', ...partialOpts }));
         cards.push(kpiCard('轄區尖峰人均／日', peakAll === null ? '—' : peakAll, state.threshold !== null ? `每人每日上限 ${state.threshold} 件` : '尚未設定上限', { icon: 'gauge', iconColor: over ? 'text-red-500' : 'text-emerald-500', danger: over }));
         cards.push(kpiCard('轄區在職人數', (scope.headcount || 0), '在職電訪人員', { icon: 'users', iconColor: 'text-purple-500' }));
       } else {
-        cards.push(kpiCard('本月全名單總量', computed.orgMonthTotal.toLocaleString(), state.listFilter === 'ALL' ? '本月所有啟用名單合計' : '本名單預估件數', { icon: 'inbox', iconColor: 'text-emerald-500' }));
+        cards.push(kpiCard('本月全名單總量', computed.orgMonthTotal.toLocaleString(), state.listFilter === 'ALL' ? '本月所有啟用名單合計' : '本名單預估件數', { icon: 'inbox', iconColor: 'text-emerald-500', ...partialOpts }));
         cards.push(kpiCard('尖峰人均／日', peakAll === null ? '—' : peakAll, state.threshold !== null ? `每人每日上限 ${state.threshold} 件` : '尚未設定上限', { icon: 'gauge', iconColor: over ? 'text-red-500' : 'text-emerald-500', danger: over }));
         const gapMonth = computed.days.reduce((s, d) => s + (d.gap || 0), 0);
         cards.push(kpiCard('尚未分派件數', gapMonth.toLocaleString(), gapMonth > 0 ? '部分名單比例未設定或未達 100%' : '所有件數已分派至部門', { icon: 'git-pull-request-draft', iconColor: gapMonth > 0 ? 'text-orange-500' : 'text-emerald-500', warn: gapMonth > 0 }));
@@ -859,6 +906,26 @@
       }
     }
 
+    // F119 AC-13：逐筆渲染 warnings[]，每一張逾時名單皆須可辨識（不得只顯示一則泛用訊息）；
+    //   顯示不阻擋頁面其餘內容渲染。
+    function renderListPartialWarn() {
+      const el = document.getElementById('listPartialWarn');
+      const warnings = stage0PartialWarnings();
+      el.classList.toggle('hidden', warnings.length === 0);
+      el.classList.toggle('flex', warnings.length > 0);
+      if (warnings.length === 0) { el.setAttribute('data-warning-count', '0'); return; }
+      el.setAttribute('data-warning-count', String(warnings.length));
+      document.getElementById('listPartialCount').textContent = warnings.length;
+      document.getElementById('listPartialItems').innerHTML = warnings.map(w => {
+        const nm = LIST_NAMES[w.listNo] || '';
+        return `<li class="flex items-start gap-1.5 flex-wrap" data-testid="stage0-partial-item" data-warning-code="${w.code}" data-list-no="${w.listNo}">
+            <code class="font-mono text-[11px] text-amber-900 bg-amber-100 border border-amber-300 px-1 py-0.5 rounded shrink-0">${w.listNo}</code>
+            <span class="text-xs text-amber-900" data-warning-message>${w.message}</span>
+            ${nm ? `<span class="text-[11px] text-amber-700">（${nm}）</span>` : ''}
+          </li>`;
+      }).join('');
+    }
+
     function renderPoolWarn() {
       const el = document.getElementById('poolWarn');
       el.classList.toggle('hidden', !state.poolLow);
@@ -896,7 +963,7 @@
     function recomputeWithScope() { recompute(); renderAll(); }
 
     function applyScenario(name) {
-      ['normal', 'gap', 'overload', 'holiday', 'headcount0', 'scopeNull'].forEach(s => {
+      ['normal', 'gap', 'overload', 'holiday', 'headcount0', 'scopeNull', 'listPartial'].forEach(s => {
         const btn = document.getElementById('demo-' + s);
         if (!btn) return;
         if (s === name) btn.className = 'demo-btn px-2.5 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
@@ -905,6 +972,7 @@
 
       state.scopeNull = false;
       state.poolLow = false;
+      state.listPartial = false;
       state.listFilter = 'ALL';
       document.getElementById('inListFilter').value = 'ALL';
       state.calSource = 'weekday';
@@ -915,6 +983,8 @@
       else if (name === 'holiday') { state.scenario = 'normal'; state.calSource = 'all'; }
       else if (name === 'headcount0') { state.scenario = 'headcount0'; setRoleSilent('director'); state.poolLow = true; }
       else if (name === 'scopeNull') { state.scenario = 'normal'; setRoleSilent('section_chief'); state.scopeNull = true; }
+      // F119 AC-13：兩張名單同時逾時 → 驗證「每一張皆可辨識」；改用名單篩選可觀察單筆情境
+      else if (name === 'listPartial') { state.scenario = 'normal'; setRoleSilent('director'); state.listPartial = true; }
 
       document.getElementById('inCalendar').value = state.calSource;
       onCalendarChange(state.calSource); // sets help + recompute via scope
