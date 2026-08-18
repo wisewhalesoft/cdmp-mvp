@@ -6,15 +6,24 @@ source-story: US-183
 epic: E07
 module: M01 名單定義（草稿階段篩選條件建構子流程，涵蓋建立草稿與編輯草稿兩進入點）
 priority: P1
-version: "1.0"
-date: 2026-08-18
+version: "1.1"
+date: 2026-08-19
 status: Draft
 ---
 
 # F119: 類別型篩選欄位新增文字比對運算子（包含 / 不包含 / 完全等於）
 
-Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Updated: 2026-08-18
+Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Updated: 2026-08-19
 
+> **v1.1（2026-08-19 / AC-15 descope —— 快照條件顯示移出範圍）**：v1.0 AC-15 / §5.2 / BR-10 以「月跑快照條件檢視為既有顯示端、本輪僅需擴充顯示格式」為前提，**該前提經 system-architect 追查後推翻**：快照 `config_payload.listDefinitions[]` 從未攜帶 `condition_payload`（`assignment-run-pipeline.service.ts:1802-1806` 僅 5 欄），前端 6 個 snapshot 元件對 `conditionPayload` / `columnName` **零命中**——快照根本不顯示篩選條件，屬 [F066](F066-view-run-snapshot-detail.md) **既有功能缺口**而非顯示格式問題。**使用者已裁決 descope 並另開票**。本版變更：
+> 1. **AC-15 縮為兩個真實顯示端**：名單詳情 Drawer（`ListDetailDrawer.tsx:296`）與名單定義列表（`list-definition-page.tsx:188`）；移除快照條件檢視。
+> 2. **§5.2** 受影響端點表：`full-snapshot` 一列註明其為 Drawer 之**即時讀取**來源（非月跑凍結快照）；月跑快照相關端點改列為**不受影響**並附技術理由。
+> 3. **BR-10** 消費端清單移除「快照條件檢視」——**本規則之核心價值（單一共用格式化函式、禁止各頁自拼字串）不變**，且明訂日後補齊快照條件顯示時須複用同一函式。
+> 4. **§13.3 新增 A-7**：完整記錄技術證據（含檔案行號）、定性、descope 理由與另開票建議。
+> 5. **§12.1 SA-7 收斂為 no-op**（其「條件固化於快照」之前提同屬誤判，故不存在快照序列化往返風險）；§7 / §8 / §10 T-26 / §10 回歸 / §11 checklist 同步縮減。
+> 6. US-183 AC-13 之對應 descope 由 **product-analyst** 執行；本 spec **未**修改 US-183。
+> **AC / BR 總數不變**（18 AC / 15 BR）；仍為**無 migration、無新端點、無新錯誤碼**。
+>
 > **v1.0（2026-08-18 / US-183 v1.2 初版）**：為類別型（categorical）篩選欄位在既有「勾選可選值清單」（`IN`）之外，新增三種文字比對運算子（`contains` / `not_contains` / `equals`），單一關鍵字、`ob_pool_data` / `customer_core` / `customer_financial` 三來源全支援。核心設計裁定：
 > 1. **`condition_payload` 純加性擴充**（新增 optional `operator` / `keyword` 兩個 key）——JSON 欄位，**不需 migration**、不需資料遷移；舊資料無 `operator` 一律解讀為 `in`（BR-11 / AC-17）。
 > 2. **SQL 產生僅有一個共用落點**（`buildCategoricalFragment`）——擴充該函式即同時涵蓋 **5 條執行路徑**（MSSQL 下推 / PG 下推 / JS filter chain / Stage 0 部門估算 / 草稿抽樣估算），此為 AC-14 一致性之**結構性保證**，亦為本 feature 成本可控之關鍵（BR-4）。`customer_core` / `customer_financial` 依既有 `I-CC-COMPOSER-SCOPE-01` / `I-CF-COMPOSER-SCOPE-01` **不走** composer，兩個建構器須各自擴充（BR-5）。
@@ -210,14 +219,15 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 - **And** 草稿命中預估因採抽樣估算（[F050](F050-create-list-definition.md) BR-15 / AD-E07-45）而為估算值，本 AC **不**要求數字逐筆相等；要求的是**篩選邏輯本身**一致
 - **And** MSSQL 與 PG 兩份 SQL builder 之文字比對語意須等價（本專案現行 DB 為 MSSQL；PG 路徑仍存在於程式碼，見 §12.1 SA-3）
 
-### AC-15：名單詳情 / 名單定義列表 / 快照條件顯示正確呈現文字條件（US-183 AC-13）
+### AC-15：名單詳情 Drawer 與名單定義列表正確呈現文字條件（US-183 AC-13，**v1.1 已 descope 快照**）
 
 - **Given** 某名單條件含文字運算子
-- **When** 使用者於名單詳情 Drawer、名單定義列表、或歷史執行快照條件檢視查看
+- **When** 使用者於**名單詳情 Drawer**（`_components/ListDetailDrawer.tsx`）或**名單定義列表**（`list-definition-page.tsx`）查看該名單之篩選條件
 - **Then** 畫面呈現「欄位顯示名稱 + 運算子中文標籤 + 關鍵字」，例如「主約專案名稱 包含「勁便利」」
 - **And** **不得**顯示為空白、`IN []`、`IN (空清單)`、或僅顯示欄位名而無條件內容
 - **And** 運算子中文標籤全系統統一：`in` →「IN」/ `contains` →「包含」/ `not_contains` →「不包含」/ `equals` →「完全等於」（BR-10）
-- **And** 所有顯示端共用**同一格式化函式**，不得各頁各自拼字串（BR-10）
+- **And** 上述兩個顯示端共用**同一格式化函式**，不得各頁各自拼字串（BR-10）
+- **And**（**v1.1 範圍變更**）**月跑快照之條件檢視不在本 feature 範圍**——經查證，快照根本**未記錄**任何篩選條件，此為 [F066](F066-view-run-snapshot-detail.md) 之既有功能缺口而非顯示格式問題，已由使用者裁決 descope 並另開票（完整技術證據與 descope 理由見 §13.3 A-7）
 
 ### AC-16（★核心）：重複名單判定須能區分運算子語意（US-183 AC-14）
 
@@ -322,9 +332,10 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 | `/api/v1/assignment/stage0/dept-estimate` | GET | **Response 消費方式** | 回應 schema **不變**；本 feature 要求前端渲染既有 `warnings[]` 之 `STAGE0_LIST_ESTIMATE_PARTIAL`（AC-13） |
 | `/api/v1/assignment/stage0/daily-estimate` | GET | **估算結果** | 同 `:listNo/estimate`，無 request 變更 |
 | `/api/v1/assignment/lists` | GET | **Response 顯示** | 列表回傳之 `conditionPayload` 含新 key；顯示端須依 AC-15 呈現 |
-| `/api/v1/assignment/lists/:listNo/full-snapshot` | GET | **Response 顯示** | 條件區塊顯示須依 AC-15（[F050](F050-create-list-definition.md) §6.2） |
+| `/api/v1/assignment/lists/:listNo/full-snapshot` | GET | **Response 顯示** | 名單詳情 Drawer 之資料來源（[F050](F050-create-list-definition.md) §6.2，即時讀取 `ob_list_definition.condition_payload`，**非**月跑凍結快照）；條件區塊顯示須依 AC-15 |
 | `/api/v1/assignment/lists/copy-duplicate-check` | GET | **判定結果** | [F118](F118-copy-from-prev-month-duplicate-indicator.md) 判定重用同一正規化函式，簽章擴充後自動生效，**無**額外修改 |
-| 月名單分派執行 / 快照相關端點 | — | **執行結果 + 快照顯示** | Stage 1 條件已固化於快照；快照條件檢視須依 AC-15 呈現（[F066](F066-view-run-snapshot-detail.md)） |
+| 月名單分派執行端點（Stage 1） | — | **執行結果** | 條件經 `buildStage1WhereConditions` 自動生效（BR-4），無 request / response schema 變更 |
+| 月跑快照相關端點（[F066](F066-view-run-snapshot-detail.md)） | — | **不受影響**（v1.1 descope） | 快照 `config_payload.listDefinitions[]` **未攜帶** `condition_payload`（`assignment-run-pipeline.service.ts:1802-1806` 僅 `listNo` / `listNm` / `cardType` / `crEnabled` / `caseStatus`），前端快照元件亦無任何條件渲染邏輯。**快照根本不顯示篩選條件**，故本 feature 對其零影響；補齊屬 F066 之獨立缺口（§13.3 A-7） |
 
 > **無新增端點、無 request 必填欄位變更、無 response 欄位移除** —— 本 feature 對 API 之變更全為**加性**，既有 client 不帶 `operator` 時行為完全不變（AC-17）。
 
@@ -359,7 +370,7 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 | BR-7 | **字面值比對（跳脫行為契約）**：使用者輸入之 `keyword` 一律視為**字面字串**。`%` / `_` / `[` / `]` / `^` 及跳脫字元本身於 `contains` / `not_contains` 之樣式中**不得**保有萬用字元語意。`equals` 採 `=` 比對，天然無萬用字元語意，**不得**改用 `LIKE` 實作。**跳脫之具體手段交 system-architect**（§12.1 SA-2），但無論手段為何，AC-9 之行為契約不可退讓 |
 | BR-8 | **比對敏感度沿用資料庫 collation**：現行 DB 為 MSSQL 2022 / `Chinese_Taiwan_Stroke_BIN`（逐 byte 比較，大小寫敏感、全半形敏感）。本 feature **不**做任何正規化（不 lower、不全半形轉換、不 Unicode NFC/NFD 正規化），與 legacy SP 之 `LIKE '%白牌%'` 現行行為一致（US-183 已拍板決策 6）。此敏感度同時適用於**篩選比對**與**重複判定簽章**（AC-16） |
 | BR-9 | **★重複判定簽章擴充 + 向後相容保證**：`normalizeConditionPayload`（`assignment-list.service.ts:525`）之 categorical 分支改為依 `operator` 分流：<br><br>`operator = 'in'` **或缺漏** → `` `${columnName}:cat:${去重排序後 values.join(',')}` ``（**與現行逐字元完全相同**）<br>文字運算子 → `` `${columnName}:catop:${operator}:${trim 後 keyword}` ``<br><br>**設計要點**：①區段標記由 `:cat:` 改為 `:catop:`，可證明無碰撞——`in` 形態之字串必為 `col:cat:` 開頭，文字形態必為 `col:catop:` 開頭，兩者前綴互斥，任何 `values` 內容皆無法偽造出 `catop` 區段②`keyword` 於簽章中**不做大小寫 / 全半形折疊**（BR-8），故 `contains "ABC"` ≠ `contains "abc"`③文字形態之簽章**不含** `values`（互斥保證其為空，BR-3）④其餘既有行為完全不變：條件依 `columnName` 排序、排除 system-fixed 欄位、併入 `logic`、空簽章視為永不衝突。<br><br>**向後相容硬性要求**：對任何**不含** `operator` 之既有 payload，新函式之輸出須與舊函式**逐字元相同**（AC-17）；此須以「同一組既有名單 payload 跑新舊兩版比對」之回歸測試證明，而非僅靠推論 |
-| BR-10 | **顯示層單一格式化來源**：運算子中文標籤（`in`→「IN」/ `contains`→「包含」/ `not_contains`→「不包含」/ `equals`→「完全等於」）與條件描述字串之組裝，須由**單一共用格式化函式**提供，供名單詳情 Drawer、名單定義列表、快照條件檢視、建立 / 編輯頁摘要共同使用。禁止各頁各自拼字串（既有 `IN []` 顯示缺陷即源於此，AC-15） |
+| BR-10 | **顯示層單一格式化來源**：運算子中文標籤（`in`→「IN」/ `contains`→「包含」/ `not_contains`→「不包含」/ `equals`→「完全等於」）與條件描述字串之組裝，須由**單一共用格式化函式**提供，供**名單詳情 Drawer**、**名單定義列表**、**建立 / 編輯頁條件摘要**共同使用。禁止各頁各自拼字串（既有 `IN []` 顯示缺陷即源於此，AC-15）。**v1.1**：消費端移除「快照條件檢視」（快照未記錄條件，§13.3 A-7）——本規則之核心價值（單一格式化函式、禁止各頁自拼）**不變**，僅消費端少一個；日後 F066 補齊快照條件顯示時，須直接複用同一函式而非另寫一份 |
 | BR-11 | **缺漏 `operator` 之統一 fallback**：`operator` 之預設值解讀**必須**集中於單一處（讀取 / 正規化之入口），使 SQL 建構、簽章、顯示三端取得同一結果。**禁止**各消費點各自寫 `cond.operator ?? 'in'`——分散預設是「顯式 `in` 與缺漏 `in` 行為分歧」之典型成因（AC-17 之風險點） |
 | BR-12 | **不新增錯誤碼**：全數重用 `VALIDATION_ERROR`（422）與既有 `LIST_NO_DUPLICATE`（422）。理由見 §5.3 |
 | BR-13 | **既有 warning 不得靜默丟棄**：`STAGE0_LIST_ESTIMATE_PARTIAL` 為後端**已產生**之資料，前端未渲染即等同讓使用者誤讀合計數字。本規則要求前端渲染後端回傳之該 warning，並沿用既有 warning 呈現管道（AC-13）。此呼應專案既有教訓「逾時靜默回 0 / 空白造成業務誤判」（見 [F112](F112-auto-suggest-categorical-options.md) BR-11、`project_stage0_estimate_timeout_dedup_index`） |
@@ -375,7 +386,7 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 - **切換清除**：切換即清空另一側輸入，且**不得**保留為隱藏狀態（AC-5）
 - **效能提示**：選用文字運算子時顯示告知性提示（不阻擋），文案與位置由 ui-ux-designer 定案（AC-12 / OQ-183-01）
 - **驗證回饋**：關鍵字為空 / 純空白 / 超長時，於該條件列就地顯示錯誤並阻擋儲存（AC-8）；錯誤須指出是哪一列
-- **條件顯示**：詳情 Drawer / 列表 / 快照皆呈現「欄位 + 運算子 + 「關鍵字」」，不得空白或 `IN []`（AC-15）
+- **條件顯示**：名單詳情 Drawer 與名單定義列表皆呈現「欄位 + 運算子 + 「關鍵字」」，不得空白或 `IN []`（AC-15）。**月跑快照條件檢視不在本輪範圍**（快照未記錄條件，§13.3 A-7）
 - **Stage 0 部門估算頁**：渲染 `STAGE0_LIST_ESTIMATE_PARTIAL` warning，使用者可辨識逾時之 `listNo` 且理解合計已排除該名單（AC-13）；呈現位置 / 樣式由 ui-ux-designer 定案
 - **兩進入點一致**：建立（27a）與編輯（27b）共用同一元件，行為逐項一致（AC-18）
 - **零可選值欄位**：即使無可選值仍可加入條件並以文字運算子完成設定（AC-11）
@@ -393,7 +404,7 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 - **相關**：
   - [F112](F112-auto-suggest-categorical-options.md)（distinct 值自動建議；與本 feature 之 `in` 運算子**並存非取代**——`in` 仍是可窮舉欄位之首選表達，文字運算子解決的是無法窮舉之情境）
   - [F118](F118-copy-from-prev-month-duplicate-indicator.md)（「已複製過」判定重用同一正規化函式，簽章擴充後自動繼承）
-  - [F066](F066-view-run-snapshot-detail.md)（快照條件顯示，AC-15 消費端之一）
+  - [F066](F066-view-run-snapshot-detail.md)（月跑快照詳情；**本 feature 對其零影響**——快照未記錄篩選條件，v1.1 已 descope，見 §13.3 A-7）
 
 ## 9. 交叉參照
 
@@ -444,12 +455,12 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 | T-23 | 切換 `包含`→`IN`：文字框隱藏、關鍵字不隨送出 | AC-5 |
 | T-24 | 空 / 純空白關鍵字 → 就地顯示錯誤、阻擋儲存 | AC-8 |
 | T-25 | 選用文字運算子顯示效能提示，且不阻擋操作 | AC-12 |
-| T-26 | 名單詳情 / 列表 / 快照顯示「主約專案名稱 不包含「勁便利」」，非空白、非 `IN []` | AC-15 |
+| T-26 | **名單詳情 Drawer** 與**名單定義列表**顯示「主約專案名稱 不包含「勁便利」」，非空白、非 `IN []`（**v1.1 移除快照斷言**） | AC-15 |
 | T-27 | **Stage 0 部門估算頁渲染 `STAGE0_LIST_ESTIMATE_PARTIAL`**：warning 存在時可見且含 `listNo`；多筆時逐筆可辨識；不存在時不顯示 | AC-13 |
 | T-28 | 建立頁與編輯頁之運算子選項 / 驗證 / 切換行為逐項一致 | AC-18 |
 | T-29 | 無可選值之 categorical 欄位仍出現在欄位下拉，且可用文字運算子完成設定 | AC-11 |
 
-**回歸**：既有 `in` 條件之建立 / 編輯 / 複製 / 重複判定 / Stage 1 執行 / Stage 0 估算 / 快照顯示行為與實作前逐項一致（AC-17）。
+**回歸**：既有 `in` 條件之建立 / 編輯 / 複製 / 重複判定 / Stage 1 執行 / Stage 0 估算行為與實作前逐項一致（AC-17）。
 
 ## 11. 實作 Checklist
 
@@ -460,7 +471,7 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 - [ ] 跳脫機制（BR-7，手段由 AD 定；MSSQL / PG 兩方言等價）
 - [ ] `normalizeConditionPayload` 簽章擴充 `:catop:`（BR-9）+ 向後相容回歸測試（T-11）
 - [ ] `operator` 預設值集中解讀之單一 fallback 落點（BR-11）
-- [ ] 顯示層共用格式化函式（BR-10）並套用至詳情 Drawer / 列表 / 快照 / 建立編輯頁摘要
+- [ ] 顯示層共用格式化函式（BR-10）並套用至名單詳情 Drawer / 名單定義列表 / 建立編輯頁條件摘要（**不含**快照，v1.1 descope）
 - [ ] 前端 `CategoricalValuesPicker` 擴充為運算子感知元件（建立 + 編輯兩頁共用，AC-1 / AC-5 / AC-18）
 - [ ] 前端效能提示（AC-12）
 - [ ] 前端 `stage0-estimate-page.tsx` 渲染 `STAGE0_LIST_ESTIMATE_PARTIAL`（AC-13 / BR-13）
@@ -482,7 +493,7 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 | **SA-4** | **`normalizeConditionPayload` 之抽出與共用** | 該函式現為 `AssignmentListService` 之 private method，[F118](F118-copy-from-prev-month-duplicate-indicator.md) BR-1 已要求判定與儲存端共用同一正規化。擴充後是否抽為共用 util、以及 [F118](F118-copy-from-prev-month-duplicate-indicator.md) copy-duplicate-check 之連帶影響 | 抽為共用純函式（`normalize-condition-payload.ts`），行為須完全等價；F118 判定自動繼承 |
 | **SA-5** | **AC-13 修正範圍認定（＝US-183 OQ-183-03）** | `STAGE0_LIST_ESTIMATE_PARTIAL` 不分觸發原因（文字運算子 / 既有數值 / `IN` 條件皆可能逾時）。須裁定修正範圍限於本 feature 觸發情境或一併涵蓋既有情境 | **不分觸發原因一律渲染**——同一 warning code、同一渲染路徑，技術上無法只挑文字運算子觸發之個案；限縮反而需要額外標記機制，成本更高 |
 | **SA-6** | **效能防護是否需要下限保護** | US-183 已拍板決策 5 明示「不引入新效能機制」。但 `LIKE '%K%'` 對 `ob_pool_data`（約 167 萬列）為全表掃描。須評估是否需要（a）估算路徑之額外逾時保護（b）是否延伸抽樣估算基礎架構至文字運算子（＝US-183 OQ-183-02，非阻塞） | 本輪不引入；沿用既有逾時機制 + AC-12 提示 + AC-13 warning 渲染。若實測顯示月跑 Stage 1 本身逾時，再另案處理 |
-| **SA-7** | **`keyword` 於快照固化之表現** | 名單條件於月跑時固化於快照；須確認快照序列化 / 反序列化路徑對新 key 無遺失（JSON 直存應天然相容，須明確驗證） | 直接透傳，不做特殊處理；以測試證明快照往返後 `operator` / `keyword` 不遺失 |
+| **SA-7** | ~~`keyword` 於快照固化之表現~~ **（v1.1 已收斂為 no-op，無須裁示）** | v1.0 以「名單條件於月跑時固化於快照」為前提，要求驗證快照序列化往返不遺失新 key。**該前提經查證不成立**——快照 `config_payload.listDefinitions[]` 從未攜帶 `condition_payload`（`assignment-run-pipeline.service.ts:1802-1806`），Stage 1 係於執行當下自 `ob_list_definition` **即時讀取**條件。故不存在快照往返之遺失風險 | **無須動作**。惟若日後另案為 F066 補齊快照條件記錄（§13.3 A-7），該案須將 `operator` / `keyword` 一併納入快照 payload 契約 |
 
 ### 12.2 [F050](F050-create-list-definition.md) 需同步之加性補述（**本輪刻意未改**）
 
@@ -529,8 +540,21 @@ Priority: P1（Should Have / Phase 2 Advanced） | Status: **Draft** | Last Upda
 | A-5 | **US-183 AC-16 末段之交叉引用有誤植**：文中「AC-15 已明確排除」應為「AC-16」（v1.1→v1.2 AC 順移後之殘留），且 DoD 列表為 AC-1~AC-16。此為純交叉引用筆誤、**不影響任何業務裁定**，本 spec 依實際語意（＝AC-16 自身之範圍澄清）撰寫，**未**修改 US-183 | 已回報 team lead；不阻塞 |
 | A-6 | **`equals` 之實作採 `=` 而非 `LIKE`**（BR-7）。若 architect 因參數型別 / collation 理由改採 `LIKE`（無萬用字元之樣式），行為須完全等價且 AC-9 仍須成立 | spec-writer 裁定，architect 可覆寫但須維持 AC 契約 |
 
+### 13.3 v1.1 範圍變更：快照條件顯示 descope（A-7）
+
+| 項目 | 內容 |
+|---|---|
+| **A-7** | **月跑快照未記錄篩選條件 —— F066 既有功能缺口，非本 feature 造成，v1.1 已 descope 並另開票** |
+| **v1.0 之錯誤前提** | v1.0 AC-15 / §5.2 / BR-10 將「快照條件檢視」列為**既有顯示端**，認定本輪只需擴充顯示格式。**此前提不成立。** |
+| **技術現況（已逐項驗證）** | ①`apps/api/src/modules/assignment/services/assignment-run-pipeline.service.ts:1802-1806` —— `buildConfigPayload()` 之 `listDefinitions[]` 僅攜帶 `listNo` / `listNm` / `cardType` / `crEnabled` / `caseStatus` 五個欄位，**從未攜帶 `condition_payload`**②前端 6 個 snapshot 元件（含 `snapshot-detail-page.tsx`）grep `conditionPayload` / `columnName` **零命中**——`run-summary-page.tsx:80` 之唯一 `columnName` 命中為 `skippedCases` metadata 之註解，與篩選條件無關③相對地，**兩個真實顯示端已確實渲染條件**：`_components/ListDetailDrawer.tsx:296`（資料源 `GET /assignment/lists/:listNo/full-snapshot`，**即時讀取** `ob_list_definition.condition_payload`，非月跑凍結快照）與 `list-definition-page.tsx:188` |
+| **定性** | 這不是「顯示格式要修」，而是「快照條件顯示這項功能從未實作」。屬 [F066](F066-view-run-snapshot-detail.md) 之既有缺口 |
+| **descope 理由（使用者裁決）** | ①**業務影響低**：名單一經推進至 `dept_ratio` 階段後 `condition_payload` 即唯讀鎖定（[F051](F051-edit-list-definition.md) 限 `stage = 'draft'`），而月跑之前置條件為全部 active 名單 `stage = 'ready'`（[F061](F061-trigger-assignment-run.md)），故「名單詳情 Drawer 之即時讀取值」與「月跑當下之條件」在正常流程下**無實質差異**——使用者要回溯月跑用了什麼條件，經 Drawer 查看即可②**與本 feature 之定性不符**：F119 全篇為**純加性**擴充（無 migration、無新端點、無新錯誤碼）；納入快照條件顯示須連帶改 `buildConfigPayload` 之快照 payload 契約、[F066](F066-view-run-snapshot-detail.md) spec、prototype `35-*`，並須處理「既有快照無此欄位」之向後相容，範圍與風險等級皆躍升③**不阻塞本 feature 之任何 AC**：AC-14 五路徑一致性、AC-16 重複判定、AC-17 向後相容均與快照無關 |
+| **處置** | **另開票**（建議掛 F066，補齊「月跑快照記錄並顯示各名單篩選條件」）。屆時**必須複用** BR-10 之同一格式化函式，不得另寫一份（否則 `IN []` 類顯示缺陷會在新頁面重演） |
+| **US-183 之對應處置** | US-183 AC-13 之同步 descope 由 **product-analyst** 執行；本 spec **未**修改 US-183（US-183 已通過人工審閱閘，非 spec-writer 可自行變更） |
+
 ## 14. 變更紀錄
 
 | 版本 | 日期 | 變更內容 |
 |---|---|---|
+| v1.1 | 2026-08-19 | **AC-15 descope：快照條件顯示移出範圍**（使用者裁決）。v1.0 誤將「月跑快照條件檢視」列為既有顯示端；經查證快照 `config_payload.listDefinitions[]` 從未攜帶 `condition_payload`（`assignment-run-pipeline.service.ts:1802-1806`）、前端 snapshot 元件零條件渲染邏輯——屬 [F066](F066-view-run-snapshot-detail.md) 既有功能缺口，非顯示格式問題，另開票處理。AC-15 縮為名單詳情 Drawer + 名單定義列表兩端；§5.2 端點表、BR-10 消費端、§7 / §8 / §10 / §11 同步縮減；§12.1 SA-7 收斂為 no-op；新增 §13.3 A-7 完整記錄技術證據與 descope 理由。**AC / BR 總數不變（18 / 15）**，仍無 migration / 無新端點 / 無新錯誤碼。US-183 AC-13 之對應 descope 由 product-analyst 執行，本輪未改 US-183 |
 | v1.0 | 2026-08-18 | 初版（DRAFT，依已通過人工審閱閘之 US-183 v1.2 撰寫）。18 AC / 15 BR；US-183 之 16 AC 逐條展開並新增 2 條（AC-6 後端互斥防呆、AC-11 零可選值欄位可用性，理由見 §13.1 D-4 / D-5）。核心裁定：D-1 採 categorical 子屬性而非新增 `fieldType`；D-6 一致性範圍自「三處」擴為**五條執行路徑**（查證 `buildStage1WhereConditions` 呼叫端）；D-7 重複判定簽章採 `:catop:` 區段並附無碰撞論證與向後相容硬性回歸要求。**不新增錯誤碼、不新增端點、不需 migration**。§12 列出交付 system-architect 之 7 項（含 `data-model.md` 補述）與 F050 之 3 處加性補述建議（**本輪刻意未改寫 F050**，沿用 F118 §12.2 慣例） |

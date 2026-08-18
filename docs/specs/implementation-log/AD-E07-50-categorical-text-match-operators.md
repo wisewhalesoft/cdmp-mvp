@@ -5,9 +5,9 @@ feature-id: F119
 source-stories: US-183
 epic: E07
 module: M01 名單定義
-version: "1.0"
+version: "1.1"
 date: 2026-08-18
-status: approved（SA-1～SA-7 皆為 HOW 層級裁定，不阻塞實作；唯一需 team lead 裁決事項為 §11-A「AC-15 快照顯示範圍缺口」，其餘可直接進 TDD）
+status: approved（SA-1～SA-7 + §11-A 全數裁決完畢，無待裁決阻塞項；可直接進 TDD）
 author: system-architect
 covers: [F119, US-183]
 depends-on:
@@ -32,9 +32,9 @@ invariants:
 
 # AD-E07-50：F119 類別型篩選欄位文字比對運算子架構設計
 
-> **✅ 本 AD 可作為 TDD 實作依據**，唯 §11-A 一項（AC-15「快照條件顯示」子範圍）需 team lead 裁決後才可動工；其餘全部可直接進入 test-generator / tdd-implementation。
+> **✅ 本 AD 可作為 TDD 實作依據，全數項目已無待裁決阻塞。**
 >
-> 本 AD 逐項裁定 [F119 §12.1](../features/F119-categorical-text-match-operators.md#121-需要-system-architect-決定--撰寫之事項) SA-1 ~ SA-7。其中 **SA-4 推翻 spec 建議之預設值**（不抽出獨立檔案），**SA-2/SA-3 之裁定使「單一 SQL 落點」原則（BR-4）從 composer 一處擴大為涵蓋全部三個資料來源建構器**，屬本 AD 對 spec 未明確要求之額外結構性強化。§11-A 另發現一項 spec 對既有程式碼行為的**錯誤假設**（AC-15「快照條件顯示」實際不存在），已停下、未自行打補丁，記錄於待裁決。
+> 本 AD 逐項裁定 [F119 §12.1](../features/F119-categorical-text-match-operators.md#121-需要-system-architect-決定--撰寫之事項) SA-1 ~ SA-7。其中 **SA-4 推翻 spec 建議之預設值**（不抽出獨立檔案），**SA-2/SA-3 之裁定使「單一 SQL 落點」原則（BR-4）從 composer 一處擴大為涵蓋全部三個資料來源建構器**，屬本 AD 對 spec 未明確要求之額外結構性強化。§11-A 另發現一項 spec 對既有程式碼行為的**錯誤假設**（AC-15「快照條件顯示」實際不存在）——已停下、未自行打補丁，經 team lead 複驗後由使用者裁決 **descope**（2026-08-18，v1.1），F119/US-183 對應條文已另指派 spec-writer/product-analyst 同步修訂；後續補齊之技術盤點與設計方向另存 §11-C 供未來開票直接引用。
 
 ## Agent Loading Guide
 
@@ -316,7 +316,7 @@ graph TD
 | **I-CATOP-NULL-MATRIX-01** | BR-6 八格矩陣中僅「`ob_pool_data` × `not_contains`」（`nullKeptOnNotContains: true`）需要顯式 `IS NULL OR ...`；其餘七格（含 `customer_core`/`customer_financial` 之 `not_contains`）**禁止**新增任何 `IS NULL`/`COALESCE` 特判，一律依賴既有 SQL 三值邏輯天然排除 |
 | **I-CATOP-ESCAPE-SINGLE-01** | LIKE 樣式跳脫僅得經 `escapeLikeKeyword()`（`stage1-query-composer.ts`）此**唯一**實作；跳脫字元集固定為 `\` `%` `_` `[` `]` `^`，**不依 dialect 增減**（PG 對 `[`/`]`/`^` 之跳脫為安全 no-op，理由見 §3.2） |
 | **I-CATOP-CASEYEAR-EXCLUDE-01** | `columnName === 'caseyear'` 之條件**禁止**帶文字運算子；此限制實作於**驗證層**（`validateConditionPayload`/`validateConditionsForPreview`）而非 SQL 建構層，違反回 422 `VALIDATION_ERROR`（§3.8） |
-| **I-CATOP-DISPLAY-SINGLE-01** | 條件顯示字串（含運算子中文標籤）僅得經 `formatConditionSummary()`（`apps/web/.../_utils/condition-summary.ts`）此**唯一**函式產生；`ListDetailDrawer.tsx`/`list-definition-page.tsx` 禁止各自組字串（BR-10） |
+| **I-CATOP-DISPLAY-SINGLE-01** | 條件顯示字串（含運算子中文標籤）僅得經 `formatConditionSummary()`（`apps/web/.../_utils/condition-summary.ts`）此**唯一**函式產生；**現階段消費端範圍明確限定為** `ListDetailDrawer.tsx`／`list-definition-page.tsx` 兩者，禁止各自組字串（BR-10）。「快照條件顯示」（`snapshot-config-view.tsx`）**不在**本次消費端範圍內——依 §11-A 裁決（descope），該顯示能力本輪不建置；若日後依 §11-C 另開票補齊，屆時消費端清單應追加 `snapshot-config-view.tsx`，核心約束（單一格式化來源、禁止各頁自拼字串）不變 |
 | **I-CATOP-VALIDATION-LAYER-01** | AC-6 之互斥檢查（`operator`↔`fieldType`、`operator`↔`values`/`keyword`）一律於 **service 層**（`validateConditionPayload`/`validateConditionsForPreview`）實作，**禁止**嘗試以多組 `class-validator` `@ValidateIf` 在同一 DTO 屬性上表達互斥條件（框架組合語意不保證正確求值，見 §3.9） |
 
 ---
@@ -380,20 +380,37 @@ graph TD
 
 ## 11. 待裁決（Open Decisions）
 
-### 11-A ⚠️ AC-15「快照條件顯示」範圍衝突（需 team lead 裁決，不阻塞其餘 SA 項目）
+### 11-A ⚠️ AC-15「快照條件顯示」範圍衝突 —— ✅ **已裁決（選項 2 / descope）**
+
+> **裁決**：選項 2（回頭修訂 spec，descope）。**裁決者**：使用者（經 team lead 轉達）。**裁決日期**：2026-08-18。team lead 已複驗本節之衝突宣稱屬實（`assignment-run-pipeline.service.ts:1802-1806` 的 `listDefinitions[]` 確為五欄位；6 個 snapshot 元件 grep `conditionPayload`/`columnName` 零命中），並已指派 spec-writer 同步 descope F119 spec（AC-15 / §5.2 / BR-10）、product-analyst 同步 descope US-183 AC-13。本 AD 之 §3.6／§7／§9 於初版撰寫時即**已預先排除**快照顯示端（僅設計「名單詳情 Drawer」與「名單定義列表」兩個真實存在的顯示端），故本次裁決**不需回頭修改**這三節之內容或範圍——以下保留原始三個選項與論證作為決策軌跡。
 
 **發現**（§2.4）：F119 AC-15／§5.2／§9 交叉引用之「快照條件顯示」（`GET runs/:runId/*`，F066 快照詳情頁「設定」頁籤）**現況並不存在此顯示能力**——後端 `AssignmentRunPipelineService.buildConfigPayload()` 之 `listDefinitions[]` 快照 payload 從未包含 `condition_payload`/`conditions[]`，前端 `snapshot-config-view.tsx` 亦無對應渲染邏輯。F119 spec 將此列為「既有顯示端、僅需格式擴充」（比照 BR-10 之其餘兩個顯示端），但實際上是**尚未建置的新功能**。
 
-**選項**（供 team lead 裁決，本 AD 不自行選定）：
+**選項**（決策軌跡，供未來回顧；已選定選項 2，見上方裁決框）：
 1. **納入本 feature 範圍**：新增 `buildConfigPayload()` 之 `listDefinitions[]` 欄位（含 `conditionPayload`）+ 新增 `snapshot-config-view.tsx` 條件顯示區塊。屬新增資料流與新增 UI 區塊，工作量超出 F119 spec 原先描述的「格式擴充」定性，建議另計工作量並經 ui-ux-designer 規劃視覺（prototype `35-snapshot-detail.html` 需同步更新）。
 2. **本輪不做，回頭修訂 F119 spec**：移除 AC-15 對「快照條件顯示」之要求，僅保留「名單詳情 Drawer」與「名單定義列表」兩個真實存在的顯示端（§3.6 已完整設計，可直接實作）。理由：`ob_list_definition.condition_payload` 於名單推進至 `dept_ratio` 階段後即鎖定唯讀（`data-model.md` 既有規則表），月名單分派執行時該名單必已達 `ready` 階段，此時 `condition_payload` 事實上已凍結——使用者仍可透過「名單詳情 Drawer」（F050 §6.2 `full-snapshot`，即時讀取）查得該次執行實際使用之條件，效果等同「快照」，僅是資料來源為即時查詢而非獨立凍結副本，對已鎖定名單而言無實質差異。
 3. **折衷**：本輪僅新增 `buildConfigPayload()` 之欄位（純資料層擴充，低成本），前端顯示留待後續 feature——使資料不遺失但延後 UI 投資。
 
-**本 AD 建議**：選項 2（回頭修訂 spec，descope）——理由同選項 2 之技術論證；選項 1 之工作量與 F119 定性為「純加性擴充、無 migration、無新端點」之整體基調不符，選項 3 則產生「資料存在但無人看得到」的半吊子狀態，不建議。**最終選擇需 team lead 裁決**，若選 1 或 3，需追加指派 spec-writer（更新 F066 spec）+ ui-ux-designer（prototype 35）。
+**本 AD 建議**（採納）：選項 2（回頭修訂 spec，descope）——理由同選項 2 之技術論證；選項 1 之工作量與 F119 定性為「純加性擴充、無 migration、無新端點」之整體基調不符，選項 3 則產生「資料存在但無人看得到」的半吊子狀態，不建議。
 
 ### 11-B 效能防護長期方案（非阻塞，對應 SA-6 / OQ-183-02）
 
 本輪確認不引入新機制（§F119 §12.1 SA-6）。若監控觀察到月名單分派 Stage 1 因 `LIKE '%keyword%'` 全表掃描（`ob_pool_data` 約 167 萬列）實際發生逾時，後續可評估選項（本 AD 不預先設計，僅記錄方向）：(a) MSSQL Full-Text Search（`CONTAINS`/`FREETEXT`，需額外全文檢索索引與 catalog）；(b) PG `pg_trgm` extension + GIN trigram index（若未來 PG 路徑重新啟用）；兩者皆為對現有查詢模型的重大擴充，非本輪範圍。
+
+### 11-C 建議另開票：月跑快照未記錄 `condition_payload` 之稽核完整性缺口
+
+> 承接 §11-A 裁決（descope）之後續：本節將原本列於 §11-A 選項 1 的技術盤點固化為獨立的開票建議，供日後若要補齊此能力時直接引用，不必重查。
+
+**現況技術盤點**（已查證，開票時可直接引用，不需重查）：
+
+- **缺口本體**：`assignment_run_snapshot`（`snapshot_type='config'`）之 `payload.listDefinitions[]` 由 `AssignmentRunPipelineService.buildConfigPayload()`（`apps/api/src/modules/assignment/services/assignment-run-pipeline.service.ts:1790-1832`）逐筆映射產生，欄位固定為 `{ listNo, listNm, cardType, crEnabled, caseStatus }`，**從未包含** `condition_payload`／`conditions[]`。其餘兩份快照（`input_list`：案件層級 `{listNo, applNo, orgno, cardType}`；`result`：分派結果）同樣不含篩選條件。
+- **前端對應缺口**：F066 快照詳情頁「設定」頁籤（`apps/web/src/pages/assignment/_components/snapshot-config-view.tsx`）之 `SnapshotConfigPayload`/`ListDefinitionRow` 型別與渲染邏輯**零** columnName/condition 相關內容；`grep conditionPayload|columnName` 於全部 6 個 snapshot 相關元件（`snapshot-array-view.tsx` / `snapshot-config-view.tsx` / `snapshot-input-summary.tsx` / `snapshot-pivot-view.tsx` / `snapshot-result-table.tsx` / `snapshot-detail-page.tsx`）零命中。
+- **業務影響邊界**：由於 `ob_list_definition.condition_payload` 於名單推進至 `dept_ratio` 階段後即鎖定唯讀（月跑執行時名單必已達 `ready` 階段），**目前**可透過「名單詳情 Drawer」（F050 §6.2 `full-snapshot`，即時讀取 `ob_list_definition`）查得任一名單「當下」的條件設定，效果等同快照——**唯一風險**是若該名單日後被允許以其他機制修改條件（現況規則不允許，但屬未來規則變更才會出現的風險，非現況缺口），屆時「名單詳情 Drawer」讀到的會是修改後的條件，與該次月跑實際套用的條件不一致，而 `assignment_run_snapshot` 若未捕捉條件即無法追溯真實歷史值——這是「稽核完整性」而非「當下可用性」的缺口。
+- **若要補齊之設計方向**（供開票時直接規劃，本 AD 不代為決定是否要做）：
+  1. **後端**：`buildConfigPayload()` 之 `listDefinitions[]` 逐筆映射新增 `conditionPayload: l.condition_payload`（`ObListDefinition` entity 既有欄位，取值即為當下值，無需額外查詢）；純加性，不影響既有 3 個消費 `listDefinitions[]` 之欄位（`listNo`/`listNm`/`cardType`/`crEnabled`/`caseStatus`）。
+  2. **前端**：`SnapshotConfigPayload`/`ListDefinitionRow` 型別新增 `conditionPayload` 欄位；`snapshot-config-view.tsx` 新增條件顯示區塊，**可直接重用本 AD §3.6 之 `formatConditionSummary()`**（`_utils/condition-summary.ts`）——若此追加工作與本 AD 同期或稍後執行，`I-CATOP-DISPLAY-SINGLE-01` 之消費端清單屆時應追加 `snapshot-config-view.tsx`，維持「單一格式化來源」不變式之完整覆蓋。
+  3. **文件**：需 F066 spec（`docs/specs/features/F066-view-run-snapshot-detail.md`）新增對應 AC + `prototypes/35-snapshot-detail.html` 更新視覺（ui-ux-designer）。
+  4. **範圍評估**：屬獨立小型 feature（無 migration、無新端點，與 F119 本身定性相似），建議獨立編號（如 F120）而非併入既有 feature，避免與已 descope 的 F119 AC-15 產生文件上的混淆。
 
 ---
 
@@ -401,4 +418,5 @@ graph TD
 
 | 版本 | 日期 | 變更內容 |
 |---|---|---|
+| v1.1 | 2026-08-18 | **§11-A 裁決落地**：team lead 複驗 §2.4/§11-A 之衝突宣稱屬實後，使用者裁決採**選項 2（descope）**——F119 AC-15／§5.2／BR-10、US-183 AC-13 對「快照條件顯示」之要求移除，已另指派 spec-writer / product-analyst 同步修訂對應 spec/story（本 AD 不觸碰那兩份檔案）。查證確認 §3.6／§7／§9 於 v1.0 撰寫時即已預先排除快照顯示端，故 v1.1 **不需**回頭修改這三節之範圍；僅小幅調整 `I-CATOP-DISPLAY-SINGLE-01` 措辭以明文限定現階段消費端為 `ListDetailDrawer.tsx`／`list-definition-page.tsx` 兩者。**新增 §11-C**：將原 §11-A 選項 1 之技術盤點與設計方向固化為獨立「建議另開票」段落（後端 `buildConfigPayload()` 加欄位 + 前端 `snapshot-config-view.tsx` 新增區塊 + F066 spec/prototype 35 更新 + 建議獨立編號 F120），供未來若要補齊此稽核完整性缺口時直接引用，不必重查。狀態由「待裁決」改為「已核可，可直接進 TDD」 |
 | v1.0 | 2026-08-18 | 初版。裁定 F119 §12.1 SA-1~SA-7：SA-1 採 spec §5.1 欄位契約表（已提交 data-model.md v1.22）；SA-2 定案跳脫超集策略（`\`/`%`/`_`/`[`/`]`/`^`，兩方言共用單一函式，PG 對字元類字元跳脫為安全 no-op）；SA-3 確認 PG 同步擴充，並**額外**將 SQL 產生收斂為 `buildCategoricalOperatorFragment` 單一共用函式（composer + customer_core PG/MSSQL 兩檔 + customer_financial 共四處呼叫）；SA-4 **推翻 spec 建議**，維持 `normalizeConditionPayload` 為 `AssignmentListService` private method（沿用 `I-F118-SINGLE-NORMALIZE-01` 既有慣例，無新增跨模組呼叫端佐證抽取必要性）；SA-5 確認不分觸發原因一律渲染；SA-6 確認本輪不引入新效能機制，記錄未來方案於 §11-B；SA-7 確認 F050 §6.2 full-snapshot 端點型別 passthrough 安全。**自行發現並裁定**：`caseyear`（→`year_cnt` INTEGER）排除文字運算子（§3.8，新不變式 `I-CATOP-CASEYEAR-EXCLUDE-01`）；AC-6 互斥驗證置於 service 層而非 DTO 層（§3.9，因 `class-validator` `@ValidateIf` 同屬性多條件組合限制，新不變式 `I-CATOP-VALIDATION-LAYER-01`）。**發現並停下未打補丁**：AC-15「快照條件顯示」與現況程式碼不符——`assignment_run_snapshot` 從未捕捉 `condition_payload`，`snapshot-config-view.tsx` 無對應渲染，列為 §11-A 待 team lead 裁決事項。新增 8 個不變式。無 schema/migration 變更（純加性 TypeScript 型別擴充） |

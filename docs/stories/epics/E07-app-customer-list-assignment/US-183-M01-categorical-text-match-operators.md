@@ -1,7 +1,7 @@
 ---
 last-updated: 2026-08-18
-version: v1.2
-change-summary: "v1.2（team lead 二次複核修正，撤回 v1.1 對 AC-11 之誤刪）：v1.1 誤以為『Stage 0 試算逾時現況已滿足、AC-11 可刪』，team lead 複核後指出係查錯頁面——v1.1 查的是命中預估面板（US-176），AC-11 原本講的是 Stage 0 每日分派數量估算（US-071）之部門估算頁，兩者是不同端點。重新查證後確認：`stage0-estimate.service.ts:557-570` 逾時時已產生 `STAGE0_LIST_ESTIMATE_PARTIAL` warning，但 `stage0-estimate-page.tsx` 完全未渲染此 warning（現況僅渲染 SCOPE_UNRESOLVED / CALENDAR_EMPTY / POOL_COUNT_LOW / HEADCOUNT_ZERO 四種），逾時名單實質上靜默以 0 貢獻部門合計、畫面零提示。AC-11 於 v1.2 補回並依新證據重新措辭（要求範圍從「新增逾時偵測」改為「渲染既有 warning」，成本更低、更精確）；OQ-183-03 重新開啟並依 team lead 指示之推理重新定義（同一 warning code 不分觸發原因，範圍認定交 system-architect）。原 v1.1 AC-11~15（三處一致性 / 詳情顯示 / 重複判定 / 向後相容 / 建立編輯一致）順移為 AC-12~16，TC 同步順移＋新增 TC-183-11。已拍板決策第 5 項、不含範圍、相關文件等段落一併修正措辭。v1.1（人工複核修正）：AC-3「不包含」對 NULL 值之裁定改為**依資料來源分流**——`ob_pool_data` 保留 NULL（v1.0 原裁定），`customer_core`／`customer_financial` 排除 NULL（沿用既有不變式 `I-CC-NULL-EXCLUDE-01` / `I-CF-NULL-EXCLUDE-01`，不得變更）；TC-183-03 同步拆為兩情境（此項 v1.1 判斷正確，v1.2 維持不變）。v1.0 初版：類別型篩選欄位新增文字比對運算子（包含 / 不包含 / 完全等於），與現況核取清單式 IN 並列供部長於建立草稿名單、編輯草稿名單時擇一使用。單一關鍵字、三個資料來源（ob_pool_data / customer_core / customer_financial）全部支援、重複名單判定須能區分運算子語意。建議對應 spec 編號：F119（spec-index 現有最高編號為 F118）。"
+version: v1.3
+change-summary: "v1.3（system-architect 追查後 descope）：AC-13 原標題「名單詳情 / 名單定義列表 / 快照條件顯示」隱含快照頁已有條件顯示、本輪僅需擴充格式，此前提經 system-architect 查證後推翻——快照 `buildConfigPayload()`（`assignment-run-pipeline.service.ts:1801-1807`）之 `listDefinitions[]` 從未攜帶 `condition_payload`，前端 6 個快照元件全文 grep `conditionPayload`/`columnName` 零命中，快照從來就沒記錄過名單篩選條件，此為既有缺口非本 Story 造成。使用者裁決 descope：AC-13 縮為「名單詳情 Drawer」與「名單定義列表」兩個真實存在的顯示端，移除快照；TC-183-13 同步縮減；「不含範圍」新增完整背景說明（含兩項查證證據、descope 理由、建議另開票處理快照稽核完整性議題）。AC/TC 總數不變（16/16，僅描述縮減，未刪減或新增項目）。v1.2（team lead 二次複核修正，撤回 v1.1 對 AC-11 之誤刪）：v1.1 誤以為『Stage 0 試算逾時現況已滿足、AC-11 可刪』，team lead 複核後指出係查錯頁面——v1.1 查的是命中預估面板（US-176），AC-11 原本講的是 Stage 0 每日分派數量估算（US-071）之部門估算頁，兩者是不同端點。重新查證後確認：`stage0-estimate.service.ts:557-570` 逾時時已產生 `STAGE0_LIST_ESTIMATE_PARTIAL` warning，但 `stage0-estimate-page.tsx` 完全未渲染此 warning（現況僅渲染 SCOPE_UNRESOLVED / CALENDAR_EMPTY / POOL_COUNT_LOW / HEADCOUNT_ZERO 四種），逾時名單實質上靜默以 0 貢獻部門合計、畫面零提示。AC-11 於 v1.2 補回並依新證據重新措辭（要求範圍從「新增逾時偵測」改為「渲染既有 warning」，成本更低、更精確）；OQ-183-03 重新開啟並依 team lead 指示之推理重新定義（同一 warning code 不分觸發原因，範圍認定交 system-architect）。原 v1.1 AC-11~15（三處一致性 / 詳情顯示 / 重複判定 / 向後相容 / 建立編輯一致）順移為 AC-12~16，TC 同步順移＋新增 TC-183-11。已拍板決策第 5 項、不含範圍、相關文件等段落一併修正措辭。v1.1（人工複核修正）：AC-3「不包含」對 NULL 值之裁定改為**依資料來源分流**——`ob_pool_data` 保留 NULL（v1.0 原裁定），`customer_core`／`customer_financial` 排除 NULL（沿用既有不變式 `I-CC-NULL-EXCLUDE-01` / `I-CF-NULL-EXCLUDE-01`，不得變更）；TC-183-03 同步拆為兩情境（此項 v1.1 判斷正確，v1.2 維持不變）。v1.0 初版：類別型篩選欄位新增文字比對運算子（包含 / 不包含 / 完全等於），與現況核取清單式 IN 並列供部長於建立草稿名單、編輯草稿名單時擇一使用。單一關鍵字、三個資料來源（ob_pool_data / customer_core / customer_financial）全部支援、重複名單判定須能區分運算子語意。建議對應 spec 編號：F119（spec-index 現有最高編號為 F118）。"
 ---
 
 # US-183：類別型篩選欄位新增文字比對運算子（F119）
@@ -155,12 +155,13 @@ change-summary: "v1.2（team lead 二次複核修正，撤回 v1.1 對 AC-11 之
 - **Then** 三處對「哪些案件符合此條件」之判定邏輯須一致（沿用既有 BR-10 一致性要求），不得出現「估算顯示有 N 筆、但實際執行結果為 0 筆」或反之的落差
 - **And** 若（b）名單命中預估因採抽樣估算機制（US-176）而本質上為估算值、非精確值，此為既有機制之已知特性，非本 AC 要求三處數字逐筆相等，但**篩選邏輯本身**（哪些案件算符合，含 AC-3 之 NULL 分流規則）須一致，不得三處各自解讀關鍵字比對規則或 NULL 處理方式
 
-### AC-13：名單詳情 / 名單定義列表 / 快照條件顯示正確呈現文字條件
+### AC-13：名單詳情 / 名單定義列表正確呈現文字條件
 
 - **Given** 某名單之篩選條件中含有文字運算子條件
-- **When** 使用者於名單詳情頁、名單定義列表、或歷史執行快照條件檢視中查看此條件
+- **When** 使用者於名單詳情 Drawer、或名單定義列表中查看此條件
 - **Then** 畫面須清楚呈現「欄位名稱 + 運算子（包含 / 不包含 / 完全等於）+ 關鍵字」，例如「主約專案名稱 包含「勁便利」」
 - **And** **不得**顯示為空白、或誤植為 `IN []`（空清單樣式），此類顯示會讓業務主管誤以為條件遺失或設定失敗
+- **And**（範圍澄清）本 AC 僅涵蓋「名單詳情 Drawer」與「名單定義列表」兩處**即時讀取** `condition_payload` 的顯示端；**不含**歷史執行快照條件顯示——月跑快照從未記錄過名單的篩選條件，此為既有缺口而非本 Story 應涵蓋之顯示端，詳見「不含範圍」段落
 
 ### AC-14：重複名單判定須能區分不同運算子語意
 
@@ -192,6 +193,10 @@ change-summary: "v1.2（team lead 二次複核修正，撤回 v1.1 對 AC-11 之
 - 效能提示文案、輸入框 UI 樣式、運算子選擇元件之視覺與互動細節由 ui-ux-designer 定案，並反映於更新後的 prototype（建立草稿名單 `27a-list-create-draft.html`、編輯草稿名單 `27b-list-edit-draft.html` 或等義檔案，確切檔名以現行 prototype 目錄為準）
 - 建立草稿頁「預估命中筆數」面板（US-176）之逾時 / 查詢失敗錯誤呈現：**現況已滿足**，不在本 Story 重複驗收——`list-create-draft-page.tsx` 之 `catch` 區塊已 `setEstimateState('error')` 並顯示「預估暫時無法取得」+ 重試按鈕，本 Story 沿用即可，不需額外開發（Stage 0 部門估算頁之對應缺口則**不屬於**已滿足範圍，見 AC-11，須實際修正）
 - `STAGE0_LIST_ESTIMATE_PARTIAL` warning 於前端之確切呈現方式（inline 於名單列 / 頁首彙總提示 / 其他樣式）由 ui-ux-designer 定案
+- **歷史執行快照顯示名單篩選條件（含本 Story 之文字運算子條件）：明確 descope，建議另開票處理，不在本 Story 範圍**。背景與理由完整記錄如下，供日後回溯：
+  - **既有缺口，非本 Story 造成**：月跑快照從未記錄過名單的篩選條件。已查證兩項技術現況：(1) 快照 `buildConfigPayload()`（`apps/api/src/modules/assignment/services/assignment-run-pipeline.service.ts:1801-1807`）之 `listDefinitions[]` 只寫入 `listNo` / `listNm` / `cardType` / `crEnabled` / `caseStatus`，**從未攜帶 `condition_payload`**；(2) 前端 6 個快照相關元件（`snapshot-detail-page.tsx`、`snapshot-config-view.tsx`、`snapshot-array-view.tsx`、`snapshot-input-summary.tsx`、`snapshot-pivot-view.tsx`、`snapshot-result-table.tsx`）全文 grep `conditionPayload` / `columnName` **零命中**，完全沒有任何條件渲染邏輯。這不是「顯示格式要擴充成支援文字運算子」的問題，而是「篩選條件本身從未被快照記錄過」——本 Story 上線前後，快照頁對「這份名單當初是用什麼條件跑的」這個問題本來就答不出來，不限於文字運算子。
+  - **本輪 descope 理由**：(a) 名單推進到 `dept_ratio` 階段後 `condition_payload` 即唯讀鎖定，月跑執行時名單必已處於 `ready` 階段，此時「名單詳情 Drawer」即時讀取到的條件與理論上該被凍結的快照內容並無實質差異，短期內以 AC-13 涵蓋的「名單詳情 Drawer」讀取現行條件作為替代查閱路徑，業務影響有限；(b) 若要在本 Story 內一併補上快照記錄篩選條件的能力，需連帶修改 F066（快照詳情重構）spec 與 prototype 35，且涉及快照 payload schema 擴充，與本 Story 定性為「純加性、無 migration、無新端點」的範圍不符。
+  - **建議另開票處理**：快照稽核完整性（快照應完整記錄名單當初的篩選條件，供事後追溯）是一個獨立、範圍更大的議題，建議另立 Story 由 spec-writer / system-architect 評估是否納入 F066 後續版本，不應在 US-183 這種功能加性 Story 中順帶擴大範圍。
 - 是否將既有抽樣估算機制（US-176／AD-E07-45）之基礎架構延伸套用於文字運算子之「命中預估」路徑，由 system-architect 評估是否值得後續投入（見 OQ-183-02，屬效能優化層次，非必要修正）
 - 數值型（numeric）、日期型（date）篩選欄位是否也需要類似的運算子擴充，不在本輪範圍
 - 「編輯既有草稿」頁補齊「預估命中筆數」即時面板（US-176 既有開放問題），不在本 Story 範圍內一併處理（見 OQ-183-04，已裁決不納入本輪）
@@ -277,10 +282,10 @@ change-summary: "v1.2（team lead 二次複核修正，撤回 v1.1 對 AC-11 之
 - **When**：分別經由三個路徑計算是否符合某已知案件
 - **Then**：三處對該案件「是否符合」之判定結果一致
 
-### TC-183-13：名單詳情頁正確顯示文字條件，非空白或 IN []
+### TC-183-13：名單詳情頁 / 名單定義列表正確顯示文字條件，非空白或 IN []
 
 - **Given**：某名單條件為「主約專案名稱 不包含 勁便利」
-- **When**：於名單詳情頁 / 名單定義列表 / 快照條件檢視查看此名單
+- **When**：於名單詳情 Drawer / 名單定義列表查看此名單
 - **Then**：畫面顯示可辨識之「主約專案名稱 不包含「勁便利」」等文字，不顯示空白或 `IN []`
 
 ### TC-183-14：運算子不同之名單不觸發重複判定 422
@@ -339,7 +344,7 @@ change-summary: "v1.2（team lead 二次複核修正，撤回 v1.1 對 AC-11 之
 - [ ] `I-CC-NULL-EXCLUDE-01` / `I-CF-NULL-EXCLUDE-01` 不變式未被本 Story 破壞，驗證通過（TC-183-03 情境 (b)）
 - [ ] Stage 0 部門估算頁正確渲染 `STAGE0_LIST_ESTIMATE_PARTIAL` warning，驗證通過（TC-183-11）
 - [ ] 三處篩選路徑（Stage 0 試算 / 命中預估 / 月名單分派執行）邏輯一致性驗證通過（TC-183-12）
-- [ ] 名單詳情 / 列表 / 快照條件顯示正確驗證通過（TC-183-13）
+- [ ] 名單詳情 / 列表條件顯示正確驗證通過（TC-183-13）
 - [ ] 重複名單判定可區分運算子語意驗證通過（TC-183-14）
 - [ ] 舊名單（無 operator）向後相容驗證通過（TC-183-15）
 - [ ] 建立草稿與編輯草稿兩進入點一致性驗證通過（TC-183-16）
