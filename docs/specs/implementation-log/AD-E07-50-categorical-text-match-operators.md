@@ -5,9 +5,9 @@ feature-id: F119
 source-stories: US-183
 epic: E07
 module: M01 名單定義
-version: "1.1"
+version: "1.2"
 date: 2026-08-18
-status: approved（SA-1～SA-7 + §11-A 全數裁決完畢，無待裁決阻塞項；可直接進 TDD）
+status: approved（SA-1～SA-7 + §11-A 全數裁決完畢，無待裁決阻塞項；可直接進 TDD；v1.2 修正 §3.6 樣板筆誤 + 記錄 C-Q2/C-Q3 兩項裁定）
 author: system-architect
 covers: [F119, US-183]
 depends-on:
@@ -216,8 +216,9 @@ if (c.fieldType === 'categorical') {
 ### 3.6 前端顯示層（BR-10）與運算子預設值
 
 - **運算子中文標籤 + 單一 fallback**：新增 `apps/web/src/pages/assignment/_utils/labels.ts` 之 `OPERATOR_LABEL` 對照表 + `operatorLabel(operator)` 函式（比照既有 `FIELD_DISPLAY`/`fieldDisplayName` 慣例），內部即前端側之 `resolveCategoricalOperator`（`operator ?? 'in'` 僅在此一處出現）。
-- **BR-10 共用格式化函式**：新增 `apps/web/src/pages/assignment/_utils/condition-summary.ts`，匯出 `formatConditionSummary(condition, decoder: ConditionDecoder): string`（`ConditionDecoder` 型別沿用 `_hooks/use-condition-decoder.ts` 既有介面），依 `fieldType`/`operator` 分支輸出：`in` → 沿用既有「欄位：值1、值2」格式；文字運算子 → `「${欄位}」${運算子標籤}「${keyword}」`（AC-15 範例格式「主約專案名稱 包含「勁便利」」）。
+- **BR-10 共用格式化函式**：新增 `apps/web/src/pages/assignment/_utils/condition-summary.ts`，匯出 `formatConditionSummary(condition, decoder: ConditionDecoder): string`（`ConditionDecoder` 型別沿用 `_hooks/use-condition-decoder.ts` 既有介面），依 `fieldType`/`operator` 分支輸出：`in` → 沿用既有「欄位：值1、值2」格式；文字運算子 → `${欄位} ${運算子標籤}「${keyword}」`（AC-15 範例格式「主約專案名稱 包含「勁便利」」；**v1.2 修正**：本樣板 v1.0 原誤植為 `「${欄位}」${運算子標籤}「${keyword}」`——欄位名多加了一組引號，與其自述來源 AC-15 之例句「主約專案名稱 包含「勁便利」」〔欄位名不帶引號、以半形空格分隔〕不一致，屬抄寫筆誤；AC-15 為通過人工審閱閘之業務契約，以其為準，prototype 與 test-generator 斷言原本即已採 AC-15 格式，本 AD 為唯一不一致方，現已修正）。
 - **消費端改為呼叫本函式**（取代各自 inline 邏輯，§9 列為修改檔案）：`ListDetailDrawer.tsx`（詳情 Drawer 條件頁籤）、`list-definition-page.tsx`（`renderConditionChips`，Kanban chip）。**快照顯示端**因 §2.4 之發現暫不在此範圍（見 §11-A）。
+- **⚠️ 裁定（v1.2 補記，使用者裁決，2026-08-18）：`formatConditionSummary()` 同時接管 `in` 與三種文字運算子，取代各消費端既有之 `in` inline 格式，非僅新增文字運算子分支**。字面執行「消費端改為呼叫本函式」會連既有 `in` 條件顯示格式一併改寫（如 Kanban chip 由既有 `欄位:值1/值2+N` 改為 `欄位：值1、值2`），此點原由 ui-ux-designer 於審閱附錄標記待 team lead 明示，現已裁定**統一**（`formatConditionSummary` 為 `in`/文字運算子共用之唯一格式化來源，非僅文字運算子專用）。理由：BR-10 之核心價值即消除各頁自拼字串，既有 `IN []` 顯示缺陷正源於各頁各自實作；若 `in` 分支保留各消費端既有格式，BR-10 名存實亡、`I-CATOP-DISPLAY-SINGLE-01` 亦無從成立（該不變式要求「僅得經本函式產生」，不能只涵蓋新增的三種運算子）。此變更僅影響既有 `in` 條件之**顯示外觀**（分隔符號、`+N` 截斷樣式可能改變），**不影響**篩選結果本身，屬可接受之外觀變更，須成為實作契約而非留待實作時再判斷。
 - **`ConditionItem`（`apps/web/src/api/assignment-list.ts:35`）型別擴充**：新增 `operator?: 'in' | 'contains' | 'not_contains' | 'equals'` 與 `keyword?: string` 兩個 optional 欄位（純加性，比照後端 `ConditionItemDto`）。
 - **`CategoricalValuesPicker` 元件**（`list-create-draft-page.tsx:1532`，建立/編輯兩頁共用）之運算子四選一控制項、互斥切換（AC-5）、效能提示（AC-12）具體視覺與互動設計**交 ui-ux-designer**（prototype 更新後定案），本 AD 僅界定：元件必須是建立頁與編輯頁的**同一元件實例**（AC-18 既有前提，未變更）。
 
@@ -375,6 +376,19 @@ graph TD
 | R-2 | `caseyear` 排除文字運算子（§3.8）為本 AD 新增之驗證規則，屬對「AC-1 僅要求 fieldType='categorical' 即可用四運算子」字面文意的**限縮** | 中；已附完整技術論證（PG 型別錯誤 + wildcard 規則未定義 + 業務動機不相容）。若 team lead / spec-writer 認為業務上仍需支援，需回頭修訂 F119 spec 明確定義 `caseyear` 與 `'99'` wildcard 之互動語意，本 AD 不預先假設該情境的設計 |
 | R-3 | `stage1-customer-core-clause.ts`/`-mssql.ts` 之 `DIRECT_MATCH_COLUMNS`/`cpost_city` 分支改動屬對 AD-E07-37/AD-E07-42 已上線程式碼的修改（非純新增） | 低；改動僅將既有 `cc.col IN (...)` 樣式替換為呼叫共用函式之等價輸出（`operator` 缺漏/`'in'` 時之輸出字串逐字元相同），建議 TDD 階段對現有 F109/F114 回歸測試保持綠燈作為驗收條件之一（比照 AD-E07-49 R-3 之先例） |
 | R-4 | `escapeLikeKeyword` 之跳脫超集策略（§3.2）未經真實 MSSQL/PG 雙資料庫之交叉驗證，僅基於 SQL 標準行為推論 | 低；`.mssql.spec.ts` 已排入（§8），建議另加一組 `.pg.spec.ts` 冒煙測試（非窮舉字元類案例，僅驗證語法可執行）作為論證的實證佐證，而非僅依賴本 AD 之書面推論 |
+| R-5 | 部署前置條件缺口——見 §10.1 | 中；非阻塞本輪 TDD／開發，但影響上線後之實際可用性，須於部署前確認 |
+
+### 10.1 部署前置條件：`spec_name`（主約專案名稱）未在部署 seed 白名單內
+
+**現況**（ui-ux-designer 於審閱附錄 C-Q3 標記，team lead 於 Phase A 審閱閘開始時獨立發現同一件事；已交叉確認）：US-183／F119 之代表性業務範例欄位 `ob_pool_data.spec_name`（主約專案名稱）**不在** `apps/api/src/database/seeds/data/pooldata-field-whitelist.json`（部署 seed）內。此為 F119 spec §3 前置條件 **[ASSUMPTION A-1]** 已逐筆查證並登記之既有事實（seed 之 `ob_pool_data` categorical 欄位為 `best_case`/`brand_name`/`case_status`/`caseyear`/`payt_num`/`prod_kind`/`prod_type_name`/`settle_src`/`spec_tp`，無 `spec_name`），非本 AD 新發現；本節將其與部署面之連帶影響一併記錄，供上線前檢核。使用者已確認 **dev 環境資料庫已有該筆**（可能為管理者手動經 F075 新增，或其他方式補入），但**部署 seed 本身未含此筆**——代表若目標環境（如新建 UAT/prod 環境）之白名單完全依賴 seed 初始化，將不會有 `spec_name`。
+
+**影響**：F119 上線後，若目標環境未先經 [F075](../features/F075-manage-pooldata-field-whitelist.md)（篩選欄位白名單管理）將 `spec_name` 加入 `pooldata_field_whitelist`（`field_type='categorical'`, `is_active=true`），使用者於條件建構子畫面**選不到**此欄位，US-183 背景說明所舉之代表場景（「主約專案名稱含『勁便利』字樣」）將**無法示範/操作**——四種運算子機制本身仍正確運作於其餘 8 個既有 categorical 欄位（`prod_kind`/`case_status`/`caseyear` 等），僅代表性範例欄位缺席，不影響 feature 本身之正確性或可用性。
+
+**補齊方式**（本 AD 不代為執行，僅記錄選項供部署前決策）：
+1. **經 F075 管理頁新增**（建議路徑）：部署後由管理者透過既有「新增篩選欄位」流程手動新增 `spec_name`（`data_source='ob_pool_data'`, `field_type='categorical'`）；若欲提供可選值供 `in` 運算子使用，可另經 [F112](../features/F112-auto-suggest-categorical-options.md) distinct 值自動建議機制帶入（`spec_name` 值域極廣，此路徑亦有 `DISTINCT_VALUES_CAP` 約 200 筆之既有上限，恰為 US-183 選用文字運算子而非窮舉可選值之原始業務動機）。
+2. **補 seed**：於 `pooldata-field-whitelist.json` 新增 `spec_name` 條目，隨下次 migration/seed 執行自動生效於所有環境；此為**改動既有 seed 資料**，不在本 AD 之「純加性、無 migration」定性範圍內，若採此路徑建議另立小型 seed 更新任務，而非併入 F119 本體。
+
+此為**部署前置條件**而非架構設計缺陷——四運算子之 SQL/驗證/顯示邏輯（§3.2~§3.9）與 `spec_name` 是否已在白名單內完全正交，不因此欄位缺席而失效或需要調整設計。
 
 ---
 
@@ -418,5 +432,6 @@ graph TD
 
 | 版本 | 日期 | 變更內容 |
 |---|---|---|
+| v1.2 | 2026-08-18 | **三項小修，源自 ui-ux-designer 審閱附錄 C-Q1~C-Q3，team lead 於 Phase A 審閱閘補處理**：(1) **修正 §3.6 樣板筆誤**（C-Q1，必改）——`formatConditionSummary()` 文字運算子樣板原誤植為 `「${欄位}」${運算子標籤}「${keyword}」`（欄位名多加引號），與其自述來源 AC-15 例句「主約專案名稱 包含「勁便利」」不一致；AC-15 為業務契約勝出，修正為 `${欄位} ${運算子標籤}「${keyword}」`。(2) **記錄 C-Q2 裁定**（使用者裁決，2026-08-18）：`formatConditionSummary()` 統一接管 `in` 與三種文字運算子（含既有 Kanban chip 顯示格式），非僅新增文字運算子分支——理由見 §3.6，使其成為實作契約。(3) **新增 §10.1 部署前置條件**（C-Q3）：記錄 `spec_name` 未在部署 seed 白名單內之既有事實（F119 spec A-1 已查證，非新發現）與其部署面連帶影響，附 R-5 風險列，供上線前檢核，不代為執行補齊 |
 | v1.1 | 2026-08-18 | **§11-A 裁決落地**：team lead 複驗 §2.4/§11-A 之衝突宣稱屬實後，使用者裁決採**選項 2（descope）**——F119 AC-15／§5.2／BR-10、US-183 AC-13 對「快照條件顯示」之要求移除，已另指派 spec-writer / product-analyst 同步修訂對應 spec/story（本 AD 不觸碰那兩份檔案）。查證確認 §3.6／§7／§9 於 v1.0 撰寫時即已預先排除快照顯示端，故 v1.1 **不需**回頭修改這三節之範圍；僅小幅調整 `I-CATOP-DISPLAY-SINGLE-01` 措辭以明文限定現階段消費端為 `ListDetailDrawer.tsx`／`list-definition-page.tsx` 兩者。**新增 §11-C**：將原 §11-A 選項 1 之技術盤點與設計方向固化為獨立「建議另開票」段落（後端 `buildConfigPayload()` 加欄位 + 前端 `snapshot-config-view.tsx` 新增區塊 + F066 spec/prototype 35 更新 + 建議獨立編號 F120），供未來若要補齊此稽核完整性缺口時直接引用，不必重查。狀態由「待裁決」改為「已核可，可直接進 TDD」 |
 | v1.0 | 2026-08-18 | 初版。裁定 F119 §12.1 SA-1~SA-7：SA-1 採 spec §5.1 欄位契約表（已提交 data-model.md v1.22）；SA-2 定案跳脫超集策略（`\`/`%`/`_`/`[`/`]`/`^`，兩方言共用單一函式，PG 對字元類字元跳脫為安全 no-op）；SA-3 確認 PG 同步擴充，並**額外**將 SQL 產生收斂為 `buildCategoricalOperatorFragment` 單一共用函式（composer + customer_core PG/MSSQL 兩檔 + customer_financial 共四處呼叫）；SA-4 **推翻 spec 建議**，維持 `normalizeConditionPayload` 為 `AssignmentListService` private method（沿用 `I-F118-SINGLE-NORMALIZE-01` 既有慣例，無新增跨模組呼叫端佐證抽取必要性）；SA-5 確認不分觸發原因一律渲染；SA-6 確認本輪不引入新效能機制，記錄未來方案於 §11-B；SA-7 確認 F050 §6.2 full-snapshot 端點型別 passthrough 安全。**自行發現並裁定**：`caseyear`（→`year_cnt` INTEGER）排除文字運算子（§3.8，新不變式 `I-CATOP-CASEYEAR-EXCLUDE-01`）；AC-6 互斥驗證置於 service 層而非 DTO 層（§3.9，因 `class-validator` `@ValidateIf` 同屬性多條件組合限制，新不變式 `I-CATOP-VALIDATION-LAYER-01`）。**發現並停下未打補丁**：AC-15「快照條件顯示」與現況程式碼不符——`assignment_run_snapshot` 從未捕捉 `condition_payload`，`snapshot-config-view.tsx` 無對應渲染，列為 §11-A 待 team lead 裁決事項。新增 8 個不變式。無 schema/migration 變更（純加性 TypeScript 型別擴充） |
