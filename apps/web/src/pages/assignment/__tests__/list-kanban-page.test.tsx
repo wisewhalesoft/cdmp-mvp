@@ -1508,3 +1508,139 @@ describe('F097 fix — 新增名單導航帶作業月', () => {
     );
   });
 });
+
+// ============================================================
+// F119 / US-183 — 類別型篩選欄位文字比對運算子之顯示（AC-15 / BR-10 / AC-17）
+//
+// 撰寫依據：F119 spec AC-15/AC-17/BR-10 + AD-E07-50 §3.6/§7 I-CATOP-DISPLAY-SINGLE-01 +
+// docs/ui-ux-design-overview.md 附錄 C（C-13：採 AC-15 例句「主約專案名稱 包含「勁便利」」，
+// 非 AD §3.6 樣板；demo 資料 OB202606004/OB202606011 為 AC-17 活體對照組）+
+// prototypes/27-list-definition.html（Kanban chip / Drawer 條件頁籤皆呼叫
+// formatConditionSummary()，兩者皆掛 data-condition-summary）。
+// **未**開啟 list-definition-page.tsx / ListDetailDrawer.tsx 生產碼；render/mock 慣例
+// （makeItem/buildResponse/renderPage、getFullSnapshot 觸發 Drawer 之互動流程）取自本檔既有
+// 測試（既有測試檔，允許範圍）。
+// ============================================================
+describe('F119 — 條件顯示（Kanban chip + Detail Drawer，AC-15/BR-10/AC-17）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetConditionDecoderCache();
+    mockedListFields.mockResolvedValue({
+      fields: [
+        ...DECODER_FIELDS.fields,
+        { columnName: 'spec_name', displayName: '主約專案名稱', fieldType: 'categorical', isActive: true, createdAt: '', updatedAt: '' },
+      ],
+    });
+    mockedListOptions.mockImplementation(async (col: string) => optionsResponseFor(col));
+    mockedListCardTypes.mockResolvedValue(DECODER_CARD_TYPES);
+    mockedGetUser.mockReturnValue({
+      id: 'u-1', name: '王部長', email: 'director@cdmp.test', role: 'user',
+    } as never);
+    mockedGetBusinessRole.mockReturnValue('director');
+    mockedGetEffectiveIdentity.mockReturnValue('director');
+  });
+
+  // ── AC-15（★核心，例句本身）：Kanban chip 呈現文字運算子條件 ─────────────
+  it('F119-KANBAN-001（★核心 / AC-15 例句本身）：Kanban 卡片顯示「主約專案名稱 不包含「勁便利」」', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({
+        lists: [
+          makeItem({
+            listNo: 'OB202605201',
+            conditionPayload: {
+              conditions: [
+                { columnName: 'spec_name', fieldType: 'categorical', operator: 'not_contains', keyword: '勁便利' } as never,
+              ],
+              logic: 'AND',
+            },
+          }),
+        ],
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByText('主約專案名稱 不包含「勁便利」')).toBeInTheDocument();
+    });
+  });
+
+  // ── AC-17（★核心，活體對照組）：顯式 in 與缺漏 operator 顯示逐字相同 ────
+  it('F119-KANBAN-002（★核心 / AC-17）：顯式 operator:"in" 與缺漏 operator（同 values）→ Kanban 顯示文字逐字相同', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({
+        lists: [
+          makeItem({
+            listNo: 'OB202605202',
+            conditionPayload: {
+              conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', operator: 'in', values: ['01'] } as never],
+              logic: 'AND',
+            },
+          }),
+          makeItem({
+            listNo: 'OB202605203',
+            conditionPayload: {
+              conditions: [{ columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] } as never],
+              logic: 'AND',
+            },
+          }),
+        ],
+      }),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('kanban-card-OB202605202')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId('kanban-card-OB202605203')).toBeInTheDocument());
+    const cardA = within(screen.getByTestId('kanban-card-OB202605202'));
+    const cardB = within(screen.getByTestId('kanban-card-OB202605203'));
+    // prod_kind='01' 依 DECODER_FIELDS/DECODER_OPTIONS 解碼為「產品類別：汽車」；
+    // 兩張卡片（顯式 operator:'in' vs 缺漏 operator，其餘同）須輸出逐字相同之條件摘要（AC-17）
+    expect(cardA.getByText('產品類別：汽車')).toBeInTheDocument();
+    expect(cardB.getByText('產品類別：汽車')).toBeInTheDocument();
+  });
+
+  // ── Detail Drawer：文字運算子條件 ────────────────────────────────────
+  it('F119-DRAWER-001（★核心 / AC-15）：Detail Drawer 條件頁籤呈現文字運算子條件（非空白、非 IN []）', async () => {
+    mockedListLists.mockResolvedValue(
+      buildResponse({ lists: [makeItem({ listNo: 'OB202605204' })] }),
+    );
+    const mockedGetFullSnapshot = vi.mocked(assignmentListApi.getFullSnapshot);
+    mockedGetFullSnapshot.mockResolvedValue({
+      list: {
+        listNo: 'OB202605204',
+        listNm: 'F119 Drawer 測試',
+        stage: 'draft',
+        status: 'active',
+        projectWorkym: '202605',
+        cardType: null,
+        crEnabled: true,
+        listPeriodStart: '1',
+        listPeriodEnd: '6',
+        listInterval: '1',
+        conditionPayload: {
+          conditions: [
+            { columnName: 'spec_name', fieldType: 'categorical', operator: 'contains', keyword: '勁便利' } as never,
+          ],
+          logic: 'AND',
+        },
+        legacyEntityFallback: null,
+        createdBy: 'u-1',
+        createdAt: '2026-05-09T01:14:00Z',
+        updatedAt: '2026-05-09T01:14:00Z',
+      },
+      deptRatios: [],
+      personnelRatios: [],
+      auditTrail: [],
+    } as never);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('btn-view-OB202605204')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('btn-view-OB202605204'));
+    await waitFor(() => expect(screen.getByTestId('detail-drawer')).toBeTruthy());
+    fireEvent.click(screen.getByTestId('drawer-tab-conditions'));
+    await waitFor(() => {
+      const panel = screen.getByTestId('drawer-panel-conditions');
+      expect(panel.textContent).toContain('主約專案名稱');
+      expect(panel.textContent).toContain('包含');
+      expect(panel.textContent).toContain('勁便利');
+      expect(panel.textContent).not.toContain('IN []');
+    });
+  });
+});

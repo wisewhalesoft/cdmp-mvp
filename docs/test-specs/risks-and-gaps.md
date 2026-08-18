@@ -1613,3 +1613,115 @@ last_updated: 2026-08-13
 - **風險等級**：已解決。tdd-implementation 後續只需將 `getPivot` 查詢與 `PivotEmplidNode`/
   `PivotResponse` 型別、`SnapshotPivotView` 渲染欄位由 `jfun_nm`/`jfunNm` 改為 `title_name`/
   `titleName` 即可轉綠，其餘既有邏輯不受影響。
+
+## F119 類別型篩選欄位新增文字比對運算子測試風險與待決問題（AD-E07-50，2026-08-18 新增）
+
+> 完整測試設計見 [features/F119-test.md](features/F119-test.md)（US-183，**106 個場景**：後端
+> stage1 SQL 語意層 42 + 後端 assignment-list 黑箱/驗證層 30 + 前端 `_utils` 純函式 13 + 前端
+> Page 整合 21）。F119 spec v1.1 / AD-E07-50 v1.1 之業務裁決已核可。以下記錄本輪測試基礎設施層級
+> 之刻意範圍簡化、設計裁量與 weak-pass 揭露，均不阻擋 TDD 進入實作。
+
+### R-F119-01（範圍簡化，team lead 明確指示，非缺口）：本輪僅產出 vitest/jest 束縛環
+
+- **決策**：team lead 於本輪任務訊息明確指示「只產 vitest / jest 單元與整合測試。不做 Playwright
+  e2e、不做 Stryker mutation、不做 dependency-cruiser metric gate、不呼叫 `ring-setup` skill」，
+  故標準 test-generator 角色定義（束縛環四要素）本應涵蓋之其餘三項本輪未產出。若日後需要完整束縛
+  環，可比照 F117/F118/F111 之 `ring-setup` 既有落地直接擴充涵蓋範圍。建議下輪若納入 Stryker，
+  `mutate` 範圍優先鎖定 `buildCategoricalOperatorFragment`/`escapeLikeKeyword`（單一 SQL 落點，
+  BR-4 之結構性保證使此處變異覆蓋率即可代表全部四個呼叫端，投資報酬率最高）。
+- **風險等級**：低（使用者決策，非技術缺口）。
+
+### R-F119-02（中，測試邊界說明，非缺口）：composer 層 caseyear defense-in-depth 因與既有 no-op 行為巧合重疊，無法產生有意義紅燈，已改測驗證層
+
+- **問題**：AD-E07-50 §3.8 為 `I-CATOP-CASEYEAR-EXCLUDE-01` 設計了兩道防線——**權威執行點於驗證層**
+  （不變式文字本身明定：「此限制實作於驗證層...而非 SQL 建構層」），composer 層另加一道
+  defense-in-depth（`operator` 非 `'in'` 時 push warning + 回 null）。經實際撰寫並執行診斷測試
+  （呼叫 `buildStage1WhereConditions` 傳入 `{columnName:'caseyear', operator:'contains', keyword:'1'}`，
+  無 `values`）發現：現行（F119 實作前）composer 對此輸入已因既有 `values`-based 分支對缺漏
+  `values` 之條件產生 `EMPTY_VALUES` 警告 + 不建構 fragment（`where: null, skipReason:
+  'EMPTY_CONDITIONS'`），**與「正確實作 caseyear 排除後之預期結果」巧合相同**——此為 tautological
+  pass，無法作為紅燈證據（實作前後皆綠，無法區分「已正確排除」與「純粹尚未支援文字運算子的既有
+  no-op」）。
+- **決策**：**未產出**該 composer 層弱測試檔（曾建立
+  `f119-caseyear-exclusion.spec.ts` 後於本輪撰寫過程中以此發現為由主動刪除，避免留下無鑑別力之
+  假紅燈證據）。改依不變式本文明定之權威執行點（驗證層）撰寫
+  `f119-condition-validation.spec.ts` CASEYEAR-CREATE-001（`createList`）與
+  `f119-preview-hit-count-text-operators.spec.ts` CASEYEAR-PREVIEW-001（`previewHitCount`）—
+  此二者於實作前皆為真紅（現行未實作互斥/欄位排除驗證，`createList`/`previewHitCount` 皆會正常
+  通過而非 422），紅燈原因正確。
+- **風險等級**：中（若 tdd-implementation 僅實作驗證層防線、未落地 composer 層 defense-in-depth，
+  本輪測試無法偵測此落差；因驗證層為 spec 明定之權威防線且已有真紅測試覆蓋，此殘留風險可接受，但
+  記錄供未來若要補強 composer 層測試時參考本節之「巧合綠燈」陷阱，避免重蹈覆轍撰寫無鑑別力斷言）。
+
+### R-F119-03（低，weak-pass 揭露，非缺口）：AC-16 重複判定之 3 個「不觸發 422」案例於實作前巧合為綠燈，需與配對紅燈案例合讀
+
+- **問題**：`f119-signature-backcompat-duplicate.spec.ts` 之 T-13（contains vs not_contains 不同判
+  不同）、T-15（in 單值 vs equals 同值不同判不同）、T-16（大小寫不同判不同）三案例斷言「建立第二筆
+  不觸發 422」，於實作前（`normalizeConditionPayload` 尚未支援 `keyword`-based 簽章）**已為綠燈**
+  ——現行僅帶 `keyword`（無 `values`）之 categorical 條件產生空簽章，空簽章依既有規則「永不衝突」，
+  故任意兩筆此類名單皆不會觸發重複判定，與「正確區分運算子後之預期結果」巧合相同。
+- **決策**：**保留**此三案例（非弱斷言而是合法的正控制組），但**明確依賴配對的 T-14**（同運算子
+  同關鍵字 → 仍須觸發 422）作為真正的紅燈證據——T-14 於實作前為真紅（keyword-based 簽章尚未產生，
+  重複判定完全不觸發）。T-13/T-15/T-16 與 T-14 合讀方能證明 AC-16 之完整雙向行為（不同判不同、
+  相同判相同），已於 F119-test.md 明確記錄此揭露，避免被誤判為「測試寫錯才通過」。
+- **風險等級**：低，資訊性記錄；已於 F119-test.md §二 對應段落記錄，比照 F118 R-F118 系列慣例。
+
+### R-F119-04（低，測試邊界說明，非缺口）：AC-14 五路徑完整一致性未於本輪逐路徑數字驗證
+
+- **問題**：AC-14 要求 MSSQL 下推 / PG 下推 / JS filter chain / Stage 0 估算 / 草稿抽樣估算五條
+  執行路徑對同一條件之判定完全一致。本輪 SQLite-based 測試（`f119-categorical-operator-fragment
+  .spec.ts` MATRIX 系列 + `f119-preview-hit-count-text-operators.spec.ts`）驗證了**單一共用函式
+  `buildCategoricalOperatorFragment` 本身**之正確性（BR-4/BR-5 之結構性保證：四個呼叫端皆呼叫同
+  一函式，即代表五條路徑天然一致），以及**一條可達路徑**（`previewHitCount`，草稿抽樣估算）之端
+  到端黑箱驗證，但**未**對 MSSQL 下推 / PG 下推 / JS filter chain / Stage 0 估算四條路徑個別執行
+  真實查詢比對數字。
+- **決策**：**2026-08-18 更新**——team lead 事後確認 dev MSSQL（`172.20.202.212:1433`）實為可連線
+  （見 R-F119-07），故已補一份 `f119-categorical-collation.mssql.spec.ts`（7 案例）驗證 BR-8 大小寫/
+  全半形敏感度（SQLite 無法重現之唯一案例）。但本項風險描述之「MSSQL 下推 / PG 下推 / JS filter
+  chain / Stage 0 估算四條路徑之逐路徑真實查詢比對數字」**仍未**補強——BR-8 collation 測試驗證的是
+  「fragment 在真實引擎下的字面值比對行為」，非「五條執行路徑各自組裝出的完整 SQL 對同一條件產生
+  相同結果」，兩者是不同層級的驗證。若需完整驗證，建議下輪比照既有 `.mssql.spec.ts` 慣例新增一份
+  逐路徑對照測試，或以 `vi.spyOn` 結構性驗證五個呼叫端確實路由至同一函式（AD-E07-50 §8 建議手法）。
+- **風險等級**：低（BR-4/BR-5 之結構性保證已由既有共用函式測試間接佐證「四個呼叫端零自行實作」，
+  完整逐路徑數字一致性風險低，但非本輪已證明之事實，如實記錄）。
+
+### R-F119-05（低，C-Q1 沿用 ui-ux-designer 已記錄之裁定，非本輪新發現）：`formatConditionSummary()` 顯示格式採 AC-15 例句而非 AD §3.6 樣板字串
+
+- **問題**：`docs/ui-ux-design-overview.md` 附錄 C C.7 C-Q1 已記錄 AD-E07-50 §3.6 之樣板字串
+  （`「${欄位}」${運算子標籤}「${keyword}」`，欄位名帶引號）與 F119 AC-15 業務契約例句
+  （`${欄位} ${運算子標籤}「${keyword}」`，欄位名不加引號、以半形空格分隔）不一致，並已裁定採
+  **AC-15 例句**（業務契約優先於架構文件樣板筆誤），建議 AD §3.6 修正樣板字串。
+- **決策**：本輪 `f119-condition-summary.test.ts`（SUMMARY-001 等）與 `list-kanban-page.test.tsx`
+  之 F119-KANBAN-001/F119-DRAWER-001 依此已記錄之裁定撰寫斷言（欄位名不加引號），與 AD 樣板字串
+  故意不同，非本檔誤植。若 tdd-implementation 依 AD 字面樣板實作（欄位名加引號），本輪測試會如預
+  期般偵測到不一致並回報紅燈——此為裁定之預期行為，非測試缺陷。
+- **風險等級**：低，資訊性記錄；待人工確認 C-Q1（ui-ux-designer 附錄 C 交付檢核已列為未勾選項）。
+
+### R-F119-06（低，測試檔本地型別擴充，非缺口）：`ObListDefinitionConditionItem`/`ConditionItem`/`DeptEstimateResponse.warnings` 型別之 F119 加性擴充於測試檔本地宣告
+
+- **問題**：`operator?`/`keyword?`（後端 `ObListDefinitionConditionItem`、前端 `ConditionItem`）與
+  `listNo?`（前端 `DeptEstimateResponse.warnings[]` 之 `STAGE0_LIST_ESTIMATE_PARTIAL` 項目）皆為
+  F119 之純加性型別擴充，正式生產型別尚未擴充。本輪測試檔以測試檔本地交集型別
+  （`F119ConditionItem = ObListDefinitionConditionItem & {operator?; keyword?}`）或 `as never`/
+  `as unknown as ...` 型別斷言先行撰寫，不等待生產型別擴充即可先行紅燈（swc 轉譯不做型別檢查，
+  `tsc --noEmit` 之預期錯誤已於 F119-test.md §五記錄）。
+- **決策**：tdd-implementation 落地正式型別擴充後，測試檔之本地型別/斷言可直接沿用（結構相容），
+  無需修改測試檔本身。
+- **風險等級**：低，資訊性記錄。
+
+### R-F119-07（已解決，2026-08-18）：team lead 環境情報先誤判「MSSQL 連不到」後自行更正為「併跑資源競爭」，本輪據此補一份真實 MSSQL 測試
+
+- **問題**：team lead 於本輪測試撰寫完成後跑基線，第一則訊息回報「dev MSSQL（`172.20.202.212:1433`）
+  連不到，全部 `.mssql.spec.ts` 逾時」，要求本輪盡量避免依賴 DB 連線。team lead 隨後自行以
+  `Test-NetConnection` 與單檔執行驗證，發現伺服器**其實可連**，第一則判斷有誤——批次全套件跑
+  （243 檔）時 `.mssql.spec.ts` 之失敗為**併跑資源競爭**（CPU/連線競爭致 testTimeout），非網路
+  不可達，此為專案既有形態（`feedback_pg_spec_parallel_timeout` 記憶：「單跑過、合跑 fail」多為
+  併跑競爭超時）。
+- **決策**：依更正後之情報，本輪補一份 `f119-categorical-collation.mssql.spec.ts`（7 案例）——
+  SQLite 無法重現 BR-8 大小寫/全半形敏感度（`Chinese_Taiwan_Stroke_BIN` collation），此為真正需要
+  真實 DB 執行才能驗證之案例，非其餘可用純函式覆蓋之項目（BR-6/BR-7 之純函式斷言證明力仍優於 DB
+  比對，維持不變，見上方各節說明）。已依專案慣例加 `vi.setConfig({ testTimeout: 60000 })` 避免
+  併跑競爭偽紅；test-generator 本輪單檔執行驗證（1.33 秒完成，5 red / 2 green，環境可達性與
+  `INFORMATION_SCHEMA` collation 查證兩案例綠燈，其餘因函式未匯出紅燈），未依賴全套件併跑結果。
+- **風險等級**：已解決。記錄供未來讀者理解為何 F119 測試設計文件出現「先聲明本輪範圍不含真實
+  MSSQL」又「補一份 .mssql.spec.ts」的表面矛盾——這是對環境情報更正的即時回應，非規劃反覆。

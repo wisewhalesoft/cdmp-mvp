@@ -1480,3 +1480,207 @@ describe('F118 — 已複製過提示（頁面整合）', () => {
     expect(screen.queryByTestId('dup-confirm-modal')).toBeNull();
   });
 });
+
+// ============================================================
+// F119 / US-183 — 類別型篩選欄位文字比對運算子（建立草稿名單頁）
+//
+// 撰寫依據：F119 spec AC-1/AC-5/AC-8/AC-11/AC-12 + AD-E07-50 §3.6/§3.8 +
+// docs/ui-ux-design-overview.md 附錄 C（data-testid 掛點 / 文案常數）+
+// prototypes/27a-list-create-draft.html（CATEGORICAL_OPERATORS / OPERATOR_LABEL /
+// TEXT_OP_PERF_HINT / TEXT_OPERATOR_EXCLUDED_COLUMNS 等常數逐字取自原型原始碼）。
+// **未**開啟 list-create-draft-page.tsx 生產碼；render/mock 慣例（renderPage、
+// mockedListFields/mockedListOptions、btn-add-condition→add-field-dropdown→
+// add-field-{col}→condition-row 互動流程）取自本檔既有測試（既有測試檔，允許範圍）。
+// IN 核取清單面板之內部互動（開啟值下拉、勾選值）本 feature 不變更行為
+// （prototype 註記「既有核取清單...行為完全未變」），故不在本區塊測試該子流程，
+// 沿用既有 lc.test 系列涵蓋。
+// ============================================================
+describe('F119 — 類別型條件文字比對運算子（建立草稿頁）', () => {
+  const f119Fields = {
+    fields: [
+      { columnName: 'spec_name', displayName: '主約專案名稱', fieldType: 'categorical' as const, isActive: true, isSystemFixed: false, createdAt: '', updatedAt: '' },
+      { columnName: 'caseyear', displayName: '進件 / 滿期年數', fieldType: 'categorical' as const, isActive: true, isSystemFixed: false, createdAt: '', updatedAt: '' },
+      { columnName: 'prod_kind', displayName: '產品類別', fieldType: 'categorical' as const, isActive: true, isSystemFixed: false, createdAt: '', updatedAt: '' },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetUser.mockReturnValue({ id: 'd1', name: 'Director', email: 'manager@cdmp.test', role: 'user' } as never);
+    mockedGetBusinessRole.mockReturnValue('director');
+    mockedGetEffectiveIdentity.mockReturnValue('director');
+    mockedListLists.mockResolvedValue({ selectedYm: '202608', currentWorkYm: '202608', isHistorical: false, isFuture: false, lockState: { locked: false, reason: null }, lists: [] } as never);
+    mockedListCardTypes.mockResolvedValue({ cardTypes: [] } as never);
+    mockedListFields.mockResolvedValue(f119Fields as never);
+    // spec_name 零可選值（AC-11）；prod_kind / caseyear 各給少量選項
+    mockedListOptions.mockImplementation((columnName: string) => {
+      if (columnName === 'prod_kind') {
+        return Promise.resolve({
+          options: [{ columnName: 'prod_kind', optionValue: '01', optionLabel: '汽車', isActive: true, createdAt: '', updatedAt: '' }],
+        } as never);
+      }
+      if (columnName === 'caseyear') {
+        return Promise.resolve({
+          options: [{ columnName: 'caseyear', optionValue: '0', optionLabel: '0 年', isActive: true, createdAt: '', updatedAt: '' }],
+        } as never);
+      }
+      return Promise.resolve({ options: [] } as never);
+    });
+  });
+
+  async function addCondition(columnName: string) {
+    await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() => expect(screen.getByTestId('add-field-dropdown')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId(`add-field-${columnName}`));
+    await waitFor(() => expect(screen.getByTestId(`condition-operator-${columnName}`)).toBeInTheDocument());
+  }
+
+  // ── AC-1：四選一運算子，預設 IN ──────────────────────────────────────
+  it('F119-FE-001（AC-1）：新增 categorical 條件 → 運算子下拉預設 "in"，且含四個選項', async () => {
+    renderPage();
+    await addCondition('spec_name');
+    const select = screen.getByTestId('condition-operator-spec_name') as HTMLSelectElement;
+    expect(select.value).toBe('in');
+    const optionValues = Array.from(select.options).map((o) => o.value);
+    expect(optionValues).toEqual(['in', 'contains', 'not_contains', 'equals']);
+  });
+
+  it('F119-FE-001b（AC-1）：未動作時 IN 面板顯示，文字面板不存在', async () => {
+    renderPage();
+    await addCondition('spec_name');
+    expect(screen.getByTestId('condition-values-panel-spec_name')).toBeInTheDocument();
+    expect(screen.queryByTestId('condition-keyword-panel-spec_name')).toBeNull();
+  });
+
+  // ── AC-5：互斥切換 ───────────────────────────────────────────────────
+  it('F119-FE-002（★核心 / AC-5）：切換為 contains → IN 面板消失、文字面板出現且關鍵字為空', async () => {
+    renderPage();
+    await addCondition('spec_name');
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'contains' } });
+    await waitFor(() => expect(screen.getByTestId('condition-keyword-panel-spec_name')).toBeInTheDocument());
+    expect(screen.queryByTestId('condition-values-panel-spec_name')).toBeNull();
+    const input = screen.getByTestId('condition-keyword-spec_name') as HTMLInputElement;
+    expect(input.value).toBe('');
+  });
+
+  it('F119-FE-002b（★核心 / AC-5 / 附錄 C C-6）：文字運算子彼此切換（contains → not_contains）→ 關鍵字不清除', async () => {
+    renderPage();
+    await addCondition('spec_name');
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'contains' } });
+    await waitFor(() => expect(screen.getByTestId('condition-keyword-panel-spec_name')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('condition-keyword-spec_name'), { target: { value: '勁便利' } });
+    await waitFor(() => expect((screen.getByTestId('condition-keyword-spec_name') as HTMLInputElement).value).toBe('勁便利'));
+
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'not_contains' } });
+    await waitFor(() => expect((screen.getByTestId('condition-operator-spec_name') as HTMLSelectElement).value).toBe('not_contains'));
+    // AC-5 之清除規則限於 in ↔ 文字運算子跨形態；同形態（文字↔文字）切換不清除，避免重打字摩擦
+    expect((screen.getByTestId('condition-keyword-spec_name') as HTMLInputElement).value).toBe('勁便利');
+  });
+
+  it('F119-FE-003（AC-5）：切回 IN → 文字面板消失、IN 面板重新出現', async () => {
+    renderPage();
+    await addCondition('spec_name');
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'contains' } });
+    await waitFor(() => expect(screen.getByTestId('condition-keyword-panel-spec_name')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'in' } });
+    await waitFor(() => expect(screen.getByTestId('condition-values-panel-spec_name')).toBeInTheDocument());
+    expect(screen.queryByTestId('condition-keyword-panel-spec_name')).toBeNull();
+  });
+
+  // ── AC-8 / BR-2：關鍵字就地驗證 ──────────────────────────────────────
+  it('F119-FE-004（★核心 / AC-8）：關鍵字留空並嘗試儲存 → 就地顯示錯誤，createList 不被呼叫', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('input-listNm'), { target: { value: 'F119 測試名單' } });
+    fireEvent.change(screen.getByTestId('input-listPeriodStart'), { target: { value: '1' } });
+    fireEvent.change(screen.getByTestId('input-listPeriodEnd'), { target: { value: '6' } });
+    fireEvent.change(screen.getByTestId('input-listInterval'), { target: { value: '1' } });
+
+    await addCondition('spec_name');
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'contains' } });
+    await waitFor(() => expect(screen.getByTestId('condition-keyword-panel-spec_name')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByTestId('btn-save-draft'));
+
+    await waitFor(() => expect(screen.getByTestId('condition-keyword-error-spec_name')).toBeInTheDocument());
+    expect(mockedCreateList).not.toHaveBeenCalled();
+  });
+
+  // ── AC-12：效能提示 ──────────────────────────────────────────────────
+  it('F119-FE-005（AC-12）：切換為文字運算子 → 顯示效能提示（文案逐字對照 prototype TEXT_OP_PERF_HINT）', async () => {
+    renderPage();
+    await addCondition('spec_name');
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'contains' } });
+    await waitFor(() => expect(screen.getByTestId('condition-perf-hint-spec_name')).toBeInTheDocument());
+    expect(screen.getByTestId('condition-perf-hint-spec_name').textContent).toContain(
+      '文字比對需逐筆掃描全部案件，較勾選可選值耗時',
+    );
+  });
+
+  it('F119-FE-006（AC-12）：切回 IN → 效能提示消失', async () => {
+    renderPage();
+    await addCondition('spec_name');
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'not_contains' } });
+    await waitFor(() => expect(screen.getByTestId('condition-perf-hint-spec_name')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'in' } });
+    await waitFor(() => expect(screen.queryByTestId('condition-perf-hint-spec_name')).toBeNull());
+  });
+
+  // ── AC-11 / BR-14：零可選值欄位仍可設定 ─────────────────────────────
+  it('F119-FE-007（★核心 / AC-11）：spec_name（零可選值）出現於新增條件下拉，且可切換為文字運算子完成設定', async () => {
+    renderPage();
+    await waitFor(() => expect(mockedListFields).toHaveBeenCalled());
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() => expect(screen.getByTestId('add-field-dropdown')).toBeInTheDocument());
+    // 零可選值欄位不得被下拉過濾掉
+    expect(screen.getByTestId('add-field-spec_name')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('add-field-spec_name'));
+    await waitFor(() => expect(screen.getByTestId('condition-operator-spec_name')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'contains' } });
+    fireEvent.change(screen.getByTestId('condition-keyword-spec_name'), { target: { value: '勁便利' } });
+    await waitFor(() => expect((screen.getByTestId('condition-keyword-spec_name') as HTMLInputElement).value).toBe('勁便利'));
+  });
+
+  it('F119-FE-008（AC-11）：spec_name 於 IN 形態顯示零可選值指引', async () => {
+    renderPage();
+    await addCondition('spec_name');
+    await waitFor(() => expect(screen.getByTestId('condition-zero-option-hint-spec_name')).toBeInTheDocument());
+  });
+
+  // ── I-CATOP-CASEYEAR-EXCLUDE-01：caseyear 排除文字運算子 ──────────────
+  it('F119-FE-009（★核心 / I-CATOP-CASEYEAR-EXCLUDE-01）：caseyear 之三個文字選項為 disabled', async () => {
+    renderPage();
+    await addCondition('caseyear');
+    const select = screen.getByTestId('condition-operator-caseyear') as HTMLSelectElement;
+    const byValue = (v: string) => Array.from(select.options).find((o) => o.value === v)!;
+    expect(byValue('contains').disabled).toBe(true);
+    expect(byValue('not_contains').disabled).toBe(true);
+    expect(byValue('equals').disabled).toBe(true);
+    expect(byValue('in').disabled).toBe(false);
+  });
+
+  // ── AC-17：IN 形態 payload 不含 operator key（未動作路徑，回歸）──────
+  it('F119-FE-010（AC-17）：未變更運算子之 IN 條件送出時 payload 不含 operator key', async () => {
+    mockedCreateList.mockResolvedValue({ listNo: 'OB202608099' } as never);
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('input-listNm'), { target: { value: 'F119 payload 測試' } });
+    fireEvent.change(screen.getByTestId('input-listPeriodStart'), { target: { value: '1' } });
+    fireEvent.change(screen.getByTestId('input-listPeriodEnd'), { target: { value: '6' } });
+    fireEvent.change(screen.getByTestId('input-listInterval'), { target: { value: '1' } });
+
+    await addCondition('prod_kind');
+    fireEvent.click(screen.getByTestId('btn-open-values-0'));
+    await waitFor(() => expect(screen.getByTestId('value-checkbox-0-0')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('value-checkbox-0-0'));
+
+    fireEvent.click(screen.getByTestId('btn-save-draft'));
+    await waitFor(() => expect(mockedCreateList).toHaveBeenCalledTimes(1));
+    const dto = mockedCreateList.mock.calls[0][0] as Record<string, unknown>;
+    const conditions = (dto.conditionPayload as { conditions: Array<Record<string, unknown>> }).conditions;
+    const prodKindCond = conditions.find((c) => c.columnName === 'prod_kind');
+    expect(prodKindCond).toBeDefined();
+    expect('operator' in (prodKindCond as object)).toBe(false);
+  });
+});
