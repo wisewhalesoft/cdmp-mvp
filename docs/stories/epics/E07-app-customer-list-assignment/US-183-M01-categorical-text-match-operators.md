@@ -146,6 +146,7 @@ change-summary: "v1.2（team lead 二次複核修正，撤回 v1.1 對 AC-11 之
 - **Then** 該名單依現況邏輯已從部門合計中排除（`catch` 區塊不將該名單寫入 `listTotals`），**且**畫面須讓使用者清楚看到「這張名單估算逾時、未被計入本次合計」的提示，不得讓使用者誤以為畫面上的合計數字已涵蓋全部名單
 - **And** 後端**已經**具備對應機制：逾時時會產生 `STAGE0_LIST_ESTIMATE_PARTIAL` warning（`apps/api/src/modules/assignment-list/stage0-estimate.service.ts:557-570`，訊息「名單 {list_no} 估算逾時，已從本次合計排除。」），**但前端 `stage0-estimate-page.tsx` 目前完全未渲染此 warning**（現況僅渲染 `SCOPE_UNRESOLVED` / `CALENDAR_EMPTY` / `POOL_COUNT_LOW` / `HEADCOUNT_ZERO` 四種）。本 AC 要求把既有的 `STAGE0_LIST_ESTIMATE_PARTIAL` warning 渲染出來，成本本質是「把後端已有的資料呈現給使用者」，非新增逾時偵測邏輯
 - **And** 此要求不限於本 Story 新增之文字運算子觸發的逾時；同一個 `STAGE0_LIST_ESTIMATE_PARTIAL` warning code 不分觸發原因（既有數值 / `IN` 條件搭配寬鬆篩選範圍時同樣可能觸發），本 Story 因新增文字運算子而**提高**此既有缺口的觸發機率，使其更值得優先處理，但「修正範圍究竟僅涵蓋本 Story 觸發情境、或一併涵蓋既有觸發情境」由 system-architect 依 OQ-183-03 確認並定案
+- **And**（歸屬澄清，避免誤讀為本 Story 新增功能引入的 bug）此為 **F049 v2.0 部門估算既有缺口，非本 Story 造成**——後端契約（`STAGE0_LIST_ESTIMATE_PARTIAL` warning 之產生邏輯）在本 Story 之前即已存在且運作正常，缺的自始至終只是前端渲染；本 Story 之所以將其納入驗收範圍，是因為文字運算子（`LIKE '%關鍵字%'` 全表掃描）會顯著提高逐名單估算逾時的觸發機率，讓這個既有缺口從「偶發」變成「常見」，值得藉本 Story 一併收斂，而非本 Story 的實作引入了新問題
 
 ### AC-12：月名單分派實際執行、Stage 0 試算、名單命中預估三處行為須一致
 
