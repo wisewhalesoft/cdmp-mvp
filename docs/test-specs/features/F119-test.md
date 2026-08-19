@@ -57,7 +57,9 @@ last_updated: 2026-08-18
 | | `f119-customer-core-categorical-operator.spec.ts`（新建，8 案例：`buildCustomerCoreClause` 文字運算子 + `cpost_city` 衍生欄 + I-CATOP-NULL-MATRIX-01 靜態掃描） |
 | | `f119-customer-financial-categorical-operator.spec.ts`（新建，6 案例：`buildCustomerFinancialClause` 對等覆蓋） |
 | | `f119-categorical-collation.mssql.spec.ts`（新建，7 案例，**真實 MSSQL**：BR-8 大小寫/全半形敏感度，2026-08-18 依 team lead 環境情報回饋補上，見 §一末說明） |
+| | **2026-08-18 R-F119-04 缺口補強（AC-14 五路徑一致性）**：`f119-ac14-cross-path-parity.mssql.spec.ts`（新建，4 案例，★核心，**真實 MSSQL**：路徑1 vs 路徑3 對 dev `ob_pool_data`〔167 萬列〕逐 PK 相等）+ `f119-ac14-pg-semantic-equivalence.spec.ts`（新建，4 案例，路徑2 SQL 字串/語意等價，非真實 PG 執行）；見 §一之附新增子章節 |
 | 後端測試檔（assignment-list，黑箱行為 + 驗證層） | `apps/api/src/modules/assignment-list/__tests__/f119-preview-hit-count-text-operators.spec.ts`（新建，7 案例：`previewHitCount` 對真實 seed 資料之 contains/not_contains/equals/escape/零可選值/caseyear 驗證黑箱） |
+| | **2026-08-18 R-F119-04 缺口補強**：`f119-ac14-stage0-delegation.spec.ts`（新建，4 案例，SQLite：spy 驗證 Stage0 估算〔路徑4〕委派 JS filter chain〔路徑3〕時 operator/keyword 不失真） |
 | | `f119-condition-validation.spec.ts`（新建，13 案例：`createList` 對 AC-1/AC-6/AC-8/BR-2/BR-3/caseyear 之驗證黑箱） |
 | | `f119-signature-backcompat-duplicate.spec.ts`（新建，10 案例：`normalizeConditionPayload` 簽章擴充 T-11/T-12 + AC-16 重複判定 T-13~T-16 黑箱） |
 | 前端測試檔（`_utils` 純函式） | `apps/web/src/pages/assignment/_utils/__tests__/f119-labels.test.ts`（新建，6 案例：`OPERATOR_LABEL`/`operatorLabel()`） |
@@ -133,6 +135,76 @@ last_updated: 2026-08-18
 除 `環境可達性`/`COLLATION-001` 兩案例外，其餘 5 案例因函式未匯出而 TypeError，紅燈原因正確
 （與 SQLite 版同理）；一旦實作落地，紅燈轉綠同時證明「函式邏輯正確」與「真實 MSSQL collation 下
 行為符合 BR-8」。已依專案慣例加 `vi.setConfig({ testTimeout: 60000 })` 避免併跑競爭偽紅。
+
+### AC-14 五路徑一致性補強（2026-08-18，R-F119-04 缺口關閉）
+
+> **背景**：F119 已實作完成並 merge 進 main。前輪 test-generator 於本文件「弱通過（weak-pass）
+> 揭露」與 §對應總表 AC-14 列誠實記錄了一個缺口——僅驗證了共用函式本身（BR-4/BR-5 結構性保證）
+> + 一條可達路徑（`previewHitCount`，路徑5）之黑箱正確性，MSSQL 下推（路徑1）/ PG 下推（路徑2）/
+> JS filter chain（路徑3）/ Stage 0 估算（路徑4）四條路徑之逐路徑真實查詢比對數字未驗證
+> （`risks-and-gaps.md` R-F119-04）。team lead 於 2026-08-18 確認原本判斷「dev MSSQL 連不到」
+> 之阻礙已消除（`172.20.202.212:1433` 實測可連），指派本輪補強。**四路真實/可執行覆蓋 + 一路
+> 誠實標記為較低驗證層級**（新增 3 檔，12 案例）：
+
+| 檔案 | 案例數 | 覆蓋路徑 | 驗證層級 |
+|---|---|---|---|
+| `stage1/__tests__/f119-ac14-cross-path-parity.mssql.spec.ts` | 4 | 路徑1（MSSQL 下推）vs 路徑3（JS filter chain） | **真實執行**——真實 MSSQL，對 dev `ob_pool_data`（167 萬列）逐 PK 集合比對 |
+| `assignment-list/__tests__/f119-ac14-stage0-delegation.spec.ts` | 4 | 路徑4（Stage0 估算）委派路徑3 | **真實執行**（SQLite）——spy 驗證委派不失真，非重覆執行路徑3 |
+| `stage1/__tests__/f119-ac14-pg-semantic-equivalence.spec.ts` | 4 | 路徑2（PG 下推） | **SQL 字串/語意等價**（非真實 PG 執行，本機無 PG 可連）——層級低於其餘三條 |
+
+**路徑1 vs 路徑3（`f119-ac14-cross-path-parity.mssql.spec.ts`，★核心）**：比照既有
+`stage1-sql-pushdown.mssql.spec.ts`（AD-E07-42 P3a）之 `assertEquivalent` 慣例——同一份
+list + F119 文字比對條件，分別跑 JS oracle（`executeStage1Chain`）與 MSSQL 下推
+（`runStage1SqlInsertMssql`），比對 PK 集合逐列相等（非僅 count）。本檔首次將此既有驗證技法
+套用於 F119 新增之類別型文字比對運算子，覆蓋 `contains`／`not_contains`（★AC-3 NULL 不對稱，
+全 feature 唯一非對稱格）／AC-9 字面值三情境。
+
+> **⚠️ 絕對數字為陷阱，已改採相對比較（team lead 明確指示）**：既有
+> `stage1-sql-pushdown.mssql.spec.ts` 現有 15~16 個既有案例因「僅 seed 2~3 筆卻斷言 `toBe(1)`，
+> 而 dev pool 已有 167 萬列」而失效在案。本檔首次撰寫時同樣掉入此陷阱（`contains '勁便利'`
+> 斷言 `toBe(1)`），實測執行後發現真實命中達 **112 列**（dev pool 既有真實資料，非本檔 seed）。
+> 已修正為**路徑相等**（`expect(path1).toEqual(path3)`，不受既有真實列數量影響）**+ 自 seed
+> 列依 PK 逐項歸類**（`toContain`/`not.toContain`，免疫於既有真實資料雜訊）雙重斷言，取代
+> 絕對計數。
+>
+> **⚠️ 效能側發現（非本輪範圍，記錄供 AD-E07-50 §11-B 參考）**：`not_contains` 對
+> `ob_pool_data.spec_name`（167 萬列）之全表 `NOT LIKE` 掃描，單一測試案例實測耗時約 90 秒；
+> 預設 tedious `requestTimeout`（15s）不足，已於測試自身連線設定比照 `data-source.ts`
+> `I-MSSQL-REQUEST-TIMEOUT-01` 慣例調高為 120000ms（**僅測試連線設定，未修改生產碼**）。
+
+**路徑4（`f119-ac14-stage0-delegation.spec.ts`）**：AD-E07-50 §2.1 查證「Stage 0 估算
+（`stage0-estimate.service.ts:817` `dryRunChainCount`）呼叫路徑3（`executeStage1Chain`），
+非獨立實作」——路徑4 在 SQL/篩選邏輯層面沒有自己的程式碼，正確性完全由路徑3 決定。故對路徑4
+最有鑑別力的驗證手法**不是**重覆執行路徑3 比對數字（那只會重新證明路徑3 自身正確），而是
+**委派完整性**——若 `Stage0EstimateService` 於呼叫 `executeStage1Chain` 前對
+`condition_payload` 做任何複製/重組，F119 新增之 `operator`/`keyword` 有可能被靜默遺漏。本檔
+以 `vi.spyOn(chainModule, 'executeStage1Chain')`（比照既有 F092
+`stage0-estimate-dryrun.service.spec.ts` TS-F092-DR-004 之技法）斷言傳入之
+`condition_payload.conditions[]` 與存入 DB 之原始條件逐欄位相同，含 `contains`/`not_contains`
+及既有 `in`（無 operator）回歸案例。此手法直接對應 AD-E07-50 §8 建議之「以 `vi.spyOn` 結構性
+驗證五個呼叫端確實路由至同一函式」。
+
+**路徑2（`f119-ac14-pg-semantic-equivalence.spec.ts`，誠實分級）**：本專案已全面遷移 MSSQL
+（見專案記憶 `project_mssql_full_migration`），本機/CI 環境無真實 PostgreSQL 可連線。本檔**不是**
+真實 PG 執行證據——改為直接呼叫生產碼 `buildStage1Sql()`（PG 建構器，純函式，`pdlRepo` 可用
+mock 取代、不需連接任何資料庫，手法沿用既有 `stage1-sql-builder.spec.ts` 之 `mockPdlRepo()`
+慣例）取得其產出之 WHERE 片段與參數，逐字元比對 `buildCategoricalOperatorFragment()`（共用
+函式）之直接輸出，證明 PG 建構器未在該函式輸出之外自行插入/竄改任何字元。此為「呼叫路徑本身
+未走樣」層級之證據，證明力**弱於**真實 DB 執行（若 PG 引擎本身對 `ESCAPE` 子句有語法層級怪異
+行為，本檔無法偵測），已於檔案頭與此處明確標記，對應 AD-E07-50 §10 R-4 之既有殘留風險。
+
+**紅燈/綠燈驗證（已實際執行）**：因 F119 生產碼已實作完成並 merge 進 main，本輪 12 案例皆為
+**對已上線程式碼的真實執行驗證**（非 TDD 紅燈-then-實作流程）。首次撰寫時 2 案例因測試自身
+書寫錯誤而假紅——PG 語意等價案例之跳脫字元正則多轉了一層跳脫（`'\\\\'` 應為 `'\\'`）、equals
+案例誤判「core.where 不含 LIKE」未考慮既有詐騙白牌規則之無關 LIKE 子句恆存在於 WHERE 中——已
+修正（PG-SEM-003 改為先擷取 `"spec_name"` 子片段再斷言，避免誤判無關子句）並重跑確認全數
+**12/12 綠燈**，其中真實 MSSQL 案例實測產出「dev pool 167 萬列真實命中 112 列」等真實數字，
+證明測試確有鑑別力而非空跑。`tsc --noEmit -p tsconfig.json` 全數通過（一處
+`condition_payload as {conditions:...}` 型別轉換過窄，改為 `as unknown as {...}` 修正）。兩
+目錄（`assignment/stage1/__tests__`、`assignment-list/__tests__`）之非-mssql 既有測試（44 檔
+772 個）於新增後全數綠燈，零回歸。MSSQL 測試執行後已實測確認 dev DB 無 `F19` 前綴殘留列
+（`ob_pool_data`/`ob_list_definition`/`ob_monthly_run_result`/`assignment_run` 四表皆 0，獨立
+前綴 + 精準 DELETE 清理，未觸碰既有 167 萬列真實資料）。
 
 ---
 
@@ -352,7 +424,7 @@ last_updated: 2026-08-18
 | AC-11（★核心） | T-29, F119-FE-007/008 |
 | AC-12 | F119-FE-005/006 |
 | AC-13（★核心） | F119-STAGE0-001~004 |
-| AC-14 | （五路徑一致性之完整覆蓋需 MSSQL live 環境逐路徑驗證，超出本輪 SQLite unit/integration 範圍；BR-4/BR-5 之「單一落點」結構性保證已由 FRAG-SHAPE 系列 + CC/CF-OP-STATIC 系列間接佐證「四個呼叫端皆呼叫同一函式」，完整逐路徑數字一致性建議留待 `.mssql.spec.ts` 或下輪 e2e 補強，見 risks-and-gaps） |
+| AC-14 | FRAG-SHAPE 系列 + CC/CF-OP-STATIC 系列（BR-4/BR-5「單一落點」結構性保證）+ **AC14-PARITY-001~003**（★核心，路徑1 vs 路徑3 真實 MSSQL 逐 PK 相等）+ **AC14-DELEGATE-001~004**（路徑4 委派路徑3 不失真）+ **PG-SEM-001~004**（路徑2 SQL 字串/語意等價，較低驗證層級）+ 既有 `previewHitCount` 黑箱（路徑5）。2026-08-18 R-F119-04 缺口已補強，四路徑真實/可執行覆蓋 + 一路誠實分級，見本文件下方新增子章節與 risks-and-gaps.md |
 | AC-15（★核心） | SUMMARY-001/002/006, F119-KANBAN-001, F119-DRAWER-001 |
 | AC-16 | T-13~T-16 |
 | AC-17（★核心） | LABEL-005/006, SUMMARY-007, T-11/T-12, F119-FE-010, F119-KANBAN-002 |
