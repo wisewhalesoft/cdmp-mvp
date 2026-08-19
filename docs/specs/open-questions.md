@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-OQ
 title: 待決事項與開放問題
-version: "2.7"
-date: 2026-08-04
+version: "2.9"
+date: 2026-08-18
 status: Draft
 ---
 
@@ -470,10 +470,62 @@ status: Draft
 
 ---
 
+## F119 M01 類別型篩選欄位文字比對運算子（2026-08-18）— ⚠️ DRAFT，待人工審閱閘
+
+> 本節對應 [F119 v1.0](features/F119-categorical-text-match-operators.md)（依已通過人工審閱閘之 **US-183 v1.2** 撰寫；US-183 之 16 AC / 16 TC 為最終業務契約，本輪**未修改** US-183）。
+> F119 spec 狀態為 **DRAFT**；(A) 節之 spec-writer 裁定與 (C) 節之 SA-1（`data-model.md` 補述）為進入 TDD 前之硬性前置。
+
+### (A) spec-writer 裁定 — 待人工確認
+
+| ID | 問題 | 裁定 | 狀態 |
+|----|------|------|------|
+| OQ-F119-A1 | US-183 未定義 `operator` 應為 categorical 之子屬性、或新增 `fieldType`（如 `text`） | **採 categorical 子屬性**（`condition_payload` 新增 optional `operator` / `keyword`），**不**新增 `fieldType`。新增 `fieldType` 會迫使同一欄位在「勾選可選值」與「文字比對」間二擇一，直接違反 US-183 AC-1「四種運算子並列供擇一」，且需連動 F075 白名單 schema / seed / UI 分組（[F119 §13.1 D-1](features/F119-categorical-text-match-operators.md)） | ⚠️ 待確認 |
+| OQ-F119-A2 | US-183 AC-12 述及「三處」路徑（Stage 0 試算 / 命中預估 / 月名單分派執行） | **擴為五條執行路徑**（MSSQL 下推 / PG 下推 / JS filter chain / Stage 0 估算 / 草稿抽樣估算）。逐一查證 `buildStage1WhereConditions` 之呼叫端共 5 處；US-183 之「三處」為業務視角分類，遺漏之路徑即為分歧來源（[F119 AC-14 / §13.1 D-6](features/F119-categorical-text-match-operators.md)） | ⚠️ 待確認（純擴充，不改變業務結果） |
+| OQ-F119-A3 | US-183 AC-14 只要求「業務結果不可退讓」，重複判定簽章格式交 spec-writer / architect | **定義 `欄位:catop:運算子:關鍵字`**，與 `in` 形態之 `欄位:cat:values` **前綴互斥故可證明無碰撞**；無 `operator` 之舊 payload 輸出與現行**逐字元相同**（須以新舊比對回歸測試證明，非推論）（[F119 BR-9 / §13.1 D-7](features/F119-categorical-text-match-operators.md)） | ⚠️ 待確認 |
+| OQ-F119-A4 | US-183 AC-5 僅規範 **UI** 之互斥與清除，未規範後端收到違反互斥之 payload 時之處置 | **新增 AC-6：後端一律 422 `VALIDATION_ERROR` 拒絕**（不靜默丟棄、不靜默正規化）。沿用 [F050 BR-6](features/F050-create-list-definition.md) 對 schema 違規一律拒絕之慣例；F050 之靜默正規化僅適用 system-fixed 欄位（BR-14），語境不同（[F119 §13.1 D-4](features/F119-categorical-text-match-operators.md)） | ⚠️ 待確認 |
+| OQ-F119-A5 | US-183 背景明示動機為「值域極廣、無法窮舉可選值之欄位」，但未定義此類欄位在 UI 是否可被選取 | **新增 AC-11：零可選值之 categorical 欄位仍須可加入條件**。若欄位下拉以「無可選值」過濾，本 feature 核心動機無法達成（新增之 `spec_name` 必然零可選值）。此非新增需求，而是使 US-183 既述動機**可達成**之必要條件（[F119 §13.1 D-5](features/F119-categorical-text-match-operators.md)） | ⚠️ 待確認 |
+| OQ-F119-A6 | US-183 AC-7 未定義關鍵字長度上限 | **trim 後 1~100 字元**（防禦性上限；現行最長 categorical 來源欄位 `ob_pool_data.spec_name` 為 nvarchar(45)）。**不**做 per-column 動態長度驗證（會使驗證耦合目標表 schema，跨三來源難以維持）（[F119 BR-2 / §13.1 D-3](features/F119-categorical-text-match-operators.md)） | ⚠️ 待確認 |
+
+### (B) 承 US-183 之未決項（狀態沿用，不重複裁示）
+
+| ID | 問題 | 負責方 | 狀態 |
+|----|------|--------|------|
+| OQ-183-01 | 效能提示之確切文案與顯示位置、運算子選擇控制項型態，並反映於 prototype `27a` / `27b` | ui-ux-designer | 待確認（另含 [F119 AC-13](features/F119-categorical-text-match-operators.md) 之 `STAGE0_LIST_ESTIMATE_PARTIAL` 於 `30-stage0-estimate.html` 之呈現位置與樣式） |
+| OQ-183-02 | 是否將抽樣估算基礎架構（US-176 / AD-E07-45）延伸套用於文字運算子之命中預估路徑 | system-architect | 待確認（**非阻塞**；[F119 §12.1 SA-6](features/F119-categorical-text-match-operators.md) 建議本輪不引入） |
+| OQ-183-03 | `STAGE0_LIST_ESTIMATE_PARTIAL` 渲染之修正範圍：限本 Story 文字運算子觸發之情境、或一併涵蓋既有數值 / `IN` 觸發之相同情境 | system-architect | 待確認（[F119 §12.1 SA-5](features/F119-categorical-text-match-operators.md) **建議不分觸發原因一律渲染**——同一 warning code、同一渲染路徑，技術上無法只挑文字運算子觸發之個案；限縮反需額外標記機制、成本更高） |
+| OQ-183-04 | 「編輯既有草稿」頁是否比照補上「預估命中筆數」即時面板 | team lead | ✅ **已裁決：不納入本輪範圍**（維持 US-176 既有 deferred 決定；[F119 AC-18](features/F119-categorical-text-match-operators.md) 已明確排除） |
+
+### (C) 交 system-architect（7 項，附本 spec 之建議預設）
+
+| ID | 項目 | 建議預設 |
+|----|------|---------|
+| **SA-1** | **`data-model.md` 之 `condition_payload` schema 補述 `operator` / `keyword`**（**必辦**；該檔非 spec-writer 之地盤，本輪未改） | 直接採用 [F119 §5.1](features/F119-categorical-text-match-operators.md) 之欄位契約表；明載**不需 migration**、既有列不回填 |
+| SA-2 | LIKE 跳脫之技術手段（`ESCAPE` 子句與跳脫字元、字元集、MSSQL `[` 具字元類語意而 PG 無、參數化方式、兩方言等價保證） | 應用層組裝樣式字串 + 參數帶入 + 明示 `ESCAPE`；跳脫落點置於共用 helper。另須確認 `cpost_city` 等**衍生欄**之文字比對對象（建議：與 `in` 相同之運算式，即衍生後之值；[F119 §13.2 A-3](features/F119-categorical-text-match-operators.md)） |
+| SA-3 | 已全面遷移 MSSQL 後，PG builder（`stage1-sql-builder.ts`）是否同步擴充文字運算子 | 同步擴充（共用 fragment 建構器故成本低；不同步將使兩 builder 語意分歧、違反既有雙版本並存形態） |
+| SA-4 | `normalizeConditionPayload`（現為 private method）是否抽為共用純函式，及對 [F118](features/F118-copy-from-prev-month-duplicate-indicator.md) `copy-duplicate-check` 之連帶影響 | 抽為共用純函式，行為須完全等價；F118 判定自動繼承簽章擴充，無需另行修改 |
+| SA-5 | AC-13 修正範圍認定（＝OQ-183-03） | 不分觸發原因一律渲染 |
+| SA-6 | 效能防護是否需下限保護（`LIKE '%K%'` 對約 167 萬列之 `ob_pool_data` 為全表掃描；＝OQ-183-02） | 本輪不引入；沿用既有逾時機制 + AC-12 提示 + AC-13 warning 渲染 |
+| SA-7 | `operator` / `keyword` 於月跑快照序列化往返之保全 | 直接透傳，以測試證明往返後不遺失 |
+
+### (D) 本輪查證發現之既有落差（不阻塞 F119）
+
+| ID | 問題 | 處置 |
+|----|------|------|
+| OQ-F119-01 | **`spec_name`（US-183 主要業務範例欄位「主約專案名稱」）不在部署 seed `pooldata-field-whitelist.json` 內**（seed 之 `ob_pool_data` categorical 欄位為 `best_case` / `brand_name` / `case_status` / `caseyear` / `payt_num` / `prod_kind` / `prod_type_name` / `settle_src` / `spec_tp`） | F119 **不**負責 seed 該欄位（屬 F075 / F076 範疇，且 dev / prod 白名單可能已由管理者新增而與 seed 不同）。使用者須先經 [F075](features/F075-manage-pooldata-field-whitelist.md) 新增流程加入白名單。**建議人工確認**是否另案納入 seed（[F119 §13.2 A-1](features/F119-categorical-text-match-operators.md)） |
+| OQ-F119-02 | **F114（`customer_financial` 來源篩選欄位）無 spec 檔**——`docs/specs/features/` 無 `F114-*.md`，但 `apps/api/src/modules/assignment/stage1/stage1-customer-financial-clause.ts` 檔頭明載「F114」且已實作 | F119 對該來源之要求（AC-10 / BR-5）以**程式碼中之不變式 `I-CF-NULL-EXCLUDE-01` / `I-CF-COMPOSER-SCOPE-01` 為權威依據**。補寫 F114 spec 屬既有文件債（同類見 OQ-DOC-01），本輪未回填 |
+| OQ-F119-03 | **US-183 AC-16 末段交叉引用誤植**：文中「AC-15 已明確排除」應為「AC-16」（v1.1→v1.2 AC 順移後之殘留），DoD 亦列為 AC-1~AC-16 | **純交叉引用筆誤，不影響任何業務裁定**。已回報 team lead；本輪**未修改** US-183（US-183 已通過人工審閱閘，非 spec-writer 可自行變更） |
+| OQ-F119-05 | **`STAGE0_LIST_ESTIMATE_PARTIAL` 未登錄於 [error-handling.md#assignment-run-warnings](error-handling.md#assignment-run-warnings)**——該節現有三碼（`RUN_REPORT_SKIPPED_CASES` / `WHITELIST_OPTION_INACTIVE` / `SCORING_INTEGRITY_WARN`），此 warning 僅存在於程式碼與 [architecture-spec.md](architecture-spec.md) §5.15 / [AD-E07-36](implementation-log/AD-E07-v3.6-f049-stage0-dept-matrix.md) OQ-F049-07 ✅ **已解決（2026-08-18）**：已於 [error-handling.md](error-handling.md) **v1.20** 補登（`#assignment-run-warnings`），含觸發條件、payload 結構 `{ code, listNo, message }`、訊息文案、與 `STAGE0_ESTIMATE_TIMEOUT`（500）之區別、以及前端呈現要求（引用 [F119 AC-13 / BR-13](features/F119-categorical-text-match-operators.md)）。**併同發現未回填**：同一端點之 `SCOPE_UNRESOLVED` / `DEPT_HEADCOUNT_ZERO` / `CALENDAR_EMPTY` 三碼與 `poolWarning = 'POOL_COUNT_LOW'` 同樣未登錄，建議另排專責 pass |
+| OQ-F119-06 | **月跑快照未記錄任何篩選條件**（`assignment-run-pipeline.service.ts:1802-1806` 之 `buildConfigPayload().listDefinitions[]` 僅 5 欄，無 `condition_payload`；前端 6 個 snapshot 元件對 `conditionPayload` / `columnName` 零命中） | ✅ **已裁決（2026-08-18，使用者）：descope，另開票**。此為 [F066](features/F066-view-run-snapshot-detail.md) 既有**功能缺口**（非顯示格式問題、非 F119 造成）。[F119](features/F119-categorical-text-match-operators.md) v1.1 已將 AC-15 縮為名單詳情 Drawer + 名單定義列表兩端，完整技術證據與 descope 理由見 [F119 §13.3 A-7](features/F119-categorical-text-match-operators.md)。**另開票時須複用 [F119 BR-10](features/F119-categorical-text-match-operators.md) 之同一格式化函式**。US-183 AC-13 之對應 descope 由 product-analyst 執行 |
+| OQ-F119-04 | **[F050](features/F050-create-list-definition.md) 3 處條文於 F119 上線後將與實際契約不符**：§5.4 規則表「categorical 條件須含 `values`（≥1 元素）」、BR-6、BR-7 (1)「categorical 以 `IN (...)` 語意」 | **本輪刻意未逕自改寫**（沿用 [F118 §12.2](features/F118-copy-from-prev-month-duplicate-indicator.md) 慣例）：F050 為 P0-MVP、承載 14 個來源 Story、其 §5.4 為多份下游 spec 交叉引用之權威段落，加性補述雖無爭議但屬跨 feature 權威條文變更，應由 team lead 核可後統一為 **F050 v2.5** 一次補述。建議文字見 [F119 §12.2](features/F119-categorical-text-match-operators.md) |
+
+---
+
 ## 更新紀錄
 
 | 日期 | 變更內容 | 負責人 |
 |------|---------|--------|
+| 2026-08-18 | **F119 v1.1 連帶更新**：新增 **OQ-F119-06**（月跑快照未記錄篩選條件 → ✅ 使用者裁決 descope、另開票掛 F066；F119 AC-15 縮為 Drawer + 列表兩端）；**OQ-F119-05 標 ✅ 已解決**（`STAGE0_LIST_ESTIMATE_PARTIAL` 已於 error-handling.md v1.20 補登，含 payload 結構與前端呈現要求），併同記錄同端點另 3 碼 + `poolWarning` 仍未登錄 | Spec Writer Agent |
+| 2026-08-18 | 新增 F119 類別型文字比對運算子節（**spec 為 DRAFT 待人工審閱閘**）：(A) 6 項 spec-writer 裁定待確認（`operator` 採 categorical 子屬性而非新 `fieldType`／一致性範圍三處擴為五路徑／簽章 `:catop:` 格式與向後相容／後端互斥防呆 422／零可選值欄位可用性／關鍵字長度上限 100）；(B) 承 US-183 之 4 項（OQ-183-01~04，狀態沿用）；(C) 7 項交 system-architect（**SA-1 `data-model.md` 補述為必辦**）；(D) 5 項既有落差（`spec_name` 不在 seed／F114 無 spec 檔／US-183 AC-16 交叉引用筆誤／`STAGE0_LIST_ESTIMATE_PARTIAL` 未登錄 error-handling／F050 3 處條文待加性補述，刻意未逕改）。**不新增錯誤碼、不新增端點、無 migration** | Spec Writer Agent |
 | 2026-08-04 | **F117 / F118 人工審閱閘：全節收斂**。業務裁決 3 項（孤兒部門＝顯示鎖定＋後端保留、不做強制歸零；語意等價之後果可接受；複製範圍以實作為準修正 spec）；architect / ui-ux 8 項定案（端點改 `GET .../copy-duplicate-check`、`ORDER BY list_no`、保留「未設代理」紅點、二次確認彈窗等）。兩份 spec 狀態 DRAFT → **Approved**。新增 4 項不阻塞之遺留技術債（OQ-F118-05 ~ 07、OQ-DOC-01） | 人工審閱閘 |
 | 2026-08-04 | 新增 F117 / F118 UX 精煉節（**全數 Open，spec 為 DRAFT 待人工審閱**）：(A) 3 項 spec-writer 裁定待確認（AC-1/AC-3 矛盾調和、加總範圍、判定機制選型）；(B) 3 項阻塞性待業務裁示（孤兒部門處理、語意等價之業務可接受性、複製範圍四方不一致）；(C) 8 項交 architect / ui-ux。新發現：`copy-source-options` 端點已規格但從未實作；F050 與 data-model.md 對 `cr_enabled` 複製行為**互相矛盾** | Spec Writer Agent |
 | 2026-06-24 | 新增 F104 全欄對齊 legacy SP：OQ-159-01／縣市粒度／per-card 矩陣 3 項已查證解決；OQ-F104-01~04 交 system-architect（附建議）；OQ-159-02／OQ-160-01／OQ-161-01/02 記為已解 | Spec Writer Agent |

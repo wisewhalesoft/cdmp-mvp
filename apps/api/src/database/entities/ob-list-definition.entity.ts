@@ -34,6 +34,18 @@ export interface ObListDefinitionConditionItem {
    * F109 上線前既有 condition_payload 無此 key（fallback 天然覆蓋，不需 backfill migration）。
    */
   dataSource?: 'ob_pool_data' | 'customer_core' | 'customer_financial';
+
+  /**
+   * F119 / US-183 / AD-E07-50 §4：categorical 條件之比對運算子（純加性，無 migration）。
+   *
+   * 缺漏 ≡ `'in'`（既有核取清單語意，AC-17）；解讀一律經
+   * `resolveCategoricalOperator()`（BR-11 / I-CATOP-OPERATOR-FALLBACK-01）。
+   * 與 `keyword` / `values` 互斥：`in` 帶 `values`、三種文字運算子帶 `keyword`（BR-3）。
+   */
+  operator?: 'in' | 'contains' | 'not_contains' | 'equals';
+
+  /** F119：文字比對運算子之單一關鍵字（trim 後 1~100 字元落庫，BR-2）。 */
+  keyword?: string;
 }
 
 export interface ObListDefinitionConditionPayload {

@@ -1613,3 +1613,167 @@ last_updated: 2026-08-13
 - **風險等級**：已解決。tdd-implementation 後續只需將 `getPivot` 查詢與 `PivotEmplidNode`/
   `PivotResponse` 型別、`SnapshotPivotView` 渲染欄位由 `jfun_nm`/`jfunNm` 改為 `title_name`/
   `titleName` 即可轉綠，其餘既有邏輯不受影響。
+
+## F119 類別型篩選欄位新增文字比對運算子測試風險與待決問題（AD-E07-50，2026-08-18 新增）
+
+> 完整測試設計見 [features/F119-test.md](features/F119-test.md)（US-183，**106 個場景**：後端
+> stage1 SQL 語意層 42 + 後端 assignment-list 黑箱/驗證層 30 + 前端 `_utils` 純函式 13 + 前端
+> Page 整合 21）。F119 spec v1.1 / AD-E07-50 v1.1 之業務裁決已核可。以下記錄本輪測試基礎設施層級
+> 之刻意範圍簡化、設計裁量與 weak-pass 揭露，均不阻擋 TDD 進入實作。
+
+### R-F119-01（範圍簡化，team lead 明確指示，非缺口）：本輪僅產出 vitest/jest 束縛環
+
+- **決策**：team lead 於本輪任務訊息明確指示「只產 vitest / jest 單元與整合測試。不做 Playwright
+  e2e、不做 Stryker mutation、不做 dependency-cruiser metric gate、不呼叫 `ring-setup` skill」，
+  故標準 test-generator 角色定義（束縛環四要素）本應涵蓋之其餘三項本輪未產出。若日後需要完整束縛
+  環，可比照 F117/F118/F111 之 `ring-setup` 既有落地直接擴充涵蓋範圍。建議下輪若納入 Stryker，
+  `mutate` 範圍優先鎖定 `buildCategoricalOperatorFragment`/`escapeLikeKeyword`（單一 SQL 落點，
+  BR-4 之結構性保證使此處變異覆蓋率即可代表全部四個呼叫端，投資報酬率最高）。
+- **風險等級**：低（使用者決策，非技術缺口）。
+
+### R-F119-02（中，測試邊界說明，非缺口）：composer 層 caseyear defense-in-depth 因與既有 no-op 行為巧合重疊，無法產生有意義紅燈，已改測驗證層
+
+- **問題**：AD-E07-50 §3.8 為 `I-CATOP-CASEYEAR-EXCLUDE-01` 設計了兩道防線——**權威執行點於驗證層**
+  （不變式文字本身明定：「此限制實作於驗證層...而非 SQL 建構層」），composer 層另加一道
+  defense-in-depth（`operator` 非 `'in'` 時 push warning + 回 null）。經實際撰寫並執行診斷測試
+  （呼叫 `buildStage1WhereConditions` 傳入 `{columnName:'caseyear', operator:'contains', keyword:'1'}`，
+  無 `values`）發現：現行（F119 實作前）composer 對此輸入已因既有 `values`-based 分支對缺漏
+  `values` 之條件產生 `EMPTY_VALUES` 警告 + 不建構 fragment（`where: null, skipReason:
+  'EMPTY_CONDITIONS'`），**與「正確實作 caseyear 排除後之預期結果」巧合相同**——此為 tautological
+  pass，無法作為紅燈證據（實作前後皆綠，無法區分「已正確排除」與「純粹尚未支援文字運算子的既有
+  no-op」）。
+- **決策**：**未產出**該 composer 層弱測試檔（曾建立
+  `f119-caseyear-exclusion.spec.ts` 後於本輪撰寫過程中以此發現為由主動刪除，避免留下無鑑別力之
+  假紅燈證據）。改依不變式本文明定之權威執行點（驗證層）撰寫
+  `f119-condition-validation.spec.ts` CASEYEAR-CREATE-001（`createList`）與
+  `f119-preview-hit-count-text-operators.spec.ts` CASEYEAR-PREVIEW-001（`previewHitCount`）—
+  此二者於實作前皆為真紅（現行未實作互斥/欄位排除驗證，`createList`/`previewHitCount` 皆會正常
+  通過而非 422），紅燈原因正確。
+- **風險等級**：中（若 tdd-implementation 僅實作驗證層防線、未落地 composer 層 defense-in-depth，
+  本輪測試無法偵測此落差；因驗證層為 spec 明定之權威防線且已有真紅測試覆蓋，此殘留風險可接受，但
+  記錄供未來若要補強 composer 層測試時參考本節之「巧合綠燈」陷阱，避免重蹈覆轍撰寫無鑑別力斷言）。
+
+### R-F119-03（低，weak-pass 揭露，非缺口）：AC-16 重複判定之 3 個「不觸發 422」案例於實作前巧合為綠燈，需與配對紅燈案例合讀
+
+- **問題**：`f119-signature-backcompat-duplicate.spec.ts` 之 T-13（contains vs not_contains 不同判
+  不同）、T-15（in 單值 vs equals 同值不同判不同）、T-16（大小寫不同判不同）三案例斷言「建立第二筆
+  不觸發 422」，於實作前（`normalizeConditionPayload` 尚未支援 `keyword`-based 簽章）**已為綠燈**
+  ——現行僅帶 `keyword`（無 `values`）之 categorical 條件產生空簽章，空簽章依既有規則「永不衝突」，
+  故任意兩筆此類名單皆不會觸發重複判定，與「正確區分運算子後之預期結果」巧合相同。
+- **決策**：**保留**此三案例（非弱斷言而是合法的正控制組），但**明確依賴配對的 T-14**（同運算子
+  同關鍵字 → 仍須觸發 422）作為真正的紅燈證據——T-14 於實作前為真紅（keyword-based 簽章尚未產生，
+  重複判定完全不觸發）。T-13/T-15/T-16 與 T-14 合讀方能證明 AC-16 之完整雙向行為（不同判不同、
+  相同判相同），已於 F119-test.md 明確記錄此揭露，避免被誤判為「測試寫錯才通過」。
+- **風險等級**：低，資訊性記錄；已於 F119-test.md §二 對應段落記錄，比照 F118 R-F118 系列慣例。
+
+### R-F119-04（低，測試邊界說明，非缺口）：AC-14 五路徑完整一致性未於本輪逐路徑數字驗證
+
+- **問題**：AC-14 要求 MSSQL 下推 / PG 下推 / JS filter chain / Stage 0 估算 / 草稿抽樣估算五條
+  執行路徑對同一條件之判定完全一致。本輪 SQLite-based 測試（`f119-categorical-operator-fragment
+  .spec.ts` MATRIX 系列 + `f119-preview-hit-count-text-operators.spec.ts`）驗證了**單一共用函式
+  `buildCategoricalOperatorFragment` 本身**之正確性（BR-4/BR-5 之結構性保證：四個呼叫端皆呼叫同
+  一函式，即代表五條路徑天然一致），以及**一條可達路徑**（`previewHitCount`，草稿抽樣估算）之端
+  到端黑箱驗證，但**未**對 MSSQL 下推 / PG 下推 / JS filter chain / Stage 0 估算四條路徑個別執行
+  真實查詢比對數字。
+- **決策**：**2026-08-18 更新**——team lead 事後確認 dev MSSQL（`172.20.202.212:1433`）實為可連線
+  （見 R-F119-07），故已補一份 `f119-categorical-collation.mssql.spec.ts`（7 案例）驗證 BR-8 大小寫/
+  全半形敏感度（SQLite 無法重現之唯一案例）。但本項風險描述之「MSSQL 下推 / PG 下推 / JS filter
+  chain / Stage 0 估算四條路徑之逐路徑真實查詢比對數字」**仍未**補強——BR-8 collation 測試驗證的是
+  「fragment 在真實引擎下的字面值比對行為」，非「五條執行路徑各自組裝出的完整 SQL 對同一條件產生
+  相同結果」，兩者是不同層級的驗證。若需完整驗證，建議下輪比照既有 `.mssql.spec.ts` 慣例新增一份
+  逐路徑對照測試，或以 `vi.spyOn` 結構性驗證五個呼叫端確實路由至同一函式（AD-E07-50 §8 建議手法）。
+- **風險等級**：低（BR-4/BR-5 之結構性保證已由既有共用函式測試間接佐證「四個呼叫端零自行實作」，
+  完整逐路徑數字一致性風險低，但非本輪已證明之事實，如實記錄）。
+
+### R-F119-05（低，C-Q1 沿用 ui-ux-designer 已記錄之裁定，非本輪新發現）：`formatConditionSummary()` 顯示格式採 AC-15 例句而非 AD §3.6 樣板字串
+
+- **問題**：`docs/ui-ux-design-overview.md` 附錄 C C.7 C-Q1 已記錄 AD-E07-50 §3.6 之樣板字串
+  （`「${欄位}」${運算子標籤}「${keyword}」`，欄位名帶引號）與 F119 AC-15 業務契約例句
+  （`${欄位} ${運算子標籤}「${keyword}」`，欄位名不加引號、以半形空格分隔）不一致，並已裁定採
+  **AC-15 例句**（業務契約優先於架構文件樣板筆誤），建議 AD §3.6 修正樣板字串。
+- **決策**：本輪 `f119-condition-summary.test.ts`（SUMMARY-001 等）與 `list-kanban-page.test.tsx`
+  之 F119-KANBAN-001/F119-DRAWER-001 依此已記錄之裁定撰寫斷言（欄位名不加引號），與 AD 樣板字串
+  故意不同，非本檔誤植。若 tdd-implementation 依 AD 字面樣板實作（欄位名加引號），本輪測試會如預
+  期般偵測到不一致並回報紅燈——此為裁定之預期行為，非測試缺陷。
+- **風險等級**：低，資訊性記錄；待人工確認 C-Q1（ui-ux-designer 附錄 C 交付檢核已列為未勾選項）。
+
+### R-F119-06（低，測試檔本地型別擴充，非缺口）：`ObListDefinitionConditionItem`/`ConditionItem`/`DeptEstimateResponse.warnings` 型別之 F119 加性擴充於測試檔本地宣告
+
+- **問題**：`operator?`/`keyword?`（後端 `ObListDefinitionConditionItem`、前端 `ConditionItem`）與
+  `listNo?`（前端 `DeptEstimateResponse.warnings[]` 之 `STAGE0_LIST_ESTIMATE_PARTIAL` 項目）皆為
+  F119 之純加性型別擴充，正式生產型別尚未擴充。本輪測試檔以測試檔本地交集型別
+  （`F119ConditionItem = ObListDefinitionConditionItem & {operator?; keyword?}`）或 `as never`/
+  `as unknown as ...` 型別斷言先行撰寫，不等待生產型別擴充即可先行紅燈（swc 轉譯不做型別檢查，
+  `tsc --noEmit` 之預期錯誤已於 F119-test.md §五記錄）。
+- **決策**：tdd-implementation 落地正式型別擴充後，測試檔之本地型別/斷言可直接沿用（結構相容），
+  無需修改測試檔本身。
+- **風險等級**：低，資訊性記錄。
+
+### R-F119-07（已解決，2026-08-18）：team lead 環境情報先誤判「MSSQL 連不到」後自行更正為「併跑資源競爭」，本輪據此補一份真實 MSSQL 測試
+
+- **問題**：team lead 於本輪測試撰寫完成後跑基線，第一則訊息回報「dev MSSQL（`172.20.202.212:1433`）
+  連不到，全部 `.mssql.spec.ts` 逾時」，要求本輪盡量避免依賴 DB 連線。team lead 隨後自行以
+  `Test-NetConnection` 與單檔執行驗證，發現伺服器**其實可連**，第一則判斷有誤——批次全套件跑
+  （243 檔）時 `.mssql.spec.ts` 之失敗為**併跑資源競爭**（CPU/連線競爭致 testTimeout），非網路
+  不可達，此為專案既有形態（`feedback_pg_spec_parallel_timeout` 記憶：「單跑過、合跑 fail」多為
+  併跑競爭超時）。
+- **決策**：依更正後之情報，本輪補一份 `f119-categorical-collation.mssql.spec.ts`（7 案例）——
+  SQLite 無法重現 BR-8 大小寫/全半形敏感度（`Chinese_Taiwan_Stroke_BIN` collation），此為真正需要
+  真實 DB 執行才能驗證之案例，非其餘可用純函式覆蓋之項目（BR-6/BR-7 之純函式斷言證明力仍優於 DB
+  比對，維持不變，見上方各節說明）。已依專案慣例加 `vi.setConfig({ testTimeout: 60000 })` 避免
+  併跑競爭偽紅；test-generator 本輪單檔執行驗證（1.33 秒完成，5 red / 2 green，環境可達性與
+  `INFORMATION_SCHEMA` collation 查證兩案例綠燈，其餘因函式未匯出紅燈），未依賴全套件併跑結果。
+- **風險等級**：已解決。記錄供未來讀者理解為何 F119 測試設計文件出現「先聲明本輪範圍不含真實
+  MSSQL」又「補一份 .mssql.spec.ts」的表面矛盾——這是對環境情報更正的即時回應，非規劃反覆。
+
+### R-F119-08（已解決，2026-08-18）：tdd-implementation 團隊模式測試爭議裁決——1 件測試自身缺陷、1 件測試遺漏真實 prototype 行為
+
+- **背景**：後端 7 檔 79 案例、前端 utils/kanban/stage0 全綠後，implementer（`impl-f119`）依團隊
+  模式規矩（不自行修改測試）提報兩件爭議，request test-generator 裁決。
+
+- **爭議 1（F119-FE-010，採納，判定為測試自身缺陷，非業務/prototype 爭議）**：
+  `list-create-draft-page.test.tsx` F119-FE-010（AC-17：IN 條件送出時 payload 不含 operator key）
+  查詢 `value-checkbox-0-0`，但該案例所屬 describe 之 `mockedListOptions` 對 `prod_kind` 之 mock
+  為 `optionValue: '01'`（非 `'0'`）——本檔既有 test-id 慣例為 `value-checkbox-{條件列 idx}-
+  {optionValue}`，本檔既有測試（L372/424/577）對 `optionValue: '01'` 之 mock 皆查
+  `value-checkbox-0-01`，`-0-0` 在此 mock 下不可達。test-generator 核對 mock 定義（自己撰寫的
+  fixture，位於同一 describe 之 `beforeEach`）確認 implementer 之判讀完全正確，屬撰寫時的
+  testid 筆誤（易與同檔 caseyear 案例之 `value-checkbox-0-0`——因 caseyear 選項值恰為 `'0'`——
+  混淆所致）。已修正兩處為 `value-checkbox-0-01`，**AC-17 斷言本體
+  （`'operator' in cond === false`）未改動**。裁決後對現行實作重跑：轉綠，同時證明
+  implementer 之 `toConditionItem`／payload 組裝邏輯（IN 形態不寫入 `operator` key，附錄 C C-17）
+  正確。
+
+- **爭議 2（F119-EDIT-002，採納，判定為測試遺漏真實 prototype 行為，非設計偏離／非測試過嚴）**：
+  implementer 指出 `list-edit-draft-page.test.tsx` F119-EDIT-002 載入一筆 `not_contains` +
+  非空關鍵字 `勁便利` 之條件，直接 `fireEvent.change` 切至 `in` 並斷言面板立即切換，但
+  prototype `27a/27b` 之 `setCondOperator()`／附錄 C C-3~C-5 明訂「跨形態切換（IN↔文字運算子）
+  且另一側『有內容』時，須先彈出二次確認 modal（`operator-switch-confirm-modal` /
+  `operator-switch-loss` / `operator-switch-confirm`），確認後才套用切換；僅另一側為空時才直接
+  切換」。test-generator **重新開啟 `prototypes/27a-list-create-draft.html` 原始碼**（第 1062~1080
+  行 `setCondOperator()`）逐行核對，確認：`const crossForm = isTextOperator(cur) !==
+  isTextOperator(next); const willLose = isTextOperator(cur) ? trimKeyword(c.keyword) !== '' :
+  (c.values||[]).length > 0; if (crossForm && willLose) { ...openOpSwitchConfirm(id, next); return;
+  }`——本案例之 `cur='not_contains'`（文字）、`next='in'`，`crossForm=true`；`willLose` 取決於
+  `trimKeyword(c.keyword)!==''`，載入之關鍵字為非空字串 `勁便利` → `willLose=true` →
+  **必然**進入確認分支，測試斷言「立即切換」與 prototype 原始碼確定不符，implementer 之判讀正確。
+  **裁決**：採 implementer 提出之選項 (b)（實作補上確認 modal，而非移除本測試以配合「立即切換」
+  的臨時佔位實作）——理由：確認 modal 是 spec ground truth（prototype）明訂之行為，非本輪 F119
+  自行新增之臆測，移除斷言等同讓真實需求悄悄漏測。F119-EDIT-002 改為斷言「未確認前面板不得切換 +
+  `operator-switch-loss` 內容含關鍵字（附錄 C C-5：損失清單須列出將被清除的內容本身）+ 點擊
+  `operator-switch-confirm` 後才切換」；新增 F119-EDIT-002b 作為對照組，覆蓋「剛加入條件、兩側皆
+  空 → 不彈窗」路徑（C-3 之另一半行為），**刻意採獨立路徑**（實際新增一個 `prod_kind` 條件測試，
+  而非依賴 EDIT-002 之確認流程來清空狀態），避免兩個測試互相依賴、其中一個失敗連帶拖垮另一個。
+  裁決後對現行實作重跑：F119-EDIT-002 為**真紅**（implementer 目前暫以「立即切換、不確認」佔位
+  等待裁決，尚未補上確認 modal，紅燈原因正確——功能未實作，非測試寫錯）；F119-EDIT-002b 為
+  **真綠**（該「兩側皆空直接切換」路徑 implementer 已正確實作，與建立頁 F119-FE-002/003 之既有
+  行為一致）。
+
+- **後續**：implementer 需依裁決 2 補上二次確認 modal（沿用既有 `_components/category-switch-
+  confirm-modal.tsx` 形制，附錄 C C-4 已論證為何是「確認」而非 undo——AC-5「不得殘留於表單狀態」
+  之硬性要求使 undo 之暫存區本身即違規）。F119-FE-002/FE-003（建立頁）不受影響，因其切換情境下
+  另一側恆為空（剛加入條件之常態路徑），兩種設計下皆綠，implementer 訊息已正確指出此點。
+
+- **風險等級**：已解決（裁決已下達並更新測試檔+文件；等待 implementer 補實作 F119-EDIT-002 之
+  確認 modal 後轉綠）。記錄本次裁決過程供未來讀者理解 `list-edit-draft-page.test.tsx` 為何多出
+  一個「002b」編號（非跳號筆誤，是 dispute 裁決後新增之對照組）。

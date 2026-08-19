@@ -772,3 +772,122 @@ describe('ListEditDraftPage — 值選擇器批次操作（全選 / 清除 / 完
     expect(screen.queryByTestId('value-dropdown-prod_kind')).toBeNull();
   });
 });
+
+// ============================================================
+// F119 / US-183 — 類別型篩選欄位文字比對運算子（編輯草稿名單頁，AC-18 兩進入點一致）
+//
+// 撰寫依據同 list-create-draft-page.test.tsx 之 F119 區塊：F119 spec AC-1/AC-5/AC-8/AC-18 +
+// AD-E07-50 §3.6/§3.8 + docs/ui-ux-design-overview.md 附錄 C（「27a/27b 條件編輯區逐字相同」）。
+// **未**開啟 list-edit-draft-page.tsx 生產碼；render/mock 慣例取自本檔既有測試（既有測試檔）。
+// 本區塊之重點是「與建立頁行為一致」，故不重複建立頁已覆蓋之全部細節，僅驗證編輯頁特有的
+// 「載入既有文字運算子條件」情境 + 幾項核心互動之一致性抽樣。
+// ============================================================
+describe('F119 — 類別型條件文字比對運算子（編輯草稿頁，AC-18 一致性）', () => {
+  const editFields: ListFieldsResponse = {
+    fields: [
+      { columnName: 'spec_name', displayName: '主約專案名稱', fieldType: 'categorical', isActive: true, isSystemFixed: false, createdAt: '', updatedAt: '' },
+      { columnName: 'caseyear', displayName: '進件 / 滿期年數', fieldType: 'categorical', isActive: true, isSystemFixed: false, createdAt: '', updatedAt: '' },
+      // F119-EDIT-002b：需一個「非既有載入條件」之欄位以測試「剛加入條件、兩側皆空」路徑
+      { columnName: 'prod_kind', displayName: '產品類別', fieldType: 'categorical', isActive: true, isSystemFixed: false, createdAt: '', updatedAt: '' },
+    ],
+  };
+
+  const editScenarioList: AssignmentListItem = {
+    listNo: 'OB202605777',
+    listNm: '2026-05 F119 編輯測試',
+    prodKind: null,
+    caseYear: null,
+    specTp: null,
+    caseStatus: null,
+    crEnabled: false,
+    listPeriodStart: 1,
+    listPeriodEnd: 6,
+    listInterval: 1,
+    settleSrc: null,
+    cardType: 'S5',
+    prodBest: null,
+    status: 'active',
+    stage: 'draft',
+    createdBy: '王部長',
+    createdAt: '2026-05-02T00:00:00Z',
+    updatedAt: '2026-05-02T00:00:00Z',
+    conditionPayload: {
+      conditions: [
+        { columnName: 'spec_name', fieldType: 'categorical', operator: 'not_contains', keyword: '勁便利' } as never,
+      ],
+      logic: 'AND',
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetUser.mockReturnValue({ id: 'd1', name: 'Director', email: 'manager@cdmp.test', role: 'user' } as never);
+    mockedGetBusinessRole.mockReturnValue('director');
+    mockedGetEffectiveIdentity.mockReturnValue('director');
+    mockedListLists.mockResolvedValue(makeResp([editScenarioList]));
+    mockedListFields.mockResolvedValue(editFields);
+    mockedListOptions.mockResolvedValue({ options: [] });
+    mockedListCardTypes.mockResolvedValue({
+      cardTypes: [{ cardType: 'S5', cardName: '主力催收', prodKind: '02', prodKindName: '中信', status: 'active', cardVersion: 1, sdate: null, edate: null, createdBy: null, createdAt: null }],
+    });
+  });
+
+  it('F119-EDIT-001（★核心 / AC-18）：載入既有 not_contains 條件 → 運算子下拉正確預選、關鍵字正確帶入', async () => {
+    renderPage('OB202605777');
+    await waitFor(() => expect(screen.getByTestId('condition-operator-spec_name')).toBeInTheDocument());
+    const select = screen.getByTestId('condition-operator-spec_name') as HTMLSelectElement;
+    expect(select.value).toBe('not_contains');
+    const input = screen.getByTestId('condition-keyword-spec_name') as HTMLInputElement;
+    expect(input.value).toBe('勁便利');
+  });
+
+  it('F119-EDIT-002（★核心 / AC-5 / AC-18 / 附錄 C C-3~C-5）：載入之關鍵字非空 → 切回 IN 須先彈出二次確認，未確認前面板不得切換；確認後才切換且關鍵字不隨表單保留', async () => {
+    renderPage('OB202605777');
+    await waitFor(() => expect(screen.getByTestId('condition-operator-spec_name')).toBeInTheDocument());
+    fireEvent.change(screen.getByTestId('condition-operator-spec_name'), { target: { value: 'in' } });
+
+    // 另一側（關鍵字 '勁便利'）非空 → prototype setCondOperator() 之 crossForm && willLose 分支
+    // 觸發二次確認 modal（附錄 C C-3），**未確認前**文字面板須原樣保留、IN 面板不得出現
+    await waitFor(() => expect(screen.getByTestId('operator-switch-confirm-modal')).toBeInTheDocument());
+    expect(screen.getByTestId('condition-keyword-panel-spec_name')).toBeInTheDocument();
+    expect(screen.queryByTestId('condition-values-panel-spec_name')).toBeNull();
+    // 損失清單（附錄 C C-5）須列出「將被清除的內容本身」，非僅泛用文字
+    expect(screen.getByTestId('operator-switch-loss').textContent).toContain('勁便利');
+
+    fireEvent.click(screen.getByTestId('operator-switch-confirm'));
+
+    await waitFor(() => expect(screen.getByTestId('condition-values-panel-spec_name')).toBeInTheDocument());
+    expect(screen.queryByTestId('condition-keyword-panel-spec_name')).toBeNull();
+  });
+
+  it('F119-EDIT-002b（AC-5 附錄 C C-3 對照組）：剛加入之條件兩側皆空 → 切換不彈出二次確認（獨立於 EDIT-002 之既有非空條件）', async () => {
+    renderPage('OB202605777');
+    await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() => expect(screen.getByTestId('add-field-dropdown')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('add-field-prod_kind'));
+    await waitFor(() => expect(screen.getByTestId('condition-operator-prod_kind')).toBeInTheDocument());
+
+    // 剛加入之條件：values 為空（未勾選任何值）→ 切至文字運算子不應彈窗
+    fireEvent.change(screen.getByTestId('condition-operator-prod_kind'), { target: { value: 'contains' } });
+    await waitFor(() => expect(screen.getByTestId('condition-keyword-panel-prod_kind')).toBeInTheDocument());
+    expect(screen.queryByTestId('operator-switch-confirm-modal')).toBeNull();
+
+    // 關鍵字從未輸入、仍為空 → 切回 IN 亦不應彈窗
+    fireEvent.change(screen.getByTestId('condition-operator-prod_kind'), { target: { value: 'in' } });
+    await waitFor(() => expect(screen.getByTestId('condition-values-panel-prod_kind')).toBeInTheDocument());
+    expect(screen.queryByTestId('operator-switch-confirm-modal')).toBeNull();
+  });
+
+  it('F119-EDIT-003（AC-18 / I-CATOP-CASEYEAR-EXCLUDE-01）：caseyear 於編輯頁同樣排除文字運算子（與建立頁一致）', async () => {
+    renderPage('OB202605777');
+    await waitFor(() => expect(screen.getByTestId('input-listNm')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('btn-add-condition'));
+    await waitFor(() => expect(screen.getByTestId('add-field-dropdown')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('add-field-caseyear'));
+    await waitFor(() => expect(screen.getByTestId('condition-operator-caseyear')).toBeInTheDocument());
+    const select = screen.getByTestId('condition-operator-caseyear') as HTMLSelectElement;
+    const contains = Array.from(select.options).find((o) => o.value === 'contains')!;
+    expect(contains.disabled).toBe(true);
+  });
+});

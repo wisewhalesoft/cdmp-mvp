@@ -312,6 +312,13 @@
             <p class="text-xs text-gray-400 mt-1">除系統固定的「優質案件」外，至少需新增 1 個篩選條件方可儲存。</p>
           </div>
           <div id="condList" class="space-y-2"></div>
+          <!-- 原型示範（F119）：產品不提供此列，僅供人工檢視 AC-8 / AD §3.8 之邊界狀態 -->
+          <div class="flex items-center gap-1.5 flex-wrap text-[10px] text-gray-400" data-prototype-demo="true">
+            <span class="mr-0.5">原型示範：</span>
+            <button type="button" onclick="demoSeedTextCondition()" class="px-1.5 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-50">帶入文字運算子條件</button>
+            <button type="button" onclick="demoSeedKeywordError()" class="px-1.5 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-50">關鍵字純空白（AC-8）</button>
+            <button type="button" onclick="demoSeedCaseyearViolation()" class="px-1.5 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-50">caseyear ✕ 文字運算子（AD §3.8）</button>
+          </div>
 
           <!-- INACTIVE 警示 -->
           <div id="inactiveValueWarn" class="hidden rounded-lg p-3 bg-amber-50 border border-amber-200 flex items-start gap-2 text-sm">
@@ -384,6 +391,51 @@
       </form>
     </div>
   </main>
+
+  <!-- ============================================================
+       F119 AC-5：運算子跨形態切換之二次確認
+         ・IN ↔ 文字運算子 切換會清除另一側輸入（規格要求：不得殘留、不得隨 payload 送出）
+         ・僅在「另一側有內容」時出現；剛加入條件的常態路徑不會被阻斷
+         ・文字運算子彼此切換（包含 ↔ 不包含 ↔ 完全等於）不清除關鍵字，故不確認
+       （27a / 27b 逐字相同）
+       ============================================================ -->
+  <div id="opSwitchModal" class="hidden fixed inset-0 z-50" data-testid="operator-switch-confirm-modal">
+    <div class="absolute inset-0 bg-black/50" onclick="closeOpSwitchConfirm()"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+      <div class="bg-white rounded-xl shadow-2xl w-full max-w-md" role="alertdialog" aria-labelledby="opSwitchTitle" aria-describedby="opSwitchDesc">
+        <div class="px-6 py-4 border-b border-border flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+            <i data-lucide="alert-triangle" class="w-5 h-5 text-warning"></i>
+          </div>
+          <div>
+            <h3 id="opSwitchTitle" class="text-base font-semibold text-gray-800">切換比對方式將清除目前設定</h3>
+            <p class="text-xs text-gray-500 mt-0.5">「勾選可選值」與「關鍵字比對」不能並存</p>
+          </div>
+        </div>
+        <div class="p-6 space-y-3">
+          <p id="opSwitchDesc" class="text-sm text-gray-700">
+            條件「<strong id="opSwitchField" class="text-gray-900">—</strong>」的比對方式將由
+            「<span id="opSwitchFrom" class="font-semibold text-gray-900">—</span>」改為
+            「<span id="opSwitchTo" class="font-semibold text-primary">—</span>」。
+          </p>
+          <div class="rounded-lg p-3 bg-amber-50 border border-amber-200">
+            <p id="opSwitchLossTitle" class="text-sm font-semibold text-amber-900 mb-2">目前設定將被清除</p>
+            <div id="opSwitchLoss" class="flex items-center gap-1.5 flex-wrap" data-testid="operator-switch-loss"></div>
+            <p class="text-xs text-amber-800 mt-2">清除後不會隨名單一併儲存；如需復原請重新設定。</p>
+          </div>
+          <p class="text-xs text-gray-500">若只是想調整目前的設定值，請按「取消」。</p>
+        </div>
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border bg-gray-50/60 rounded-b-xl">
+          <button id="btnOpSwitchCancel" type="button" onclick="closeOpSwitchConfirm()"
+            class="px-4 py-2 text-sm border border-border rounded-md text-gray-600 hover:bg-white">取消</button>
+          <button type="button" onclick="confirmOpSwitch()" data-testid="operator-switch-confirm"
+            class="px-4 py-2 text-sm bg-primary text-white rounded-md hover:bg-blue-700 font-medium inline-flex items-center gap-1.5">
+            <i data-lucide="repeat" class="w-4 h-4"></i>確定切換並清除
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ===== Modal：停用名單 ===== -->
   <div id="deactivateModal" class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4">
@@ -496,6 +548,7 @@
       { columnName: 'spec_tp',     displayName: '專案類別',         fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
       { columnName: 'case_status', displayName: '案件結清期別',     fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
       { columnName: 'settle_src',  displayName: '他行代償',         fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
+      { columnName: 'spec_name',   displayName: '主約專案名稱',     fieldType: 'categorical', isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },  // F119 / US-183：值域極廣、無法窮舉可選值（FIELD_VALUES 刻意不建此鍵）→ AC-11 之示範欄位；A-1：實際部署須先經 F075 加入白名單
       { columnName: 'best_case',   displayName: '優質案件',         fieldType: 'categorical', isActive: true,  isSystemFixed: true,  dataSource: 'ob_pool_data' },  // v1.7 / US-144：系統固定條件，值鎖定 Y；對應原系統 OBPOOLDATA.BEST_CASE / OBMLISTDF.PROD_BEST 硬編碼 'Y'
       { columnName: 'month_cnt',   displayName: '撈取月份計數',     fieldType: 'numeric',     isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
       { columnName: 'birth_date',  displayName: '客戶生日',         fieldType: 'date',        isActive: true,  isSystemFixed: false, dataSource: 'ob_pool_data' },
@@ -605,6 +658,8 @@
         conditionPayload: {
           conditions: [
             { columnName:'prod_kind', fieldType:'categorical', values:['02','03'] },
+            // F119：文字運算子條件（編輯進入點載入既有 operator / keyword，AC-18 / AC-17）
+            { columnName:'spec_name', fieldType:'categorical', operator:'not_contains', keyword:'勁便利' },
             { columnName:'month_cnt', fieldType:'numeric', min:2, max:6 },
             { columnName:'birth_date', fieldType:'date', dateStart:'1990-01-01', dateEnd:'2005-12-31' }
           ],
@@ -812,7 +867,12 @@
         document.getElementById('btnAddCond').title = '';
         (L.conditionPayload.conditions || []).forEach(src => {
           const c = { id: condIdSeq++, columnName: src.columnName, fieldType: src.fieldType };
-          if (src.fieldType === 'categorical') c.values = [...(src.values || [])];
+          if (src.fieldType === 'categorical') {
+            // F119：保留來源之運算子形態（缺漏 operator ≡ IN，BR-11 唯一 fallback 落點）
+            const srcOp = resolveCategoricalOperator(src.operator);
+            if (isTextOperator(srcOp)) { c.operator = srcOp; c.keyword = src.keyword || ''; }
+            else c.values = [...(src.values || [])];
+          }
           else if (src.fieldType === 'numeric') { c.min = src.min; c.max = src.max; }
           else if (src.fieldType === 'date') { c.dateStart = src.dateStart; c.dateEnd = src.dateEnd; }
           conditions.push(c);
@@ -967,6 +1027,379 @@
     function ftLabel(ft) { return ft === 'categorical' ? '類別' : ft === 'numeric' ? '數值' : '日期'; }
     function fieldDisplayName(col) { const f = FIELDS.find(x => x.columnName === col); return f ? f.displayName : col; }
 
+    // ============================================================
+    // F119 / US-183：類別型篩選欄位文字比對運算子（包含 / 不包含 / 完全等於）
+    //   spec：docs/specs/features/F119-categorical-text-match-operators.md v1.1
+    //   AD  ：docs/specs/implementation-log/AD-E07-50-categorical-text-match-operators.md v1.1
+    //
+    //   ⚠️ 本區塊（含 renderCategoricalValueUI 與其下所有 helper）於 27a / 27b 兩份原型
+    //      **逐字相同**。F119 AC-18 要求兩進入點行為一致，React 落地亦為同一個
+    //      CategoricalValuesPicker 元件；修改時務必兩份同步，勿只改一份。
+    // ============================================================
+
+    // BR-1：合法運算子四值（US-183 已拍板決策 1，命名不得更動）
+    const CATEGORICAL_OPERATORS = ['in', 'contains', 'not_contains', 'equals'];
+    const TEXT_OPERATORS = ['contains', 'not_contains', 'equals'];
+    // BR-10：運算子中文標籤（全系統統一，禁止各頁自訂）
+    const OPERATOR_LABEL = { in: 'IN', contains: '包含', not_contains: '不包含', equals: '完全等於' };
+    // BR-11 / I-CATOP-OPERATOR-FALLBACK-01：缺漏 operator 之預設值解讀「唯一」落點。
+    //   其他任何地方都不得再寫 `cond.operator ?? 'in'` —— 分散預設正是「顯式 in 與缺漏 in
+    //   行為分歧」（AC-17 風險點）之典型成因。
+    function resolveCategoricalOperator(op) { return (op === undefined || op === null || op === '') ? 'in' : op; }
+    function isTextOperator(op) { return TEXT_OPERATORS.indexOf(resolveCategoricalOperator(op)) >= 0; }
+    function operatorLabel(op) { return OPERATOR_LABEL[resolveCategoricalOperator(op)] || OPERATOR_LABEL.in; }
+    // BR-2：trim 前後之半形空白 / 全形空格 U+3000 / Tab / CR / LF；關鍵字「內部」空白一律保留
+    //   （「勁 便利」與「勁便利」為不同關鍵字）
+    function trimKeyword(s) { return String(s === undefined || s === null ? '' : s).replace(/^[\s　]+|[\s　]+$/g, ''); }
+    const KEYWORD_MAX_LEN = 100;   // BR-2 / §13.1 D-3：trim 後長度 1~100
+
+    // I-CATOP-CASEYEAR-EXCLUDE-01（AD §3.8）：caseyear 對應 ob_pool_data.year_cnt（INTEGER），
+    //   文字運算子於 PG 端直接型別錯誤，且 '99'（不限年數）wildcard 規則僅對 IN 有定義 → 排除。
+    const TEXT_OPERATOR_EXCLUDED_COLUMNS = ['caseyear'];
+    function isTextOperatorExcluded(col) { return TEXT_OPERATOR_EXCLUDED_COLUMNS.indexOf(col) >= 0; }
+
+    // AC-12 / OQ-183-01：文字運算子之效能提示（告知性，不阻擋操作、不需確認、不影響儲存）。
+    //   ui-ux-designer 定案文案；下游可逐字斷言，勿在此常數外另寫第二份措辭。
+    const TEXT_OP_PERF_HINT = '文字比對需逐筆掃描全部案件，較勾選可選值耗時；命中預估與 Stage 0 試算可能因此逾時。此為正常現象，不影響條件儲存。';
+
+    function escHtml(s) {
+      return String(s === undefined || s === null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // BR-10 / I-CATOP-DISPLAY-SINGLE-01：條件描述字串（含運算子中文標籤）之「唯一」格式化來源。
+    //   AC-15 格式：欄位顯示名稱 + 運算子中文標籤 + 關鍵字，例：主約專案名稱 包含「勁便利」
+    //   decoder = { fieldDisplayName(col), valueLabel(col, value) }
+    //   ⚠️ 此函式於 27 / 27a / 27b 三份原型逐字相同（React 落地＝ _utils/condition-summary.ts）。
+    function formatConditionSummary(cond, decoder) {
+      const name = decoder.fieldDisplayName(cond.columnName);
+      if (cond.fieldType === 'categorical') {
+        const op = resolveCategoricalOperator(cond.operator);
+        if (isTextOperator(op)) return name + ' ' + operatorLabel(op) + '「' + trimKeyword(cond.keyword) + '」';
+        const vals = (cond.values || []).map(function (v) { return decoder.valueLabel(cond.columnName, v); });
+        // AC-15：不得顯示為空白 / `IN []` / 僅欄位名
+        return vals.length === 0 ? name + '：（未選擇任何值）' : name + '：' + vals.join('、');
+      }
+      if (cond.fieldType === 'numeric') return name + '：' + cond.min + ' ~ ' + cond.max;
+      if (cond.fieldType === 'date') return name + '：' + cond.dateStart + ' ~ ' + cond.dateEnd;
+      return name;
+    }
+    const CONDITION_DECODER = {
+      fieldDisplayName: function (col) { return fieldDisplayName(col); },
+      valueLabel: function (col, v) {
+        const o = (FIELD_VALUES[col] || []).find(function (x) { return x.v === v; });
+        return o ? o.l : v;
+      }
+    };
+
+    // ── AC-8：關鍵字驗證 ──────────────────────────────────────
+    //   force = true 時忽略「尚未離開焦點」，供儲存前檢查使用（剛切到文字運算子的空輸入框
+    //   不應立刻變紅，否則正常操作路徑一開始就滿版錯誤）。
+    const kwTouched = new Set();   // 已離開焦點（或已嘗試儲存）之條件 id
+    function keywordError(c, force) {
+      if (c.fieldType !== 'categorical' || !isTextOperator(c.operator)) return '';
+      const name = fieldDisplayName(c.columnName);
+      // AD §3.8 / I-CATOP-CASEYEAR-EXCLUDE-01（下拉已 disabled，此為 defense-in-depth）
+      if (isTextOperatorExcluded(c.columnName)) return '「' + name + '」不支援文字比對運算子，請改用「IN」勾選可選值';
+      const kw = trimKeyword(c.keyword);
+      if (kw.length > KEYWORD_MAX_LEN) return '「' + name + '」關鍵字長度不得超過 ' + KEYWORD_MAX_LEN + ' 個字元（目前 ' + kw.length + ' 個）';
+      if (kw === '') return (force || kwTouched.has(c.id)) ? '「' + name + '」使用文字比對運算子時，關鍵字為必填且不得為空白' : '';
+      return '';
+    }
+
+    // AC-8：儲存前之關鍵字驗證。回傳 true＝可繼續；false＝已就地顯示錯誤、聚焦該列並阻擋儲存。
+    function assertKeywordsValid() {
+      const bad = conditions.find(function (c) { return keywordError(c, true) !== ''; });
+      if (!bad) return true;
+      kwTouched.add(bad.id);
+      renderConditions();
+      showToast('error', '第 ' + (conditions.indexOf(bad) + 1) + ' 列條件尚未通過驗證', keywordError(bad, true));
+      const el = document.getElementById('condKw-' + bad.id);
+      if (el) { el.focus(); el.scrollIntoView({ block: 'center' }); }
+      return false;
+    }
+    const KW_INPUT_BASE = 'w-full px-2.5 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2';
+    const KW_INPUT_OK = ' border-border focus:ring-primary';
+    const KW_INPUT_ERR = ' border-danger bg-red-50/40 focus:ring-danger';
+
+    function setCondKeyword(id, v) {
+      const c = conditions.find(function (x) { return x.id === id; });
+      if (!c) return;
+      c.keyword = v;        // 輸入中保留原樣；trim 於送出時進行（BR-2），避免游標跳動
+      syncKeywordRow(id);   // 就地更新字數 / 錯誤 / aria —— 整列重繪會使輸入框失焦
+      if (typeof updatePreview === 'function') updatePreview();
+    }
+    function onKeywordBlur(id) { kwTouched.add(id); syncKeywordRow(id); }
+
+    function syncKeywordRow(id) {
+      const c = conditions.find(function (x) { return x.id === id; });
+      if (!c) return;
+      const err = keywordError(c, false);
+      const kwLen = trimKeyword(c.keyword).length;
+      const input = document.getElementById('condKw-' + id);
+      const counter = document.getElementById('condKwCount-' + id);
+      const errBox = document.getElementById('condKwError-' + id);
+      const row = document.querySelector('[data-cond-id="' + id + '"]');
+      if (counter) {
+        counter.textContent = kwLen + ' / ' + KEYWORD_MAX_LEN;
+        counter.className = 'text-[10px] tabular-nums shrink-0 ' + (kwLen > KEYWORD_MAX_LEN ? 'text-danger font-semibold' : 'text-gray-400');
+      }
+      if (input) {
+        input.className = KW_INPUT_BASE + (err ? KW_INPUT_ERR : KW_INPUT_OK);
+        input.setAttribute('aria-invalid', err ? 'true' : 'false');
+      }
+      if (errBox) {
+        errBox.classList.toggle('hidden', !err);
+        errBox.innerHTML = err ? '<i data-lucide="alert-circle" class="w-3 h-3 mt-0.5 shrink-0"></i><span>' + escHtml(err) + '</span>' : '';
+        if (err) lucide.createIcons();
+      }
+      if (row) row.setAttribute('data-cond-error', err ? 'true' : 'false');
+    }
+
+    // ── AC-5 / BR-3：運算子切換（互斥；切換即清除另一側，且不得隨 payload 送出）──
+    //   ・IN ↔ 文字運算子＝跨形態切換 → 另一側輸入被清除
+    //   ・文字運算子之間（包含 ↔ 不包含 ↔ 完全等於）不跨形態 → 關鍵字保留、不需確認
+    let pendingOpSwitch = null;   // { id, nextOp }，等待二次確認
+    function setCondOperator(id, nextOpRaw) {
+      const c = conditions.find(function (x) { return x.id === id; });
+      if (!c) return;
+      const cur = resolveCategoricalOperator(c.operator);
+      const next = resolveCategoricalOperator(nextOpRaw);
+      if (next === cur) return;
+      // I-CATOP-CASEYEAR-EXCLUDE-01：下拉已 disabled，此處為 setter 端 guard。
+      //   鍵盤 / 程式 / 自動化路徑仍可觸及 setter，僅靠 disabled 屬性不足。
+      if (isTextOperatorExcluded(c.columnName) && isTextOperator(next)) { renderConditions(); return; }
+      const crossForm = isTextOperator(cur) !== isTextOperator(next);
+      const willLose = isTextOperator(cur) ? trimKeyword(c.keyword) !== '' : (c.values || []).length > 0;
+      // 另一側「有內容」才二次確認；無內容（剛加入條件的常態路徑）直接切換，不製造多餘阻斷
+      if (crossForm && willLose) {
+        renderConditions();          // 先把下拉還原成目前運算子，避免畫面與狀態不一致
+        openOpSwitchConfirm(id, next);
+        return;
+      }
+      applyCondOperator(id, next);
+    }
+
+    function applyCondOperator(id, next) {
+      const c = conditions.find(function (x) { return x.id === id; });
+      if (!c) return;
+      const cur = resolveCategoricalOperator(c.operator);
+      const crossForm = isTextOperator(cur) !== isTextOperator(next);
+      c.operator = next;
+      if (crossForm) {
+        kwTouched.delete(id);
+        if (isTextOperator(next)) {
+          delete c.values;    // AC-5 / BR-3：核取清單被清除，且不得殘留於表單狀態
+          c.keyword = '';     // AC-5：切至文字運算子後輸入框為空（不預填任何值）
+          if (openValueDropdownId === id) openValueDropdownId = null;
+        } else {
+          delete c.keyword;   // AC-5 / BR-3：關鍵字被清除，且不得殘留於表單狀態
+          c.values = [];
+        }
+      }
+      renderConditions();
+      const el = document.getElementById((isTextOperator(next) ? 'condKw-' : 'condOp-') + id);
+      if (el) el.focus();
+    }
+
+    function openOpSwitchConfirm(id, next) {
+      const c = conditions.find(function (x) { return x.id === id; });
+      if (!c) return;
+      const f = FIELDS.find(function (x) { return x.columnName === c.columnName; });
+      const cur = resolveCategoricalOperator(c.operator);
+      pendingOpSwitch = { id: id, nextOp: next };
+      document.getElementById('opSwitchField').textContent = f ? f.displayName : c.columnName;
+      document.getElementById('opSwitchFrom').textContent = operatorLabel(cur);
+      document.getElementById('opSwitchTo').textContent = operatorLabel(next);
+      const lossBox = document.getElementById('opSwitchLoss');
+      if (isTextOperator(cur)) {
+        document.getElementById('opSwitchLossTitle').textContent = '目前輸入的關鍵字將被清除';
+        lossBox.innerHTML = '<span class="val-chip">' + escHtml(trimKeyword(c.keyword)) + '</span>';
+      } else {
+        document.getElementById('opSwitchLossTitle').textContent = '目前已勾選的 ' + (c.values || []).length + ' 個可選值將被清除';
+        lossBox.innerHTML = (c.values || []).map(function (v) {
+          return '<span class="val-chip">' + escHtml(CONDITION_DECODER.valueLabel(c.columnName, v)) + '</span>';
+        }).join(' ');
+      }
+      document.getElementById('opSwitchModal').classList.remove('hidden');
+      lucide.createIcons();
+      setTimeout(function () { const b = document.getElementById('btnOpSwitchCancel'); if (b) b.focus(); }, 30);
+    }
+    function closeOpSwitchConfirm() {
+      document.getElementById('opSwitchModal').classList.add('hidden');
+      const p = pendingOpSwitch;
+      pendingOpSwitch = null;
+      if (p) { const el = document.getElementById('condOp-' + p.id); if (el) el.focus(); }
+    }
+    function confirmOpSwitch() {
+      const p = pendingOpSwitch;
+      pendingOpSwitch = null;
+      document.getElementById('opSwitchModal').classList.add('hidden');
+      if (p) applyCondOperator(p.id, p.nextOp);
+    }
+
+    // ── 條件列之值編輯區（categorical）──────────────────────────
+    //   AC-1：四選一運算子，預設 IN；AC-5：IN 核取清單與文字輸入框互斥、不同時出現
+    function renderCategoricalValueUI(c, f, idx) {
+      const op = resolveCategoricalOperator(c.operator);
+      const excluded = isTextOperatorExcluded(c.columnName);
+      const rowLabel = '第 ' + (idx + 1) + ' 列條件（' + f.displayName + '）';
+      const opts = CATEGORICAL_OPERATORS.map(function (o) {
+        const dis = (excluded && o !== 'in') ? ' disabled' : '';
+        return '<option value="' + o + '"' + (op === o ? ' selected' : '') + dis + '>' + OPERATOR_LABEL[o] + '</option>';
+      }).join('');
+      const opSelect = `
+            <label class="sr-only" for="condOp-${c.id}">${rowLabel}比對方式</label>
+            <select id="condOp-${c.id}" data-testid="condition-operator-${f.columnName}" data-operator="${op}"
+              onchange="setCondOperator(${c.id}, this.value)"
+              title="${excluded ? '此欄位對應整數欄位 year_cnt，僅支援「IN」勾選可選值' : '選擇此條件的比對方式'}"
+              class="shrink-0 ${isTextOperator(op) ? 'self-start ' : ''}w-[104px] px-2 py-1.5 border border-border rounded-md text-xs font-medium text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-primary">${opts}</select>`;
+      if (isTextOperator(op)) return opSelect + renderKeywordPanel(c, f, idx);
+      return opSelect + renderInValuePanel(c, f) + (excluded ? excludedColumnNote(f) : zeroOptionNote(f));
+    }
+
+    // 文字運算子形態：單一關鍵字輸入框 + 效能提示（AC-12）+ 就地驗證錯誤（AC-8）
+    function renderKeywordPanel(c, f, idx) {
+      const err = keywordError(c, false);
+      const kwLen = trimKeyword(c.keyword).length;
+      const rowLabel = '第 ' + (idx + 1) + ' 列條件（' + f.displayName + '）';
+      return `
+            <div class="flex-1 min-w-[260px]" data-operator-panel="text" data-testid="condition-keyword-panel-${f.columnName}">
+              <input type="text" id="condKw-${c.id}" data-testid="condition-keyword-${f.columnName}"
+                value="${escHtml(c.keyword || '')}" oninput="setCondKeyword(${c.id}, this.value)" onblur="onKeywordBlur(${c.id})"
+                placeholder="輸入單一關鍵字，例如：勁便利"
+                aria-label="${rowLabel}關鍵字" aria-invalid="${err ? 'true' : 'false'}" aria-describedby="condKwHint-${c.id}"
+                class="${KW_INPUT_BASE}${err ? KW_INPUT_ERR : KW_INPUT_OK}">
+              <p id="condKwError-${c.id}" data-testid="condition-keyword-error-${f.columnName}" role="alert"
+                class="${err ? '' : 'hidden '}mt-1 text-[11px] text-danger flex items-start gap-1">${err ? '<i data-lucide="alert-circle" class="w-3 h-3 mt-0.5 shrink-0"></i><span>' + escHtml(err) + '</span>' : ''}</p>
+              <div class="mt-1 flex items-start gap-2">
+                <p id="condKwHint-${c.id}" data-testid="condition-perf-hint-${f.columnName}" class="flex-1 text-[11px] text-gray-500 flex items-start gap-1">
+                  <i data-lucide="info" class="w-3 h-3 mt-0.5 shrink-0"></i><span>${TEXT_OP_PERF_HINT}</span>
+                </p>
+                <span id="condKwCount-${c.id}" class="text-[10px] tabular-nums shrink-0 ${kwLen > KEYWORD_MAX_LEN ? 'text-danger font-semibold' : 'text-gray-400'}">${kwLen} / ${KEYWORD_MAX_LEN}</span>
+              </div>
+              <p class="mt-1 text-[11px] text-gray-400" data-design-add="true">關鍵字以字面值比對，<code class="font-mono">%</code>、<code class="font-mono">_</code> 等符號不具萬用字元意義；一列僅能設定一個關鍵字，需要多個請新增多列條件（列間以「且」連接）。</p>
+            </div>`;
+    }
+
+    // AD §3.8：不支援文字運算子之欄位（caseyear），於列內說明原因
+    function excludedColumnNote(f) {
+      return `
+            <p class="w-full text-[11px] text-gray-500 flex items-start gap-1" data-design-add="true"
+              data-testid="condition-operator-excluded-${f.columnName}">
+              <i data-lucide="info" class="w-3 h-3 mt-0.5 shrink-0"></i>
+              <span>「${f.displayName}」對應整數欄位 <code class="font-mono">year_cnt</code>，僅支援「IN」勾選可選值，不提供文字比對運算子。</span>
+            </p>`;
+    }
+
+    // AC-11 / BR-14：零可選值之 categorical 欄位仍可設定條件 —— 於 IN 形態主動指路到文字運算子
+    function zeroOptionNote(f) {
+      if ((FIELD_VALUES[f.columnName] || []).length > 0) return '';
+      return `
+            <p class="w-full text-[11px] text-amber-700 flex items-start gap-1" data-design-add="true"
+              data-testid="condition-zero-option-hint-${f.columnName}">
+              <i data-lucide="lightbulb" class="w-3 h-3 mt-0.5 shrink-0"></i>
+              <span>「${f.displayName}」尚未登錄任何可選值。此類值域極廣、無法窮舉的欄位，請將比對方式改為「包含 / 不包含 / 完全等於」，直接以關鍵字設定條件。</span>
+            </p>`;
+    }
+
+    // IN 形態：既有核取清單（本 feature 上線前之唯一形態，行為完全未變 —— AC-1 / AC-17）
+    function renderInValuePanel(c, f) {
+      const opts = FIELD_VALUES[f.columnName] || [];
+      const selectedVals = c.values || [];
+      const chips = selectedVals.map(function (v) {
+        const opt = opts.find(function (o) { return o.v === v; });
+        const label = opt ? opt.l : v;
+        const isInactive = opt && !opt.active;
+        const chipCls = isInactive ? 'val-chip val-chip-inactive' : 'val-chip';
+        const icon = isInactive ? '<i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i>' : '';
+        return `<span class="${chipCls}">${icon}${v === label ? label : v + ' · ' + label}<button type="button" onclick="toggleCatValue(${c.id}, '${v}')"><i data-lucide="x" class="w-3 h-3"></i></button></span>`;
+      }).join(' ');
+      const dropdownOpts = opts.map(function (o) {
+        const selected = selectedVals.includes(o.v);
+        const inactiveTag = !o.active ? ' <span class="text-amber-600">(已停用)</span>' : '';
+        const specialTag = o.special ? ' <span class="text-amber-600 font-semibold">SPECIAL</span>' : '';
+        const tip = c.columnName === 'case_status' && CASE_STATUS_TOOLTIPS[o.v] ? ` title="${CASE_STATUS_TOOLTIPS[o.v]}"` : '';
+        return `<label class="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer text-sm ${!o.active ? 'opacity-70' : ''}"${tip}>
+              <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleCatValue(${c.id}, '${o.v}')" class="rounded text-primary">
+              ${o.v === o.l ? '' : `<span class="font-mono text-xs text-gray-500 w-8 shrink-0">${o.v}</span>`}
+              <span class="text-gray-700">${o.l}${inactiveTag}${specialTag}</span>
+            </label>`;
+      }).join('');
+      const activeCount = opts.filter(function (o) { return o.active; }).length;
+      const selectedCount = selectedVals.length;
+      return `
+            <div class="flex-1 flex items-center gap-2 flex-wrap min-h-[36px] px-2 py-1 border border-border rounded-md bg-white" data-operator-panel="in" data-testid="condition-values-panel-${f.columnName}">
+              ${chips || '<span class="text-xs text-gray-400">未選擇任何值</span>'}
+              <div class="relative ml-auto">
+                <button type="button" onclick="toggleValueDropdown(${c.id})" class="text-xs px-2 py-1 border border-border rounded-md text-primary hover:bg-blue-50 inline-flex items-center gap-1">
+                  <i data-lucide="plus" class="w-3 h-3"></i>選擇值
+                  <span class="text-gray-400">(${activeCount})</span>
+                </button>
+                <div id="valDrop-${c.id}" data-testid="value-dropdown-${f.columnName}" class="${openValueDropdownId === c.id ? '' : 'hidden'} absolute right-0 top-full mt-1 w-72 bg-white border border-border rounded-md shadow-lg z-10 max-h-64 overflow-y-auto">
+                  <!-- 批次操作 header：全選（僅啟用值）/ 清除，sticky 於清單頂部 -->
+                  <div class="sticky top-0 bg-white border-b border-border px-2.5 py-1.5 flex items-center justify-between gap-2 z-10">
+                    <span class="text-[10px] text-gray-400 leading-tight">全選僅含啟用值</span>
+                    <div class="flex items-center gap-0.5 shrink-0">
+                      <button type="button" onclick="selectAllCatValues(${c.id})" ${activeCount === 0 ? 'disabled' : ''}
+                        data-testid="value-select-all-${f.columnName}"
+                        class="text-[11px] px-1.5 py-0.5 rounded text-primary font-medium hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed">全選</button>
+                      <span class="text-gray-200 text-[10px]">|</span>
+                      <button type="button" onclick="clearCatValues(${c.id})" ${selectedCount === 0 ? 'disabled' : ''}
+                        data-testid="value-clear-${f.columnName}"
+                        class="text-[11px] px-1.5 py-0.5 rounded text-gray-500 font-medium hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed">清除</button>
+                    </div>
+                  </div>
+                  <!-- 可選值清單（中段可捲動） -->
+                  <div class="py-0.5">
+                    ${dropdownOpts || '<p class="px-3 py-4 text-center text-xs text-gray-400">此欄位尚無可選值</p>'}
+                  </div>
+                  <!-- footer：已選計數 + 完成（明確關閉清單），sticky 於清單底部 -->
+                  <div class="sticky bottom-0 bg-white border-t border-border px-2.5 py-1.5 flex items-center justify-between gap-2 z-10">
+                    <span class="text-[10px] text-gray-400">已選 <span class="font-semibold text-gray-600" data-testid="value-selected-count-${f.columnName}">${selectedCount}</span> 項</span>
+                    <button type="button" onclick="closeValueDropdown(${c.id})"
+                      data-testid="value-done-${f.columnName}"
+                      class="text-xs px-3 py-1 bg-primary text-white rounded-md hover:bg-blue-700 font-medium inline-flex items-center gap-1">
+                      <i data-lucide="check" class="w-3 h-3"></i>完成
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+    }
+
+    // ── 原型示範（產品不提供）：供人工檢視 AC-8 / AD §3.8 之邊界狀態 ──
+    function demoSeedTextCondition() {
+      let c = conditions.find(function (x) { return x.columnName === 'spec_name'; });
+      if (!c) { addConditionByCol('spec_name'); c = conditions.find(function (x) { return x.columnName === 'spec_name'; }); }
+      if (!c) return;
+      c.operator = 'contains';
+      delete c.values;
+      c.keyword = '勁便利';
+      kwTouched.delete(c.id);
+      renderConditions();
+    }
+    function demoSeedKeywordError() {
+      let c = conditions.find(function (x) { return isTextOperator(x.operator); });
+      if (!c) { demoSeedTextCondition(); c = conditions.find(function (x) { return isTextOperator(x.operator); }); }
+      if (!c) return;
+      c.keyword = '　  ';           // 全形空格 + 半形空白 → trim 後為空（AC-8）
+      kwTouched.add(c.id);
+      renderConditions();
+    }
+    function demoSeedCaseyearViolation() {
+      let c = conditions.find(function (x) { return x.columnName === 'caseyear'; });
+      if (!c) { addConditionByCol('caseyear'); c = conditions.find(function (x) { return x.columnName === 'caseyear'; }); }
+      if (!c) return;
+      // 刻意繞過 setCondOperator 之 guard，模擬「前端狀態管理出錯」時後端防呆所擋下的 payload
+      c.operator = 'contains';
+      delete c.values;
+      c.keyword = '中古';
+      kwTouched.add(c.id);
+      renderConditions();
+    }
+
     function renderConditions() {
       const list = document.getElementById('condList');
       const empty = document.getElementById('condEmpty');
@@ -1030,68 +1463,8 @@
 
         let valueUI = '';
         if (f.fieldType === 'categorical') {
-          const opts = FIELD_VALUES[f.columnName] || [];
-          const selectedVals = c.values || [];
-          const chips = selectedVals.map(v => {
-            const opt = opts.find(o => o.v === v);
-            const label = opt ? opt.l : v;
-            const isInactive = opt && !opt.active;
-            const chipCls = isInactive ? 'val-chip val-chip-inactive' : 'val-chip';
-            const icon = isInactive ? '<i data-lucide="alert-triangle" class="w-2.5 h-2.5"></i>' : '';
-            return `<span class="${chipCls}">${icon}${v === label ? label : v + ' · ' + label}<button type="button" onclick="toggleCatValue(${c.id}, '${v}')"><i data-lucide="x" class="w-3 h-3"></i></button></span>`;
-          }).join(' ');
-          const dropdownOpts = opts.map(o => {
-            const selected = selectedVals.includes(o.v);
-            const inactiveTag = !o.active ? ' <span class="text-amber-600">(已停用)</span>' : '';
-            const specialTag = o.special ? ' <span class="text-amber-600 font-semibold">SPECIAL</span>' : '';
-            const tip = c.columnName === 'case_status' && CASE_STATUS_TOOLTIPS[o.v] ? ` title="${CASE_STATUS_TOOLTIPS[o.v]}"` : '';
-            return `<label class="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 cursor-pointer text-sm ${!o.active ? 'opacity-70' : ''}"${tip}>
-              <input type="checkbox" ${selected ? 'checked' : ''} onchange="toggleCatValue(${c.id}, '${o.v}')" class="rounded text-primary">
-              ${o.v === o.l ? '' : `<span class="font-mono text-xs text-gray-500 w-8 shrink-0">${o.v}</span>`}
-              <span class="text-gray-700">${o.l}${inactiveTag}${specialTag}</span>
-            </label>`;
-          }).join('');
-          const activeCount = opts.filter(o => o.active).length;
-          const selectedCount = selectedVals.length;
-          valueUI = `
-            <span class="text-xs text-gray-500 font-mono">IN</span>
-            <div class="flex-1 flex items-center gap-2 flex-wrap min-h-[36px] px-2 py-1 border border-border rounded-md bg-white">
-              ${chips || '<span class="text-xs text-gray-400">未選擇任何值</span>'}
-              <div class="relative ml-auto">
-                <button type="button" onclick="toggleValueDropdown(${c.id})" class="text-xs px-2 py-1 border border-border rounded-md text-primary hover:bg-blue-50 inline-flex items-center gap-1">
-                  <i data-lucide="plus" class="w-3 h-3"></i>選擇值
-                  <span class="text-gray-400">(${activeCount})</span>
-                </button>
-                <div id="valDrop-${c.id}" data-testid="value-dropdown-${f.columnName}" class="${openValueDropdownId === c.id ? '' : 'hidden'} absolute right-0 top-full mt-1 w-72 bg-white border border-border rounded-md shadow-lg z-10 max-h-64 overflow-y-auto">
-                  <!-- 批次操作 header：全選（僅啟用值）/ 清除，sticky 於清單頂部 -->
-                  <div class="sticky top-0 bg-white border-b border-border px-2.5 py-1.5 flex items-center justify-between gap-2 z-10">
-                    <span class="text-[10px] text-gray-400 leading-tight">全選僅含啟用值</span>
-                    <div class="flex items-center gap-0.5 shrink-0">
-                      <button type="button" onclick="selectAllCatValues(${c.id})" ${activeCount === 0 ? 'disabled' : ''}
-                        data-testid="value-select-all-${f.columnName}"
-                        class="text-[11px] px-1.5 py-0.5 rounded text-primary font-medium hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed">全選</button>
-                      <span class="text-gray-200 text-[10px]">|</span>
-                      <button type="button" onclick="clearCatValues(${c.id})" ${selectedCount === 0 ? 'disabled' : ''}
-                        data-testid="value-clear-${f.columnName}"
-                        class="text-[11px] px-1.5 py-0.5 rounded text-gray-500 font-medium hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed">清除</button>
-                    </div>
-                  </div>
-                  <!-- 可選值清單（中段可捲動） -->
-                  <div class="py-0.5">
-                    ${dropdownOpts || '<p class="px-3 py-4 text-center text-xs text-gray-400">此欄位尚無可選值</p>'}
-                  </div>
-                  <!-- footer：已選計數 + 完成（明確關閉清單），sticky 於清單底部 -->
-                  <div class="sticky bottom-0 bg-white border-t border-border px-2.5 py-1.5 flex items-center justify-between gap-2 z-10">
-                    <span class="text-[10px] text-gray-400">已選 <span class="font-semibold text-gray-600" data-testid="value-selected-count-${f.columnName}">${selectedCount}</span> 項</span>
-                    <button type="button" onclick="closeValueDropdown(${c.id})"
-                      data-testid="value-done-${f.columnName}"
-                      class="text-xs px-3 py-1 bg-primary text-white rounded-md hover:bg-blue-700 font-medium inline-flex items-center gap-1">
-                      <i data-lucide="check" class="w-3 h-3"></i>完成
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>`;
+          // F119：運算子感知（IN 核取清單 ↔ 單一關鍵字輸入框，兩者互斥不同時出現）
+          valueUI = renderCategoricalValueUI(c, f, idx);
         } else if (f.fieldType === 'numeric') {
           valueUI = `
             <span class="text-xs text-gray-500 font-mono">BETWEEN</span>
@@ -1222,7 +1595,11 @@
     }
 
     function isConditionComplete(c) {
-      if (c.fieldType === 'categorical') return (c.values || []).length >= 1;
+      // F119 AC-8：文字運算子形態改以「關鍵字通過驗證」為完成條件；
+      //   values 至少 1 個之既有規則僅適用於 IN（AC-11）
+      if (c.fieldType === 'categorical') {
+        return isTextOperator(c.operator) ? keywordError(c, true) === '' : (c.values || []).length >= 1;
+      }
       if (c.fieldType === 'numeric')     return c.min !== '' && c.max !== '' && Number(c.max) >= Number(c.min);
       if (c.fieldType === 'date')        return c.dateStart && c.dateEnd && c.dateEnd >= c.dateStart;
       return false;
@@ -1249,12 +1626,21 @@
         // v1.7 / US-144：最小條件數只計入「非系統固定」條件（best_case 不計入）
         const userConditions = conditions.filter(c => { const f = FIELDS.find(x => x.columnName === c.columnName); return !(f && f.isSystemFixed); });
         if (userConditions.length === 0) { showToast('error','請至少新增 1 個篩選條件（優質案件為系統固定，不計入）'); return; }
+        // F119 AC-8：關鍵字驗證（空 / 純空白 / 超長 / caseyear 不支援）須就地顯示並指出是哪一列
+        if (!assertKeywordsValid()) return;
         const incomplete = conditions.find(c => !isConditionComplete(c));
         if (incomplete) { showToast('error','部分條件尚未填寫完整'); return; }
         body.conditionPayload = {
           conditions: conditions.map(c => {
             const base = { columnName: c.columnName, fieldType: c.fieldType };
-            if (c.fieldType === 'categorical') return { ...base, values: c.values };
+            if (c.fieldType === 'categorical') {
+              // F119 BR-3：互斥 —— 文字形態送 operator + keyword（不送 values）；
+              //   IN 形態維持與本 feature 上線前逐字相同之 payload（不含 operator key，AC-17 / T-21）
+              const op = resolveCategoricalOperator(c.operator);
+              return isTextOperator(op)
+                ? { ...base, operator: op, keyword: trimKeyword(c.keyword) }   // BR-2：落庫值為 trim 後之字串
+                : { ...base, values: c.values };
+            }
             if (c.fieldType === 'numeric')     return { ...base, min: c.min, max: c.max };
             if (c.fieldType === 'date')        return { ...base, dateStart: c.dateStart, dateEnd: c.dateEnd };
             return base;

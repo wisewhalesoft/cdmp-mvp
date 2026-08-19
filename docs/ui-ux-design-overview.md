@@ -912,3 +912,220 @@ prototypes/
 - [x] 46 項自動化斷言 ＋ console 零錯誤 ＋ 三寬度 RWD 實測
 - [ ] **人工確認 B-Q1（spec §11 之 `-` vs `0`）**
 - [ ] 人工審閱閘核可後交 test-generator
+
+---
+
+# 附錄 C — F119 類別型篩選欄位文字比對運算子（US-183）
+
+> **狀態：✅ 人工審閱閘已核可（2026-08-18）；C-Q1 / C-Q2 已裁決（2026-08-18，見 C.7）。** 本附錄涵蓋 [F119 v1.1](specs/features/F119-categorical-text-match-operators.md)（US-183 v1.3）之 UI/UX 設計。
+> 架構決策見 [AD-E07-50 v1.1](specs/implementation-log/AD-E07-50-categorical-text-match-operators.md)。
+> 本輪**不新增頁面、不新增路由、未改動任何原型的側邊欄或頁面階層**。
+
+## C.1 Context
+
+類別型（categorical）篩選條件現行唯一語意為「勾選 `pooldata_field_option` 已登錄之可選值」＝ SQL `IN (...)`。
+F119 為其新增三種文字比對運算子（`contains` / `not_contains` / `equals`）＋單一關鍵字，
+使值域極廣、無法窮舉可選值的欄位（如主約專案名稱 `spec_name`）也能設定條件。
+
+| 檔案 | 本輪變更 |
+|---|---|
+| `prototypes/27a-list-create-draft.html` | 條件列新增運算子四選一；IN 核取清單 ↔ 關鍵字輸入框互斥切換；效能提示；關鍵字驗證；零可選值欄位指引；`caseyear` 排除 |
+| `prototypes/27b-list-edit-draft.html` | 與 27a **逐字相同**（AC-18；React 落地為同一個 `CategoricalValuesPicker`） |
+| `prototypes/27-list-definition.html` | 名單詳情 Drawer ＋ Kanban 條件 chip 改由 `formatConditionSummary()` 統一產生（AC-15 / BR-10） |
+| `prototypes/30-stage0-estimate.html` | 渲染既有 `STAGE0_LIST_ESTIMATE_PARTIAL` warning（AC-13），為本頁第 5 種警告 |
+
+> **範圍外（v1.1 已 descope）**：月跑快照之條件顯示（F119 §13.3 A-7 / AD §11-A）。`prototypes/35-snapshot-detail.html` 本輪**未動**。
+
+## C.2 設計決策
+
+| # | 決策 | 選擇 | 理由 / AC 依據 |
+|---|---|---|---|
+| C-1 | 運算子選擇控制項型態（OQ-183-01） | **原生 `<select>`**，寬 `104px`，置於既有 `IN` 文字標籤原位 | ①條件列的值編輯列已被「chips ＋ 選擇值按鈕 ＋ 下拉」佔滿，四顆 segmented 按鈕約需 200px+，會把值編輯區擠到換行，且每多一列條件就重複一次視覺噪音；`<select>` 只佔 104px，恰好接手 `IN` 標籤原本的位置②四個選項互斥、預設值明確、非高頻切換 —— 正是 select 的典型情境；segmented 適合 2~3 個高頻切換選項③原生 select 免費得到鍵盤操作、行動裝置原生選單與螢幕閱讀器支援，本頁其他欄位（卡別、資料來源）也是原生 select，不引入新設計語彙 |
+| C-2 | 選項文字 | 逐字採 BR-10 標籤：`IN` / `包含` / `不包含` / `完全等於`（無附加說明字） | AC-1 明列四個顯示字；與 `formatConditionSummary()` 的運算子標籤同源，選單所見即條件摘要所寫，使用者不需要記兩套詞 |
+| C-3 | 互斥切換的視覺處理（AC-5） | **另一側「有內容」才二次確認**；另一側為空則直接切換 | 剛加入條件的常態路徑（兩側皆空）不該被彈窗打斷；只有真的會丟資料時才確認。確認框沿用 repo 既有 `category-switch-confirm-modal.tsx` 的形制（琥珀圓形圖示 ＋ 明列後果 ＋ 取消/確認） |
+| C-4 | 為何是「確認」而不是「切換後可復原（undo）」 | 確認 | AC-5 要求被清除的輸入「**不得殘留於表單狀態**並隨送出 payload 一併儲存」。undo 必須把舊值留在某處，會與該條文正面衝突（下游 ring 很可能斷言 `'values' in cond === false`）。確認式在切換**之前**攔截，切換後狀態乾淨 |
+| C-5 | 確認框內容 | 明列「將被清除的內容本身」（已勾選值以 `val-chip` 逐個列出／關鍵字以 chip 顯示）＋「清除後不會隨名單一併儲存」＋「若只是想調整設定值，請按取消」 | 只說「將被清除」使用者無從判斷損失大小；把實際內容攤開才能做決定。預設焦點放在「取消」 |
+| C-6 | 文字運算子彼此切換（包含 ↔ 不包含 ↔ 完全等於） | **不清除關鍵字、不確認** | AC-5 的清除規則限於「`in` ↔ 文字運算子」跨形態；同形態切換沒有互斥問題，清除只會製造重打字的摩擦 |
+| C-7 | **效能提示文案與位置（OQ-183-01，本輪裁定）** | **列內 inline**，緊接關鍵字輸入框下方，`info` 圖示 ＋ `text-[11px] text-gray-500`（**非**琥珀警示色）。文案固定為：<br>**`文字比對需逐筆掃描全部案件，較勾選可選值耗時；命中預估與 Stage 0 試算可能因此逾時。此為正常現象，不影響條件儲存。`** | ①**位置**：運算子是**每列**的屬性，區塊底部或預估面板旁的提示無法指出是哪一列造成；放在造成它的輸入框正下方，因果一目了然，且「切回 IN 時提示消失」（AC-12）成為結構上的必然而非額外狀態②**色彩**：AC-12 明訂這是告知性、不阻擋、不需確認 —— 用琥珀/紅會讀成錯誤，本頁的琥珀已被「可選值已停用」佔用；灰字 ＋ `info` 沿用本元件既有的「系統固定條件說明」樣式，是最低干擾的既有語彙③**內容**：一句因（逐筆掃描）、一句果（哪兩件事可能逾時）、一句安心（不是錯誤、不影響儲存）。刻意**不**宣稱「月名單分派不受影響」—— AD SA-6 尚未確認該路徑效能，不能替它背書④只出現在一個位置（不重複於預估面板旁），避免同一件事講兩次 |
+| C-8 | 關鍵字輸入是否設 `maxlength="100"` | **不設** | 硬上限會讓 AC-8 的「超過 100 字元 → 阻擋並顯示錯誤」在 UI 上永遠不可能發生（貼上也被吃掉），驗證變成不可測。改為即時字數計數（超過即轉紅）＋ 就地錯誤 ＋ 阻擋儲存 |
+| C-9 | 「必填」錯誤的出現時機 | 離開焦點（blur）或按下儲存後才出現；超長錯誤則即時出現 | 切到文字運算子的瞬間輸入框必然是空的（AC-5 要求不預填），若立刻標紅，正常操作路徑一開始就滿版錯誤。超長是「已經打出來的內容」，即時回饋才有意義 |
+| C-10 | 驗證錯誤如何指出「哪一列」 | 錯誤訊息以**欄位顯示名稱**開頭（`「主約專案名稱」關鍵字…`），並就地顯示於該列；儲存被擋時 toast 為「第 N 列條件尚未通過驗證」＋同一則訊息，並自動聚焦捲動至該列 | 同一欄位在一份名單中只能出現一次（`availableFields` 已排除已用欄位），故欄位名即列的唯一識別；序號 `#N` 會隨刪列位移，只用於 toast 的定位語 |
+| C-11 | `caseyear` 不支援文字運算子（AD §3.8 / `I-CATOP-CASEYEAR-EXCLUDE-01`） | 下拉中三個文字選項設**真正的 `disabled`** ＋ select `title` ＋ 列內說明；**同時**在 `setCondOperator()` 開頭 guard | 讓使用者根本走不到錯誤狀態，優於讓他設定完再被 422 打回。但 disabled 只擋滑鼠，鍵盤/程式/自動化路徑仍可觸及 setter，故兩道都要。仍保留 `keywordError()` 的訊息分支，供後端防呆情境（前端狀態出錯）呈現 |
+| C-12 | 零可選值欄位（AC-11 / BR-14） | 欄位下拉**不過濾**；`IN` 形態下於列內顯示琥珀 `lightbulb` 指引 | 「新增條件」下拉只顯示欄位名 + `column_name` + 型別徽章，本來就不揭露可選值數量，**不會**給出「沒東西可選」的暗示（已實測）。真正的風險在使用者選了欄位、打開值清單看到空的就走人 —— 所以指引放在他真的撞到空清單的那一刻 |
+| C-13 | 條件顯示格式（AC-15 / BR-10） | 單一函式 `formatConditionSummary(cond, decoder)`，三份原型**逐字相同**。文字運算子輸出：`{欄位} {運算子標籤}「{關鍵字}」`；`in` 輸出 `{欄位}：{值1}、{值2}`；空 `values` 輸出 `{欄位}：（未選擇任何值）` | 見 C.7 之 C-Q1 —— AD §3.6 的樣板字串與 AC-15 的例句不一致，本原型採 **AC-15 例句**（AD 自己標註其樣板是在實作該例句）。**2026-08-18 已裁決採 AC-15 例句，原型無需變更** |
+| C-14 | Kanban 條件 chip 過長時的處理 | `max-w-full truncate` ＋ `title` 帶完整字串；**不**做字串截斷 | Kanban 卡片內容寬度 @1280 約 156px，`主約專案名稱 不包含「勁便利」` 需 157px，會裁掉最後一字。以 CSS 裁切 ＋ `title` 保全語意，且名單詳情 Drawer 為完整保真的顯示端。字串層截斷會使「+N」與關鍵字混在一起難以辨識 |
+| C-15 | Drawer 文字條件的細節列 | 標題行為條件摘要字串；下方另給「運算子徽章（靛紫）＋ 關鍵字徽章（藍）」 | 與 `in` 條件下方的值 chip 形成一致的「標題 + 細節」節奏；靛紫運算子徽章與藍色值徽章可區分「比對方式」與「內容」 |
+| C-16 | `IN` 條件的顯示是否改動 | 顯示格式統一由同一函式產生（Kanban 由 `欄位:值1/值2+N` 改為 `欄位：值1、值2`） | BR-10 的核心價值是「單一格式化來源、禁止各頁自拼字串」；既有 `IN []` 缺陷正源於各頁自拼。AC-17 的「顯示完全相同」是指**顯式 `in` ≡ 缺漏 `operator`**（已於原型以 `OB202606004`／`OB202606011` 兩筆對照組實測），不是指視覺格式不得調整 |
+| C-17 | `IN` 形態的 payload | 一律**不送** `operator` key | AC-17 / T-21 允許「不含 operator key」或「含 `operator:'in'`」兩種；不送出使既有名單重新儲存後 payload 與上線前逐位元相同，是風險最低的一側 |
+| C-18 | **Stage 0 warning 的呈現位置（AC-13）** | **頁首彙總 amber banner，逐筆一列**（`listNo` code ＋ 後端 `message` 逐字 ＋ 名單名稱），置於既有四種警告的**最上方**；**另**於件數 KPI 卡加「不完整」徽章 | ①本頁沒有「名單列」可放 inline —— 名單是一個下拉篩選器，唯一能逐筆列出的位置就是頁首②置於警告堆疊最上方：它影響本頁**所有**數字的可信度，其餘四種只影響局部③KPI 徽章是必要的第二觸點 —— 業務主管常只掃 KPI 就下判斷，警告在畫面上方很容易被略過，而「合計被誤讀為完整值」正是 BR-13 要防的事 |
+| C-19 | Stage 0 示範資料是否真的排除逾時名單 | **是**（`currentLists()` 過濾掉逾時名單，合計由 28,500 降為 12,000） | 若示範資料照舊全額計入，banner 的「合計未涵蓋」就是假的，人工審閱與下游 ring 都會建立在錯誤前提上 |
+
+## C.3 色彩系統（本輪未新增色票，僅新增語意）
+
+| 語意 | 色票 | 用途 | 與既有元素之區隔 |
+|---|---|---|---|
+| 文字運算子效能提示 | `text-gray-500` ＋ `info` 圖示 | 關鍵字輸入框下方 | **刻意不用琥珀** —— 本頁琥珀已代表「可選值已停用（需處理）」；灰字沿用同元件的「系統固定條件說明」樣式，讀作說明而非警示 |
+| 關鍵字驗證錯誤 | `border-danger` ＋ `bg-red-50/40` 輸入框 ＋ `text-danger` 訊息 ＋ `alert-circle` | 就地錯誤 | 與頁面既有 `nameError` / `periodError` 同一紅色語彙 |
+| 零可選值指引 | `text-amber-700` ＋ `lightbulb` | IN 形態列內 | `lightbulb`（建議）而非 `alert-triangle`（警示）—— 這不是錯誤狀態，AC-11 明訂空核取清單為既有合法狀態 |
+| 運算子切換確認 | 琥珀圓形圖示 `bg-amber-100` ＋ `alert-triangle`；損失清單 `bg-amber-50 / border-amber-200` | modal | 沿用 `category-switch-confirm-modal.tsx` 既有形制；主要按鈕為 primary 藍（合法操作，非破壞性紅） |
+| Drawer 運算子徽章 | `bg-indigo-50 / text-indigo-700 / border-indigo-100` | 條件細節列 | 與值徽章的藍（`bg-blue-50/text-blue-700`）同色系但不同色相，表達「比對方式 vs 內容」 |
+| Stage 0 合計不完整 | `bg-amber-50 / border-amber-300 / text-amber-900`；`hourglass` 圖示 | 頁首 banner ＋ KPI 徽章 | 邊框較其餘警告深一階（`amber-300` vs `amber-200`），`hourglass`（逾時）明確區別於 `alert-triangle`（資料池偏低）／`user-minus`（人力 0）／`git-pull-request-draft`（缺口） |
+
+> 對比度：`#B45309` on `#FFFBEB` 約 6.9:1、amber-900 `#78350F` on `#FFFBEB` 約 10.9:1、`text-gray-500` on `#F9FAFB` 約 5.9:1、`text-danger` `#EF4444` on white 約 4.5:1 —— 均達 WCAG 2.1 AA。
+
+## C.4 檔案結構
+
+```
+prototypes/
+├── 27-list-definition.html       # 名單定義（Kanban chip ＋ 詳情 Drawer）→ AC-15 / BR-10 消費端
+├── 27a-list-create-draft.html    # 建立草稿名單  ┐ 條件編輯區逐字相同（AC-18）
+├── 27b-list-edit-draft.html      # 編輯草稿名單  ┘
+└── 30-stage0-estimate.html       # Stage 0 試算 → AC-13 warning 渲染
+```
+
+**未新增原型檔**：F119 為既有頁面之加性擴充，spec 已無阻塞 OQ（OQ-183-01 由本輪裁定），故直接就地修改 ground truth 檔。
+
+## C.5 執行內容
+
+### Phase C-1：條件列運算子（27a / 27b，AC-1 / AC-5 / AC-11 / AC-12 / AC-18）
+
+條件列版面（未改動 `#序號 + 欄位名 + column_name + 型別徽章 + 刪除鈕` 的第一列）：
+
+| 運算子 | 值編輯列的組成 |
+|---|---|
+| `IN`（預設） | `<select>` ＋ **既有**核取清單面板（chips / 選擇值 / 全選 / 清除 / 完成，逐字未動）＋（零可選值時）琥珀指引 |
+| `包含` / `不包含` / `完全等於` | `<select>`（`self-start`）＋ 關鍵字輸入框 ＋ 就地錯誤 ＋ 效能提示 ＋ `N / 100` 計數 ＋ 字面值/單關鍵字說明 |
+
+**共用區塊逐字相同的保證**：27a / 27b 之 `// F119 …` 至 `renderConditions()` 之間 **22,224 bytes 完全一致**（已以程式比對），
+其中 `renderCategoricalValueUI()` 為兩頁唯一的條件值編輯區渲染入口；切換確認 modal（2,395 bytes）與原型示範列（749 bytes）亦逐字相同。
+
+**斷言掛點**：
+
+| 元素 | hook |
+|---|---|
+| 運算子下拉 | `[data-testid="condition-operator-{col}"]`、`[data-operator]` |
+| IN 面板 / 文字面板 | `[data-operator-panel="in"]` / `[data-operator-panel="text"]`、`[data-testid="condition-values-panel-{col}"]` / `condition-keyword-panel-{col}` |
+| 關鍵字輸入 | `[data-testid="condition-keyword-{col}"]`、`aria-invalid` |
+| 就地錯誤 | `[data-testid="condition-keyword-error-{col}"]`、列上 `[data-cond-error]` |
+| 效能提示 | `[data-testid="condition-perf-hint-{col}"]` |
+| 零可選值指引 | `[data-testid="condition-zero-option-hint-{col}"]`（`data-design-add="true"`） |
+| caseyear 說明 | `[data-testid="condition-operator-excluded-caseyear"]`（`data-design-add="true"`） |
+| 切換確認 | `[data-testid="operator-switch-confirm-modal"]` / `operator-switch-loss` / `operator-switch-confirm` |
+
+**純函式（可直接呼叫斷言）**：`resolveCategoricalOperator` / `isTextOperator` / `operatorLabel` / `trimKeyword` /
+`keywordError(cond, force)` / `formatConditionSummary(cond, decoder)` / `assertKeywordsValid()`。
+
+### Phase C-2：條件顯示（27，AC-15 / BR-10）
+
+- Kanban chip 與 Drawer 條件清單皆呼叫 `formatConditionSummary()`，兩者皆掛 `[data-condition-summary]`。
+- Drawer 文字條件另掛 `[data-condition-operator="{op}"]` 與 `[data-condition-keyword]`。
+- 示範資料新增：
+
+| 名單 | 新增條件 | 示範之邊界 |
+|---|---|---|
+| `OB202606002` | `spec_name contains 勁便利` | `contains` 顯示 |
+| `OB202606005` | `spec_name not_contains 勁便利` | **AC-15 例句本身**：`主約專案名稱 不包含「勁便利」` |
+| `OB202606009` | `occupation_desc equals 軍公教` | `equals` ＋ `customer_core` 來源 |
+| `OB202606004` | `prod_kind` 改為**顯式** `operator:'in'` | **AC-17 活體對照組** —— 與 `OB202606011`（缺漏 `operator`、同值）顯示字串必須逐字相同。**請勿把任一筆改成與另一筆一致的寫法**，改了就失去這道 tripwire |
+
+> 兩筆含文字運算子的示範條件刻意放在條件陣列的**前兩位**，因為 Kanban chip 只顯示前 2 個條件（既有規則）；
+> 放在第 3 位會被 `+N` 收掉而無法在列表頁被人工或 ring 看見。
+
+### Phase C-3：Stage 0 warning（30，AC-13 / BR-13）
+
+- 新 banner `#listPartialWarn`（`[data-testid="stage0-list-partial-warning"]`、`[data-warning-count]`），每筆 `<li>` 掛
+  `[data-testid="stage0-partial-item"]`、`[data-list-no]`、`[data-warning-code]`、`[data-warning-message]`。
+- 訊息逐字採 `error-handling.md` v1.20 契約：**`名單 {listNo} 估算逾時，已從本次合計排除。`**（名單中文名為原型附加的輔助資訊，置於訊息之後的括號內）。
+- KPI 徽章 `[data-testid="kpi-incomplete-badge"]`（「不完整」），`title` 列出逾時名單編號。
+- Demo 場景「名單估算逾時（合計不完整）」預設兩張名單同時逾時（驗證「每一張皆可辨識」）；改用「名單篩選」選到其中一張即得單筆情境。
+- 處長（section_chief）視角同樣渲染（唯讀不影響警告）。
+
+## C.6 共用 UI 模式（本輪新增／沿用）
+
+| 模式 | 規則 |
+|---|---|
+| 一列條件內的「形態切換」控制項 | 用原生 `<select>` 接手原本的靜態運算子標籤位置；文字形態時 select 加 `self-start`，避免與多行面板垂直置中而錯位 |
+| 切換會清除另一側輸入 | 另一側**有內容**才二次確認；確認框必須列出「將被清除的內容本身」，預設焦點放「取消」。**不做 undo** —— 規格若寫「不得殘留於表單狀態」，undo 的暫存區就是違規 |
+| 高頻輸入欄位的就地驗證 | `oninput` **不得**觸發整列 `innerHTML` 重繪（游標會消失）；改為 `syncXxxRow(id)` 就地更新計數／錯誤／`aria-invalid`，整列重繪只在運算子切換等結構變動時發生 |
+| 「必填」vs「格式」錯誤的時機 | 必填錯誤等 blur / 送出；格式（長度、範圍）錯誤即時。否則剛出現的空欄位立刻標紅 |
+| 不支援某選項的欄位 | 選項設真正的 `disabled` ＋ `title` ＋ 列內說明**並且**在 setter 開頭 guard；兩者缺一不可（disabled 只擋滑鼠） |
+| 有硬性長度上限的輸入 | **不要**用 `maxlength` 把驗證變成不可達；用計數器 ＋ 就地錯誤 ＋ 阻擋送出 |
+| 告知性（非錯誤）提示 | 灰字 ＋ `info`，緊貼造成它的控制項；不用琥珀/紅，不重複於第二個位置 |
+| 「合計不完整」類警告 | 頁首逐筆列出（每筆可辨識）＋ **在合計數字本身**加標記；只放頁首會被只掃 KPI 的使用者略過 |
+| 跨頁共用的顯示格式化 | 自持原型無法 import，故把純函式**逐字**貼進每一頁並在檔頭註明「三份逐字相同，勿只改一份」，再以程式比對長度/內容驗證 |
+
+## C.7 待人工確認 / 給上游的問題
+
+| # | 標記 | 事項 | 本原型採取的立場 |
+|---|---|---|---|
+| C-Q1 | **✅ 已裁決（2026-08-18 / team lead）** | AD §3.6 的樣板字串為 `「${欄位}」${運算子標籤}「${keyword}」`，會產出 `「主約專案名稱」包含「勁便利」`（欄位名帶引號）；但同一句括號內註明其為「AC-15 範例格式『主約專案名稱 包含「勁便利」』」，而 F119 AC-15 的例句是 `主約專案名稱 包含「勁便利」`（欄位名**不**帶引號、以半形空格分隔）。兩者不一致 | **裁定：採 AC-15 例句（欄位名不加引號），即本原型既有做法；prototype 與 test-generator 斷言皆無需變更。** AD §3.6 之樣板字串改由 system-architect 修正為 `${欄位} ${運算子標籤}「${keyword}」`（已指派）。<br><br>**原論證（保留為軌跡）**：原型採 AC-15 例句。理由：AC-15 是通過人工審閱閘的業務契約，且 AD 自述其樣板是在實作該例句 —— 屬樣板筆誤而非設計歧異；否則實作會同時滿足不了 AD 與 AC。裁定者認可此推論：AD 自證來源即為 AC-15，兩者不一致時以來源為準 |
+| C-Q2 | **✅ 已裁決（2026-08-18 / 使用者）** | AD §3.6 寫「消費端改為呼叫本函式（**取代各自 inline 邏輯**）」。照字面執行會連 `in` 條件的既有顯示格式一併改寫（本原型 Kanban chip 即由 `欄位:值1/值2+N` 改為 `欄位：值1、值2`） | **裁定：統一（維持本原型照 AD 字面的做法），`formatConditionSummary()` 的 `in` 分支不回退為各頁既有格式。** 理由：`in` 分支若回退，BR-10「單一格式化來源」即名存實亡，而既有 `IN []` 缺陷正是各頁自拼字串造成的；Kanban chip 由 `欄位:值1/值2+N` 改為 `欄位：值1、值2` 屬純外觀變更、不影響篩選結果。<br><br>**原論證（保留為軌跡）**：原型照 AD 字面統一，並以 `OB202606004`／`OB202606011` 對照組證明「顯式 `in` ≡ 缺漏 `operator`」（AC-17 的真正要求）仍成立；若認為既有 `in` 顯示格式不可動則需回退，但那會使 BR-10 名存實亡 |
+| C-Q3 | 記錄（不阻塞） | `spec_name`（主約專案名稱）依 F119 A-1 **不在**部署 seed 白名單內，需先經 F075 新增 | 原型已將其列入 `FIELDS` 並**刻意不建** `FIELD_VALUES['spec_name']`，以示範 AC-11 的零可選值路徑。落地時若白名單尚未加入該欄位，AC-11 / T-29 需改用其他零可選值欄位驗證 |
+| C-Q4 | 記錄（不阻塞） | Kanban 卡片 @1280 內容寬約 156px，`主約專案名稱 不包含「勁便利」` 需 157px → 最後一字被 CSS 裁切（`title` 帶完整字串；@1440 / @1920 完整顯示） | 接受。名單詳情 Drawer 為完整保真顯示端；AC-15「不得顯示為空白 / `IN []`」在所有寬度皆成立 |
+| C-Q5 | 記錄（不阻塞） | 系統固定條件列（`best_case`）仍保留靜態 `IN` 文字標籤，未改為 `<select>` | 該列為唯讀鎖定列（US-144 AC-3），給它一個不能操作的下拉只會誤導。若 ring 斷言「所有 categorical 列皆有運算子下拉」需排除 `[data-system-fixed="true"]` |
+
+### 本輪自行決定、但**不在任何 AC 之中**的內容（供 spec-writer 決定是否轉為逐字 AC）
+
+| 項目 | 值 |
+|---|---|
+| 效能提示文案（C-7） | `文字比對需逐筆掃描全部案件，較勾選可選值耗時；命中預估與 Stage 0 試算可能因此逾時。此為正常現象，不影響條件儲存。` |
+| 關鍵字輸入 placeholder | `輸入單一關鍵字，例如：勁便利` |
+| 關鍵字下方補充說明 | `關鍵字以字面值比對，% 、_ 等符號不具萬用字元意義；一列僅能設定一個關鍵字，需要多個請新增多列條件（列間以「且」連接）。`（承載 AC-7 / AC-9 的使用者可見說明） |
+| 字數計數格式 | `{trim 後字數} / 100` |
+| 必填錯誤 | `「{欄位}」使用文字比對運算子時，關鍵字為必填且不得為空白` |
+| 超長錯誤 | `「{欄位}」關鍵字長度不得超過 100 個字元（目前 {N} 個）` |
+| caseyear 錯誤 | `「{欄位}」不支援文字比對運算子，請改用「IN」勾選可選值` |
+| 儲存被擋之 toast 標題 | `第 {N} 列條件尚未通過驗證` |
+| 零可選值指引 | `「{欄位}」尚未登錄任何可選值。此類值域極廣、無法窮舉的欄位，請將比對方式改為「包含 / 不包含 / 完全等於」，直接以關鍵字設定條件。` |
+| caseyear 列內說明 | `「{欄位}」對應整數欄位 year_cnt，僅支援「IN」勾選可選值，不提供文字比對運算子。` |
+| 切換確認 modal 文案 | 標題 `切換比對方式將清除目前設定`／副標 `「勾選可選值」與「關鍵字比對」不能並存`／損失標題 `目前已勾選的 {N} 個可選值將被清除` 或 `目前輸入的關鍵字將被清除`／`清除後不會隨名單一併儲存；如需復原請重新設定。`／`若只是想調整目前的設定值，請按「取消」。`／按鈕 `取消` 與 `確定切換並清除` |
+| 空 `values` 之 `in` 顯示 | `{欄位}：（未選擇任何值）` |
+| Stage 0 banner 文案 | 標題 `本頁合計未涵蓋 {N} 張名單（估算逾時）`／註腳 `下方件數、人均與每日明細皆不含上列名單，請勿據以判定整體工作量。可改以「名單篩選」單獨試算該名單，或聯繫 IT 檢查索引後重新整理。`／KPI 徽章 `不完整` |
+| 條件顯示之分隔符 | `in`：全形冒號 `：` ＋ 頓號 `、`；文字運算子：欄位與標籤間**半形空格**、關鍵字用直角引號 `「」` |
+| 選項順序 | `IN` → `包含` → `不包含` → `完全等於`（與 BR-1 列舉順序一致） |
+| 運算子下拉寬度 | `104px`（足以容納最長標籤「完全等於」＋ 下拉箭頭） |
+
+## C.8 無障礙設計（WCAG 2.1 AA）
+
+- 運算子 `<select>` 有 `sr-only` `<label for>`：`第 N 列條件（{欄位}）比對方式`；`title` 於 `caseyear` 說明為何受限。
+- 關鍵字輸入有 `aria-label`（`第 N 列條件（{欄位}）關鍵字`）、`aria-invalid`、`aria-describedby` 指向效能提示。
+- 就地錯誤 `role="alert"`，錯誤出現時可被輔助技術即時播報。
+- 切換確認框 `role="alertdialog"` ＋ `aria-labelledby` / `aria-describedby`；開啟時焦點移至「取消」，關閉後焦點回到觸發它的運算子下拉。
+- 不可用選項使用真正的 `disabled`（非僅視覺灰化），輔助技術可正確播報。
+- Stage 0 warning 為文字內容（非純顏色編碼），每筆含 `listNo` 的 `<code>` 與完整句子。
+
+## C.9 驗證方式（本輪已執行）
+
+以 Playwright ＋ 本機靜態伺服器對四份原型執行 **55 項斷言，全數通過，console / pageerror 零錯誤**：
+
+1. **AC-1**：預設 `in`；四個選項之 value／文字為 `in|IN`、`contains|包含`、`not_contains|不包含`、`equals|完全等於`。
+2. **AC-5 互斥**：切 `contains` → 核取面板不存在、文字框存在且為空；切回 `in` → 文字框不存在。
+3. **AC-5 清除**：關鍵字非空時切 `in` → 出現確認；**取消後狀態與下拉皆未變**；確認後 `keyword` 自條件物件與 payload 皆移除。已勾 2 值時切文字 → 確認框列出 2 個 chip；確認後 `values` 自條件物件與 payload 皆移除。
+4. **同形態切換**：`contains` → `not_contains` 不清除關鍵字、不出現確認。
+5. **AC-8**：空 / 純全形空格 U+3000 / 101 字元 → 對應錯誤訊息且含欄位名；100 字元為合法邊界；前後空白 trim 後落庫、內部空白保留（`　 勁 便利 \t` → `勁 便利`）。
+6. **AC-8 阻擋**：`assertKeywordsValid()` 於未通過時回 `false`（儲存被擋）。
+7. **AC-11**：`spec_name` 出現在「新增條件」下拉（27a / 27b）；`FIELD_VALUES['spec_name']` 為空；零可選值指引存在。
+8. **AC-12**：效能提示於文字運算子出現，文字與 `TEXT_OP_PERF_HINT` 常數逐字相同；27a / 27b 逐字一致。
+9. **AC-17**：`in` 條件之 payload 不含 `operator` / `keyword` key；顯式 `operator:'in'` 與缺漏 `operator` 之 `formatConditionSummary()` 輸出逐字相同。
+10. **AC-18**：27a / 27b 之四個選項（含 `disabled` 狀態）與效能提示逐字相同；共用區塊 22,224 bytes 完全一致（程式比對）。
+11. **`I-CATOP-CASEYEAR-EXCLUDE-01`**：三個文字選項 `disabled === true`；程式呼叫 `setCondOperator(id,'contains')` 後運算子仍為 `in`；強制違規時錯誤訊息含「不支援文字比對運算子」。
+12. **AC-15 / BR-10**：Kanban chip 與 Drawer 皆出現 `主約專案名稱 不包含「勁便利」`；`職業別 完全等於「軍公教」`；空 `values` 之 `in` 顯示 `產品類別：（未選擇任何值）`（非空白、非 `IN []`）；三份原型 `formatConditionSummary()` 對同一組輸入輸出完全一致。
+13. **AC-13**：預設不顯示 warning；場景開啟後兩筆逐一可辨識（`data-list-no` = `OB202606002,OB202606004`）；訊息逐字符合 `error-handling.md` v1.20；合計由 28,500 降為 12,000（**確實排除**而非僅提示）；KPI「不完整」徽章出現；四張 KPI 與月曆照常渲染（不阻擋）；單一名單篩選 → 僅該筆警告；切回正常場景 → 警告與徽章皆消失；處長視角同樣渲染。
+14. **互動品質**：逐字輸入關鍵字時輸入框保持焦點（未整列重繪）。
+15. **RWD**：1280 / 1440 下 `documentElement.scrollWidth − innerWidth === 0`（四份頁面本體皆不橫捲）。
+
+## C.10 交付檢核
+
+- [x] 四份原型改動完成，可直接以瀏覽器操作
+- [x] 27a / 27b 條件編輯區逐字等價（已程式比對）
+- [x] 運算子四選一、互斥切換、二次確認、效能提示、就地驗證皆可實際操作
+- [x] 零可選值欄位（`spec_name`）與 `caseyear` 排除兩個邊界皆有可操作的示範
+- [x] 三份原型 `formatConditionSummary()` 逐字相同並實測輸出一致
+- [x] Stage 0 warning 逐筆可辨識、合計確實排除、KPI 標示不完整
+- [x] 供 constraint ring 使用之 `data-testid` / `data-*` 掛點
+- [x] 55 項自動化斷言 ＋ console 零錯誤 ＋ 兩寬度 RWD 實測
+- [x] 未新增頁面 / 路由 / 側邊欄項目
+- [x] **人工確認 C-Q1（AD §3.6 樣板字串與 AC-15 例句不一致）** —— 2026-08-18 team lead 裁定採 AC-15 例句；AD 由 system-architect 修正，原型不變
+- [x] 人工確認 C-Q2（`in` 顯示格式是否可統一）—— 2026-08-18 使用者裁定「統一」，維持原型現況
+- [x] 人工審閱閘核可後交 test-generator —— Phase A 已核可（commit `5f79a39`），約束環已由 test-generator 建構完成
+- [ ] C-Q3（`spec_name` 不在部署 seed 白名單）維持記錄狀態，由 system-architect 於 AD 補「部署前置條件」一節正式追蹤（非本附錄職責）

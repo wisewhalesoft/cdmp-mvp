@@ -1,0 +1,63 @@
+%% F119 v1.0 類別型文字比對運算子：operator 解讀 → 依 data_source 分派 fragment 建構器 → NULL 語意分流 → 五條執行路徑共用
+%% 對應 spec：features/F119-categorical-text-match-operators.md AC-1 到 AC-4、AC-9、AC-10、AC-14、AC-16、AC-17；BR-1、BR-4 到 BR-9、BR-11
+flowchart TD
+    Start(["草稿名單 condition_payload 之 fieldType 為 categorical 的條件"]) --> Op
+
+    Op{"讀取 operator<br/>BR-11 單一 fallback 落點"}
+
+    Op -->|"缺漏 或 in"| InMode["IN 形態：使用 values 陣列<br/>本 feature 上線前之唯一形態<br/>行為完全不變"]
+    Op -->|"contains 或 not_contains 或 equals"| TxtMode["文字形態：使用 keyword<br/>trim 後 1 到 100 字<br/>BR-2 與 BR-3 互斥"]
+
+    TxtMode --> Esc["關鍵字視為字面值<br/>跳脫百分比、底線、中括號等萬用字元<br/>BR-7；equals 採等號比對天然不需跳脫"]
+
+    InMode --> Src
+    Esc --> Src
+
+    Src{"依白名單 data_source 分派<br/>F109 BR-1"}
+
+    Src -->|"ob_pool_data"| Composer["buildCategoricalFragment<br/>stage1-query-composer.ts<br/>BR-4 唯一落點，五路徑共用"]
+    Src -->|"customer_core"| Cc["buildCustomerCoreClause<br/>I-CC-COMPOSER-SCOPE-01"]
+    Src -->|"customer_financial"| Cf["buildCustomerFinancialClause<br/>I-CF-COMPOSER-SCOPE-01"]
+
+    Composer --> NullP{"ob_pool_data 之 NULL 語意<br/>BR-6"}
+    NullP -->|"in 或 contains 或 equals"| NullEx1["NULL 排除<br/>三值邏輯自然結果，不寫特判"]
+    NullP -->|"not_contains"| NullKeep["NULL 保留<br/>八格中唯一例外，須顯式表達<br/>AC-3 業務裁定"]
+
+    Cc --> NullEx2["NULL 一律排除<br/>I-CC-NULL-EXCLUDE-01<br/>禁 COALESCE、禁 if else 特判"]
+    Cf --> NullEx3["NULL 一律排除<br/>I-CF-NULL-EXCLUDE-01<br/>禁 COALESCE、禁 if else 特判"]
+
+    NullEx1 --> Where
+    NullKeep --> Where
+    NullEx2 --> Where
+    NullEx3 --> Where
+
+    Where["WHERE fragments 以 AND 組合<br/>F050 BR-7 第 4 點"]
+
+    Where --> P1
+    Where --> P2
+    Where --> P3
+    Where --> P4
+    Where --> P5
+
+    subgraph Paths["五條執行路徑共用同一 fragment，AC-14 依建構即一致"]
+        P1["MSSQL SQL 下推<br/>stage1-sql-builder-mssql.ts"]
+        P2["PG SQL 下推<br/>stage1-sql-builder.ts"]
+        P3["JS filter chain<br/>stage1-filter-chain.ts"]
+        P4["Stage 0 估算<br/>stage0-estimate.service.ts"]
+        P5["草稿命中抽樣估算<br/>assignment-list.service.ts"]
+    end
+
+    subgraph Sig["重複名單判定簽章，BR-9 與 AC-16 與 AC-17"]
+        S1["operator 缺漏 或 in<br/>簽章為 欄位:cat:去重排序後 values<br/>與現行逐字元相同，既有名單不被誤判為變更"]
+        S2["operator 為文字運算子<br/>簽章為 欄位:catop:運算子:關鍵字<br/>前綴與 cat 互斥故可證明無碰撞<br/>大小寫與全半形敏感，BR-8"]
+        S3["LIST_NO_DUPLICATE 比對<br/>完整條件集相等加上 card_type"]
+        S1 --> S3
+        S2 --> S3
+    end
+
+    style NullKeep fill:#fff3cd,stroke:#856404
+    style Composer fill:#cce5ff,stroke:#004085
+    style Cc fill:#e2e3e5,stroke:#6c757d
+    style Cf fill:#e2e3e5,stroke:#6c757d
+    style Paths fill:#f8f9fa,stroke:#adb5bd
+    style Sig fill:#f8f9fa,stroke:#adb5bd

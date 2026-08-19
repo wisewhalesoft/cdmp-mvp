@@ -616,19 +616,86 @@
     };
     const FIELD_DISPLAY = {
       prod_kind: '產品類別', caseyear: '年數', spec_tp: '專案類別',
-      case_status: '結清期別', settle_src: '他行代償', month_cnt: '撈取月份', birth_date: '生日'
+      case_status: '結清期別', settle_src: '他行代償', month_cnt: '撈取月份', birth_date: '生日',
+      // F119 / US-183：文字比對運算子之示範欄位（spec_name 值域極廣、無可窮舉可選值）
+      spec_name: '主約專案名稱', occupation_desc: '職業別'
+    };
+
+    // ============================================================
+    // F119 / US-183：類別型篩選欄位文字比對運算子 —— 顯示層
+    //   spec：docs/specs/features/F119-categorical-text-match-operators.md v1.1 AC-15 / BR-10
+    //   AD  ：AD-E07-50 §3.6 / I-CATOP-DISPLAY-SINGLE-01
+    //
+    //   ⚠️ 以下至 formatConditionSummary() 為止之區段，與 27a / 27b 兩份原型**逐字相同**。
+    //      條件描述字串（含運算子中文標籤）只能由 formatConditionSummary() 產生，
+    //      本頁兩個消費端（名單詳情 Drawer、名單定義列表 Kanban chip）皆呼叫之，禁止各自拼字串。
+    // ============================================================
+    // BR-1：合法運算子四值（US-183 已拍板決策 1，命名不得更動）
+    const CATEGORICAL_OPERATORS = ['in', 'contains', 'not_contains', 'equals'];
+    const TEXT_OPERATORS = ['contains', 'not_contains', 'equals'];
+    // BR-10：運算子中文標籤（全系統統一，禁止各頁自訂）
+    const OPERATOR_LABEL = { in: 'IN', contains: '包含', not_contains: '不包含', equals: '完全等於' };
+    // BR-11 / I-CATOP-OPERATOR-FALLBACK-01：缺漏 operator 之預設值解讀「唯一」落點。
+    //   其他任何地方都不得再寫 `cond.operator ?? 'in'` —— 分散預設正是「顯式 in 與缺漏 in
+    //   行為分歧」（AC-17 風險點）之典型成因。
+    function resolveCategoricalOperator(op) { return (op === undefined || op === null || op === '') ? 'in' : op; }
+    function isTextOperator(op) { return TEXT_OPERATORS.indexOf(resolveCategoricalOperator(op)) >= 0; }
+    function operatorLabel(op) { return OPERATOR_LABEL[resolveCategoricalOperator(op)] || OPERATOR_LABEL.in; }
+    // BR-2：trim 前後之半形空白 / 全形空格 U+3000 / Tab / CR / LF；關鍵字「內部」空白一律保留
+    //   （「勁 便利」與「勁便利」為不同關鍵字）
+    function trimKeyword(s) { return String(s === undefined || s === null ? '' : s).replace(/^[\s　]+|[\s　]+$/g, ''); }
+    const KEYWORD_MAX_LEN = 100;   // BR-2 / §13.1 D-3：trim 後長度 1~100
+
+    // I-CATOP-CASEYEAR-EXCLUDE-01（AD §3.8）：caseyear 對應 ob_pool_data.year_cnt（INTEGER），
+    //   文字運算子於 PG 端直接型別錯誤，且 '99'（不限年數）wildcard 規則僅對 IN 有定義 → 排除。
+    const TEXT_OPERATOR_EXCLUDED_COLUMNS = ['caseyear'];
+    function isTextOperatorExcluded(col) { return TEXT_OPERATOR_EXCLUDED_COLUMNS.indexOf(col) >= 0; }
+
+    // AC-12 / OQ-183-01：文字運算子之效能提示（告知性，不阻擋操作、不需確認、不影響儲存）。
+    //   ui-ux-designer 定案文案；下游可逐字斷言，勿在此常數外另寫第二份措辭。
+    const TEXT_OP_PERF_HINT = '文字比對需逐筆掃描全部案件，較勾選可選值耗時；命中預估與 Stage 0 試算可能因此逾時。此為正常現象，不影響條件儲存。';
+
+    function escHtml(s) {
+      return String(s === undefined || s === null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // BR-10 / I-CATOP-DISPLAY-SINGLE-01：條件描述字串（含運算子中文標籤）之「唯一」格式化來源。
+    //   AC-15 格式：欄位顯示名稱 + 運算子中文標籤 + 關鍵字，例：主約專案名稱 包含「勁便利」
+    //   decoder = { fieldDisplayName(col), valueLabel(col, value) }
+    //   ⚠️ 此函式於 27 / 27a / 27b 三份原型逐字相同（React 落地＝ _utils/condition-summary.ts）。
+    function formatConditionSummary(cond, decoder) {
+      const name = decoder.fieldDisplayName(cond.columnName);
+      if (cond.fieldType === 'categorical') {
+        const op = resolveCategoricalOperator(cond.operator);
+        if (isTextOperator(op)) return name + ' ' + operatorLabel(op) + '「' + trimKeyword(cond.keyword) + '」';
+        const vals = (cond.values || []).map(function (v) { return decoder.valueLabel(cond.columnName, v); });
+        // AC-15：不得顯示為空白 / `IN []` / 僅欄位名
+        return vals.length === 0 ? name + '：（未選擇任何值）' : name + '：' + vals.join('、');
+      }
+      if (cond.fieldType === 'numeric') return name + '：' + cond.min + ' ~ ' + cond.max;
+      if (cond.fieldType === 'date') return name + '：' + cond.dateStart + ' ~ ' + cond.dateEnd;
+      return name;
+    }
+    // 本頁之 decoder（各頁可選值來源不同 —— 27a / 27b 走 FIELD_VALUES，本頁走 OPT_LABELS）
+    const CONDITION_DECODER = {
+      fieldDisplayName: function (col) { return FIELD_DISPLAY[col] || col; },
+      valueLabel: function (col, v) { const m = OPT_LABELS[col] || {}; return m[v] || v; }
     };
     const MOCK_LISTS = [
       { listNo: 'OB202606001', listNm: '2026-06 業務一部 主力催收',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-06-02', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02','03'] }, { columnName:'month_cnt', fieldType:'numeric', min:2, max:3 }], logic:'AND' } },
       { listNo: 'OB202606002', listNm: '2026-06 機車期中滿期前3月',  stage: 'draft',       cr: true,  createdBy: '王部長',  createdAt: '2026-06-03', ym: '2026-06',
-        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02'] }, { columnName:'case_status', fieldType:'categorical', values:['01'] }], logic:'AND' } },
+        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02'] }, { columnName:'spec_name', fieldType:'categorical', operator:'contains', keyword:'勁便利' }, { columnName:'case_status', fieldType:'categorical', values:['01'] }], logic:'AND' } },
       { listNo: 'OB202606003', listNm: '2026-06 業務三部 信貸催收',  stage: 'dept_ratio',  cr: true,  createdBy: '李處長',  createdAt: '2026-06-04', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['01'] }], logic:'AND' } },
+      // F119 AC-17 活體對照組：本筆為「顯式 operator:'in'」，OB202606011 為「缺漏 operator」，
+      //   兩者條件內容相同 → 顯示字串必須逐字相同。請勿把任一筆改成與另一筆一致的寫法。
       { listNo: 'OB202606004', listNm: '2026-06 業務一部 房貸專案',  stage: 'dept_ratio',  cr: false, createdBy: '王部長',  createdAt: '2026-06-05', ym: '2026-06',
-        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['03'] }], logic:'AND' } },
+        conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', operator:'in', values:['03'] }], logic:'AND' } },
       { listNo: 'OB202606005', listNm: '2026-06 汽車期中小資專案', stage: 'personnel_ratio', cr: true,  createdBy: '李處長',  createdAt: '2026-06-06', ym: '2026-06',
-        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['01','02'] }], logic:'AND' } },
+        conditionPayload: { conditions: [{ columnName:'spec_name', fieldType:'categorical', operator:'not_contains', keyword:'勁便利' }, { columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['01','02'] }], logic:'AND' } },
       { listNo: 'OB202606006', listNm: '2026-06 業務一部 重點戶',     stage: 'personnel_ratio', cr: true,  createdBy: '王部長',  createdAt: '2026-06-07', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['01','02'] }], logic:'AND' } },
       { listNo: 'OB202606007', listNm: '2026-06 業務三部 退回重做',   stage: 'personnel_ratio', cr: true,  createdBy: '李處長',  createdAt: '2026-06-07', ym: '2026-06', hasReject: true,
@@ -636,7 +703,7 @@
       { listNo: 'OB202606008', listNm: '2026-06 業務二部 即將到期',   stage: 'approval',    cr: true,  createdBy: '王部長',  createdAt: '2026-06-08', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'prod_kind', fieldType:'categorical', values:['02'] }], logic:'AND' } },
       { listNo: 'OB202606009', listNm: '2026-06 業務一部 結清強催',   stage: 'ready',       cr: true,  createdBy: '王部長',  createdAt: '2026-06-09', ym: '2026-06',
-        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['02'] }], logic:'AND' } },
+        conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }, { columnName:'case_status', fieldType:'categorical', values:['02'] }, { columnName:'occupation_desc', fieldType:'categorical', operator:'equals', keyword:'軍公教' }], logic:'AND' } },
       { listNo: 'OB202606010', listNm: '2026-06 業務二部 標準名單',   stage: 'ready',       cr: true,  createdBy: '王部長',  createdAt: '2026-06-09', ym: '2026-06',
         conditionPayload: { conditions: [{ columnName:'spec_tp', fieldType:'categorical', values:['12'] }], logic:'AND' } },
       { listNo: 'OB202606011', listNm: '2026-06 車齡10年以上名單',   stage: 'ready',       cr: true,  createdBy: '李處長',  createdAt: '2026-06-10', ym: '2026-06',
@@ -743,16 +810,15 @@
       const conds = (row.conditionPayload && row.conditionPayload.conditions) || [];
       if (conds.length === 0) return '<span class="text-[10px] text-gray-400 italic">無條件</span>';
       const show = conds.slice(0, 2);
+      // F119 BR-10 / AC-15：條件描述字串一律由 formatConditionSummary() 產生（含文字運算子），
+      //   不得於此自拼 —— 既有 `IN []` 類顯示缺陷正源於各頁各自組字串。
+      //   過長時以 CSS truncate + title 收斂，不做字串截斷（截斷會使關鍵字看不完整）。
       const chips = show.map(c => {
-        const dn = FIELD_DISPLAY[c.columnName] || c.columnName;
-        if (c.fieldType === 'categorical') {
-          const opts = OPT_LABELS[c.columnName] || {};
-          const labels = (c.values || []).map(v => opts[v] || v);
-          const txt = labels.slice(0, 2).join('/') + (labels.length > 2 ? `+${labels.length - 2}` : '');
-          return `<span class="inline-block px-1.5 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[10px] mr-0.5 mb-0.5">${dn}:${txt}</span>`;
-        }
-        if (c.fieldType === 'numeric') return `<span class="inline-block px-1.5 py-0.5 bg-purple-50 text-purple-700 border border-purple-100 rounded text-[10px] mr-0.5 mb-0.5">${dn}:${c.min}~${c.max}</span>`;
-        return `<span class="inline-block px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] mr-0.5 mb-0.5">${dn}</span>`;
+        const txt = formatConditionSummary(c, CONDITION_DECODER);
+        const tone = c.fieldType === 'categorical' ? 'bg-blue-50 text-blue-700 border-blue-100'
+          : c.fieldType === 'numeric' ? 'bg-purple-50 text-purple-700 border-purple-100'
+          : 'bg-cyan-50 text-cyan-700 border-cyan-100';
+        return `<span class="inline-block max-w-full truncate align-bottom px-1.5 py-0.5 ${tone} border rounded text-[10px] mr-0.5 mb-0.5" title="${escHtml(txt)}" data-condition-summary>${escHtml(txt)}</span>`;
       }).join('');
       const more = conds.length > 2 ? `<span class="text-[10px] text-gray-400">+${conds.length - 2}</span>` : '';
       return chips + more;
@@ -1072,9 +1138,14 @@
       const conds = (row.conditionPayload && row.conditionPayload.conditions) || [];
       if (conds.length === 0) { list.innerHTML = '<p class="text-xs text-gray-400 italic">無條件</p>'; return; }
       conds.forEach((c, i) => {
-        const dn = FIELD_DISPLAY[c.columnName] || c.columnName;
+        // F119 AC-15 / BR-10：標題行即條件描述字串（欄位 + 運算子 + 關鍵字），單一格式化來源
+        const summary = formatConditionSummary(c, CONDITION_DECODER);
         let detail = '';
-        if (c.fieldType === 'categorical') {
+        if (c.fieldType === 'categorical' && isTextOperator(c.operator)) {
+          // 文字運算子：以「運算子徽章 + 關鍵字徽章」呈現，不得留空或顯示 IN []
+          detail = `<span class="inline-block px-1.5 py-0.5 mr-1 mb-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded text-[10px] font-medium" data-condition-operator="${resolveCategoricalOperator(c.operator)}">${operatorLabel(c.operator)}</span>`
+            + `<span class="inline-block px-1.5 py-0.5 mr-1 mb-1 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[10px]" data-condition-keyword>${escHtml(trimKeyword(c.keyword))}</span>`;
+        } else if (c.fieldType === 'categorical') {
           const opts = OPT_LABELS[c.columnName] || {};
           detail = (c.values || []).map(v => `<span class="inline-block px-1.5 py-0.5 mr-1 mb-1 bg-blue-50 text-blue-700 border border-blue-100 rounded text-[10px]">${v}<span class="text-gray-400 ml-1">${opts[v] || ''}</span></span>`).join('');
         } else if (c.fieldType === 'numeric') {
@@ -1087,7 +1158,7 @@
             <div class="flex items-center justify-between mb-2">
               <div class="flex items-center gap-2">
                 <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold">${i + 1}</span>
-                <span class="text-sm font-medium text-gray-800">${dn}</span>
+                <span class="text-sm font-medium text-gray-800" data-condition-summary>${escHtml(summary)}</span>
               </div>
             </div>
             <div class="text-xs">${detail}</div>

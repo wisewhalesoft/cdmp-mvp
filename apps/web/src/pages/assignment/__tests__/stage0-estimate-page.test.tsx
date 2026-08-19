@@ -584,3 +584,78 @@ describe('Stage0EstimatePage（F049 v2.0 部門維度）', () => {
     expect(screen.getByTestId('dept-pill-ALL')).toBeInTheDocument();
   });
 });
+
+// ============================================================
+// F119 / US-183 — Stage 0 部門估算頁渲染既有 STAGE0_LIST_ESTIMATE_PARTIAL warning（AC-13/BR-13）
+//
+// 撰寫依據：F119 spec AC-13/BR-13 + AD-E07-50 §3.7（T-27）+
+// docs/ui-ux-design-overview.md 附錄 C（C-18：頁首彙總 amber banner + KPI「不完整」徽章；
+// Phase C-3 hooks：stage0-list-partial-warning / stage0-partial-item / kpi-incomplete-badge）+
+// error-handling.md v1.20（訊息契約「名單 {listNo} 估算逾時，已從本次合計排除。」）。
+// **未**開啟 stage0-estimate-page.tsx 生產碼；render/mock 慣例（deptResp/renderPage/
+// warnings[] 陣列渲染既有 SCOPE_UNRESOLVED 案例）取自本檔既有測試（既有測試檔）。
+// DeptEstimateWarning 型別今日僅 {code, message}；F119 純加性擴充 optional listNo，
+// 測試檔本地以型別斷言帶入，不等待生產型別擴充即可先行紅燈。
+// ============================================================
+describe('F119 — Stage0 部門估算頁 STAGE0_LIST_ESTIMATE_PARTIAL 渲染（AC-13/BR-13）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedGetUser.mockReturnValue({
+      id: 'd1', name: '張部長', email: 'd@test', role: 'user', businessRole: 'director', status: 'active',
+    } as never);
+    mockedGetBusinessRole.mockReturnValue('director');
+    mockedListLists.mockResolvedValue(
+      listsResp([activeList('OB202606001', '汽車期中名單'), activeList('OB202606002', '信貸滿期名單')]),
+    );
+    mockedGetCurrentWorkYm.mockResolvedValue({ currentWorkYm: '202605' });
+  });
+  afterEach(() => cleanup());
+
+  function partialWarning(listNo: string) {
+    return { code: 'STAGE0_LIST_ESTIMATE_PARTIAL', listNo, message: `名單 ${listNo} 估算逾時，已從本次合計排除。` };
+  }
+
+  it('F119-STAGE0-001（★核心）：warnings 含 2 筆 STAGE0_LIST_ESTIMATE_PARTIAL → banner 逐筆可辨識', async () => {
+    mockedGetDept.mockResolvedValue(
+      deptResp({ warnings: [partialWarning('OB202606001'), partialWarning('OB202606002')] as never }),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('stage0-list-partial-warning')).toBeInTheDocument());
+    const items = screen.getAllByTestId('stage0-partial-item');
+    expect(items.length).toBe(2);
+    const listNos = items.map((el) => el.getAttribute('data-list-no'));
+    expect(listNos).toEqual(expect.arrayContaining(['OB202606001', 'OB202606002']));
+    expect(screen.getByTestId('stage0-list-partial-warning').textContent).toContain(
+      '名單 OB202606001 估算逾時，已從本次合計排除。',
+    );
+  });
+
+  it('F119-STAGE0-002：warnings 為空 → banner 與 KPI「不完整」徽章皆不渲染', async () => {
+    mockedGetDept.mockResolvedValue(deptResp({ warnings: [] }));
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('dept-summary-table')).toBeInTheDocument());
+    expect(screen.queryByTestId('stage0-list-partial-warning')).toBeNull();
+    expect(screen.queryByTestId('kpi-incomplete-badge')).toBeNull();
+  });
+
+  it('F119-STAGE0-003（BR-13：不阻擋其餘內容）：warning 存在時，KPI 徽章出現且部門表格 / 月曆仍正常渲染', async () => {
+    mockedGetDept.mockResolvedValue(
+      deptResp({ warnings: [partialWarning('OB202606001')] as never }),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('kpi-incomplete-badge')).toBeInTheDocument());
+    expect(screen.getByTestId('dept-summary-table')).toBeInTheDocument();
+    expect(screen.getByTestId('calendar-grid')).toBeInTheDocument();
+  });
+
+  it('F119-STAGE0-004：單一 listNo 逾時（非多筆）→ 僅 1 筆項目，仍可辨識該 listNo', async () => {
+    mockedGetDept.mockResolvedValue(
+      deptResp({ warnings: [partialWarning('OB202606002')] as never }),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('stage0-list-partial-warning')).toBeInTheDocument());
+    const items = screen.getAllByTestId('stage0-partial-item');
+    expect(items.length).toBe(1);
+    expect(items[0].getAttribute('data-list-no')).toBe('OB202606002');
+  });
+});

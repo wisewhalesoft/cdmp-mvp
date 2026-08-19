@@ -4,8 +4,8 @@
 > **優先級**：P0（Critical）
 > **類型**：下游應用
 > **階段**：Phase 1（MVP）
-> **Stories 數量**：57（含 A~H 組 + v2.1 重構 + 2026-05-20 業務複核補強 + 2026-06-24 F103 計分修正；廢棄 US-088/089/079/091/092；US-078 保留為流程外查詢入口）
-> **最後更新**：2026-06-24（F103 月名單分派計分引擎欄位來源修正：新增 US-156/157/158）
+> **Stories 數量**：58（含 A~H 組 + v2.1 重構 + 2026-05-20 業務複核補強 + 2026-06-24 F103 計分修正 + 2026-08-18 US-183；廢棄 US-088/089/079/091/092；US-078 保留為流程外查詢入口）
+> **最後更新**：2026-08-18（新增 US-183：類別型篩選欄位文字比對運算子，建議對應 F119。註：本檔案 M03~M07 表格與整體 Stories 數量自 2026-06-24 起未逐一同步後續新增之 US-137~182 等 Story，僅本輪新增之 US-183 已補登於 M01 表；完整索引缺口建議另立整理任務）
 
 ## Epic 目標
 
@@ -35,6 +35,7 @@
 | **US-126** | **建立草稿名單 — 卡別改為下拉選單**（2026-05-20 業務複核 D1+D4）| Must Have | [US-126-M01-cardtype-dropdown-create.md](US-126-M01-cardtype-dropdown-create.md) |
 | **US-127** | **編輯草稿名單 — 卡別改為下拉選單（含停用卡別保留處理）**（2026-05-20 業務複核 D1+D4+Q-A）| Must Have | [US-127-M01-cardtype-dropdown-edit.md](US-127-M01-cardtype-dropdown-edit.md) |
 | **US-128** | **移除「最佳產品」一級欄位，改由篩選條件 best_case 取代**（2026-05-20 業務複核 D2+Q-B）| Must Have | [US-128-M01-remove-prodbest-field.md](US-128-M01-remove-prodbest-field.md) |
+| **US-183** | **類別型篩選欄位新增文字比對運算子（包含／不包含／完全等於）**（2026-08-18 新增，建議對應 F119）| Should Have | [US-183-M01-categorical-text-match-operators.md](US-183-M01-categorical-text-match-operators.md) |
 
 ### M02 — 計分設定
 

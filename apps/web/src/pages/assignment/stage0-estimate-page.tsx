@@ -19,6 +19,7 @@ import {
   ChevronDown,
   Info,
   Loader2,
+  Hourglass,
 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/app-layout';
 import { MonthPicker } from '@/components/e07/MonthPicker';
@@ -176,6 +177,28 @@ export function Stage0EstimatePage() {
     isSectionChief &&
     (data?.warnings.some((w) => w.code === 'SCOPE_UNRESOLVED') ?? false);
   const hasActiveList = lists.length > 0;
+
+  /**
+   * F119 / AC-13 / BR-13（AD-E07-50 §3.7）：`STAGE0_LIST_ESTIMATE_PARTIAL` 逐筆渲染。
+   *
+   * 沿用既有 `warnings[]` 陣列迭代管道（不另建平行機制）；不分觸發原因一律渲染
+   * （後端同一 warning code、同一產生路徑，無從區分是文字運算子 LIKE 全表掃描逾時
+   * 或既有 IN 條件在寬鬆篩選下逾時）。多名單同時逾時時**逐筆**可辨識。
+   */
+  const listPartialWarnings = useMemo(
+    () =>
+      (data?.warnings ?? []).filter(
+        (w) => w.code === 'STAGE0_LIST_ESTIMATE_PARTIAL',
+      ),
+    [data],
+  );
+  /** AC-13：件數 KPI 之「不完整」徽章提示文字（列出逾時名單編號）。 */
+  const partialBadgeTitle =
+    listPartialWarnings.length > 0
+      ? `未涵蓋 ${listPartialWarnings.length} 張估算逾時的名單：${listPartialWarnings
+          .map((w) => w.listNo ?? '')
+          .join('、')}`
+      : undefined;
 
   const deptStats = useMemo<DeptStat[]>(
     () => (data ? computeDeptStats(data) : []),
@@ -443,6 +466,52 @@ export function Stage0EstimatePage() {
           </div>
         )}
 
+        {/* F119 / AC-13：名單估算逾時 → 本頁合計不完整（置於警告堆疊最上方 —— 它影響本頁
+            「所有」數字的可信度，其餘警告僅影響局部）。不阻擋其餘內容渲染（BR-13）。 */}
+        {listPartialWarnings.length > 0 && (
+          <div
+            data-testid="stage0-list-partial-warning"
+            data-warning-count={listPartialWarnings.length}
+            className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-300 rounded-lg text-sm text-gray-700"
+          >
+            <Hourglass className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-amber-900">
+                本頁合計未涵蓋 {listPartialWarnings.length} 張名單（估算逾時）
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {listPartialWarnings.map((w, idx) => {
+                  const listNm = lists.find((l) => l.listNo === w.listNo)?.listNm;
+                  return (
+                    <li
+                      key={`${w.listNo ?? 'unknown'}-${idx}`}
+                      data-testid="stage0-partial-item"
+                      data-warning-code={w.code}
+                      data-list-no={w.listNo}
+                      className="flex items-start gap-1.5 flex-wrap"
+                    >
+                      <code className="font-mono text-[11px] text-amber-900 bg-amber-100 border border-amber-300 px-1 py-0.5 rounded shrink-0">
+                        {w.listNo}
+                      </code>
+                      <span className="text-xs text-amber-900" data-warning-message>
+                        {w.message}
+                      </span>
+                      {listNm && (
+                        <span className="text-[11px] text-amber-700">（{listNm}）</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-xs text-amber-800 mt-2">
+                下方件數、人均與每日明細皆<strong>不含</strong>
+                上列名單，請勿據以判定整體工作量。可改以「名單篩選」單獨試算該名單，或聯繫 IT
+                檢查索引後重新整理。
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* 工作日曆無資料 → 無法計算（明確提示，取代靜默顯示 0） */}
         {data?.warnings.some((w) => w.code === 'CALENDAR_EMPTY') && (
           <div
@@ -536,6 +605,7 @@ export function Stage0EstimatePage() {
               value={hasActiveList ? scopeMonthCases.toLocaleString() : '—'}
               sub="您轄區部門本月分派合計"
               icon={<Inbox className="w-4 h-4 text-emerald-500" />}
+              incompleteTitle={partialBadgeTitle}
             />
           ) : (
             <KpiCard
@@ -548,6 +618,7 @@ export function Stage0EstimatePage() {
                   : '本名單預估件數'
               }
               icon={<Inbox className="w-4 h-4 text-emerald-500" />}
+              incompleteTitle={partialBadgeTitle}
             />
           )}
           <KpiCard
@@ -857,8 +928,22 @@ interface KpiCardProps {
   icon: React.ReactNode;
   danger?: boolean;
   warn?: boolean;
+  /**
+   * F119 / AC-13：合計數字本身標示「不完整」，避免只掃 KPI 的使用者錯過上方警告
+   * （附錄 C C-18 之第二觸點）。undefined = 不渲染徽章。
+   */
+  incompleteTitle?: string;
 }
-function KpiCard({ testId, label, value, sub, icon, danger, warn }: KpiCardProps) {
+function KpiCard({
+  testId,
+  label,
+  value,
+  sub,
+  icon,
+  danger,
+  warn,
+  incompleteTitle,
+}: KpiCardProps) {
   const valClass = danger
     ? 'text-red-600'
     : warn
@@ -873,7 +958,19 @@ function KpiCard({ testId, label, value, sub, icon, danger, warn }: KpiCardProps
         <span className="text-xs text-gray-500">{label}</span>
         {icon}
       </div>
-      <div className={`text-2xl font-bold tabular-nums ${valClass}`}>{value}</div>
+      <div className={`text-2xl font-bold tabular-nums ${valClass}`}>
+        {value}
+        {incompleteTitle && (
+          <span
+            data-testid="kpi-incomplete-badge"
+            title={incompleteTitle}
+            className="ml-2 align-middle inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300"
+          >
+            <Hourglass className="w-2.5 h-2.5" />
+            不完整
+          </span>
+        )}
+      </div>
       <p className="text-xs text-gray-400 mt-1">{sub}</p>
     </div>
   );

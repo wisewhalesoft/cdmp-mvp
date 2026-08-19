@@ -5,6 +5,7 @@ import {
   IsIn,
   IsNumber,
   IsString,
+  Length,
   Matches,
   Min,
   ValidateIf,
@@ -12,6 +13,10 @@ import {
   ValidationOptions,
   ValidationArguments,
 } from 'class-validator';
+import {
+  isTextCategoricalOperator,
+  type CategoricalOperator,
+} from '@/modules/assignment/stage1/stage1-query-composer';
 
 /**
  * F050 v2.1 / F051 v2.1：condition_payload.conditions[] 單一項目 schema
@@ -92,7 +97,29 @@ export class ConditionItemDto {
   fieldType!: 'categorical' | 'numeric' | 'date';
 
   // ---- categorical ----
-  @ValidateIf((o: ConditionItemDto) => o.fieldType === 'categorical')
+  /**
+   * F119 / US-183：categorical 條件之比對運算子（缺漏 ≡ 'in'，AC-17）。
+   *
+   * 本層僅做**單屬性**列舉檢查；`operator` ↔ `fieldType` / `values` / `keyword` 之**跨屬性
+   * 互斥**檢查一律置於 service 層（I-CATOP-VALIDATION-LAYER-01 / AD-E07-50 §3.9）。
+   */
+  @ValidateIf((o: ConditionItemDto) => o.operator !== undefined)
+  @IsIn(['in', 'contains', 'not_contains', 'equals'], {
+    message: 'operator 必須為 in / contains / not_contains / equals 之一',
+  })
+  operator?: CategoricalOperator;
+
+  /** F119：文字比對運算子之單一關鍵字（BR-2：service 層另驗 trim 後 1~100 字元）。 */
+  @ValidateIf((o: ConditionItemDto) => isTextCategoricalOperator(o.operator))
+  @IsString({ message: 'keyword 必須為字串' })
+  @Length(1, 100, { message: 'keyword 長度需為 1~100 字元' })
+  keyword?: string;
+
+  // F119：文字運算子形態不帶 values（BR-3 互斥），故既有 ArrayMinSize 僅適用於 `in` 形態
+  @ValidateIf(
+    (o: ConditionItemDto) =>
+      o.fieldType === 'categorical' && !isTextCategoricalOperator(o.operator),
+  )
   @IsArray({ message: 'values 必須為字串陣列' })
   @ArrayMinSize(1, { message: 'categorical 條件 values 至少需 1 個元素' })
   @IsString({ each: true })

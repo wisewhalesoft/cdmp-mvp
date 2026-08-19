@@ -40,6 +40,15 @@ export interface ConditionItem {
   max?: number;
   dateStart?: string;
   dateEnd?: string;
+  /**
+   * F119 / US-183：categorical 條件之比對運算子（純加性，比照後端 `ConditionItemDto`）。
+   * 缺漏 ≡ `'in'`（AC-17）；解讀一律經 `_utils/labels.ts` 之 `resolveCategoricalOperator()`。
+   * AC-17 / 附錄 C C-17：`in` 形態送出時**不送** `operator` key，使既有名單重新儲存後
+   * payload 與 F119 上線前逐位元相同。
+   */
+  operator?: 'in' | 'contains' | 'not_contains' | 'equals';
+  /** F119：文字比對運算子之單一關鍵字（trim 後 1~100 字元，BR-2）。 */
+  keyword?: string;
 }
 
 export interface ConditionPayload {

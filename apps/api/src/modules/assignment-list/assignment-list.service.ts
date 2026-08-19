@@ -27,7 +27,10 @@ import { SectionChiefScopeService } from '@/modules/assignment/services/section-
 // F095 / AD-E07-26 §26.5：與 F091 月名單分派共用同一 trigger pure utility（read-time 推導，無新 DB 欄位）
 import { deriveAppliedSpecialRules } from '@/modules/assignment/stage1/special-rules';
 // F050 v2.4 / US-176 / AD-E07-45：草稿命中筆數抽樣估算（欄位篩選子步驟 + customer_core 條件式 JOIN）。
-import { buildStage1WhereConditions } from '@/modules/assignment/stage1/stage1-query-composer';
+import {
+  buildStage1WhereConditions,
+  resolveCategoricalOperator,
+} from '@/modules/assignment/stage1/stage1-query-composer';
 import { buildCustomerCoreClause } from '@/modules/assignment/stage1/stage1-customer-core-clause';
 import { buildCustomerCoreClauseMssql } from '@/modules/assignment/stage1/stage1-customer-core-clause-mssql';
 import {
@@ -89,6 +92,20 @@ export class AssignmentListService {
   private static readonly SYSTEM_FIXED_VALUE_MAP: Record<string, string[]> = {
     best_case: ['Y'],
   };
+
+  /**
+   * F119 / US-183 / §13.1 D-3：文字比對運算子之關鍵字 trim 後長度上限（BR-2 / AC-8）。
+   */
+  private static readonly KEYWORD_MAX_LEN = 100;
+
+  /**
+   * F119 / AD-E07-50 §3.8 / I-CATOP-CASEYEAR-EXCLUDE-01：不支援文字比對運算子之 columnName。
+   *
+   * `caseyear` 對應 `ob_pool_data.year_cnt`（INTEGER）——`LIKE` 於 PG 端直接型別錯誤，
+   * 且 `'99'`（不限年數）wildcard 規則僅對 `IN` 語意有定義。
+   */
+  private static readonly TEXT_OPERATOR_EXCLUDED_COLUMNS: ReadonlySet<string> =
+    new Set(['caseyear']);
 
   constructor(
     @InjectRepository(ObListDefinition)
@@ -189,6 +206,9 @@ export class AssignmentListService {
         });
       }
     }
+
+    // 4. F119 / AC-1 / AC-6 / AC-8 / BR-2 / BR-3：文字比對運算子之跨屬性互斥 + 關鍵字規則
+    this.assertCategoricalOperatorRules(conditions);
   }
 
   // -------------------------------------------------------------------------
@@ -320,6 +340,119 @@ export class AssignmentListService {
         }
       }
     }
+
+    // 4. F119：與 validateConditionPayload 共用同一組互斥 / 關鍵字規則（I-CATOP-VALIDATION-LAYER-01）
+    this.assertCategoricalOperatorRules(conditions);
+  }
+
+  /**
+   * F119 / US-183 / AD-E07-50 §3.9（I-CATOP-VALIDATION-LAYER-01）：
+   * categorical 文字比對運算子之**跨屬性**規則檢查（DTO 層只做單屬性型別 / 列舉 / 長度）。
+   *
+   * 檢查順序（同一筆條件內，由高至低）：
+   *   1. AC-1 / BR-1：`operator` / `keyword` 僅適用於 categorical 條件
+   *   2. I-CATOP-CASEYEAR-EXCLUDE-01：`caseyear`（→ `year_cnt` INTEGER）不支援文字比對運算子
+   *   3. AC-6 / BR-3：`operator` 與 `values` / `keyword` 互斥（文字運算子不得帶 values，
+   *      `in`／缺漏不得帶 keyword）
+   *   4. AC-8 / BR-2：文字運算子之 keyword trim 後須為 1~100 字元
+   *
+   * 全部違規一律 422 `VALIDATION_ERROR`（BR-12：不新增錯誤碼），並於 `details.columnName`
+   * 指出違反之欄位，供多條件表單定位是哪一列（AC-6 / AC-8）。
+   */
+  private assertCategoricalOperatorRules(
+    conditions: ObListDefinitionConditionItem[],
+  ): void {
+    const reject = (columnName: string, message: string): never => {
+      throw new UnprocessableEntityException({
+        error: ERROR_CODES.VALIDATION_ERROR,
+        message,
+        details: { columnName },
+      });
+    };
+
+    for (const cond of conditions) {
+      const hasOperator = cond.operator !== undefined && cond.operator !== null;
+      const hasKeyword = cond.keyword !== undefined && cond.keyword !== null;
+
+      // 1. operator / keyword 僅適用於 categorical
+      if (cond.fieldType !== 'categorical') {
+        if (hasOperator || hasKeyword) {
+          reject(
+            cond.columnName,
+            `operator / keyword 僅適用於 categorical 篩選條件（${cond.columnName}）`,
+          );
+        }
+        continue;
+      }
+
+      // BR-11：operator 之解讀一律經唯一 fallback 落點
+      const isTextOperator = resolveCategoricalOperator(cond.operator) !== 'in';
+
+      // 2. caseyear 排除文字比對運算子（AD-E07-50 §3.8）
+      if (
+        isTextOperator &&
+        AssignmentListService.TEXT_OPERATOR_EXCLUDED_COLUMNS.has(cond.columnName)
+      ) {
+        reject(
+          cond.columnName,
+          `${cond.columnName} 欄位不支援文字比對運算子（對應 year_cnt 為整數欄位）`,
+        );
+      }
+
+      // 3. 互斥（AC-6 / BR-3）
+      const hasValues = Array.isArray(cond.values) && cond.values.length > 0;
+      const keywordText = typeof cond.keyword === 'string' ? cond.keyword.trim() : '';
+      if (isTextOperator && hasValues) {
+        reject(
+          cond.columnName,
+          `${cond.columnName} 之比對方式與設定值不相符，請重新設定`,
+        );
+      }
+      if (!isTextOperator && keywordText.length > 0) {
+        reject(
+          cond.columnName,
+          `${cond.columnName} 之比對方式與設定值不相符，請重新設定`,
+        );
+      }
+
+      // 4. keyword 必填 / 長度（AC-8 / BR-2；trim 後 1~100）
+      if (isTextOperator) {
+        if (keywordText.length === 0) {
+          reject(
+            cond.columnName,
+            `${cond.columnName} 使用文字比對運算子時，關鍵字為必填且不得為空白`,
+          );
+        }
+        if (keywordText.length > AssignmentListService.KEYWORD_MAX_LEN) {
+          reject(
+            cond.columnName,
+            `${cond.columnName} 關鍵字長度不得超過 ${AssignmentListService.KEYWORD_MAX_LEN} 個字元（目前 ${keywordText.length} 個）`,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * F119 / BR-2：文字比對運算子之 keyword 於落庫前 trim 前後空白
+   * （半形空白 / 全形空格 U+3000 / Tab / CR / LF 皆由 `String.prototype.trim()` 涵蓋）；
+   * 關鍵字**內部**空白一律保留（「勁 便利」≠「勁便利」）。
+   *
+   * immutable pattern：回傳新物件，不 mutate 傳入參數（比照 injectSystemFixedConditions）。
+   */
+  private normalizeCategoricalKeywords<T extends ObListDefinitionConditionPayload>(
+    payload: T,
+  ): T {
+    if (!payload || !Array.isArray(payload.conditions)) return payload;
+    const conditions = (payload.conditions as ObListDefinitionConditionItem[]).map(
+      (c) => {
+        if (c.fieldType !== 'categorical') return c;
+        if (resolveCategoricalOperator(c.operator) === 'in') return c;
+        if (typeof c.keyword !== 'string') return c;
+        return { ...c, keyword: c.keyword.trim() };
+      },
+    );
+    return { ...payload, conditions } as T;
   }
 
   /**
@@ -351,7 +484,11 @@ export class AssignmentListService {
       conditionPayload && Array.isArray(conditionPayload.conditions)
         ? conditionPayload
         : ({ conditions: [], logic: 'AND' } as ObListDefinitionConditionPayload);
-    const normalized = this.injectSystemFixedConditions(basePayload, systemFixedFields);
+    // F119 / BR-2：文字比對關鍵字先 trim，再注入系統固定條件（與 createList 同順序）
+    const normalized = this.injectSystemFixedConditions(
+      this.normalizeCategoricalKeywords(basePayload),
+      systemFixedFields,
+    );
 
     // 3. 欄位篩選子步驟（既有 composer；customer_core 條件由 composer 靜默 skip，改由下方 clause 產生）。
     const fieldFragment = buildStage1WhereConditions({
@@ -524,13 +661,24 @@ export class AssignmentListService {
    */
   private normalizeConditionPayload(
     payload: ObListDefinitionConditionPayload | null | undefined,
-    systemFixedColumnNames: Set<string>,
+    systemFixedColumnNames: Set<string> = new Set<string>(),
   ): string {
     if (!payload || !Array.isArray(payload.conditions)) return '';
     const parts: string[] = [];
     for (const c of payload.conditions as ObListDefinitionConditionItem[]) {
       if (systemFixedColumnNames.has(c.columnName)) continue;
-      if (c.fieldType === 'categorical' && Array.isArray(c.values)) {
+      if (c.fieldType === 'categorical') {
+        // F119 / BR-9 / BR-11：operator 之解讀一律經唯一 fallback 落點；
+        //   `in` / 缺漏走既有 `:cat:` 區段（I-CATOP-SIG-BACKCOMPAT-01：輸出逐字元不變），
+        //   三種文字運算子走互斥之 `:catop:` 新區段（大小寫 / 全半形敏感，不做折疊，BR-8）。
+        const operator = resolveCategoricalOperator(c.operator);
+        if (operator !== 'in') {
+          const kw = typeof c.keyword === 'string' ? c.keyword.trim() : '';
+          if (kw.length === 0) continue;
+          parts.push(`${c.columnName}:catop:${operator}:${kw}`);
+          continue;
+        }
+        if (!Array.isArray(c.values)) continue;
         const vals = [
           ...new Set(
             c.values.filter(
@@ -820,6 +968,9 @@ export class AssignmentListService {
     // 2b. US-144 / §18.12.5 step 3：注入系統固定條件（best_case → ['Y']）
     //     在驗證通過後、衍生 backward-compat 之前執行（tamper-proof 靜默正規化）。
     if (dto.conditionPayload) {
+      // F119 / BR-2：文字比對關鍵字於落庫前 trim（內部空白保留）
+      dto.conditionPayload = this.normalizeCategoricalKeywords(dto.conditionPayload);
+
       dto.conditionPayload = this.injectSystemFixedConditions(
         dto.conditionPayload,
         systemFixedFields,
@@ -1038,8 +1189,11 @@ export class AssignmentListService {
 
       // 7b. US-144 / §18.12.5 step 3：注入系統固定條件（best_case → ['Y']）
       //     在 stage guard + 驗證通過後、衍生 backward-compat 之前執行。
+      // F119 / BR-2：文字比對關鍵字於落庫前 trim（內部空白保留）
+      dto.conditionPayload = this.normalizeCategoricalKeywords(dto.conditionPayload!);
+
       dto.conditionPayload = this.injectSystemFixedConditions(
-        dto.conditionPayload!,
+        dto.conditionPayload,
         systemFixedFields,
       );
 
