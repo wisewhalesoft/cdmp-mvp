@@ -260,6 +260,16 @@
     "updated_at": "2026-05-19T01:28:26.610Z"
   },
   {
+    "column_name": "spec_name",
+    "display_name": "主約專案名稱",
+    "field_type": "categorical",
+    "is_active": true,
+    "data_source": "ob_pool_data",
+    "is_system_fixed": false,
+    "created_at": "2026-07-14T09:13:26.902Z",
+    "updated_at": "2026-07-14T09:13:26.902Z"
+  },
+  {
     "column_name": "spec_tp",
     "display_name": "專案類別",
     "field_type": "categorical",
