@@ -267,9 +267,18 @@ describe('新增 seed 資料檔（帳號 / 篩選欄位 / 202607 名單）', () 
     }
   });
 
-  it('篩選欄位：whitelist 19 + option 454（以 dev CDMP 為 ground truth；已移除 brand_no/list_type/sta_code_na）', () => {
+  // F119 / AD-E07-50 §10.1 R-5：新增 spec_name（主約專案名稱）後 whitelist 27 → 28。
+  //   spec_name 為 F119 文字比對運算子之代表欄位（dev ob_pool_data 有 6,618 個 distinct
+  //   值，遠超 DISTINCT_VALUES_CAP=200，正是 F119 存在的理由）；先前僅存在於 dev CDMP、
+  //   未進部署 seed，導致新環境部署後該欄位不可選。
+  //   ⚠️ 刻意**不**同步 dev 的 pooldata_field_option（spec_name / '兔給得'）：該值於
+  //   ob_pool_data 查無任何列（0 筆），研判為手動試 F112 自動建議留下的測試值，非真實
+  //   專案名稱，故 option 維持 454 筆。
+  it('篩選欄位：whitelist 28 + option 454（以 dev CDMP 為 ground truth；已移除 brand_no/list_type/sta_code_na）', () => {
     const wl = loadJson<any>('pooldata-field-whitelist.json');
-    expect(wl).toHaveLength(27);
+    expect(wl).toHaveLength(28);
+    // F119：spec_name 必須在部署 seed 內，否則新環境無此篩選欄位可選
+    expect(wl.some((w) => w.column_name === 'spec_name')).toBe(true);
     // 已硬刪除的欄位不得再出現
     const removed = ['brand_no', 'list_type', 'sta_code_na'];
     expect(wl.some((w) => removed.includes(w.column_name))).toBe(false);

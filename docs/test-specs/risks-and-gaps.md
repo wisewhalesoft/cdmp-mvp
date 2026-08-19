@@ -1666,25 +1666,61 @@ last_updated: 2026-08-13
   相同判相同），已於 F119-test.md 明確記錄此揭露，避免被誤判為「測試寫錯才通過」。
 - **風險等級**：低，資訊性記錄；已於 F119-test.md §二 對應段落記錄，比照 F118 R-F118 系列慣例。
 
-### R-F119-04（低，測試邊界說明，非缺口）：AC-14 五路徑完整一致性未於本輪逐路徑數字驗證
+### R-F119-04（✅ 2026-08-18 大部分關閉；PG 路徑誠實保留較低分級）：AC-14 五路徑完整一致性
 
-- **問題**：AC-14 要求 MSSQL 下推 / PG 下推 / JS filter chain / Stage 0 估算 / 草稿抽樣估算五條
-  執行路徑對同一條件之判定完全一致。本輪 SQLite-based 測試（`f119-categorical-operator-fragment
-  .spec.ts` MATRIX 系列 + `f119-preview-hit-count-text-operators.spec.ts`）驗證了**單一共用函式
-  `buildCategoricalOperatorFragment` 本身**之正確性（BR-4/BR-5 之結構性保證：四個呼叫端皆呼叫同
-  一函式，即代表五條路徑天然一致），以及**一條可達路徑**（`previewHitCount`，草稿抽樣估算）之端
-  到端黑箱驗證，但**未**對 MSSQL 下推 / PG 下推 / JS filter chain / Stage 0 估算四條路徑個別執行
-  真實查詢比對數字。
-- **決策**：**2026-08-18 更新**——team lead 事後確認 dev MSSQL（`172.20.202.212:1433`）實為可連線
-  （見 R-F119-07），故已補一份 `f119-categorical-collation.mssql.spec.ts`（7 案例）驗證 BR-8 大小寫/
-  全半形敏感度（SQLite 無法重現之唯一案例）。但本項風險描述之「MSSQL 下推 / PG 下推 / JS filter
-  chain / Stage 0 估算四條路徑之逐路徑真實查詢比對數字」**仍未**補強——BR-8 collation 測試驗證的是
-  「fragment 在真實引擎下的字面值比對行為」，非「五條執行路徑各自組裝出的完整 SQL 對同一條件產生
-  相同結果」，兩者是不同層級的驗證。若需完整驗證，建議下輪比照既有 `.mssql.spec.ts` 慣例新增一份
-  逐路徑對照測試，或以 `vi.spyOn` 結構性驗證五個呼叫端確實路由至同一函式（AD-E07-50 §8 建議手法）。
-- **風險等級**：低（BR-4/BR-5 之結構性保證已由既有共用函式測試間接佐證「四個呼叫端零自行實作」，
-  完整逐路徑數字一致性風險低，但非本輪已證明之事實，如實記錄）。
+- **問題（原始）**：AC-14 要求 MSSQL 下推 / PG 下推 / JS filter chain / Stage 0 估算 / 草稿抽樣
+  估算五條執行路徑對同一條件之判定完全一致。前一輪 SQLite-based 測試僅驗證了**單一共用函式
+  `buildCategoricalOperatorFragment` 本身**之正確性（BR-4/BR-5 結構性保證）+ **一條可達路徑**
+  （`previewHitCount`，草稿抽樣估算）之端到端黑箱驗證，未對 MSSQL 下推 / PG 下推 / JS filter
+  chain / Stage 0 估算四條路徑個別執行真實查詢比對數字。2026-08-18 首次更新僅補了 BR-8
+  collation 案例（`f119-categorical-collation.mssql.spec.ts`），仍未真正補強逐路徑數字比對。
 
+- **決策（2026-08-18 第二次更新，team lead 指派缺口補強）**：team lead 確認 dev MSSQL
+  （`172.20.202.212:1433`）實測可連，指派 test-generator 針對此缺口補強。新增 3 檔、12 案例，
+  結果為**四路徑真實/可執行覆蓋 + 一路誠實分級**：
+
+  | 路徑 | 檔案 | 驗證層級 | 結果 |
+  |---|---|---|---|
+  | 路徑1 MSSQL 下推 | `f119-ac14-cross-path-parity.mssql.spec.ts` | **真實執行**（真實 MSSQL，dev `ob_pool_data` 167 萬列） | ✅ 與路徑3 逐 PK 相等，3/3 綠 |
+  | 路徑3 JS filter chain | 同上 | **真實執行** | ✅ 同上 |
+  | 路徑4 Stage0 估算 | `f119-ac14-stage0-delegation.spec.ts` | **真實執行**（SQLite，spy 驗委派不失真） | ✅ 4/4 綠；AD-E07-50 §2.1 查證路徑4 非獨立實作，委派完整性即為正確驗證手法 |
+  | 路徑2 PG 下推 | `f119-ac14-pg-semantic-equivalence.spec.ts` | **SQL 字串/語意等價**（非真實 PG 執行，本機無 PG 可連） | ✅ 4/4 綠；證明力弱於真實執行，已誠實標記 |
+  | 路徑5 草稿抽樣估算 | 既有 `f119-preview-hit-count-text-operators.spec.ts`（前一輪） | 真實執行（SQLite） | ✅ 沿用，AC-14 本身明文抽樣估算不要求數字逐筆相等 |
+
+  **路徑1 vs 路徑3**：比照既有 `stage1-sql-pushdown.mssql.spec.ts`（AD-E07-42 P3a）之
+  `assertEquivalent` 慣例，同一 list + F119 條件分別跑 `executeStage1Chain`（JS oracle）與
+  `runStage1SqlInsertMssql`（MSSQL 下推），比對 PK 集合逐列相等（非僅 count），覆蓋
+  `contains`/`not_contains`（★AC-3 NULL 不對稱，全 feature 唯一非對稱格）/AC-9 字面值。
+  **絕對數字為陷阱，已改採相對比較**——首次撰寫時斷言 `toBe(1)`，實測發現 dev pool 既有真實
+  資料已使 `contains '勁便利'` 命中達 112 列（非本檔 3 列 seed），已改為「路徑相等 + 自 seed
+  列依 PK 逐項歸類」雙重斷言，此與既有 `stage1-sql-pushdown.mssql.spec.ts` 因同一原因（僅 seed
+  2~3 筆卻斷言 `toBe(1)`，dev pool 167 萬列早非空表）已知失效之 15~16 個案例為同一類陷阱，本
+  輪已避開。**效能側附帶發現**（非本輪範圍，記錄供 AD-E07-50 §11-B 參考）：`not_contains` 全表
+  NOT LIKE 掃描單案例實測約 90 秒，已於測試連線設定 `requestTimeout:120000`（僅測試連線，非
+  生產碼變更）避免 tedious 預設 15s 逾時。
+
+  **路徑4**：因 AD-E07-50 §2.1 明定「路徑4 呼叫路徑3、非獨立實作」，正確驗證手法非重覆執行
+  路徑3 比對數字，而是**委派完整性**（`vi.spyOn` 驗證 `condition_payload` 之 `operator`/
+  `keyword` 傳遞至 `executeStage1Chain` 時逐欄位不失真），對應 AD-E07-50 §8 建議之結構性驗證
+  手法。
+
+  **路徑2**：本專案已全面遷移 MSSQL、環境無真實 PG 可連（AD-E07-50 §10 R-4 既有殘留風險）。
+  改為直接呼叫生產碼 `buildStage1Sql()`（PG 建構器純函式，`pdlRepo` 可 mock、免連接任何 DB）
+  取得 WHERE 片段，逐字元比對 `buildCategoricalOperatorFragment()` 之直接輸出，證明 PG 建構器
+  未在共用函式輸出外自行竄改字元。此為「呼叫路徑未走樣」層級，**弱於**真實 DB 執行（若 PG 引擎
+  本身對 `ESCAPE` 子句有語法層級怪異行為，本檔無法偵測），已於檔案頭與此處誠實標記，未假裝為
+  真實 PG 執行證據。
+
+  **驗證方式**：因 F119 生產碼已實作完成並 merge 進 main，本輪 12 案例為**對已上線程式碼的真實
+  執行**（非 TDD 紅燈流程），已全數以 `vitest run` 實際執行確認 12/12 綠燈（含 3 個真實 MSSQL
+  案例，其中一次執行實測產出「dev pool 真實命中 112 列」證明測試非空跑）；`tsc --noEmit` 全數
+  通過；兩目錄既有測試（44 檔 772 個）零回歸；MSSQL 測試後已實測確認 dev DB 無 `F19` 前綴殘留
+  （四表皆 0 列，獨立前綴 + 精準 DELETE，未觸碰既有 167 萬列真實資料）。
+
+- **風險等級**：低。四條路徑（1/3/4/5）已有真實或結構性可執行證據；路徑2（PG）因環境限制僅達
+  語意等價層級，此為專案既有事實（全面遷移 MSSQL、無 PG 可測）而非本輪可解決之缺口，已誠實記錄
+  於此，非隱瞞。若未來需要真實 PG 執行證據，需另行提供可連線之 PostgreSQL 測試環境（TestContainer
+  或其他），非測試設計本身之限制。
 ### R-F119-05（低，C-Q1 沿用 ui-ux-designer 已記錄之裁定，非本輪新發現）：`formatConditionSummary()` 顯示格式採 AC-15 例句而非 AD §3.6 樣板字串
 
 - **問題**：`docs/ui-ux-design-overview.md` 附錄 C C.7 C-Q1 已記錄 AD-E07-50 §3.6 之樣板字串
