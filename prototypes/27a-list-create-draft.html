@@ -698,7 +698,9 @@
 
     // F076 v1.6 categorical 可選值（對齊 spec seed；prod_kind '01' 設 inactive 用於琥珀 demo；v2.1.1：新增 best_case Y/N）
     const FIELD_VALUES = {
-      prod_kind:   [ { v: '01', l: '汽車新車',    active: false, reason: 'manual' }, { v: '02', l: '機車', active: true }, { v: '03', l: '其他商品', active: true } ],
+      // 產品類別標籤逐字對齊正式 seed（baseline-reference-data.ts，column_name='prod_kind'）：
+      //   01=汽車 / 02=機車 / 03=一般商品。與 27 / 30 / 37 同源，勿改回舊示範字。
+      prod_kind:   [ { v: '01', l: '汽車',        active: false, reason: 'manual' }, { v: '02', l: '機車', active: true }, { v: '03', l: '一般商品', active: true } ],
       caseyear:    [ { v: '0', l: '0 年', active: true }, { v: '1', l: '1 年', active: true }, { v: '2', l: '2 年', active: true }, { v: '3', l: '3 年', active: true }, { v: '4', l: '4 年', active: true }, { v: '5', l: '5 年', active: true }, { v: '6', l: '6 年（以上）', active: true }, { v: '99', l: '不限年數', active: true, special: true } ],
       spec_tp:     [ { v: '02', l: '中古車', active: true }, { v: '04', l: '原融代償', active: true }, { v: '05', l: '在庫融資', active: true }, { v: '06', l: '專案融資', active: true }, { v: '11', l: '保單', active: true }, { v: '12', l: '信貸', active: true } ],
       case_status: [ { v: '01', l: '期中（不含當月滿期）', active: true }, { v: '02', l: '中結', active: true }, { v: '03', l: '滿期（含當月滿期）', active: true }, { v: '04', l: '滿期（已結清）', active: true } ],

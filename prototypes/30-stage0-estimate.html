@@ -169,6 +169,13 @@
         <button onclick="applyScenario('headcount0')" id="demo-headcount0" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">某部門未配置人力</button>
         <button onclick="applyScenario('scopeNull')" id="demo-scopeNull" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">處長無轄區</button>
         <button onclick="applyScenario('listPartial')" id="demo-listPartial" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">名單估算逾時（合計不完整）</button>
+        <!-- F120 / US-184：名單基礎預估數量總覽之專屬示範場景 -->
+        <span class="mx-1 h-4 w-px bg-gray-200"></span>
+        <span class="text-xs text-gray-400 mr-1">名單總覽：</span>
+        <button onclick="applyScenario('listGroups')" id="demo-listGroups" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">名單分組完整示範</button>
+        <button onclick="applyScenario('listGroupsPartial')" id="demo-listGroupsPartial" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">分組含未能估算名單</button>
+        <button onclick="applyScenario('listAllUnestimated')" id="demo-listAllUnestimated" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">名單全數未能估算</button>
+        <button onclick="applyScenario('listEmpty')" id="demo-listEmpty" class="demo-btn px-2.5 py-1 text-xs rounded border border-gray-300 bg-white hover:bg-gray-50">當月無啟用名單</button>
         <span class="ml-auto text-[10px] text-gray-400">切換「部長／處長／一般使用者」請用右上角角色選單 · mock 互動不發 API</span>
       </div>
 
@@ -187,6 +194,9 @@
             <div class="bg-gray-50 rounded-lg border border-border p-3 text-center"><div class="text-xl font-bold text-gray-300">—</div><div class="text-[10px] text-gray-400 mt-1">在職人數</div></div>
           </div>
         </div>
+        <!-- F120 §10.2：處長無轄區時，「名單基礎預估數量總覽」仍完整呈現（不降級）——
+             名單層總量本就不依轄區，轄區辨識失敗不影響其可算性。渲染時由 placeListOverview() 搬入此處。 -->
+        <div id="scopeNullExtra" class="mt-4"></div>
       </div>
 
       <div id="contentArea" class="p-6 space-y-4">
@@ -195,8 +205,10 @@
         <div id="readOnlyBanner" class="hidden rounded-lg p-3 bg-purple-50 border border-purple-200 flex items-start gap-2 text-sm">
           <i data-lucide="eye" class="w-4 h-4 text-purple-700 mt-0.5 shrink-0"></i>
           <div class="flex-1">
-            <p class="font-semibold text-purple-900" id="readOnlyTitle">唯讀模式：僅顯示您轄區部門（北區電銷一課）的預估資料</p>
-            <p class="text-xs text-purple-700 mt-0.5">此頁僅供檢視，不提供任何修改設定的操作；您看到的是轄區部門的每日工作量與人均負荷。</p>
+            <p class="font-semibold text-purple-900" id="readOnlyTitle">唯讀模式：部門相關區塊僅顯示您轄區部門（北區電銷一課）的預估資料</p>
+            <!-- F120 AC-LIST-11：新增之「名單基礎預估數量總覽」不受轄區限制，
+                 若此處仍寫「本頁僅顯示轄區」會與該區塊正面矛盾，故補一句界定範圍。 -->
+            <p class="text-xs text-purple-700 mt-0.5">此頁僅供檢視，不提供任何修改設定的操作；上方部門區塊呈現的是您轄區部門的每日工作量與人均負荷。頁面最下方的「名單基礎預估數量總覽」則為全公司名單層總量，不受轄區限制。</p>
           </div>
           <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0" style="background:#EDE9FE;color:#6D28D9;">
             <i data-lucide="scan-eye" class="w-3 h-3"></i>轄區檢視
@@ -333,6 +345,38 @@
           </div>
         </div>
 
+        <!-- ============================================================
+             名單基礎預估數量總覽（F120 / US-184 AC-LIST-01 ~ AC-LIST-14）
+             第三個區塊，位於既有兩個部門維度區塊之後、頁尾提示之前（AC-LIST-01）。
+             以「名單」為單位（非部門），依產品類別分為五組（＋未登錄代碼組）小計。
+             設計要點：
+               - 分組標題列同時就是小計列 → 收合分組永遠不會把數字藏起來。
+               - 篩選條件逐條以標籤呈現，超過 2 條以就地展開（非 hover / 非 tooltip）補足，
+                 每條描述字串一律由 formatConditionSummary() 產生（AC-LIST-04 / F119 BR-10）。
+               - 無估算值＝「—」＋沙漏琥珀徽章，與本頁既有 STAGE0_LIST_ESTIMATE_PARTIAL
+                 語彙完全同一套（AC-LIST-10 / OQ-F120-U3），不另造第二種逾時視覺。
+               - 處長角色必帶「全公司口徑」語意標示（AC-LIST-11，非加分項）。
+               - 本區塊不套部門 scope：處長與部長看到的名單集合完全相同。
+             ============================================================ -->
+        <div id="listOverviewAnchor">
+          <div id="listOverviewBlock" class="bg-white rounded-xl border border-border overflow-hidden" data-testid="stage0-list-overview">
+            <div class="px-5 py-3.5 border-b border-border flex items-center gap-2 flex-wrap">
+              <i data-lucide="clipboard-list" class="w-4 h-4 text-primary"></i>
+              <h3 class="text-sm font-semibold text-gray-800">名單基礎預估數量總覽</h3>
+              <span id="listOverviewTitleBadges" class="inline-flex items-center gap-1.5"></span>
+              <span class="text-xs text-gray-400" id="listOverviewHint">以名單為單位列出本月啟用名單，依產品類別分組小計</span>
+              <button type="button" id="listOverviewToggleAll" onclick="toggleAllListGroups()"
+                class="ml-auto inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:border-primary hover:text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                data-testid="list-overview-toggle-all">
+                <i data-lucide="chevrons-down-up" class="w-3.5 h-3.5"></i><span id="listOverviewToggleAllLabel">全部收合</span>
+              </button>
+            </div>
+            <div id="listOverviewChiefNotice" class="hidden"></div>
+            <div id="listOverviewBody"></div>
+            <div id="listOverviewFootNote"></div>
+          </div>
+        </div>
+
         <!-- footer note（業務語言） -->
         <div class="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">
           <i data-lucide="info" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
@@ -406,11 +450,99 @@
     ];
     const SCOPE_DEPT = 'XVE1';                  // 業務處長（李處長）轄區
     const HOLIDAYS = { '2026-05-01': '勞動節', '2026-06-19': '端午節', '2026-01-01': '元旦' };
-    const LIST_NAMES = {
-      OB202606001: '汽車期中名單',
-      OB202606002: '信貸滿期名單',
-      OB202606004: '機車中度逾期名單'
-    };
+    // 名單編號 → 名單名稱（供顯示模式 chip 與逾時警告使用）。
+    // F120：改為由目前的名單母體動態同步，避免示範資料與名稱表脫節。
+    const LIST_NAMES = {};
+    function syncListNames() {
+      Object.keys(LIST_NAMES).forEach(k => { delete LIST_NAMES[k]; });
+      LIST_UNIVERSE_BASE.concat(LIST_UNIVERSE_RICH).forEach(l => { LIST_NAMES[l.listNo] = l.name; });
+    }
+
+    // ===================================================================
+    // 名單母體（F120 / US-184）
+    //   每筆名單帶 conditionPayload —— 這是「產品類別分組」判定之唯一依據
+    //   （AC-LIST-06：不得改讀衍生欄位，因為它無法區分「文字比對」與「未設定」）。
+    //   ration 為部門比例，供既有兩個部門區塊使用（本區塊不使用）。
+    // ===================================================================
+    const LIST_UNIVERSE_BASE = [
+      { listNo: 'OB202606001', name: '汽車期中名單', total: 12000, ration: { XVE1: 35, XVE2: 30, XVE3: 20, XVE4: 15 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+          { columnName: 'case_status', fieldType: 'categorical', values: ['01'] }
+        ] } },
+      { listNo: 'OB202606002', name: '信貸滿期名單', total: 9000, ration: { XVE1: 30, XVE2: 25, XVE3: 25, XVE4: 20 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'spec_tp', fieldType: 'categorical', values: ['12'] },
+          { columnName: 'case_status', fieldType: 'categorical', values: ['03'] }
+        ] } },
+      { listNo: 'OB202606004', name: '機車中度逾期名單', total: 7500, ration: { XVE1: 40, XVE2: 30, XVE3: 20, XVE4: 10 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] },
+          { columnName: 'month_cnt', fieldType: 'numeric', min: 2, max: 3 }
+        ] } }
+    ];
+
+    // 完整分組示範母體：刻意覆蓋 F120 §10.2 邊界案例矩陣的每一列。
+    //   小計佔比四捨五入後加總 = 99%（非 100%）—— 這是 AC-LIST-08 明訂的預期行為，
+    //   數字是刻意挑的，請勿為了「湊成 100%」而改動任何 total。
+    const LIST_UNIVERSE_RICH = [
+      { listNo: 'OB202606001', name: '汽車期中名單', total: 12000, ration: { XVE1: 35, XVE2: 30, XVE3: 20, XVE4: 15 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01'] },
+          { columnName: 'case_status', fieldType: 'categorical', values: ['01'] }
+        ] } },
+      { listNo: 'OB202606002', name: '信貸滿期名單', total: 9000, ration: { XVE1: 30, XVE2: 25, XVE3: 25, XVE4: 20 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'spec_tp', fieldType: 'categorical', values: ['12'] },
+          { columnName: 'case_status', fieldType: 'categorical', values: ['03'] }
+        ] } },
+      // 重複值去重後仍為單一代碼 → 歸「汽車」，不是「多重產品類別」
+      { listNo: 'OB202606003', name: '汽車原融代償名單', total: 4000, ration: { XVE1: 25, XVE2: 25, XVE3: 25, XVE4: 25 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', operator: 'in', values: ['01', '01'] },
+          { columnName: 'spec_tp', fieldType: 'categorical', values: ['04'] }
+        ] } },
+      { listNo: 'OB202606004', name: '機車中度逾期名單', total: 7500, ration: { XVE1: 40, XVE2: 30, XVE3: 20, XVE4: 10 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['02'] },
+          { columnName: 'month_cnt', fieldType: 'numeric', min: 2, max: 3 }
+        ] } },
+      // 顯式 operator:'in' 與缺漏 operator 之對照組（判定結果必須相同）
+      { listNo: 'OB202606005', name: '一般商品滿期名單', total: 3000, ration: { XVE1: 30, XVE2: 30, XVE3: 20, XVE4: 20 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', operator: 'in', values: ['03'] }
+        ] } },
+      { listNo: 'OB202606006', name: '汽機車重點戶名單', total: 3500, ration: { XVE1: 35, XVE2: 25, XVE3: 25, XVE4: 15 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01', '02'] },
+          { columnName: 'case_status', fieldType: 'categorical', values: ['01', '02'] }
+        ] } },
+      { listNo: 'OB202606007', name: '全類別高風險名單', total: 2200, ration: { XVE1: 25, XVE2: 30, XVE3: 25, XVE4: 20 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['01', '02', '03'] }
+        ] } },
+      // 產品類別以文字比對指定 → 無法對應到固定代碼 → 未分類
+      { listNo: 'OB202606008', name: '排除一般商品名單', total: 2800, ration: { XVE1: 30, XVE2: 30, XVE3: 25, XVE4: 15 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', operator: 'not_contains', keyword: '03' },
+          { columnName: 'spec_name', fieldType: 'categorical', operator: 'contains', keyword: '勁便利' },
+          { columnName: 'case_status', fieldType: 'categorical', values: ['01', '02'] },
+          { columnName: 'month_cnt', fieldType: 'numeric', min: 1, max: 6 }
+        ] } },
+      // 舊名單：完全沒有篩選條件內容 → 未分類、條件欄顯示「（未設定篩選條件）」
+      { listNo: 'OB202606009', name: '舊系統遷移名單', total: 1500, ration: { XVE1: 25, XVE2: 25, XVE3: 25, XVE4: 25 },
+        conditionPayload: null },
+      // 引用未登錄於可選值清單之代碼 → 自成一組、標題顯示原始代碼、排在已登錄代碼之後
+      { listNo: 'OB202606010', name: '新品試辦名單', total: 1000, ration: { XVE1: 40, XVE2: 20, XVE3: 20, XVE4: 20 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: ['09'] }
+        ] } },
+      // 產品類別條件存在但未選任何值 → 未分類（不得當成多值、不得壞畫面）
+      { listNo: 'OB202606011', name: '未指定類別值名單', total: 500, ration: { XVE1: 25, XVE2: 25, XVE3: 25, XVE4: 25 },
+        conditionPayload: { logic: 'AND', conditions: [
+          { columnName: 'prod_kind', fieldType: 'categorical', values: [] }
+        ] } }
+    ];
 
     const state = {
       ym: DEFAULT_TARGET_WORK_YM,
@@ -422,7 +554,11 @@
       scenario: 'normal',
       poolLow: false,
       listPartial: false,     // F119 AC-13：demo 開關 —— 是否模擬個別名單估算逾時
-      selectedDept: 'ALL'     // 月曆當前檢視部門：'ALL'（全部門合計）或部門代號；處長鎖定轄區
+      selectedDept: 'ALL',    // 月曆當前檢視部門：'ALL'（全部門合計）或部門代號；處長鎖定轄區
+      // F120 demo 開關
+      universe: 'base',       // 'base'（3 筆）｜'rich'（11 筆，涵蓋全部分組與邊界案例）
+      allUnestimated: false,  // 全部名單皆無估算值 → 預估數量總計 0 → 佔比全數「—」
+      noLists: false          // 當月無啟用名單 → 本區塊空狀態
     };
 
     let computed = null;
@@ -433,13 +569,14 @@
       if (state.scenario === 'headcount0') d.push({ code: 'AM000', name: '數位專案組', chief: '—', headcount: 0 });
       return d;
     }
-    function baseLists() {
-      return [
-        { listNo: 'OB202606001', name: LIST_NAMES.OB202606001, total: 12000, ration: { XVE1: 35, XVE2: 30, XVE3: 20, XVE4: 15 } },
-        { listNo: 'OB202606002', name: LIST_NAMES.OB202606002, total: 9000,  ration: { XVE1: 30, XVE2: 25, XVE3: 25, XVE4: 20 } },
-        { listNo: 'OB202606004', name: LIST_NAMES.OB202606004, total: 7500,  ration: { XVE1: 40, XVE2: 30, XVE3: 20, XVE4: 10 } }
-      ];
+    // 當月啟用名單母體（尚未套用名單篩選、尚未排除未能估算者）。
+    // AC-LIST-02：本區塊與既有兩個部門區塊共用「同一份」名單集合，此處即該唯一來源。
+    function activeUniverse() {
+      if (state.noLists) return [];
+      const src = state.universe === 'rich' ? LIST_UNIVERSE_RICH : LIST_UNIVERSE_BASE;
+      return src.map(l => ({ ...l, ration: { ...l.ration } }));
     }
+    function baseLists() { return activeUniverse(); }
     // ===================================================================
     // F119 AC-13 / BR-13：STAGE0_LIST_ESTIMATE_PARTIAL
     //   後端於個別名單 estimateListCount 逾時時，將該名單自 listTotals 排除並回一則
@@ -447,7 +584,10 @@
     //   本頁 mock 以 demo 場景重現；message 逐字採用 error-handling.md v1.20 之契約文案。
     // ===================================================================
     const PARTIAL_TIMEOUT_LISTS = ['OB202606002', 'OB202606004'];
-    function partialExcludedListNos() { return state.listPartial ? PARTIAL_TIMEOUT_LISTS.slice() : []; }
+    function partialExcludedListNos() {
+      if (state.allUnestimated) return activeUniverse().map(l => l.listNo);   // F120：全部名單皆無估算值
+      return state.listPartial ? PARTIAL_TIMEOUT_LISTS.slice() : [];
+    }
     function stage0PartialWarnings() {
       // 單一名單檢視時，僅呈現該名單之警告（後端亦只會估算該名單）
       return partialExcludedListNos()
@@ -469,6 +609,410 @@
       if (excluded.length) lists = lists.filter(l => excluded.indexOf(l.listNo) < 0);
       if (state.listFilter !== 'ALL') lists = lists.filter(l => l.listNo === state.listFilter);
       return lists;
+    }
+
+    // 名單篩選下拉之選項隨名單母體同步（AC-LIST-02：本區塊不另設篩選器，共用這一個）
+    function renderListFilterOptions() {
+      const sel = document.getElementById('inListFilter');
+      if (!sel) return;
+      const universe = activeUniverse();
+      if (state.listFilter !== 'ALL' && !universe.some(l => l.listNo === state.listFilter)) state.listFilter = 'ALL';
+      sel.innerHTML = ['<option value="ALL">全部名單（彙總）</option>']
+        .concat(universe.map(l => `<option value="${l.listNo}">${escHtml(l.name)}（${l.listNo}）</option>`)).join('');
+      sel.value = state.listFilter;
+    }
+
+    // ===================================================================
+    // F120 / US-184：名單基礎預估數量總覽
+    // ===================================================================
+
+    // -------------------------------------------------------------------
+    // ⚠️ 以下至 formatConditionSummary() 為止，與 prototypes/27-list-definition.html
+    //    之對應區段**逐字相同**（React 落地＝ _utils/condition-summary.ts）。
+    //    AC-LIST-04 / F119 BR-10：條件描述字串只能由這一個函式產生，本區塊禁止另拼字串。
+    //    修改此區段時，27 / 27a / 27b 三份原型必須同步，否則 TC-184-12 之
+    //    「與名單詳情逐字元相同」立刻失守。
+    // -------------------------------------------------------------------
+    const CATEGORICAL_OPERATORS = ['in', 'contains', 'not_contains', 'equals'];
+    const TEXT_OPERATORS = ['contains', 'not_contains', 'equals'];
+    const OPERATOR_LABEL = { in: 'IN', contains: '包含', not_contains: '不包含', equals: '完全等於' };
+    function resolveCategoricalOperator(op) { return (op === undefined || op === null || op === '') ? 'in' : op; }
+    function isTextOperator(op) { return TEXT_OPERATORS.indexOf(resolveCategoricalOperator(op)) >= 0; }
+    function operatorLabel(op) { return OPERATOR_LABEL[resolveCategoricalOperator(op)] || OPERATOR_LABEL.in; }
+    function trimKeyword(s) { return String(s === undefined || s === null ? '' : s).replace(/^[\s　]+|[\s　]+$/g, ''); }
+
+    function escHtml(s) {
+      return String(s === undefined || s === null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function formatConditionSummary(cond, decoder) {
+      const name = decoder.fieldDisplayName(cond.columnName);
+      if (cond.fieldType === 'categorical') {
+        const op = resolveCategoricalOperator(cond.operator);
+        if (isTextOperator(op)) return name + ' ' + operatorLabel(op) + '「' + trimKeyword(cond.keyword) + '」';
+        const vals = (cond.values || []).map(function (v) { return decoder.valueLabel(cond.columnName, v); });
+        return vals.length === 0 ? name + '：（未選擇任何值）' : name + '：' + vals.join('、');
+      }
+      if (cond.fieldType === 'numeric') return name + '：' + cond.min + ' ~ ' + cond.max;
+      if (cond.fieldType === 'date') return name + '：' + cond.dateStart + ' ~ ' + cond.dateEnd;
+      return name;
+    }
+    // -------------------------------------------------------------------
+
+    // 產品類別可選值清單（＝ AC-LIST-05 之 decode 來源）。
+    //   分組標題與條件描述字串共用這一份，畫面上不會出現「群組叫汽車、條件卻叫別的名字」。
+    //   排序鍵：顯示順序 → 代碼（現行三筆顯示順序皆相同，代碼才是決定 01/02/03 的關鍵）。
+    const PROD_KIND_OPTIONS = [
+      { value: '01', label: '汽車',     displayOrder: 0, icon: 'car',     badge: 'bg-blue-100 text-blue-700' },
+      { value: '02', label: '機車',     displayOrder: 0, icon: 'bike',    badge: 'bg-emerald-100 text-emerald-700' },
+      { value: '03', label: '一般商品', displayOrder: 0, icon: 'package', badge: 'bg-violet-100 text-violet-700' }
+    ];
+    const OPT_LABELS = {
+      prod_kind:   {},
+      spec_tp:     { '02': '中古車', '04': '原融代償', '05': '在庫融資', '06': '專案融資', '11': '保單', '12': '信貸' },
+      case_status: { '01': '期中', '02': '中結', '03': '滿期(含當月)', '04': '滿期(已結清)' }
+    };
+    PROD_KIND_OPTIONS.forEach(o => { OPT_LABELS.prod_kind[o.value] = o.label; });
+    const FIELD_DISPLAY = {
+      prod_kind: '產品類別', caseyear: '年數', spec_tp: '專案類別',
+      case_status: '結清期別', settle_src: '他行代償', month_cnt: '撈取月份', birth_date: '生日',
+      spec_name: '主約專案名稱', occupation_desc: '職業別'
+    };
+    const CONDITION_DECODER = {
+      fieldDisplayName: function (col) { return FIELD_DISPLAY[col] || col; },
+      valueLabel: function (col, v) { const m = OPT_LABELS[col] || {}; return m[v] || v; }
+    };
+
+    // 分組判定（AC-LIST-06 / §5.2）：全函式 —— 任何輸入都恰好回傳一個分組鍵，
+    //   因此「互斥且完備」是結構上的必然，不靠測試維持。
+    //   運算子預設值一律經 resolveCategoricalOperator()，此處不得自寫 `op || 'in'`。
+    const GROUP_COMBINED = 'combined';      // 合成鍵刻意不用可讀英文，避免混入畫面文字
+    const GROUP_UNSET = 'unset';
+    function resolveListGroup(payload) {
+      if (!payload || !Array.isArray(payload.conditions) || payload.conditions.length === 0) return GROUP_UNSET;
+      const items = payload.conditions.filter(c => c && c.columnName === 'prod_kind');
+      if (items.length === 0) return GROUP_UNSET;
+      const cond = items[items.length - 1];                    // 防禦：多筆時取最後一筆
+      if (cond.fieldType !== 'categorical') return GROUP_UNSET;
+      if (isTextOperator(cond.operator)) return GROUP_UNSET;   // 文字比對無法對應固定代碼
+      if (!Array.isArray(cond.values)) return GROUP_UNSET;
+      const codes = [];
+      cond.values.forEach(v => { if (codes.indexOf(v) < 0) codes.push(v); });   // 去重、不做大小寫折疊
+      if (codes.length === 0) return GROUP_UNSET;
+      if (codes.length === 1) return codes[0];
+      return GROUP_COMBINED;
+    }
+
+    // 本區塊之名單集合：與部門區塊同一份母體、同一個名單篩選器，
+    //   但**不**排除未能估算的名單 —— 它們仍要列出來（只是預估數量為 null）。
+    function listOverviewRows() {
+      let universe = activeUniverse();
+      if (state.listFilter !== 'ALL') universe = universe.filter(l => l.listNo === state.listFilter);
+      const excluded = partialExcludedListNos();
+      return universe
+        .slice()
+        .sort((a, b) => a.listNo.localeCompare(b.listNo))
+        .map(l => ({
+          listNo: l.listNo,
+          name: l.name,
+          conditions: (l.conditionPayload && Array.isArray(l.conditionPayload.conditions)) ? l.conditionPayload.conditions : [],
+          groupKey: resolveListGroup(l.conditionPayload),
+          estimatedCount: excluded.indexOf(l.listNo) >= 0 ? null : l.total
+        }));
+    }
+
+    // 分組排序（AC-LIST-07 / §5.3）：已登錄代碼 → 未登錄代碼 → 多重產品類別 → 未分類。
+    //   名單數為 0 的分組不會存在於此結果（依名單數隱藏，而非依小計金額）。
+    function buildListGroups(rows, totalEstimated, percentApplicable) {
+      const bucket = new Map();
+      rows.forEach(r => { if (!bucket.has(r.groupKey)) bucket.set(r.groupKey, []); bucket.get(r.groupKey).push(r); });
+
+      const ordered = [];
+      PROD_KIND_OPTIONS.slice()
+        .sort((a, b) => (a.displayOrder - b.displayOrder) || a.value.localeCompare(b.value))
+        .forEach(o => { if (bucket.has(o.value)) ordered.push({ key: o.value, kind: 'code', registered: true, label: o.label, icon: o.icon, badge: o.badge, note: '' }); });
+      Array.from(bucket.keys())
+        .filter(k => k !== GROUP_COMBINED && k !== GROUP_UNSET && !PROD_KIND_OPTIONS.some(o => o.value === k))
+        .sort()
+        .forEach(k => ordered.push({ key: k, kind: 'code', registered: false, label: k, icon: 'alert-circle', badge: 'bg-gray-100 text-gray-500', note: '此代碼尚未登錄於產品類別可選值清單' }));
+      if (bucket.has(GROUP_COMBINED)) ordered.push({ key: GROUP_COMBINED, kind: 'combined', registered: false, label: '多重產品類別', icon: 'layers', badge: 'bg-gray-100 text-gray-600', note: '同時指定 2 種以上產品類別的名單' });
+      if (bucket.has(GROUP_UNSET)) ordered.push({ key: GROUP_UNSET, kind: 'unset', registered: false, label: '未分類', icon: 'help-circle', badge: 'bg-gray-100 text-gray-600', note: '未指定產品類別，或以文字比對方式指定的名單' });
+
+      return ordered.map((g, idx) => {
+        const items = bucket.get(g.key);
+        const subtotal = items.reduce((s, r) => s + (r.estimatedCount === null ? 0 : r.estimatedCount), 0);
+        const unestimated = items.filter(r => r.estimatedCount === null).length;
+        return {
+          ...g, index: idx, lists: items,
+          listCount: items.length,
+          unestimatedCount: unestimated,
+          subtotal: subtotal,
+          // 佔比：分母＝預估數量總計；總計為 0（或單一名單檢視）時一律「—」，不得出現 0% / NaN
+          percent: percentApplicable && totalEstimated > 0 ? Math.round(subtotal / totalEstimated * 100) : null
+        };
+      });
+    }
+
+    // -------------------------------------------------------------------
+    // 顯示狀態（分組收合、條件展開）
+    // -------------------------------------------------------------------
+    const listOverviewState = { collapsed: {}, expandedConds: {}, pendingFocus: null };
+    const COND_PREVIEW_COUNT = 2;   // 與名單定義列表卡片相同的門檻，全站只有一種「前 N 條 ＋N」慣例
+
+    function toggleListGroup(key) {
+      listOverviewState.collapsed[key] = !listOverviewState.collapsed[key];
+      listOverviewState.pendingFocus = '[data-testid="list-overview-group-toggle"][data-group-id="' + cssEscapeId(key) + '"]';
+      renderListOverview();
+    }
+    function toggleAllListGroups() {
+      const groups = currentListOverviewGroups;
+      const anyOpen = groups.some(g => !listOverviewState.collapsed[g.key]);
+      groups.forEach(g => { listOverviewState.collapsed[g.key] = anyOpen; });
+      listOverviewState.pendingFocus = '[data-testid="list-overview-toggle-all"]';
+      renderListOverview();
+    }
+    function toggleListConditions(listNo) {
+      listOverviewState.expandedConds[listNo] = !listOverviewState.expandedConds[listNo];
+      listOverviewState.pendingFocus = '[data-testid="list-overview-cond-toggle"][data-list-no="' + listNo + '"]';
+      renderListOverview();
+    }
+    // 合成分組鍵含控制字元，轉成穩定且可用於選擇器的 id
+    function cssEscapeId(key) {
+      if (key === GROUP_COMBINED) return 'g-combined';
+      if (key === GROUP_UNSET) return 'g-unset';
+      return 'g-' + key;
+    }
+    function applyListOverviewFocus() {
+      const sel = listOverviewState.pendingFocus;
+      listOverviewState.pendingFocus = null;
+      if (!sel) return;
+      const el = document.querySelector(sel);
+      if (el) el.focus();
+    }
+
+    // -------------------------------------------------------------------
+    // 片段
+    // -------------------------------------------------------------------
+    // 「未能估算」徽章：與本頁既有 KPI「不完整」徽章同一組 class、同一個沙漏圖示，
+    //   全頁只有這一套逾時語彙（OQ-F120-U3）。
+    function unestimatedBadge(text, title) {
+      return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 align-middle"
+        title="${escHtml(title || '')}" data-testid="list-overview-unestimated-badge"><i data-lucide="hourglass" class="w-2.5 h-2.5"></i>${text}</span>`;
+    }
+
+    function conditionCell(row) {
+      if (row.conditions.length === 0) {
+        return `<span class="text-xs text-gray-400 italic" data-testid="list-overview-no-condition">（未設定篩選條件）</span>`;
+      }
+      const expanded = !!listOverviewState.expandedConds[row.listNo];
+      const shown = expanded ? row.conditions : row.conditions.slice(0, COND_PREVIEW_COUNT);
+      const chips = shown.map(c => {
+        const txt = formatConditionSummary(c, CONDITION_DECODER);
+        return `<span class="inline-block max-w-[18rem] truncate align-bottom px-1.5 py-0.5 bg-gray-50 text-gray-600 border border-gray-200 rounded text-[11px]"
+          title="${escHtml(txt)}" data-condition-summary>${escHtml(txt)}</span>`;
+      }).join('');
+      let toggle = '';
+      if (row.conditions.length > COND_PREVIEW_COUNT) {
+        const rest = row.conditions.length - COND_PREVIEW_COUNT;
+        toggle = `<button type="button" onclick="toggleListConditions('${row.listNo}')" aria-expanded="${expanded}"
+          data-testid="list-overview-cond-toggle" data-list-no="${row.listNo}"
+          class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[11px] font-medium border border-blue-200 bg-blue-50 text-primary hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-primary/30">
+          <i data-lucide="${expanded ? 'chevron-up' : 'chevron-down'}" class="w-3 h-3"></i>${expanded ? '收合條件' : '＋' + rest + ' 項'}</button>`;
+      }
+      return `<div class="flex flex-wrap items-center gap-1">${chips}${toggle}</div>`;
+    }
+
+    function listOverviewEmptyState() {
+      return `<div class="px-5 py-12 flex flex-col items-center text-center" data-testid="list-overview-empty">
+        <div class="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-3"><i data-lucide="clipboard-x" class="w-6 h-6 text-gray-400"></i></div>
+        <p class="text-sm text-gray-600">本月尚無啟用名單，請先於名單定義頁建立並啟用名單</p>
+        <a href="27-list-definition.html" class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 border border-border rounded-md text-xs text-gray-600 hover:border-primary hover:text-primary">
+          <i data-lucide="clipboard-list" class="w-3.5 h-3.5"></i>前往名單定義
+        </a>
+      </div>`;
+    }
+
+    let currentListOverviewGroups = [];
+
+    // -------------------------------------------------------------------
+    // 主渲染
+    // -------------------------------------------------------------------
+    function renderListOverview() {
+      const isChief = state.role === 'section_chief';
+      const single = state.listFilter !== 'ALL';
+      const rows = listOverviewRows();
+      const totalListCount = rows.length;
+      const totalEstimated = rows.reduce((s, r) => s + (r.estimatedCount === null ? 0 : r.estimatedCount), 0);
+      const unestimatedCount = rows.filter(r => r.estimatedCount === null).length;
+      // 單一名單檢視下佔比恆為 100%，是同義反覆而非資訊，故整欄降級為「—」並就地說明（OQ-F120-U2）
+      const percentApplicable = !single;
+      const groups = buildListGroups(rows, totalEstimated, percentApplicable);
+      currentListOverviewGroups = groups;
+
+      const badges = document.getElementById('listOverviewTitleBadges');
+      const notice = document.getElementById('listOverviewChiefNotice');
+      const body = document.getElementById('listOverviewBody');
+      const foot = document.getElementById('listOverviewFootNote');
+      const toggleAllBtn = document.getElementById('listOverviewToggleAll');
+
+      // --- 標題徽章 ---
+      let badgeHtml = '';
+      if (isChief) {
+        badgeHtml += `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200"
+          data-testid="list-overview-org-scope-badge"><i data-lucide="globe" class="w-2.5 h-2.5"></i>全公司口徑</span>`;
+      }
+      if (unestimatedCount > 0) {
+        badgeHtml += unestimatedBadge('不完整', '本區塊之預估數量總計未涵蓋 ' + unestimatedCount + ' 張未能估算的名單');
+      }
+      badges.innerHTML = badgeHtml;
+
+      // --- 處長語意標示（AC-LIST-11：缺此標示即視為未通過）---
+      notice.classList.toggle('hidden', !isChief);
+      if (!isChief) notice.innerHTML = '';   // 非處長時清空，避免殘留文字被全文掃描到
+      if (isChief) {
+        const dep = DEPTS_BASE.find(d => d.code === SCOPE_DEPT);
+        notice.className = 'mx-5 mt-4 mb-1 flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg';
+        notice.innerHTML = `<i data-lucide="globe" class="w-4 h-4 text-primary mt-0.5 shrink-0"></i>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-blue-900" data-testid="list-overview-chief-notice">本區塊為全公司名單層總量，非您所屬轄區之分派量</p>
+            <p class="text-xs text-blue-800 mt-0.5">上方兩個部門區塊只顯示您的轄區部門（${dep ? escHtml(dep.name) : '—'}）；本區塊列出的是本月全公司所有啟用名單，兩者口徑不同，請勿相加或直接比較。</p>
+          </div>`;
+      }
+
+      // --- 空狀態（AC-LIST-12：不渲染任何分組、名單列、小計或總計）---
+      if (totalListCount === 0) {
+        body.innerHTML = listOverviewEmptyState();
+        foot.innerHTML = '';
+        toggleAllBtn.classList.add('hidden');
+        return;
+      }
+      toggleAllBtn.classList.remove('hidden');
+      const anyOpen = groups.some(g => !listOverviewState.collapsed[g.key]);
+      document.getElementById('listOverviewToggleAllLabel').textContent = anyOpen ? '全部收合' : '全部展開';
+
+      // --- 表頭 ---
+      const percentHead = percentApplicable
+        ? '佔比'
+        : `佔比<span class="block text-[10px] font-normal normal-case text-gray-400 tracking-normal">單一名單檢視不計算佔比</span>`;
+      const thead = `<thead>
+        <tr class="border-b border-border bg-gray-50/40 text-xs text-gray-500 uppercase tracking-wider">
+          <th class="text-left px-5 py-2.5 font-medium">名單編號</th>
+          <th class="text-left px-5 py-2.5 font-medium">名單名稱</th>
+          <th class="text-left px-5 py-2.5 font-medium">篩選條件</th>
+          <th class="text-right px-5 py-2.5 font-medium whitespace-nowrap">名單數</th>
+          <th class="text-right px-5 py-2.5 font-medium whitespace-nowrap">預估數量</th>
+          <th class="text-right px-5 py-2.5 font-medium whitespace-nowrap align-top">${percentHead}</th>
+        </tr></thead>`;
+
+      // --- 分組 ---
+      // 分組標題列同時就是小計列 → 收合分組永遠不會把名單數／小計／佔比藏起來。
+      // 每個分組輸出兩個 tbody：分組列（恆顯示）＋ 名單列容器（可收合），避免巢狀 tbody。
+      const sections = groups.map(g => {
+        const gid = cssEscapeId(g.key);
+        const collapsed = !!listOverviewState.collapsed[g.key];
+        return `<tbody data-testid="list-overview-group" data-group-id="${gid}">${groupRowHtml(g, gid, collapsed)}</tbody>
+          <tbody id="lo-body-${gid}" class="${collapsed ? 'hidden' : ''}" data-testid="list-overview-group-body" data-group-id="${gid}">${g.lists.map(listRowHtml).join('')}</tbody>`;
+      }).join('');
+
+      // --- 總計列 ---
+      const totalBadge = unestimatedCount > 0
+        ? ' ' + unestimatedBadge('不完整', '未涵蓋 ' + unestimatedCount + ' 張未能估算的名單')
+        : '';
+      const tfoot = `<tfoot>
+        <tr class="border-t-2 border-gray-200 bg-gray-50/70" data-testid="list-overview-total-row"
+            data-total-list-count="${totalListCount}" data-total-estimated="${totalEstimated}">
+          <td colspan="3" class="px-5 py-3 text-sm font-bold text-gray-700">總計${isChief ? '<span class="ml-1 text-xs font-medium text-blue-800">（全公司口徑）</span>' : ''}</td>
+          <td class="px-5 py-3 text-right">
+            <div class="text-[10px] font-normal text-gray-500">名單總數</div>
+            <div class="tabular text-sm font-bold text-gray-900" data-testid="list-overview-total-listcount">${totalListCount}</div>
+          </td>
+          <td class="px-5 py-3 text-right">
+            <div class="text-[10px] font-normal text-gray-500">預估數量總計</div>
+            <div class="tabular text-sm font-bold text-gray-900" data-testid="list-overview-total-estimated">${totalEstimated.toLocaleString()}${totalBadge}</div>
+          </td>
+          <td class="px-5 py-3 text-right tabular text-sm text-gray-300">—</td>
+        </tr></tfoot>`;
+
+      body.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-sm">${thead}${sections}${tfoot}</table></div>`;
+
+      // --- 區塊底部說明 ---
+      const notes = [];
+      notes.push('分組列顯示該組的名單數、預估數量小計與佔比；最末列為名單總數與預估數量總計。同一名單的多個篩選條件為「且」的關係（需同時成立）。');
+      if (percentApplicable) {
+        notes.push('佔比以預估數量總計為分母、四捨五入至整數；四捨五入後各組加總可能不等於 100%，屬正常現象。');
+      } else {
+        notes.push('目前為單一名單檢視，佔比不具比較意義，故不計算；改回「全部名單（彙總）」即會顯示各組佔比。');
+      }
+      if (unestimatedCount > 0) {
+        notes.push('標記「未能估算」的名單仍計入名單總數，但不計入任何預估數量小計與總計；完整清單與原因請見本頁上方提示。');
+      }
+      foot.innerHTML = `<div class="px-5 py-3 border-t border-border bg-gray-50/30 flex items-start gap-2 text-[11px] text-gray-500">
+        <i data-lucide="info" class="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0"></i>
+        <p>${notes.join('<br>')}</p>
+      </div>`;
+
+      lucide.createIcons();
+      applyListOverviewFocus();
+    }
+
+    function groupRowHtml(g, gid, collapsed) {
+      const groupNote = g.unestimatedCount > 0
+        ? unestimatedBadge('本組合計未涵蓋 ' + g.unestimatedCount + ' 張未能估算的名單', '這些名單仍計入本組名單數，但不計入預估數量小計')
+        : '';
+      return `<tr class="bg-gray-50/70 border-t border-border" data-testid="list-overview-group-row"
+          data-group-id="${gid}" data-group-kind="${g.kind}"${g.kind === 'code' ? ` data-group-code="${escHtml(g.key)}"` : ''} data-group-registered="${g.registered}">
+          <th colspan="3" scope="colgroup" class="text-left px-5 py-2.5 font-medium">
+            <span class="inline-flex items-center gap-2 flex-wrap">
+              <button type="button" onclick="toggleListGroupById('${gid}')"
+                aria-expanded="${!collapsed}" aria-controls="lo-body-${gid}"
+                data-testid="list-overview-group-toggle" data-group-id="${gid}"
+                class="inline-flex items-center gap-1.5 rounded px-1 -mx-1 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/30">
+                <i data-lucide="${collapsed ? 'chevron-right' : 'chevron-down'}" class="w-3.5 h-3.5 text-gray-400"></i>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${g.badge}" data-testid="list-overview-group-label">
+                  <i data-lucide="${g.icon}" class="w-3 h-3"></i>${escHtml(g.label)}
+                </span>
+              </button>
+              ${g.note ? `<span class="text-[11px] text-gray-400">${escHtml(g.note)}</span>` : ''}
+              ${groupNote}
+            </span>
+          </th>
+          <td class="px-5 py-2.5 text-right tabular text-sm text-gray-700" data-testid="list-overview-group-listcount">${g.listCount}</td>
+          <td class="px-5 py-2.5 text-right tabular text-sm font-semibold text-gray-900" data-testid="list-overview-group-subtotal">${g.subtotal.toLocaleString()}</td>
+          <td class="px-5 py-2.5 text-right tabular text-sm ${g.percent === null ? 'text-gray-300' : 'text-gray-600'}" data-testid="list-overview-group-percent">${g.percent === null ? '—' : g.percent + '%'}</td>
+        </tr>`;
+    }
+
+    function listRowHtml(r) {
+      const un = r.estimatedCount === null;
+      return `<tr class="border-t border-border ${un ? 'bg-amber-50/40' : 'hover:bg-blue-50/20'}"
+          data-testid="list-overview-list-row" data-list-no="${r.listNo}"${un ? ' data-unestimated="true"' : ''}>
+          <td class="pl-11 pr-5 py-2.5 align-top font-mono text-[11px] text-gray-500 whitespace-nowrap">${r.listNo}</td>
+          <td class="px-5 py-2.5 align-top text-sm text-gray-800">${escHtml(r.name)}</td>
+          <td class="px-5 py-2.5 align-top">${conditionCell(r)}</td>
+          <td class="px-5 py-2.5"></td>
+          <td class="px-5 py-2.5 align-top text-right whitespace-nowrap" data-testid="list-overview-list-count">
+            ${un
+              ? `<span class="tabular text-gray-400 mr-1">—</span>` + unestimatedBadge('未能估算', '本次未納入合計')
+              : `<span class="tabular text-sm text-gray-800">${r.estimatedCount.toLocaleString()}</span>`}
+          </td>
+          <td class="px-5 py-2.5"></td>
+        </tr>`;
+    }
+
+    function toggleListGroupById(gid) {
+      const g = currentListOverviewGroups.find(x => cssEscapeId(x.key) === gid);
+      if (!g) return;
+      toggleListGroup(g.key);
+    }
+
+    // 本區塊在「處長無轄區」狀態下仍須完整呈現（F120 §10.2），
+    // 而該狀態會把 F049 的內容區整塊隱藏，故把節點搬到降級卡片下方。
+    function placeListOverview(scopeNull) {
+      const block = document.getElementById('listOverviewBlock');
+      const host = document.getElementById(scopeNull ? 'scopeNullExtra' : 'listOverviewAnchor');
+      if (block && host && block.parentElement !== host) host.appendChild(block);
     }
 
     // ===================================================================
@@ -509,6 +1053,8 @@
     }
 
     function recompute() {
+      syncListNames();
+      renderListFilterOptions();
       const { start, end } = monthRange(state.ym);
       const days = buildCalendar(start, end, state.calSource);
       assignDailyShare(days);
@@ -582,11 +1128,15 @@
       document.getElementById('scopeNullCard').classList.toggle('hidden', !scopeNull);
       document.getElementById('contentArea').classList.toggle('hidden', scopeNull);
       document.getElementById('readOnlyBanner').classList.toggle('hidden', !isChief);
-      if (scopeNull) { lucide.createIcons(); return; }
+      // F120：名單層總量不依轄區，處長無轄區時本區塊仍完整呈現（§10.2）
+      placeListOverview(scopeNull);
+      if (scopeNull) { renderListOverview(); lucide.createIcons(); return; }
 
       if (isChief) {
         const dep = DEPTS_BASE.find(d => d.code === SCOPE_DEPT);
-        document.getElementById('readOnlyTitle').textContent = `唯讀模式：僅顯示您轄區部門（${dep.name}）的預估資料`;
+        // F120 AC-LIST-11：措辭須與靜態原文一致（「部門相關區塊」而非「本頁」），
+        // 否則會與下方「名單基礎預估數量總覽」之全公司口徑標示正面矛盾。
+        document.getElementById('readOnlyTitle').textContent = `唯讀模式：部門相關區塊僅顯示您轄區部門（${dep.name}）的預估資料`;
       }
 
       const activeDepts = activeDeptsFor(isChief);
@@ -601,6 +1151,7 @@
       renderListPartialWarn();
       renderPoolWarn();
       renderGapAndHeadcount(activeDepts, isChief);
+      renderListOverview();          // F120：第三個區塊
       lucide.createIcons();
     }
 
@@ -963,7 +1514,8 @@
     function recomputeWithScope() { recompute(); renderAll(); }
 
     function applyScenario(name) {
-      ['normal', 'gap', 'overload', 'holiday', 'headcount0', 'scopeNull', 'listPartial'].forEach(s => {
+      ['normal', 'gap', 'overload', 'holiday', 'headcount0', 'scopeNull', 'listPartial',
+       'listGroups', 'listGroupsPartial', 'listAllUnestimated', 'listEmpty'].forEach(s => {
         const btn = document.getElementById('demo-' + s);
         if (!btn) return;
         if (s === name) btn.className = 'demo-btn px-2.5 py-1 text-xs rounded border border-primary bg-blue-50 text-primary';
@@ -976,6 +1528,12 @@
       state.listFilter = 'ALL';
       document.getElementById('inListFilter').value = 'ALL';
       state.calSource = 'weekday';
+      // F120 場景旗標一併歸零
+      state.universe = 'base';
+      state.allUnestimated = false;
+      state.noLists = false;
+      listOverviewState.collapsed = {};
+      listOverviewState.expandedConds = {};
 
       if (name === 'normal') { state.scenario = 'normal'; }
       else if (name === 'gap') { state.scenario = 'gap'; }
@@ -985,6 +1543,11 @@
       else if (name === 'scopeNull') { state.scenario = 'normal'; setRoleSilent('section_chief'); state.scopeNull = true; }
       // F119 AC-13：兩張名單同時逾時 → 驗證「每一張皆可辨識」；改用名單篩選可觀察單筆情境
       else if (name === 'listPartial') { state.scenario = 'normal'; setRoleSilent('director'); state.listPartial = true; }
+      // F120：名單母體換成涵蓋全部分組與邊界案例的 11 筆
+      else if (name === 'listGroups') { state.scenario = 'normal'; setRoleSilent('director'); state.universe = 'rich'; }
+      else if (name === 'listGroupsPartial') { state.scenario = 'normal'; setRoleSilent('director'); state.universe = 'rich'; state.listPartial = true; }
+      else if (name === 'listAllUnestimated') { state.scenario = 'normal'; setRoleSilent('director'); state.universe = 'rich'; state.allUnestimated = true; }
+      else if (name === 'listEmpty') { state.scenario = 'normal'; setRoleSilent('director'); state.noLists = true; }
 
       document.getElementById('inCalendar').value = state.calSource;
       onCalendarChange(state.calSource); // sets help + recompute via scope
