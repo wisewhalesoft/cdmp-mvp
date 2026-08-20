@@ -1813,3 +1813,123 @@ last_updated: 2026-08-13
 - **風險等級**：已解決（裁決已下達並更新測試檔+文件；等待 implementer 補實作 F119-EDIT-002 之
   確認 modal 後轉綠）。記錄本次裁決過程供未來讀者理解 `list-edit-draft-page.test.tsx` 為何多出
   一個「002b」編號（非跳號筆誤，是 dispute 裁決後新增之對照組）。
+
+---
+
+## F120：Stage 0 試算頁「名單基礎預估數量總覽」— 風險與缺口記錄
+
+### R-F120-01（已知範圍限縮，非缺陷）：本輪僅產出 vitest 測試，無 Playwright e2e fidelity／Stryker mutation／dependency-cruiser metric gate
+
+- **背景**：team lead 於本輪指示明確簡化 ring——「只寫 vitest 測試，不建 Playwright e2e / Stryker
+  mutation / dependency-cruiser metric gate，不要呼叫 `ring-setup` skill」。與 F119 同型態範圍
+  限縮（見上方 F119 引言）。
+- **影響**：constraint ring 之「四環」（acceptance/fidelity、unit/TDD、mutation、
+  quality/architecture metric）本輪僅落地第二環（unit/TDD，含後端整合測試）。以下面向暫無自動化
+  防線：
+  - prototype 逐畫素 / DOM 結構 fidelity（例如 §D.9 之 RWD、console 零錯誤、真實瀏覽器互動）
+  - 測試本身之「殺傷力」（是否為 tautological assertion）未經 Stryker mutation score 驗證
+  - 循環複雜度 / 依賴循環 / 函式長度等架構 metric 未設 gate
+- **處置**：非本輪職責範圍，記錄供未來若要補齊 e2e/mutation/metric 環時之待辦依據。若日後執行，
+  建議沿用 `ring-setup` skill 之既有慣例（`e2e/tests/fidelity-f120-*.spec.ts`、
+  `apps/api/stryker.assignment-list.conf.json` 或新拆分設定檔）。
+
+### R-F120-02（待確認）：前端元件檔案路徑為判斷，非強制契約
+
+- **背景**：AD-E07-51 §10 檔案異動清單對前端新元件僅給出**建議命名範例**——「新元件（命名交
+  ui-ux-designer / tdd-implementation，**例如** `_components/list-estimate-overview-section.tsx`）」
+  ——並未如後端三個檔案（`stage0-list-group-resolve.ts` / `stage0-estimate.service.ts` /
+  `stage0-estimate.controller.ts`）給出確定路徑。test-generator 必須在撰寫前端 component 測試前
+  決定一個 import 路徑，否則無法撰寫任何斷言。
+- **判斷**：採用 AD 建議之範例路徑 `apps/web/src/pages/assignment/_components/
+  list-estimate-overview-section.tsx`，匯出元件名 `ListEstimateOverviewSection`，props 為
+  `{ data: <AD §6.2 回應 shape> }`（欄位命名逐一對齊已核可之後端契約欄位名，非另行發明）。
+- **理由**：①此為 AD 文件中唯一提及之具體路徑，比起完全臆測更貼近架構意圖②以「後端回應 shape」
+  作為 props（而非 mock fetch／API client 命名）可完全避開「API client 函式命名未定案」之另一個
+  未知數——AD §7 僅描述元件呼叫新端點（獨立 `useQuery` / fetch），未指定 client 函式名稱，本輪選擇
+  不對此另行臆測，将其留給 tdd-implementation 自行決定 fetch 層實作，測試只驗證「餵入後端 shape
+  後之渲染結果」，與 fetch 層完全解耦。
+- **風險**：若 tdd-implementation 採用不同的檔案路徑、元件名稱或 props shape（例如元件自己呼叫
+  hook 取資料、不接受 `data` prop），本檔會產生「找不到模組」或「props 不符」之爭議。**依團隊模式
+  規則，implementer 不得自行修改測試**，應透過訊息通知 test-generator 說明實際採用的路徑/介面，
+  由 test-generator 核對 AD／spec 後決定是否調整 import（若僅為路徑/命名差異、不影響任何斷言之
+  業務語意，屬合理採納；若 implementer 想繞過 `data` prop 之單一資料來源設計，需另行 spec-writer /
+  system-architect 裁決，因該設計呼應 AD §4.2/§7「後端算好，顯示層只呈現」之分工，並非測試作者
+  自行加碼的限制）。
+- **驗證**：已以一次性 throwaway stub（同路徑、同介面）證明本檔 30 個測試案例皆可被正確實作滿足，
+  stub 於驗證後已刪除（`git status` 應不含該檔案），ring 已恢復 RED（`Cannot find module`）。
+
+### R-F120-03（範圍排除）：AC-LIST-01 頁面層定位驗證未在本輪覆蓋
+
+- **背景**：AC-LIST-01 要求本區塊須渲染於既有「部門負載總覽」「部門每日分派明細」兩區塊之後、
+  頁尾提示之前。此為 `stage0-estimate-page.tsx`（F120 production 目標檔案之一，依 blindness 規則
+  禁止讀取）內部之 DOM 順序問題。
+- **問題**：若要以靜態 grep 斷言此順序（例如比對 `部門負載總覽`／`部門每日分派明細`／
+  `名單基礎預估數量總覽`／頁尾提示文字四個錨點字串在原始碼中的出現順序），必須先知道現有 F049
+  兩區塊在 React 原始碼中的確切文字/data-testid——而這正是被禁止讀取的目標檔案。若憑空假設既有
+  文字（例如假設 React 內確有逐字「部門負載總覽」字串），一旦假設錯誤，測試會「red for the wrong
+  reason」（找不到我猜測的錨點文字，而非「新區塊未接上」），違反 ring 的核心承諾。
+- **處置**：本輪不新增此項頁面層定位測試，改由本文件 R-F120-01 所述之 Playwright fidelity 層
+  （本輪排除）承接——e2e 測試以 `page.route()` 或真實渲染頁面直接量測 DOM 順序，不依賴原始碼
+  文字猜測。前端 component 測試（`list-estimate-overview-section.f120.test.tsx`）已完整覆蓋
+  區塊「內部」渲染正確性（AC-LIST-03~14），僅未覆蓋區塊在頁面中的「外部」相對位置。
+- **建議**：日後補 e2e fidelity 環時，比照 `prototypes/30-stage0-estimate.html` 之
+  `#listOverviewAnchor` 置於 `部門每日分派明細` 卡片之後、頁尾 `info` 提示卡片之前的 DOM 順序，
+  對真實運行頁面斷言。
+
+### R-F120-04（已核實，非缺口）：跨區塊嚴格相等測試依賴 `computeDeptEstimate` 新增 `orgMonthTotal` 欄位，該欄位本輪前尚未實作
+
+- **背景**：AC-LIST-09／I-F120-03 要求本區塊 `totalEstimatedCount` 與同頁部門矩陣端點新增之
+  `orgMonthTotal` 欄位嚴格相等（F049 v2.1 §16.5／AC-DEPT-3／BR-17，AD-E07-51 §4.5 之裁定）。
+  test-generator 於撰寫測試前查證既有 `stage0-dept-estimate.service.spec.ts`（既有測試檔，允許
+  讀取以學習 fixture 慣例）與既有 `stage0-estimate.controller.spec.ts` 之 `computeDeptEstimate`
+  mock 回應，確認**現行程式碼尚未包含 `orgMonthTotal` 欄位**（mock response 之 `scope` 物件後
+  直接是 `departments`/`days`/`warnings`，無此欄位；existing spec 全文亦無 `orgMonthTotal` 字串）。
+- **判斷**：這不是 F120 本身之缺口，而是 F120 之**前置依賴**——依 AD-E07-51 §4.5「執行方式」，
+  `orgMonthTotal` 由**同一位** tdd-implementation 於實作 F120 時一併於 `computeDeptEstimate`
+  補上（零新查詢成本之加性欄位，對既有 `resolveListTotals()` 之 `listTotals` 做一次 `reduce`）。
+  故 test-generator 依 AD 之明確指示撰寫兩則直接針對 `computeDeptEstimate` 回傳值之測試（要求
+  `orgMonthTotal` 為非 null 數字、對處長角色亦然），與跨端點嚴格相等測試並列於同一 describe block
+  （`stage0-list-estimate-overview.service.f120.spec.ts` 第五節），確保這個前置依賴被 ring 明確
+  釘住，不會被實作者遺漏。
+- **已驗證**：以實際執行確認這兩則測試現況為紅（`orgMonthTotal` 為 `undefined`），紅的原因正確
+  （欄位未實作），非測試自身錯誤。
+- **風險等級**：低（AD 已明確裁定歸屬，非模糊地帶）；僅記錄供 tdd-implementation 與後續稽核參照，
+  避免誤以為 `orgMonthTotal` 是應由 F049 既有 owner 另行處理之範圍外事項。
+
+### R-F120-05（已解決，2026-08-20）：實作完成後 impl-f120 提報既有 F049 測試檔因 v2.1/v2.2 同批交付變紅，裁決採納
+
+- **背景**：F120 ring 四檔（35+21+8+30=94）實作完成全綠、零改測試。impl-f120 依團隊模式規矩（不
+  自行修改測試）提報一件**既有測試檔**爭議：`apps/web/src/pages/assignment/__tests__/
+  stage0-estimate-page.test.tsx`（F119 時期既有檔，非本輪 F120 新增之 4 個 ring 檔案之一）因
+  F049 v2.1/v2.2（`orgMonthTotal` 精確和取代客戶端 `Σ_d days[].orgTotal` reduce；v2.2 處長 banner
+  文案補「部門相關區塊」限定語）而有 1 筆執行期斷言失敗（`TS-F049-FE-001`）＋ 1 筆 `tsc --noEmit`
+  型別錯誤（`deptResp()` fixture 缺 `orgMonthTotal` 必填欄位）。
+- **裁決（採納，非測試自身缺陷、非業務爭議）**：查證 `docs/specs/features/F049-stage0-daily-
+  estimate.md` §24.1~§24.3（spec-writer 於 v2.1/v2.2 已預先列出的「受影響既有實作與測試落點」表，
+  非本次臨時裁決發明），逐項核對 impl-f120 之引用**完全準確**（行號、症狀、修法皆與 §24.3 #8/#9/
+  #10/#11a 一致）。§24.3 #8 並已明文「fixture 改為設定 `orgMonthTotal`；期望值本身之業務意圖不變」
+  ——即本次修改是 spec-writer 已預先核准之既定路徑，非本輪臨時決定。
+- **實際修改**（僅此一檔，`git diff` 可核對）：
+  1. `deptResp()` fixture helper 新增預設 `orgMonthTotal: 989`——刻意選擇與 `days[]` 內容**無關聯**
+     的獨立值（強調 v2.1 之核心即兩者允許有 ≤ 工作日數×0.5 殘差，不應在 fixture 裡人工同步成看似
+     相等）；除 `TS-F049-FE-001` 外，檔內其餘測試皆不讀取 `org-total-row`/`kpi-total-cases` 之
+     具體數字（已 grep 全檔確認僅 3 處命中，其中 2 處為「—」/不存在斷言，不受影響），故任意預設值
+     皆安全。
+  2. `TS-F049-FE-001` 之 `deptResp({...})` override 明確加入 `orgMonthTotal: 200`，斷言本體
+     （`org-total-row` 含 `'200'`）**逐字未動**——業務意圖依 §24.3 #8 之明文指示保持不變。
+  3. **額外採納**§24.3 #11a 之建議（非必要，但已動同一檔案、風險低、且直接關聯 F120 AC-LIST-11）：
+     `TS-F049-FE-003`（處長唯讀 banner）新增逐字斷言，鎖住「部門相關區塊」限定語——此為 F120
+     AC-LIST-11 之「全公司口徑」語意標示得以不自相矛盾的前提（見本文件 R-F120-04 之姊妹風險：
+     若此限定語被還原為舊文案「僅顯示您轄區部門的預估資料」，會與 F120 區塊之全公司口徑標示正面
+     矛盾）。
+  4. §24.3 #9（`TS-F049-AGG-003`）、#11（`stage0-dept-estimate.service.spec.ts` 新增測試建議）：
+     核對後判定**不需改動**——#9 之空名單路徑本就不經 `orgMonthTotal` 顯示邏輯，複跑確認仍綠；#11
+     所建議之後端 `orgMonthTotal` 契約測試已由本輪 F120 ring 自身之
+     `stage0-list-estimate-overview.service.f120.spec.ts`（AC-LIST-09 / I-F120-03 一節，含跨端點
+     嚴格相等穩態/過渡態、處長角色非 null 等案例，見 R-F120-04）等價覆蓋，不重複新增。
+- **驗證**：`stage0-estimate-page.test.tsx` 20/20 通過；`apps/web` 全套 `npx tsc --noEmit` 零錯誤；
+  `apps/web/src/pages/assignment` 全套 879 passed / 29 skipped（較 impl-f120 回報之 878 passed 多 1，
+  即本次修復之該筆）；F120 ring 三個後端檔（64 案例）與前端元件檔（30 案例）複跑仍全綠，無回歸。
+- **範圍**：僅此一檔一次性修改；未觸碰 F120 本輪四個 ring 檔案本身（其斷言與案例數維持
+  35+21+8+30=94，與實作前逐字相同）。
+- **風險等級**：已解決。
