@@ -1,11 +1,23 @@
 ---
 type: architecture-spec
-version: "2.30"
+version: "2.33"
 status: draft
-last_updated: 2026-08-13
-covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105, F108, F109, F110, F116, F117, F118]
+last_updated: 2026-08-20
+covers: [F001, F002, F003, F004, F005, F006, F006a, F007, F008, F009, F010, F011, F012, F013, F014, F015, F016, F017, F018, F019, F020, F021, F022, F023, F024, F025, F026, F027, F028, F029, F030, F031, F032, F033, F034, F036, F038, F046, F047, F048, F049, F050, F051, F052, F053, F054, F055, F056, F057, F058, F059, F060, F061, F062, F063, F064, F065, F066, F067, F068, F069, F070, F071, F072, F073, F074, F075, F076, F077, F078, F079, F080, F081, F082, F083, F084, F085, F086, F087, F088, F089, F090, F091, F092, F097, F101, F102, F103, F104, F105, F108, F109, F110, F116, F117, F118, F119, F120]
 ---
 
+> **v2.33 / 2026-08-20 變更摘要（AD-E07-51 v1.2：欄位定名 `orgMonthTotal` + `I-F120-03` 嚴格相等之可斷言精確條件）**：
+>
+> 承接 v2.32 之 OQ-F120-B1 拍板記錄，本次補齊兩項：**(1) 欄位命名裁決**——B1 新增之 dept-estimate 頂層欄位定名為 **`orgMonthTotal`**（非先前草案命名），spec-writer 查證 `prototypes/30-stage0-estimate.html:517` 本即以此名計算精確和、且與既有前端變數 `stage0-estimate-page.tsx:227` 同名，沿用避免同一數字出現第三種叫法；型別 `number`，值為對 `resolveListTotals()` 之 `listTotals` Map 做一次 reduce，零新查詢成本，不動 F049 既有逐日 / 逐部門呈現。**(2) `I-F120-03` 嚴格相等之可斷言精確條件**——定義 `excluded(response) := 該回應 warnings[] 中 STAGE0_LIST_ESTIMATE_PARTIAL 對應之 listNo 集合`，證明 `excluded(dept-estimate) = excluded(list-estimate-overview) ⟹ orgMonthTotal = totalEstimatedCount`（充分條件）；論證此條件於**測試環境下恆成立**（deterministic fixture 或同一組 mock 施加於兩次呼叫，不存在真實網路 timing 競爭），故明確要求 **TC-184-07 無條件斷言嚴格相等**（含 AC-LIST-10 部分降級情境測試在內），不寫成依 `unestimatedListCount` 等執行期狀態分支的條件式；同時明確區分「跨端點・月層級 vs 月層級」（本節，嚴格相等）與「同端點內・月層級 vs 逐日捨入和」（F049 v2.1 既定容差，殘差 ≤ 工作日數 × 0.5，非本節範圍）兩組不同關係，避免混淆。生產環境下兩端獨立 fallback timeout 結果分歧之窄窗口改列為**風險追蹤**（非測試風險）：非靜默錯誤（受影響名單於兩端皆有既有 warning 明確標示），若生產觀察顯示 material 應優先修 F088 物化覆蓋率，不新增同步 / 快取機制。**F049 / F120 spec 本輪仍未變動**（spec-writer 範疇）；§4.1~4.4（A1~A4）與端點契約無變化。§5.21 已同步更新。
+>
+> **v2.32 / 2026-08-20 變更摘要（AD-E07-51 v1.1：OQ-F120-B1 拍板追記 — F049 KPI 精確和、`I-F120-03` 升級為嚴格相等）**：
+>
+> 使用者對 [AD-E07-51](implementation-log/AD-E07-51-f120-list-estimate-overview.md) §4.5 之 OQ-F120-B1 拍板：採納 G-1 修正，F049「本月全名單總量」KPI 由「逐日先捨入再相加」改為 `Σ_L list_total[L]` 精確整數和；`I-F120-03`（本區塊與部門矩陣總量同源）由容差升級為**嚴格相等**。**F049 spec 由 spec-writer 同步升版，本次僅追記架構面後果，不變動 F049 spec 或程式碼、不變動 §4.1~4.4（A1~A4 端點拓樸 / 運算歸屬 / `resolveListTotals` 共用機制 / 不新增快取層皆維持原裁定）**。新增 §4.5.1 明確處理嚴格相等之邊界案例：**全數名單皆有物化 `stage0_estimate_count`** 時嚴格相等無條件依建構成立（兩端各自查詢同一批既存欄位值，無 timing 不確定性）；**存在 fallback dry-run** 時，嚴格相等於「兩端請求皆完整估算成功」時成立，若兩端對同一名單之 30 秒 timeout 結果分歧（同一 SQL、不同時序），該名單在排除它的一端已透過既有 `STAGE0_LIST_ESTIMATE_PARTIAL` / `estimateUnavailable` / `unestimatedListCount` 機制明確標示為部分——此為 AC-LIST-10 / BR-7 既有降級語意之延伸，非新失效模式，亦非靜默錯誤。新增不變式 `I-LISTOVW-STRICT-EQUALITY-BOUNDARY-01`。§5.21 已同步更新，AD-E07-51 open decisions 清空。
+>
+> **v2.31 / 2026-08-20 變更摘要（AD-E07-51：F120 Stage 0 試算頁「名單基礎預估數量總覽」— 端點拓樸 / 運算歸屬 / listTotals 共用機制）**：
+>
+> 新增 **§5.21「F120 Stage 0 試算頁『名單基礎預估數量總覽』架構決策（AD-E07-51）」** 與決策記錄 [`implementation-log/AD-E07-51-f120-list-estimate-overview.md`](implementation-log/AD-E07-51-f120-list-estimate-overview.md)。裁定 [F120](features/F120-stage0-list-estimate-overview.md) §13.1 交付之 4 項 OQ：(1) **OQ-F120-A1（端點拓樸）**——採納 spec-writer 建議之**新增獨立端點** `GET /api/v1/assignment/stage0/list-estimate-overview`，理由為本區塊授權語意（無 dept scope）與部門矩陣（處長強制限縮）相反，混入同一回應為安全邊界最易出錯之形態；查證確認既有 `computeDeptEstimate` 之 `lists`/`listTotals` 建立邏輯**本就未套用**任何 scope 過濾（scope 僅施加於其後之 `deptPctRows`），故獨立端點之無 scope 語意與現行程式碼結構天然對齊；(2) **OQ-F120-A2（運算歸屬）**——**後端計算**，新增純函式 `resolveListGroup()`（`stage0-list-group-resolve.ts`）匯入 Stage 1 既有規範性 `resolveCategoricalOperator()`（`stage1-query-composer.ts`），不新建第三個 operator fallback 落點（延續 F119 / AD-E07-50 之單一落點先例）；(3) **OQ-F120-A3（`listTotals` 共用機制）**——抽出 `Stage0EstimateService.resolveListTotals(ym, listNo?)` 私有方法，供 `computeDeptEstimate` 與新 `computeListEstimateOverview` 共同呼叫，使 `I-F120-03`（跨區塊同源）依建構成立；(4) **OQ-F120-A4（效能）**——**不新增快取層**，論證 fallback dry-run 重複成本為有界之固定倍率（非隨資料量增長之無界成本，且已由既有 SQL COUNT 下推 + 30s timeout 上界），非本專案 ETL/資料處理「禁止 in-memory 全表策略」規矩所警惕之風險類型。另對 **OQ-F120-B1**（F049 KPI 捨入落差，team lead 拍板項）提出零額外查詢成本之具體實作路徑主張（新增一個頂層欄位，直接 reduce 既有 `resolveListTotals` 之 Map，不改動 F049 既有兩區塊之逐日/逐部門呈現；欄位最終定名 `orgMonthTotal`，見 v2.33）。新增 5 個 HOW 層級不變式（`I-LISTOVW-SHARED-SOURCE-01` / `I-LISTOVW-NO-SCOPE-FILTER-01` / `I-LISTOVW-OPERATOR-SINGLE-SOURCE-01` / `I-LISTOVW-PURE-GROUP-RESOLVE-01` / `I-LISTOVW-NO-NEW-CACHE-01`）。**無 schema / migration 變更**。covers 補入 F119（既有落差，v3.40 banner 已自承 F119 上線時未曾補列）與 F120。
+>
 > **v2.30 / 2026-08-13 變更摘要（AD-E07-49：F116 v1.1 樞紐分析頁籤 — 職稱／新人標註／總計欄置前／工作天模式）**：
 >
 > 新增 **§5.19「F116 v1.1 樞紐分析頁籤架構決策（AD-E07-49）」** 與決策記錄 [`implementation-log/AD-E07-49-f116-v1.1-pivot-newcomer-workday.md`](implementation-log/AD-E07-49-f116-v1.1-pivot-newcomer-workday.md)。裁定 F116 v1.1 spec §12 之 A-1~A-5：**確認**（不推翻）A-1（工作天 `ceil(cnt/workingDays)` 換算為前端展示轉換，與既有佔比換算 BR-3 同構，不下推後端以免每層資料結構翻倍）、A-3（不回傳 `hireDate`，最小曝光面）、A-5（維度切換為純前端 UI state，不持久化）；**具體化** A-2（`workingDays` 複用 `assignment-list/stage0-estimate.service.ts` 匯出之純函式 `computeWorkingDayRatios`，比照 `assignment-run-pipeline.service.ts:53` 既有跨模組「只共用 pure function、不共用 injectable class」慣例，`I-RUN-EST-01` 延伸為第四消費者，不需在 `assignment.module.ts` 新增 `imports: [AssignmentListModule]`）；**推翻** A-4 之 spec 假設——查證 v1.0 現行 `getPivot` 之 TS 端 `Map` 聚合僅保證「輸出節點不重複」，不保證「`ob_emphire` 潛在重複 `emp_id` 列造成 join fan-out 時計數不被重複計入」，改為 SQL 層以 `ROW_NUMBER() OVER (PARTITION BY emp_id) = 1` 去重 derived table 取代直接 `LEFT JOIN ob_emphire`，使外層 `COUNT(*)` 天然正確。新增 5 個不變式（`I-F116-CALENDAR-SHARE-01` / `I-F116-EMPHIRE-DEDUP-01` / `I-F116-CEIL-PER-CELL-01` / `I-F116-NO-ACTIVE-FILTER-01` / `I-F116-CLIENT-STATE-01`）。無 schema / migration 變更。covers 補入 F116（v1.0 上線時未曾補列）。**A-4 為 HOW 層級修正，不影響 F116 spec 契約，不需回頭修訂 spec。**
@@ -2833,6 +2845,64 @@ F119（US-183，2026-08-18 通過人工審閱閘）於既有 categorical 條件�
 #### 5.20.4 待裁決（摘要）
 
 完整內容見 AD §11。**⚠️ AC-15「快照條件顯示」與現況程式碼不符**：`assignment_run_snapshot`（`buildConfigPayload()`）從未捕捉 `condition_payload`，F066 快照詳情頁「設定」頁籤（`snapshot-config-view.tsx`）無對應渲染邏輯——此非「格式擴充」而是「功能尚未建置」，需 team lead 裁決是否納入本 feature 範圍或回頭修訂 F119 spec descope（AD 建議 descope，理由：已鎖定名單之 `condition_payload` 唯讀，「名單詳情 Drawer」之即時讀取已能達到等同效果）。此項**不阻塞**其餘 SA 裁定之實作。
+
+---
+
+### 5.21 F120 Stage 0 試算頁「名單基礎預估數量總覽」架構決策（AD-E07-51）
+
+> 完整設計（既有程式碼查證彙總、`resolveListTotals(ym, listNo?)` 共用方法契約、`resolveListGroup()` 純函式契約、端點 / service / controller 完整簽章、5 個 HOW 層級不變式、檔案異動清單、風險與待裁決）：見
+> [`implementation-log/AD-E07-51-f120-list-estimate-overview.md`](implementation-log/AD-E07-51-f120-list-estimate-overview.md)。
+> 本節為架構主文概要，供 Test Generator / TDD Developer 快速定位。
+
+#### 5.21.1 背景
+
+[F120](features/F120-stage0-list-estimate-overview.md)（US-184，2026-08-20 spec 完成）於 [F049 v2.0](features/F049-stage0-daily-estimate.md) Stage 0 試算頁新增第三個唯讀區塊，以名單為單位、按產品類別分組小計呈現當月啟用名單之預估數量。spec 交付 4 項 HOW 層級問題（端點拓樸、運算歸屬、`listTotals` 共用機制、效能）予本 AD 裁決，另有 1 項 KPI 捨入落差之斷言形式問題（OQ-F120-B1）需 team lead 拍板。無 migration、無新錯誤碼、純讀取。
+
+#### 5.21.2 核心決策摘要
+
+| # | 議題 | 裁定 |
+|---|---|---|
+| OQ-F120-A1 | 端點拓樸 | **新增獨立端點** `GET /api/v1/assignment/stage0/list-estimate-overview`；查證確認既有 `computeDeptEstimate` 之 `lists`/`listTotals` 建立邏輯本就未套用 scope 過濾（scope 僅施加於其後之 `deptPctRows`），故無 scope 語意與現行程式碼結構天然對齊，不需新增也不需移除任何過濾 |
+| OQ-F120-A2 | 運算歸屬 | **後端計算**；新增純函式 `resolveListGroup()`（`apps/api/src/modules/assignment-list/stage0-list-group-resolve.ts`）匯入 Stage 1 既有規範性 `resolveCategoricalOperator()`（`stage1-query-composer.ts`），不新建第三個 operator fallback 落點（延續 F119 / AD-E07-50 前後端各一單一落點之既定模式） |
+| OQ-F120-A3 | `listTotals` 共用機制 | 抽出 `Stage0EstimateService.resolveListTotals(ym, listNo?)` 私有方法，`computeDeptEstimate` 與新 `computeListEstimateOverview` 共同呼叫（同一 class、同一段程式碼），`I-F120-03` 依建構成立，非僅測試維持 |
+| OQ-F120-A4 | 效能（fallback 重複成本） | **不新增快取層**。fallback dry-run 已是 SQL `COUNT(*)` 下推（非全表撈取），2× 重複成本為有界固定倍率、非隨資料量增長之無界成本，且僅影響 `stage0_estimate_count` 未物化之過渡態；不符合為此引入新狀態管理機制之成本效益 |
+| OQ-F120-B1 | F049 KPI 捨入落差 | **✅ 已拍板（2026-08-20）**：採納修正，F049 新增頂層欄位 **`orgMonthTotal`**（`Σ_L list_total[L]` 精確和，直接 reduce 既有 `resolveListTotals` 之 `listTotals` Map，不改動 F049 既有兩區塊之逐日 / 逐部門呈現）；`I-F120-03` 升級為嚴格相等，可斷言精確條件與邊界案例處理見 §5.21.4 |
+
+#### 5.21.3 端點與資料流
+
+```mermaid
+graph TD
+    subgraph 既有["既有（不動）"]
+        DeptEP["GET stage0/dept-estimate\nDirectorOrSectionChief + scope filter"]
+    end
+    subgraph 新增["新增（AD-E07-51）"]
+        ListEP["GET stage0/list-estimate-overview\nDirectorOrSectionChief，恆不 scope filter"]
+    end
+
+    RLT["resolveListTotals(ym, listNo?)\n私有方法：list 查詢 + stage0_estimate_count\n優先 / fallback dry-run COUNT"]
+    GR["resolveListGroup()\n純函式：condition_payload → groupType"]
+    OP["resolveCategoricalOperator()\nstage1-query-composer.ts（既有規範落點）"]
+
+    DeptEP --> RLT
+    ListEP --> RLT
+    ListEP --> GR
+    GR --> OP
+    RLT -.->|"Σ list_total[L]（供 dept-estimate\n頂層欄位 orgMonthTotal，已拍板）"| DeptEP
+
+    classDef unchanged fill:#e8e8e8,stroke:#888
+    classDef new fill:#d4f4dd,stroke:#2a9d5c
+    class DeptEP unchanged
+    class ListEP,RLT,GR new
+    class OP unchanged
+```
+
+#### 5.21.4 不變式（摘要）
+
+`I-LISTOVW-SHARED-SOURCE-01`（`resolveListTotals` 單一呼叫落點，實作 `I-F120-03`）/ `I-LISTOVW-NO-SCOPE-FILTER-01`（本端點呼叫鏈禁止出現 `scopeDeptCode` 過濾，`scope.deptCode` 純顯示；實作 `I-F120-05` / BR-10）/ `I-LISTOVW-OPERATOR-SINGLE-SOURCE-01`（`resolveListGroup()` 僅匯入既有 `resolveCategoricalOperator`，不自行 `operator ?? 'in'`）/ `I-LISTOVW-PURE-GROUP-RESOLVE-01`（純函式、零 I/O、零 request context 依賴）/ `I-LISTOVW-NO-NEW-CACHE-01`（不引入任何新快取層）/ `I-LISTOVW-STRICT-EQUALITY-BOUNDARY-01`（`I-F120-03` 精確條件：`excluded(dept-estimate) = excluded(list-estimate-overview)` ⟹ `orgMonthTotal = totalEstimatedCount`，`excluded()` 為該回應 `STAGE0_LIST_ESTIMATE_PARTIAL` 對應之 listNo 集合；測試環境下兩端共用同一組 mock/fixture，此條件恆成立，故 TC-184-07 應無條件斷言嚴格相等；僅生產環境兩端獨立 fallback timeout 結果分歧時可能不成立，屬既有 AC-LIST-10 / BR-7 降級語意延伸、非新失效模式，2026-08-20 因 OQ-F120-B1 拍板新增）。完整說明見 AD §8。
+
+#### 5.21.5 待裁決（摘要）
+
+**無殘留 open decision。** OQ-F120-A1~A4 與 OQ-F120-B1（2026-08-20 使用者拍板）皆已裁定完畢，完整內容見 AD §12。
 
 ---
 
