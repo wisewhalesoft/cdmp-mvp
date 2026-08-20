@@ -26,11 +26,14 @@ import { MonthPicker } from '@/components/e07/MonthPicker';
 import { useAssignmentWorkYm } from '@/contexts/assignment-work-ym-context';
 import {
   getDeptEstimate,
+  getListEstimateOverview,
   type DeptEstimateResponse,
   type DeptEstimateDay,
+  type ListEstimateOverviewResponse,
   type CalendarSource,
 } from '@/api/assignment-run';
 import { listLists } from '@/api/assignment-list';
+import { ListEstimateOverviewSection } from './_components/list-estimate-overview-section';
 
 /**
  * F049 v2.0 Stage 0 試算頁（部門維度每日分派可行性）
@@ -124,6 +127,10 @@ export function Stage0EstimatePage() {
   const [listFilter, setListFilter] = useState<string>('ALL');
   const [calendarSource, setCalendarSource] = useState<CalendarSource>('weekday');
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
+  // F120：名單基礎預估數量總覽（獨立端點、獨立降級——不與部門矩陣共用 loading / error 狀態，
+  //   對齊 AD-E07-51 §4.1「獨立降級」之設計意圖）
+  const [listOverview, setListOverview] =
+    useState<ListEstimateOverviewResponse | null>(null);
 
   // 載入當月 active 名單（供名單篩選下拉）
   useEffect(() => {
@@ -145,6 +152,27 @@ export function Stage0EstimatePage() {
       aborted = true;
     };
   }, [ym]);
+
+  // F120：載入名單基礎預估數量總覽（隨同一個名單篩選器與作業月份連動，AC-LIST-02；
+  //   本區塊無日曆維度，故不隨 calendarSource 重抓）
+  useEffect(() => {
+    if (!ym) return;
+    let aborted = false;
+    void (async () => {
+      try {
+        const resp = await getListEstimateOverview(toYYYYMMRaw(ym), {
+          listNo: listFilter === 'ALL' ? undefined : listFilter,
+        });
+        if (!aborted) setListOverview(resp ?? null);
+      } catch {
+        // 獨立降級：本區塊失敗不影響部門矩陣之呈現（反之亦然）
+        if (!aborted) setListOverview(null);
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [ym, listFilter]);
 
   // 載入部門維度試算矩陣（ym / calendarSource / listFilter 變化即重抓）
   useEffect(() => {
@@ -224,12 +252,11 @@ export function Stage0EstimatePage() {
   const calHelp =
     CALENDAR_OPTIONS.find((o) => o.value === calendarSource)?.help ?? '';
 
-  const orgMonthTotal = useMemo(() => {
-    if (!data) return 0;
-    return data.days
-      .filter((d) => d.isWorkday)
-      .reduce((s, d) => s + (d.orgTotal ?? 0), 0);
-  }, [data]);
+  // F049 v2.1 §16.5 / AC-DEPT-3 / BR-17：月層級全名單總量**直接取用後端欄位**
+  //   （`Σ_L 名單估算件數` 之整數精確和）。
+  //   ⚠️ 不得改回客戶端 `Σ_d days[].orgTotal`（逐日捨入和）作為值或 fallback——該值與
+  //   F120「名單基礎預估數量總覽」之預估數量總計不會嚴格相等（殘差 ≤ 工作日數 × 0.5）。
+  const orgMonthTotal = data?.orgMonthTotal ?? 0;
   const gapMonth = useMemo(() => {
     if (!data) return 0;
     return data.days
@@ -310,6 +337,13 @@ export function Stage0EstimatePage() {
               ))}
             </div>
           </div>
+          {/* F120 §10.2：名單層總量本就不依轄區，轄區辨識失敗不影響其可算性——
+              本區塊仍完整呈現（含 AC-LIST-11 之三個語意標示），不降級。 */}
+          {listOverview && (
+            <div className="mt-4">
+              <ListEstimateOverviewSection data={listOverview} />
+            </div>
+          )}
         </main>
       </AppLayout>
     );
@@ -334,6 +368,12 @@ export function Stage0EstimatePage() {
               目前沒有名單分派到您的轄區部門，因此沒有可顯示的每日工作量。待名單設定部門比例後即會顯示。
             </p>
           </div>
+          {/* F120 §10.2 同上：本區塊為全公司名單層總量，與轄區有無分派無關 */}
+          {listOverview && (
+            <div className="mt-4">
+              <ListEstimateOverviewSection data={listOverview} />
+            </div>
+          )}
         </main>
       </AppLayout>
     );
@@ -350,13 +390,16 @@ export function Stage0EstimatePage() {
           >
             <Eye className="w-4 h-4 text-purple-700 mt-0.5 shrink-0" />
             <div className="flex-1">
+              {/* F049 v2.2 §24.2 #7a：限定語「部門相關區塊」為必要條件——F120 之
+                  「名單基礎預估數量總覽」為全公司口徑，若此處仍寫「本頁僅顯示轄區」
+                  會與該區塊正面矛盾（逐字以 prototype 30-stage0-estimate.html 為準）。 */}
               <p className="font-semibold text-purple-900">
-                唯讀模式：僅顯示您轄區部門
+                唯讀模式：部門相關區塊僅顯示您轄區部門
                 {data?.departments[0] ? `（${data.departments[0].deptName}）` : ''}
                 的預估資料
               </p>
               <p className="text-xs text-purple-700 mt-0.5">
-                此頁僅供檢視，不提供任何修改設定的操作；您看到的是轄區部門的每日工作量與人均負荷。
+                此頁僅供檢視，不提供任何修改設定的操作；上方部門區塊呈現的是您轄區部門的每日工作量與人均負荷。頁面最下方的「名單基礎預估數量總覽」則為全公司名單層總量，不受轄區限制。
               </p>
             </div>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 bg-purple-100 text-purple-700">
@@ -903,6 +946,9 @@ export function Stage0EstimatePage() {
             </div>
           </div>
         )}
+
+        {/* F120 / AC-LIST-01：名單基礎預估數量總覽（第三區塊，位於既有兩區塊之後、頁尾提示之前） */}
+        {listOverview && <ListEstimateOverviewSection data={listOverview} />}
 
         {/* footer note（業務語言） */}
         <div className="flex items-start gap-2 p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-xs text-gray-600">

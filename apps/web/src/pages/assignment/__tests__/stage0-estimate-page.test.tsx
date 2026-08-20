@@ -148,6 +148,11 @@ function deptResp(
     warnings: [],
     poolCount: 50000,
     poolWarning: null,
+    // F049 v2.1 §16.5.5：月層級全名單總量，型別 number（非 nullable，所有角色皆回傳）。
+    // 刻意採與 days[] 無關聯之獨立值（precise sum，非逐日 reduce）——v2.1 之核心即兩者
+    // 允許有 ≤ 工作日數×0.5 之殘差，不應在 fixture 裡人工同步成看似相等。
+    // 需要特定合計值的案例（如 TS-F049-FE-001）請透過 overrides 明確指定。
+    orgMonthTotal: 989,
     ...overrides,
   };
 }
@@ -312,6 +317,10 @@ describe('Stage0EstimatePage（F049 v2.0 部門維度）', () => {
     it('TS-F049-FE-001：部門列 / 人均欄 / org_total 合計列 / gap 橘色徽章', async () => {
       mockedGetDept.mockResolvedValue(
         deptResp({
+          // F049 v2.1 §24.3 #8：org-total-row 之顯示值已改為直接取用回應欄位
+          // `orgMonthTotal`（精確和），不再由前端對 days[].orgTotal 逐日 reduce 取得，
+          // 故此處明確指定；期望顯示值（'200'）之業務意圖與 v2.1 前完全相同。
+          orgMonthTotal: 200,
           departments: [
             { deptCode: 'D001', deptName: '北一課', activeHeadcount: 10 },
           ],
@@ -391,6 +400,12 @@ describe('Stage0EstimatePage（F049 v2.0 部門維度）', () => {
           screen.getByTestId('section-chief-readonly-banner'),
         ).toBeInTheDocument();
       });
+      // F049 v2.2 §24.2 #7a / §24.3 #11a：標題須含「部門相關區塊」限定語（非「本頁」），
+      // 否則會與 F120 AC-LIST-11 之「名單基礎預估數量總覽為全公司口徑」正面矛盾
+      // （逐字取自 prototypes/30-stage0-estimate.html:208，v1.3 定案，不得還原為舊文案）。
+      expect(
+        screen.getByTestId('section-chief-readonly-banner').textContent,
+      ).toContain('部門相關區塊僅顯示您轄區部門（北區電銷一課）的預估資料');
       expect(screen.queryByTestId('org-total-row')).not.toBeInTheDocument();
       expect(screen.getByTestId('dept-row-XVE1')).toBeInTheDocument();
     });

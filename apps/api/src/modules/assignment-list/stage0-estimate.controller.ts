@@ -96,6 +96,34 @@ export class Stage0EstimateController {
     });
   }
 
+  /**
+   * F120 / US-184（AD-E07-51 §4.1 / §6.4）：名單基礎預估數量總覽（唯讀，月層級名單總量）。
+   *
+   * ★Guard：維持 class 級基準（DirectorOrSectionChief），**不得**加 method 級
+   *   `@RequireDirector()`——否則處長 403，直接違反 AC-LIST-11（處長須可完整檢視本區塊）。
+   *
+   * ★本端點**刻意不做** dept scope filter（與同頁 `dept-estimate` 之處長限縮行為相反，
+   *   `I-LISTOVW-NO-SCOPE-FILTER-01`）；名單集合對所有可存取角色一律為當月全部啟用名單。
+   *
+   * `calendarSource` / `startDate` / `endDate` 接受但**不**傳入 service（A-1：本區塊為月層級
+   * 名單總量、無日曆維度；不把恆為 no-op 之參數往下傳，避免 service 簽章誤導）。
+   */
+  @Get('stage0/list-estimate-overview')
+  async listEstimateOverview(
+    @Request() req: { user?: ActorLike | null },
+    @Query('ym') ym?: string,
+    @Query('listNo') listNo?: string,
+    @Query('calendarSource') _calendarSource?: string,
+    @Query('startDate') _startDate?: string,
+    @Query('endDate') _endDate?: string,
+  ) {
+    const effectiveYm = ym ?? this.systemService.getCurrentWorkYm();
+    return this.service.computeListEstimateOverview(effectiveYm, {
+      listNo,
+      actor: req.user ?? null,
+    });
+  }
+
   @Get('list-definitions/:listNo/estimate')
   async estimateListCount(@Param('listNo') listNo: string) {
     return this.service.estimateListCount(listNo);

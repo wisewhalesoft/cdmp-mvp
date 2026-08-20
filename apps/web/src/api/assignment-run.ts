@@ -1,4 +1,6 @@
 import { apiClient } from './client';
+// F120：名單總覽之條件陣列原樣透傳，型別複用名單 API 之既有 ConditionItem（型別匯入，無執行期相依）。
+import type { ConditionItem } from './assignment-list';
 
 /**
  * F049 / F061 / F062 / F063 / F067 — Assignment Run API client
@@ -148,6 +150,14 @@ export interface DeptEstimateResponse {
   scope: DeptEstimateScope;
   departments: DeptEstimateDepartment[];
   days: DeptEstimateDay[];
+  /**
+   * F049 v2.1 §16.5 / AC-DEPT-3：本月全名單總量＝`Σ_L 名單估算件數` 之**整數精確和**。
+   *
+   * **不得**於顯示層改以 `Σ_d days[].orgTotal` 自行加總（逐日捨入和，殘差 ≤ 工作日數 × 0.5），
+   * 亦**不得**改以名單列表之物化估算欄位加總（排除集合不同，§24.2 實作陷阱）。
+   * 所有角色（含處長）皆回傳；處長之顯示面不變（KPI 改顯示「轄區本月件數」、表尾合計列不渲染）。
+   */
+  orgMonthTotal: number;
   /** 每人每日上限；未設定為 null */
   threshold: number | null;
   warnings: DeptEstimateWarning[];
@@ -174,6 +184,80 @@ export async function getDeptEstimate(
   if (opts.endDate) params.endDate = opts.endDate;
   const response = await apiClient.get<DeptEstimateResponse>(
     '/assignment/stage0/dept-estimate',
+    { params },
+  );
+  return response.data;
+}
+
+// =====================================================================
+// F120 / US-184 — Stage 0「名單基礎預估數量總覽」（AD-E07-51 §6.2 回應契約）
+//
+// ★本端點刻意**不做** dept scope filter（與 dept-estimate 之處長限縮行為相反）：
+//   處長取得之名單集合與部長完全相同（AC-LIST-11 / BR-10），`scope.deptCode` 僅供顯示文案，
+//   `scope.listOverviewScoped` 恆為 false。
+// =====================================================================
+
+export interface ListEstimateOverviewWarning {
+  code: string;
+  listNo?: string;
+  message?: string;
+}
+
+export interface ListEstimateOverviewScope {
+  role: 'director' | 'section_chief' | 'admin';
+  /** 處長之轄區代碼（純顯示；本區塊從不以此過濾）；其他角色為 null。 */
+  deptCode: string | null;
+  /** 恆為 false（本區塊不套轄區限縮之顯式契約標記）。 */
+  listOverviewScoped: boolean;
+}
+
+export interface ListEstimateOverviewListRow {
+  listNo: string;
+  listNm: string;
+  /** 原樣之條件陣列；描述字串一律由 `formatConditionSummary()` 於顯示層產生（F119 BR-10）。 */
+  conditions: ConditionItem[];
+  /** null ⇔ 無估算值（顯示「—」，不得顯示 0）。 */
+  estimatedCount: number | null;
+  estimateUnavailable: boolean;
+}
+
+export interface ListEstimateOverviewGroup {
+  groupKey: string;
+  /** 結構化判別；顯示層不得以 groupKey 字串比對取代。 */
+  groupType: 'code' | 'multi' | 'unclassified';
+  optionValue: string | null;
+  displayOrder: number | null;
+  /** 含無估算值名單（空分組隱藏之判定依據）。 */
+  listCount: number;
+  estimatedListCount: number;
+  subtotalCount: number;
+  /** null ⇔ 預估數量總計為 0（顯示「—」，不得顯示 0% / NaN / Infinity）。 */
+  percent: number | null;
+  lists: ListEstimateOverviewListRow[];
+}
+
+export interface ListEstimateOverviewResponse {
+  ym: string;
+  mode: 'aggregated' | 'single-list';
+  listNo: string | null;
+  scope: ListEstimateOverviewScope;
+  totalListCount: number;
+  totalEstimatedCount: number;
+  unestimatedListCount: number;
+  /** ★陣列順序即為顯示順序；顯示層**不得**重排（AC-LIST-07）。 */
+  groups: ListEstimateOverviewGroup[];
+  warnings: ListEstimateOverviewWarning[];
+}
+
+export async function getListEstimateOverview(
+  ym?: string,
+  opts: { listNo?: string } = {},
+): Promise<ListEstimateOverviewResponse> {
+  const params: Record<string, string> = {};
+  if (ym) params.ym = ym;
+  if (opts.listNo) params.listNo = opts.listNo;
+  const response = await apiClient.get<ListEstimateOverviewResponse>(
+    '/assignment/stage0/list-estimate-overview',
     { params },
   );
   return response.data;

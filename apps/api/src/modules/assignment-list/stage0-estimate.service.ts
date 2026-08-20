@@ -3,10 +3,15 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Between, In, Repository } from 'typeorm';
-import { ObListDefinition } from '@/database/entities/ob-list-definition.entity';
+import {
+  ObListDefinition,
+  type ObListDefinitionConditionItem,
+} from '@/database/entities/ob-list-definition.entity';
+import { PooldataFieldOption } from '@/database/entities/pooldata-field-option.entity';
 import { ObPoolData } from '@/database/entities/ob-pool-data.entity';
 import { ObPoolDataList } from '@/database/entities/ob-pool-data-list.entity';
 import { ObCalendar } from '@/database/entities/ob-calendar.entity';
@@ -28,6 +33,8 @@ import { estimateStage1SqlCount } from '@/modules/assignment/stage1/stage1-sql-e
 // AD-E07-42 P3a：MSSQL Stage 1 estimate 下推（DB_TYPE='mssql' 分支，DISPATCH-002）。
 import { estimateStage1SqlCountMssql } from '@/modules/assignment/stage1/stage1-sql-executor-mssql';
 import { ERROR_CODES, ERROR_MESSAGES } from '@/common/errors/error-codes';
+// F120 / AD-E07-51 §4.2：分組判定純函式（內部匯入既有 resolveCategoricalOperator 單一落點）
+import { resolveListGroup } from './stage0-list-group-resolve';
 
 /**
  * F049 v1.3：工作日來源模式（對齊 §5.1 calendarSource）
@@ -150,10 +157,86 @@ export interface Stage0DeptEstimateResult {
   scope: Stage0DeptScope;
   departments: Stage0Department[];
   days: Stage0DeptDay[];
+  /**
+   * F049 v2.1 §16.5 / AC-DEPT-3 / BR-17：月層級全名單總量 = `Σ_L list_total[L]`（整數精確和）。
+   *
+   * **非** `Σ_d Math.round(days[d].orgTotal)`（逐日捨入和；殘差 ≤ 工作日數 × 0.5，§16.5.2）。
+   * 型別 `number`（非 nullable）；**所有角色**皆回傳全公司口徑之名單層總量（比照 BR-12，
+   * 與 `days[].orgTotal` 之處長 `null` 分支刻意不同——後者為部門矩陣脈絡下之全部門合計）。
+   * 與 F120 `list-estimate-overview` 之 `totalEstimatedCount` 同源且嚴格相等（`I-F120-03`）。
+   */
+  orgMonthTotal: number;
   threshold: number | null;
   warnings: Stage0DeptWarning[];
   poolCount: number;
   poolWarning: 'POOL_COUNT_LOW' | null;
+}
+
+// ===========================================================================
+// F120 v1.3 / US-184：名單基礎預估數量總覽（AD-E07-51 §6.2 回應契約）
+// ===========================================================================
+
+/** 合成分組鍵（保留字；不得與任何產品類別代碼碰撞，F120 spec §5.2）。 */
+const MULTI_GROUP_KEY = 'MULTI';
+const UNCLASSIFIED_GROUP_KEY = 'UNCLASSIFIED';
+/** 產品類別欄位代碼（白名單查詢用）。 */
+const PRODUCT_KIND_COLUMN = 'prod_kind';
+
+export interface ComputeListEstimateOverviewOptions {
+  /** absent = aggregated（全名單彙總）；指定 = single-list 鑽探 */
+  listNo?: string;
+  actor?: ActorLike | null;
+}
+
+export interface Stage0ListEstimateOverviewScope {
+  role: 'director' | 'section_chief' | 'admin';
+  /** 處長之轄區代碼（**純顯示用途**；本端點從不以此過濾）；其他角色為 null。 */
+  deptCode: string | null;
+  /** ★恆為 `false`：本區塊不套 dept scope filter 之顯式契約標記（`I-LISTOVW-NO-SCOPE-FILTER-01`）。 */
+  listOverviewScoped: false;
+}
+
+export interface Stage0ListEstimateListItem {
+  listNo: string;
+  listNm: string;
+  /** 原樣透傳之條件陣列（供顯示層以唯一格式化函式產生描述字串）；無條件時為 `[]`（非 null）。 */
+  conditions: ObListDefinitionConditionItem[];
+  /** `null` ⇔ 無估算值（顯示「—」，不得顯示 0）。 */
+  estimatedCount: number | null;
+  /** 冗餘旗標（與 `estimatedCount === null` 等價），供顯示層免於 null 判斷分歧。 */
+  estimateUnavailable: boolean;
+}
+
+export interface Stage0ListEstimateGroup {
+  /** 產品類別代碼 | 'MULTI' | 'UNCLASSIFIED'。 */
+  groupKey: string;
+  /** 結構化判別；下游**不得**以 groupKey 字串比對取代本欄位。 */
+  groupType: 'code' | 'multi' | 'unclassified';
+  optionValue: string | null;
+  /** 已登錄代碼取自白名單；孤兒代碼與合成分組為 null。 */
+  displayOrder: number | null;
+  /** 含無估算值名單（空分組隱藏之判定依據）。 */
+  listCount: number;
+  estimatedListCount: number;
+  /** Σ 有估算值名單之預估數量。 */
+  subtotalCount: number;
+  /** `null` ⇔ `totalEstimatedCount = 0`（顯示「—」）；**禁止**以 0 代替。 */
+  percent: number | null;
+  /** 組內顯示順序＝名單編號 ASC。 */
+  lists: Stage0ListEstimateListItem[];
+}
+
+export interface Stage0ListEstimateOverviewResult {
+  ym: string;
+  mode: 'aggregated' | 'single-list';
+  listNo: string | null;
+  scope: Stage0ListEstimateOverviewScope;
+  totalListCount: number;
+  totalEstimatedCount: number;
+  unestimatedListCount: number;
+  /** ★陣列順序即為顯示順序（§5.3）；顯示層不得重排。空分組不出現於陣列。 */
+  groups: Stage0ListEstimateGroup[];
+  warnings: Stage0DeptWarning[];
 }
 
 const WEEKDAY_TW = ['日', '一', '二', '三', '四', '五', '六'];
@@ -282,6 +365,14 @@ export class Stage0EstimateService {
     private readonly emphireRepo: Repository<ObEmphire>,
     // §17 處長唯讀 scope（複用 listLists 之 getScopeDeptCode → ob_dept_pct.obdeptid 模式）
     private readonly scopeService: SectionChiefScopeService,
+    // F120 / AD-E07-51 §10：分組標籤 decode 與排序之白名單來源（module 已註冊本 entity）。
+    //   標為 @Optional()：既有精簡 TestingModule（stage0-dept-estimate / stage0-estimate /
+    //   stage0-estimate-dryrun / f119-ac14-stage0-delegation）未註冊本 entity，若設為必填會
+    //   使其 DI 解析失敗——本 repo 僅供名單總覽之標籤/排序，缺席時降級為原始代碼，
+    //   不影響任何既有行為。
+    @Optional()
+    @InjectRepository(PooldataFieldOption)
+    private readonly optionRepo?: Repository<PooldataFieldOption>,
   ) {}
 
   /**
@@ -533,44 +624,15 @@ export class Stage0EstimateService {
       return ymd >= startYmd && ymd <= endYmd;
     });
 
-    // ---- L1 / L2 名單集合 + list_total ----
-    let lists = await this.listRepo.find({
-      where: { project_workym: ym, status: 'active' },
-    });
-    if (mode === 'single-list') {
-      lists = lists.filter((l) => l.list_no === opts.listNo);
-    }
+    // ---- L1 / L2 名單集合 + list_total（AD-E07-51 §4.3：與名單總覽共用同一段程式碼）----
+    const listTotalsResult = await this.resolveListTotals(
+      ym,
+      mode === 'single-list' ? opts.listNo : undefined,
+    );
+    const lists = listTotalsResult.lists;
+    const listTotals = listTotalsResult.listTotals;
+    warnings.push(...listTotalsResult.warnings);
     const listNos = lists.map((l) => l.list_no);
-
-    const listTotals = new Map<string, number>();
-    const fallbackLists: ObListDefinition[] = [];
-    for (const l of lists) {
-      if (l.stage0_estimate_count != null) {
-        listTotals.set(l.list_no, l.stage0_estimate_count);
-      } else {
-        fallbackLists.push(l);
-      }
-    }
-    if (fallbackLists.length > 0) {
-      const timeoutMs = this.resolveDeptTimeoutMs();
-      await Promise.all(
-        fallbackLists.map(async (l) => {
-          try {
-            const r = await this.raceTimeout(
-              this.estimateListCount(l.list_no),
-              timeoutMs,
-            );
-            listTotals.set(l.list_no, r.count);
-          } catch {
-            warnings.push({
-              code: 'STAGE0_LIST_ESTIMATE_PARTIAL',
-              listNo: l.list_no,
-              message: `名單 ${l.list_no} 估算逾時，已從本次合計排除。`,
-            });
-          }
-        }),
-      );
-    }
 
     // ---- L3 ob_dept_pct（批次）+ scope filter ----
     let deptPctRows: ObDeptPct[] =
@@ -726,6 +788,15 @@ export class Stage0EstimateService {
       });
     }
 
+    // F049 v2.1 §16.5 / AC-DEPT-3 / BR-17（AD-E07-51 §4.5）：月層級全名單總量＝
+    //   Σ_L list_total[L] 之**整數精確和**（非 Σ_d Math.round(orgTotal[d]) 之逐日捨入和）。
+    //   對已在記憶體之 listTotals Map 多做一次 reduce，零額外查詢（不違反 I-RUN-EST-01）。
+    //   型別為 number（非 nullable）、**所有角色**皆回傳全公司口徑之名單層總量（比照 BR-12）；
+    //   處長之顯示面維持不變（前端 KPI 改顯示「轄區本月件數」、表尾合計列不渲染，BR-13）。
+    //   與 F120 之 totalEstimatedCount 同源（I-LISTOVW-SHARED-SOURCE-01）→ I-F120-03 依建構成立。
+    let orgMonthTotal = 0;
+    for (const v of listTotals.values()) orgMonthTotal += v;
+
     return {
       ym,
       mode,
@@ -736,11 +807,266 @@ export class Stage0EstimateService {
       scope,
       departments,
       days,
+      orgMonthTotal,
       threshold,
       warnings,
       poolCount,
       poolWarning,
     };
+  }
+
+  /**
+   * AD-E07-51 §4.3 / `I-LISTOVW-SHARED-SOURCE-01`：名單集合 + `list_total[L]` 之**唯一**來源。
+   *
+   * 由 `computeDeptEstimate`（部門矩陣）與 `computeListEstimateOverview`（名單基礎預估數量總覽）
+   * **共同呼叫**；禁止任一方自行 `listRepo.find(...)` 重寫此邏輯——兩區塊之總量嚴格相等
+   * （`I-F120-03`）即由此**依建構成立**，非靠測試維持。
+   *
+   * 行為與抽出前逐行相同（F049 §14.2 L1/L2）：
+   *   - 名單集合：`project_workym = :ym AND status = 'active'`；`listNo` 提供時縮限為該筆
+   *   - `stage0_estimate_count` 物化值優先；缺值時 fallback 完整 Stage 1 dry-run COUNT
+   *   - fallback 失敗（逾時或其他原因）→ 該名單**不進入** `listTotals`，並追加一則
+   *     `STAGE0_LIST_ESTIMATE_PARTIAL` warning（呼叫端各自併入自己的 warnings）
+   *
+   * ★本方法**不含任何 dept scope 過濾**（現行即如此；scope 僅施於其後之 `deptPctRows`）。
+   *   `I-LISTOVW-NO-SCOPE-FILTER-01` 因此天然成立，實作時**不得**在此新增 scope 判斷分支。
+   */
+  private async resolveListTotals(
+    ym: string,
+    listNo?: string,
+  ): Promise<{
+    lists: ObListDefinition[];
+    listTotals: Map<string, number>;
+    warnings: Stage0DeptWarning[];
+  }> {
+    const warnings: Stage0DeptWarning[] = [];
+
+    let lists = await this.listRepo.find({
+      where: { project_workym: ym, status: 'active' },
+    });
+    if (listNo) {
+      lists = lists.filter((l) => l.list_no === listNo);
+    }
+
+    const listTotals = new Map<string, number>();
+    const fallbackLists: ObListDefinition[] = [];
+    for (const l of lists) {
+      if (l.stage0_estimate_count != null) {
+        listTotals.set(l.list_no, l.stage0_estimate_count);
+      } else {
+        fallbackLists.push(l);
+      }
+    }
+    if (fallbackLists.length > 0) {
+      const timeoutMs = this.resolveDeptTimeoutMs();
+      await Promise.all(
+        fallbackLists.map(async (l) => {
+          try {
+            const r = await this.raceTimeout(
+              this.estimateListCount(l.list_no),
+              timeoutMs,
+            );
+            listTotals.set(l.list_no, r.count);
+          } catch {
+            warnings.push({
+              code: 'STAGE0_LIST_ESTIMATE_PARTIAL',
+              listNo: l.list_no,
+              message: `名單 ${l.list_no} 估算逾時，已從本次合計排除。`,
+            });
+          }
+        }),
+      );
+    }
+
+    return { lists, listTotals, warnings };
+  }
+
+  /**
+   * F120 / US-184（AD-E07-51 §6.3）：名單基礎預估數量總覽（唯讀，月層級名單總量）。
+   *
+   * 於既有 L1 `list_total[L]` 之上**只做加法**：分組（`resolveListGroup`）＋ 小計 ＋ 佔比
+   * （F120 spec §5.2 / §5.3 / §5.5），不分叉任何底層估算邏輯（BR-13 / I-RUN-EST-01）。
+   *
+   * ★授權特例（AC-LIST-11 / BR-10 / `I-LISTOVW-NO-SCOPE-FILTER-01`）：本方法之名單集合
+   *   **一律為當月全部啟用名單**，對處長**不套** dept scope filter——與同一頁面之部門矩陣
+   *   行為**相反**。`scope.deptCode` 僅供顯示層文案使用，**從不**參與任何過濾；
+   *   `scope.listOverviewScoped` 恆為 `false`，為此事實之顯式契約標記。
+   *   `getScopeDeptCode()` 回 `null` 時本區塊**不降級、不發 `SCOPE_UNRESOLVED`**
+   *   （該 warning 僅屬部門矩陣）。
+   */
+  async computeListEstimateOverview(
+    ym: string,
+    opts: ComputeListEstimateOverviewOptions = {},
+  ): Promise<Stage0ListEstimateOverviewResult> {
+    const mode: 'aggregated' | 'single-list' = opts.listNo
+      ? 'single-list'
+      : 'aggregated';
+    const actor = opts.actor ?? null;
+
+    // scope 僅供顯示（不過濾）：判定式與 computeDeptEstimate 之 L4 段相同
+    const isSectionChief =
+      actor?.businessRole === 'section_chief' && actor?.role !== 'admin';
+    const scopeRole: Stage0ListEstimateOverviewScope['role'] =
+      actor?.role === 'admin'
+        ? 'admin'
+        : actor?.businessRole === 'section_chief'
+          ? 'section_chief'
+          : 'director';
+    const scopeDeptCode = isSectionChief
+      ? await this.scopeService.getScopeDeptCode(actor!.userId)
+      : null;
+
+    const { lists, listTotals, warnings } = await this.resolveListTotals(
+      ym,
+      opts.listNo,
+    );
+    const options = await this.loadProductKindOptions();
+
+    const groups = this.buildListEstimateGroups(lists, listTotals, options);
+
+    let totalListCount = 0;
+    let totalEstimatedCount = 0;
+    let estimatedListCount = 0;
+    for (const g of groups) {
+      totalListCount += g.listCount;
+      totalEstimatedCount += g.subtotalCount;
+      estimatedListCount += g.estimatedListCount;
+    }
+
+    // §5.5 佔比：分母為 totalEstimatedCount（已排除無估算值名單）；
+    //   分母為 0 → null（顯示「—」，禁 0% / NaN / Infinity）。分子 0、分母 > 0 → 0（正確值）。
+    for (const g of groups) {
+      g.percent =
+        totalEstimatedCount > 0
+          ? Math.round((g.subtotalCount / totalEstimatedCount) * 100)
+          : null;
+    }
+
+    return {
+      ym,
+      mode,
+      listNo: mode === 'single-list' ? (opts.listNo ?? null) : null,
+      scope: {
+        role: scopeRole,
+        // ★純顯示欄位：本端點之名單集合查詢從不讀取此值（I-LISTOVW-NO-SCOPE-FILTER-01）
+        deptCode: isSectionChief ? scopeDeptCode : null,
+        listOverviewScoped: false,
+      },
+      totalListCount,
+      totalEstimatedCount,
+      unestimatedListCount: totalListCount - estimatedListCount,
+      groups,
+      warnings,
+    };
+  }
+
+  /**
+   * 產品類別可選值清單（分組**標籤**與**排序**之來源；不影響分組**歸屬**，F120 spec §5.3）。
+   *
+   * 含 `is_active = false` 之代碼：停用不回溯既有名單條件（F076 BR-4），仍視為「已登錄」。
+   * 排序鍵 `display_order ASC, option_value ASC` 與既有可選值清單查詢完全相同
+   * （現行 seed 三筆 display_order 皆為 0，次鍵才是決定 01/02/03 順序之關鍵，§12 G-2）。
+   */
+  private async loadProductKindOptions(): Promise<PooldataFieldOption[]> {
+    if (!this.optionRepo) {
+      // 僅可能發生於未註冊本 entity 之精簡 TestingModule；正式 module 恆已註冊。
+      this.logger.warn(
+        '[Stage0Estimate] pooldata_field_option repository unavailable → 分組標籤/排序降級為原始代碼',
+      );
+      return [];
+    }
+    const rows = await this.optionRepo.find({
+      where: { column_name: PRODUCT_KIND_COLUMN },
+    });
+    return rows.sort(
+      (a, b) =>
+        a.display_order - b.display_order ||
+        a.option_value.localeCompare(b.option_value),
+    );
+  }
+
+  /**
+   * F120 spec §5.3 `GROUP-ORDER`：分桶 + 排序 + 組裝（percent 由呼叫端於總計已知後填入）。
+   *
+   * 組間順序＝已登錄單一代碼組（白名單排序）→ 孤兒代碼組（代碼 ASC）→ 多重產品類別 → 未分類；
+   * 組內依名單編號 ASC。`listCount = 0` 之分組不輸出（BR-9：依**名單數**隱藏，非依小計金額）。
+   */
+  private buildListEstimateGroups(
+    lists: ObListDefinition[],
+    listTotals: Map<string, number>,
+    options: PooldataFieldOption[],
+  ): Stage0ListEstimateGroup[] {
+    const sorted = [...lists].sort((a, b) => a.list_no.localeCompare(b.list_no));
+
+    const bucket = new Map<string, Stage0ListEstimateListItem[]>();
+    const groupTypes = new Map<string, Stage0ListEstimateGroup['groupType']>();
+    for (const l of sorted) {
+      const resolution = resolveListGroup(l.condition_payload);
+      const groupKey =
+        resolution.groupType === 'code'
+          ? resolution.optionValue
+          : resolution.groupType === 'multi'
+            ? MULTI_GROUP_KEY
+            : UNCLASSIFIED_GROUP_KEY;
+      groupTypes.set(groupKey, resolution.groupType);
+      const total = listTotals.get(l.list_no);
+      const estimated = total != null;
+      const item: Stage0ListEstimateListItem = {
+        listNo: l.list_no,
+        listNm: l.list_nm,
+        // 原樣透傳（含 operator / keyword / dataSource 等 optional key）：後端**不得**預先
+        // 格式化為字串，條件描述之唯一格式化來源在顯示層（F119 BR-10 / BR-4）。
+        conditions: Array.isArray(l.condition_payload?.conditions)
+          ? l.condition_payload!.conditions
+          : [],
+        estimatedCount: estimated ? total! : null,
+        estimateUnavailable: !estimated,
+      };
+      const arr = bucket.get(groupKey);
+      if (arr) arr.push(item);
+      else bucket.set(groupKey, [item]);
+    }
+
+    const registered = new Map(options.map((o) => [o.option_value, o]));
+    const orderedKeys: string[] = [];
+    // ① 已登錄之單一代碼組（依 display_order ASC, option_value ASC）
+    for (const o of options) {
+      if (bucket.has(o.option_value)) orderedKeys.push(o.option_value);
+    }
+    // ② 孤兒代碼組（代碼字串遞增）
+    const orphanKeys = Array.from(bucket.keys())
+      .filter((k) => groupTypes.get(k) === 'code' && !registered.has(k))
+      .sort((a, b) => a.localeCompare(b));
+    orderedKeys.push(...orphanKeys);
+    // ③ 多重產品類別 → ④ 未分類
+    if (bucket.has(MULTI_GROUP_KEY)) orderedKeys.push(MULTI_GROUP_KEY);
+    if (bucket.has(UNCLASSIFIED_GROUP_KEY))
+      orderedKeys.push(UNCLASSIFIED_GROUP_KEY);
+
+    return orderedKeys.map((key) => {
+      const items = bucket.get(key)!;
+      const groupType = groupTypes.get(key)!;
+      const option = groupType === 'code' ? registered.get(key) : undefined;
+      let subtotalCount = 0;
+      let estimatedListCount = 0;
+      for (const it of items) {
+        if (it.estimatedCount != null) {
+          subtotalCount += it.estimatedCount;
+          estimatedListCount += 1;
+        }
+      }
+      return {
+        groupKey: key,
+        groupType,
+        optionValue: groupType === 'code' ? key : null,
+        displayOrder: option ? option.display_order : null,
+        listCount: items.length,
+        estimatedListCount,
+        subtotalCount,
+        percent: null, // 由 computeListEstimateOverview 於總計已知後填入（§5.5）
+        lists: items,
+      };
+    });
   }
 
   /** 在職人數 + 部門名稱（批次 TRIM(dept_code) GROUP BY；SQLite / PG 均相容）。 */
