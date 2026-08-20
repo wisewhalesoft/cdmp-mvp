@@ -2,18 +2,36 @@
 spec-id: F049
 title: Stage 0 試算頁業務化重設計（部門維度每日分派可行性）
 feature-id: F049
-source-story: US-071, US-132, US-135, US-166, US-167, US-168, US-169, US-170
+source-story: US-071, US-132, US-135, US-166, US-167, US-168, US-169, US-170, US-184
 epic: E07
 module: M01 名單定義
 priority: P0-MVP
-version: "2.0"
-date: 2026-06-26
+version: "2.2"
+date: 2026-08-20
 status: Draft
 ---
 
 # F049: Stage 0 試算頁業務化重設計（部門維度每日分派可行性；含單一 LIST_NO 案件試算）
 
-Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-26
+Priority: P0-MVP | Status: Draft | Last Updated: 2026-08-20
+
+> **🟡 v2.2（2026-08-20 / 處長唯讀提示文案限定範圍 — 顯示層契約變更）**：本版**僅改一句使用者可見文案**，不動任何演算法、公式、捨入、scope 過濾邏輯或版面。
+> 1. **變更**：AC-SCOPE-1 之處長 banner 標題由「唯讀模式：**僅顯示您轄區部門**（{dept_name}）的預估資料」改為「唯讀模式：**部門相關區塊**僅顯示您轄區部門（{dept_name}）的預估資料」；說明句補一句界定範圍（頁面最下方之「名單基礎預估數量總覽」為全公司名單層總量、不受轄區限制）。
+> 2. **緣由**：[F120](F120-stage0-list-estimate-overview.md) 於**同一頁**新增之第三區塊為**全公司**名單層總量、刻意不受轄區限制（[F120 AC-LIST-11](F120-stage0-list-estimate-overview.md) / BR-10）。原文案在該區塊存在後已成**假敘述**，且與該區塊之「全公司口徑」標示**正面矛盾**——同頁兩段話互相打架會直接抵消 AC-LIST-11 之誤讀防呆。
+> 3. **範圍**：**僅文字**。banner 之版面、顏色、顯示條件（`businessRole = section_chief`）、既有兩區塊之公式 / 捨入 / 缺口 / 人均 / scope 隔離**全數不變**；`prototypes/30-stage0-estimate.html` 已由 ui-ux-designer 於靜態 HTML（`:208`）與 JS 樣板（`:1139`）兩處同步改為此措辭（本檔為記錄，spec-writer 未改 prototype）。
+> 4. **受影響之 React 落點**：見 §24.2（`stage0-estimate-page.tsx:353-360`）。
+> 5. **v2.1 之全部內容（`orgMonthTotal` 精確和）原樣保留、不受本版影響。**
+
+> **🔴 v2.1（2026-08-20 / 月層級「全名單總量」改為精確和 — 行為變更，使用者已裁決）**：本版**僅修正一個數值定義**：月層級之「全名單總量」由「各工作日顯示值之和」（`Σ_d Math.round(org_real[d])`）改為「**各名單預估數量之精確整數和**」（`Σ_L list_total[L]`）。**其餘一切不變**——§13 千分位 ratio 演算法、§16.1 部門投影公式、§16.3 每日捨入規則、§17 處長 scope 隔離、§18 人均可行性、§19 術語清理、Part A v1.x 全數原樣保留。
+> 1. **緣由**：[F120](F120-stage0-list-estimate-overview.md)（Stage 0「名單基礎預估數量總覽」區塊）之跨區塊一致性不變量 `I-F120-03` 要求「本區塊之預估數量總計」與本頁「本月全名單總量」為同一個數。查證發現兩者算式不同：F120 為 `Σ_L list_total[L]`（整數精確和），而本頁現行實作為逐日先 `Math.round` 再相加，**殘差上界 = 工作日數 × 0.5**（20 個工作日約 ±10 件）。詳細分析見 [F120 §12 G-1](F120-stage0-list-estimate-overview.md)。
+> 2. **裁決（2026-08-20，使用者 / team lead，關閉 OQ-F120-B1）**：**採精確和**。理由：該數字之語意本就是「本月名單總量」，而非「各日顯示值之和」；逐日捨入是**呈現層**需要，不應污染月層級彙總值。
+> 3. **範圍**：新增 **§16.5**（月層級彙總定義 + §16.5.5 實作路徑）與 **AC-DEPT-3**、**BR-17**；§14.3 概念契約新增 **`orgMonthTotal`** 欄位。適用於**兩個**顯示落點——KPI 卡片「本月全名單總量」與部門負載總覽表尾「全名單總量」合計列（兩者本即同一量）。
+> 3a. **實作路徑已由 system-architect 裁定並經 team lead 核准**（[AD-E07-51](../implementation-log/AD-E07-51-f120-list-estimate-overview.md) §4.5）：**不是**讓前端改算式，而是後端於 `Stage0DeptEstimateResult` 新增 top-level 欄位 **`orgMonthTotal`**（型別 **`number`**，非 nullable），值為對 `Stage0EstimateService.resolveListTotals(ym, listNo?)` 回傳之 `listTotals` Map 做一次 reduce 之精確整數和；前端 KPI 與合計列**直接取用該欄位**，移除既有之客戶端 reduce。此為**純加性**變更（新增回應欄位、不刪除不修改任何既有欄位語意）、**零額外查詢**（該 Map 本即已建立），詳見 §16.5.5。
+> 3b. **欄位命名最終裁決（2026-08-20，team lead）＝ `orgMonthTotal`，不得改名**（下游 grep 驗證）。理由：①`prototypes/30-stage0-estimate.html:517` 本即為 `orgMonthTotal`（見第 5 點，prototype 為 UI ground truth）②前端既有變數 `stage0-estimate-page.tsx:227` 即同名③與同一回應內既有之 `days[].orgTotal` **同族**，避免同一個數字在 prototype／前端／後端出現第三種叫法。（本輪草擬過程中曾短暫採用之其他候選名稱已全數作廢。）
+> 4. **每日顯示值不變**：`days[].orgTotal`（每日全名單總量）維持 `Math.round(org_real[d])`、每日缺口與部門格維持 §16.3 捨入規則，**呈現層完全不動**。因此「月層級全名單總量」與「各日顯示值之和」可能相差 ≤ 工作日數 × 0.5 件，此為**預期**（見 §16.5 之殘差說明），下游**不得**斷言兩者嚴格相等。
+> 5. **本修正同時回復 prototype fidelity**：`prototypes/30-stage0-estimate.html:517` 之 `orgMonthTotal = lists.reduce((s, l) => s + l.total, 0)` 本即為**精確和**——現行 React 實作與 prototype 脫節，屬既有 UI 落差；本版之修正方向與 prototype 一致，非新增行為（CLAUDE.md：prototype 為 UI ground truth）。
+> 6. **⚠️ 這是行為變更**：既有對該 KPI / 合計列之斷言需同步調整。受影響之程式與測試落點已列於 **§24**（**僅定位，本版不改 code / test / prototype**）。
+> 7. **刻意未動（邊界）**：`architecture-spec.md` / `data-model.md` / AD（system-architect）；`prototypes/30-stage0-estimate.html`（ui-ux-designer；且該檔本即為精確和，無須改）；code / test（tdd-implementation / test-generator）；`docs/stories/**`（US-184 TC-184-07 原文即為「兩者相等」，裁決後**無須改動**）。
 
 > **v2.0（2026-06-26 / Stage 0 試算頁業務化重設計：per-list 技術視角 → 部門維度每日分派可行性，對齊 US-166~US-170）**：本版於既有 per-list / 千分位 ratio 引擎（v1.3~v1.4，**完整保留、不分叉**）之上新增「聚合層 + 部門投影層 + 可行性層 + 唯讀範圍隔離 + 術語清理」，將試算頁從「選一筆名單看每日件數」改為「本月全名單彙總後，各部門每日預估分派量與人均可行性」。新增內容集中於 **Part B（§14~§22）**，並以新 AC 命名（AC-AGG / AC-DEPT / AC-GAP / AC-SCOPE / AC-FEAS / AC-TERM）對應 US-166~170 之 AC-ID，避免與 v1.x AC 編號衝突。核心變更：
 > 1. **§15 聚合預設（US-166，supersedes US-071 AC-1/AC-2/AC-3/AC-4-Default）**：頁面預設進入「全名單彙總」模式（所有 active 名單件數合計後做部門投影），名單篩選器降級為可選的「單一名單鑽探」；不再預設自動選第一筆名單（v1.3 AC-4-Default 之「自動選第一筆」於 v2.0 由「全部名單彙總」取代）。
@@ -360,6 +378,8 @@ Priority: P0-MVP | Status: Draft | Last Updated: 2026-06-26
 - 架構決策：AD-E07-1（OB 資料遷移）、**AD-E07-8（Stage 0 每日 ratio 千分位演算法，§13 為 feature 層行為規格、權威定義於 architecture-spec.md）**、AD-E07-18（F050 v2.1 名單篩選 condition_payload / Stage 1 動態 SQL 演算法，§18.4~§18.6 為 AC-4 試算機制之權威來源）、**AD-E07-23（v1.4：estimate / dry-run 完整鏈唯讀複用，AC-4 / BR-6 試算機制之權威來源）**、E07 與 E04 依賴關係
 - 篩選機制權威來源（v1.4）：[F091](F091-stage1-complete-month-cnt-dedup-special-delete.md) `Stage1FilterChain`（完整鏈 = 欄位篩選 + MONTH_CNT + 去重 + 特殊 DELETE）、[architecture-spec.md AD-E07-23](../architecture-spec.md)（`executeStage1Chain` dry-run）、[§18.5](../architecture-spec.md)（`buildStage1WhereConditions()` 欄位篩選子步驟）；試算須複用同一完整鏈，不另寫一套
 - 相關功能：[F048](F048-view-list-definition.md)、[F061](F061-trigger-assignment-run.md)、[F050](F050-create-list-definition.md)（condition_payload source of truth）、**[F091](F091-stage1-complete-month-cnt-dedup-special-delete.md)（Stage 1 補完整三步驟）、[F092](F092-stage1-dry-run-estimate.md)（dry-run 升級，§11 對 F049 影響表）**
+- **同頁第三區塊（v2.1 新增關聯）**：[F120](F120-stage0-list-estimate-overview.md)（「名單基礎預估數量總覽」；共用同一名單集合與同一 L1 `list_total[L]`；其 `I-F120-03` 與本檔 §16.5 / AC-DEPT-3 / BR-17 互為對應，v2.1 之修正即源自該不變量）
+- **架構決策（v2.1）**：[AD-E07-51](../implementation-log/AD-E07-51-f120-list-estimate-overview.md) §4.3（`resolveListTotals(ym, listNo?)` 共用方法）／§4.5（`orgMonthTotal` 實作路徑）／§8（HOW 層級不變式，含 `I-LISTOVW-SHARED-SOURCE-01`）；`architecture-spec.md` §5.21
 
 ## 11. 假設
 
@@ -445,6 +465,10 @@ Part B 需要一個能回傳「部門 × 日期件數矩陣（含 org_total / ga
   "listNo": null,                    // single-list 模式時為選定 list_no
   "calendarSource": "weekday",
   "scope": { "role": "section_chief", "deptCode": "XVE1", "scoped": true },
+  "orgMonthTotal": 28501,            // v2.1：月層級全名單總量 = Σ_L list_total[L]（整數精確和）
+                                     //       型別 number（**非** nullable）；來源＝resolveListTotals(ym, listNo?)
+                                     //       之 Map reduce（AD-E07-51 §4.5）。所有角色皆回傳全公司口徑之
+                                     //       名單層總量（比照 BR-12），與 days[].orgTotal 之處長 null 分支不同；§16.5
   "departments": [                   // 本回應涵蓋之部門（處長僅含轄區，部長 / admin 含全部）
     { "deptCode": "XVE1", "deptName": "北區電銷1", "activeHeadcount": 27 }
   ],
@@ -556,6 +580,80 @@ gap_real[d] = org_real[d] − Σ_D dept_real[d][D]                   // 因 Σ_D
 
 部門顯示名稱優先取 `ob_dept_pct.obdeptnm`（per-list 部門名稱），缺值時 fallback `ob_emphire.dept_name`（by `dept_code = obdeptid`）。`deptCode` 一律為 `ob_dept_pct.obdeptid`（trimmed）。
 
+### 16.5 月層級彙總：全名單總量 `org_month_total`（v2.1 修正，使用者裁決 2026-08-20）
+
+> **本節為 v2.1 之唯一數值定義變更。** 修正緣由、裁決紀錄與 prototype fidelity 說明見本檔頂部 v2.1 banner；技術分析見 [F120 §12 G-1](F120-stage0-list-estimate-overview.md)。
+
+#### 16.5.1 定義
+
+```
+org_month_total = Σ_{L ∈ S} list_total[L]           // 整數精確和；S 為當前模式之名單集合
+```
+
+- `list_total[L]` 為 L1 之 per-list 估算件數（§14.2；優先 `stage0_estimate_count` 物化值，缺值時 fallback 完整 Stage 1 dry-run）；皆為整數，**故本式無捨入誤差**。
+- **排除集合一致**：估算未能取得之名單（已發 `STAGE0_LIST_ESTIMATE_PARTIAL` 並自 `list_total` 排除者）**不計入**本式，與部門投影所用之集合完全相同。
+- **單一名單鑽探模式**：`S` = {選定名單}，故 `org_month_total` 退化為該名單之 `list_total`。
+- **處長模式**：本值為**名單層總量**（非部門分解），比照 **BR-12** 對處長開放，故處長回應中**仍為數字**（全公司口徑、與部長相同），**非** `null`；但前端**不渲染**（現行處長 KPI 改顯示「轄區本月件數」、部門負載總覽表尾合計列本即不顯示，維持不變）。理由詳見 §16.5.5「處長分支」。
+- **與 `days[].orgTotal` 之關係**：`days[].orgTotal = Math.round(org_real[d])` 之定義與捨入規則（§16.2 / §16.3）**完全不變**。
+
+#### 16.5.2 為何不是「各日顯示值之和」
+
+實數層 `Σ_d org_real[d] = Σ_L list_total[L]`（因 `Σ_d dpm[d] = 1000`，恆等）；但**逐日先捨入再相加**會產生殘差：
+
+```
+| org_month_total − Σ_d Math.round(org_real[d]) |  ≤  工作日數 × 0.5
+```
+
+例：總量 28,501、20 個工作日均分 → 每日 `1425.05 → 1425`，`×20 = 28,500 ≠ 28,501`。
+每日捨入屬**呈現層**需要（每日件數必為整數），不應污染月層級彙總值——故月層級一律採精確和。
+
+#### 16.5.3 顯示落點（兩處，同一個數）
+
+| 落點 | 說明 |
+|---|---|
+| KPI 卡片「本月全名單總量」 | 部長 / Admin 可見；處長改顯示「轄區本月件數」（不受本節影響） |
+| 部門負載總覽表尾「全名單總量」合計列 | 部長 / Admin 可見；處長不顯示（BR-13） |
+
+兩處**必須**顯示同一個 `org_month_total`（不得一處精確和、一處逐日累加）；兩處皆**直接取用**回應欄位 `orgMonthTotal`（§16.5.5），不得於顯示層各自加總。
+
+#### 16.5.4 殘差之呈現後果（明列，避免被誤判為缺陷）
+
+| 關係式 | v2.1 後是否嚴格成立 | 說明 |
+|---|---|---|
+| `org_month_total` ＝ [F120](F120-stage0-list-estimate-overview.md) 之「預估數量總計」 | ✅ **嚴格相等** | 兩者為同一式 `Σ_L list_total[L]`（`I-F120-03`）；此即本次修正之目的 |
+| `org_month_total` ＝ `Σ_d days[].orgTotal` | ❌ **不**嚴格成立 | 殘差 ≤ 工作日數 × 0.5（§16.5.2）；**預期行為**，不做尾差調整 |
+| `org_month_total` ＝ `Σ_D 部門月合計` ＋ `月缺口` | ❌ **不**嚴格成立 | 部門月合計與月缺口皆為「逐日捨入值之和」（§16.3 容差語意），與精確和之間存在同量級殘差；**與 prototype 現行行為一致**（prototype `orgMonthTotal` 為精確和、`gapMonth` 為 `Σ_d d.gap`） |
+
+> **月缺口 `gap_month` 之定義不變**：仍為 `Σ_{工作日 d} gap[d]`（逐日捨入值之和），**不**改為 `org_month_total − Σ_D 部門月合計`。理由：缺口之業務語意是「逐日未分派量之累計」，且缺口 banner / KPI 已以此值呈現；改為相減會使其隨捨入殘差漂移。
+
+#### 16.5.5 實作路徑（system-architect 裁定，team lead 已核准）
+
+> 權威來源：[AD-E07-51](../implementation-log/AD-E07-51-f120-list-estimate-overview.md) §4.5（OQ-F120-B1 之零額外成本路徑）＋ §4.3（`resolveListTotals` 抽出）。本節為**行為契約層之記載**，SQL / 方法內部實作細節仍屬 AD 範疇。
+
+| 項目 | 規範 |
+|---|---|
+| 回應欄位名 | **`orgMonthTotal`** — **固定，不得改名**（下游 grep 驗證） |
+| 位置 | `Stage0DeptEstimateResult` 之 **top-level** 欄位（非置於 `days[]` 內） |
+| 型別 | **`number`（非 nullable）**；**所有角色**（部長 / Admin / 處長）皆回傳全公司口徑之名單層總量。此與同回應 `days[].orgTotal` 之處長 `null` 分支**刻意不同**——見下方「處長分支」說明 |
+| 值 | 對 `Stage0EstimateService.resolveListTotals(ym, listNo?)` 回傳之 `listTotals` Map 之**全部 value 做一次 reduce**，得整數精確和 |
+| 成本 | **零額外查詢**——該 Map 於 `computeDeptEstimate` 內本即已建立；本欄位僅為對已在記憶體之資料多做一次加總，故不違反 §22.1 `I-RUN-EST-01`（僅在既有 L1 之上做加法） |
+| 變更性質 | **純加性**：新增回應欄位，**不刪除、不修改**任何既有欄位語意；`days[].orgTotal` / `deptAssignedTotal` / `gap` 完全不動 |
+| 前端 | KPI 卡片與部門負載總覽表尾合計列**直接取用**本欄位；**移除**既有之客戶端 reduce（`Σ_d days[].orgTotal`），不在顯示層重算 |
+| 跨區塊同源 | `resolveListTotals` 由 `computeDeptEstimate` 與 [F120](F120-stage0-list-estimate-overview.md) 之 `computeListEstimateOverview` **共同呼叫**（AD-E07-51 §4.3 / 不變式 `I-LISTOVW-SHARED-SOURCE-01`），故本欄位與 F120 之 `totalEstimatedCount` **同源**，[F120 `I-F120-03`](F120-stage0-list-estimate-overview.md) 依建構成立 |
+
+> **處長分支（型別為何是 `number` 而非 `number | null`；2026-08-20 定案，取代先前之 [ASSUMPTION] A-6）**：本欄位為**名單層總量**，非部門分解，故適用 **BR-12**（名單層總量端點對處長開放）而**非** BR-13（處長不顯示全部門合計列）。`days[].orgTotal` / `deptAssignedTotal` / `gap` 之處長 `null` 分支係針對**部門矩陣脈絡下之全部門合計**，語意不同，維持原樣不動。此設計與 [F120 AC-LIST-11](F120-stage0-list-estimate-overview.md)（處長全量可見名單層總量）之裁決一致，並使 [`I-F120-03`](F120-stage0-list-estimate-overview.md) 之跨區塊嚴格相等在**處長角色下亦可斷言**（若為 `null` 則處長情境無從比對）。**UI 不受影響**：處長之 KPI 卡片本即改顯示「轄區本月件數」、部門負載總覽表尾合計列本即不渲染（BR-13），故本欄位對處長為「回傳但不呈現」。
+>
+> **⚠️ 禁止之替代作法**：**不得**改由前端以 `listLists()` 之 `estimateCases` 自行加總（理由見 §24.2 之實作陷阱），亦**不得**保留顯示層之 `Σ_d days[].orgTotal` 作為 fallback——兩者皆會產生與後端不同之排除集合或捨入語意。
+
+**AC-DEPT-3（月層級全名單總量為精確和；v2.1 新增）**
+- **Given** 全名單彙總模式，角色為部長 / Admin
+- **When** 頁面顯示「本月全名單總量」KPI 或部門負載總覽表尾之「全名單總量」合計列
+- **Then** 其值 = `Σ_{L ∈ S} list_total[L]`（整數精確和，已排除估算未取得之名單），**非** `Σ_d Math.round(org_real[d])`
+- **And** 兩個顯示落點顯示同一個數值，且**皆直接取用**後端回應欄位 `orgMonthTotal`（型別 `number`，§16.5.5）——顯示層**不得**自行以 `Σ_d days[].orgTotal` 或 `listLists()` 之 `estimateCases` 加總
+- **And** 該值與 [F120](F120-stage0-list-estimate-overview.md) 之「預估數量總計」**嚴格相等**（同一模式、同一 `ym`、同一名單集合）
+- **And** 每日列之「全名單總量」欄（`days[].orgTotal`）**維持**逐日捨入不變；下游**不得**斷言「月層級值 = 各日顯示值之和」
+- **And** 單一名單鑽探模式下退化為該名單之 `list_total`；處長模式下本值**仍為數字**（全公司口徑，比照 BR-12 之名單層總量開放），但前端不渲染（處長 KPI 改顯示「轄區本月件數」、表尾合計列不顯示，BR-13 之部門合計隔離維持不變）
+
 ---
 
 ## 17. 範圍隔離層：處長唯讀 dept scope（US-168）
@@ -570,7 +668,10 @@ gap_real[d] = org_real[d] − Σ_D dept_real[d][D]                   // 因 Σ_D
 - **Given** `businessRole='section_chief'`
 - **When** 導航至 `/assignment/estimate`
 - **Then** 頁面成功載入（HTTP 200，不被導向無權限頁；取消 v1.x `DirectorGuard` 完全封鎖）
-- **And** 顯示「唯讀模式：僅顯示您轄區部門（{dept_name}）的預估資料」banner，且不顯示任何可修改設定之操作按鈕
+- **And**（**v2.2 修訂**）顯示「**唯讀模式：部門相關區塊僅顯示您轄區部門（{dept_name}）的預估資料**」banner，且不顯示任何可修改設定之操作按鈕。
+  **「部門相關區塊」為必要限定語，不得省略**：[F120](F120-stage0-list-estimate-overview.md) 於同頁新增之「名單基礎預估數量總覽」為**全公司名單層總量、不受轄區限制**（[F120 AC-LIST-11](F120-stage0-list-estimate-overview.md)）；若本 banner 仍寫「僅顯示您轄區部門的預估資料」，即成為**假敘述**，且與該區塊之「全公司口徑」標示**正面矛盾**——矛盾會直接抵消 AC-LIST-11 之防呆效果。
+  **And** 說明句須補一句界定範圍，指出頁面最下方之「名單基礎預估數量總覽」為全公司名單層總量、不受轄區限制（逐字文案以 `prototypes/30-stage0-estimate.html` 為 ground truth）。
+  **And** 本項**僅為文案變更**：banner 之版面、顏色、顯示條件（`businessRole = section_chief`）與既有兩區塊之行為**全數不變**
 
 **AC-SCOPE-2（只見轄區部門列；US-168 AC-2 / AC-6）**
 - **Given** 處長 scope = `'XVE1'`
@@ -656,6 +757,7 @@ active_headcount[D]    = COUNT( ob_emphire WHERE TRIM(dept_code) = D AND resign_
 | 表格欄位 | `calendar_date` / `ratioPerMille` / `isWorkday` / `skipReason` | 「日期」、「星期」、「預估件數」、「累積件數」；工作日 / 休息日欄標題用「日別」或等效 |
 | 派案日曆下拉 | 「工作日來源」+ `weekday` / `weekday-only` / `all` | 標籤改「派案日曆」；選項：「只排上班日」(`weekday`) / 「也排連假日（週末除外）」(`weekday-only`) / 「連週末都排（全月每天）」(`all`)；功能行為不變，附簡短說明 |
 | 唯讀試算說明 | 「Daily estimate 不寫入 ob_assign_set」 | 「此試算不觸發正式分派，僅供工作量評估參考」 |
+| **處長唯讀提示（v2.2 新增）** | 「唯讀模式：**僅顯示您轄區部門**（X）的預估資料」 | 「唯讀模式：**部門相關區塊**僅顯示您轄區部門（X）的預估資料」＋說明句補「頁面最下方的『名單基礎預估數量總覽』為全公司名單層總量，不受轄區限制」。**「部門相關區塊」為必要限定語**，省略即與 [F120 AC-LIST-11](F120-stage0-list-estimate-overview.md) 之全公司口徑標示正面矛盾（AC-SCOPE-1） |
 | Pool 偏低警示 | 含 `OBPOOLDATA` / `STAGE0_POOL_WARN_THRESHOLD` | 「系統資料池筆數偏低（目前 N 筆），可能影響估算準確度，請聯繫 IT 確認資料是否已完成更新」 |
 
 **AC-TERM-1**：v2.0 頁面任意可見位置全文掃描，§19.1 黑名單字串均不出現（US-170 AC-1，自動化 regression）。
@@ -704,6 +806,7 @@ dev 資料乾淨不代表 production ETL 後一致。架構師須於 production 
 | BR-14 | `getScopeDeptCode` 回 `null` → 200 空結果 + 友善訊息，不 403、不 500（US-168 AC-5） |
 | BR-15 | 人均每日件數 = `round(dept_daily_count ÷ active_headcount)`；`active_headcount = COUNT(ob_emphire WHERE TRIM(dept_code)=D AND resign_date IS NULL)`；headcount=0 → 「—」+ 警告（不除零）；休息日 → 「—」（US-169） |
 | BR-16 | 警告通道：headcount=0 → `DEPT_HEADCOUNT_ZERO`（per dept）；處長 scope=null → `SCOPE_UNRESOLVED`；超門檻為前端顯示態（非後端警告）。警告以 response `warnings[]`（結構性，非錯誤碼）承載，沿用月名單分派 `warning_summary` 既有慣例，**不**擴 `assignment_audit_log.action` enum（落點細節見 §23 OQ-F049-07） |
+| **BR-17（v2.1 新增）** | **月層級「全名單總量」＝ `Σ_L list_total[L]` 整數精確和**（§16.5 / AC-DEPT-3），由後端以 top-level 回應欄位 **`orgMonthTotal`**（欄位名固定；值＝對 `resolveListTotals(ym, listNo?)` 之 `listTotals` Map reduce，AD-E07-51 §4.5 / `I-LISTOVW-SHARED-SOURCE-01`）承載；適用於 KPI 卡片與部門負載總覽表尾合計列兩處，兩處須**直接取用該欄位**且顯示同一值；**禁止**以 `Σ_d Math.round(org_real[d])` 或前端 `estimateCases` 自行加總。每日列之 `orgTotal` 與月缺口 `gap_month` 之定義**維持不變**（逐日捨入 / 逐日累計），故「月層級總量 = 各日顯示值之和」與「月層級總量 = 部門月合計 + 月缺口」兩式**不**嚴格成立，殘差 ≤ 工作日數 × 0.5，屬預期、不做尾差調整（§16.5.4）。本規則使 [F120 `I-F120-03`](F120-stage0-list-estimate-overview.md) 之跨區塊嚴格相等成立 |
 
 ---
 
@@ -726,6 +829,8 @@ dev 資料乾淨不代表 production ETL 後一致。架構師須於 production 
 | 處長 scope=null | 200 空結果 + 友善訊息，非 403 / 500 | AC-SCOPE-5 / BR-14 |
 | 處長轄區某 obdeptid 在 `ob_dept_pct` 無該名單比例 | 該名單對該部門貢獻 0；若處長轄區當月全無比例，部門列為空、顯示缺口/空狀態 | §17 / BR-13 |
 | per-list COUNT 逾時（10s） | `STAGE0_ESTIMATE_TIMEOUT`（沿用 BR-3 / AC-5）；全名單彙總之逐名單 COUNT 效能風險見 §23 OQ-F049-02 | BR-3 |
+| **月層級總量 ≠ 各日顯示值之和（v2.1）** | **預期行為**：月層級採精確和、每日採逐日捨入，殘差 ≤ 工作日數 × 0.5；不做尾差調整、不視為缺陷 | AC-DEPT-3 / BR-17 / §16.5.4 |
+| **某名單估算未取得（`STAGE0_LIST_ESTIMATE_PARTIAL`）時之月層級總量** | 該名單自 `Σ_L list_total[L]` 排除（與部門投影之排除集合相同），故月層級總量與部門區塊、[F120](F120-stage0-list-estimate-overview.md) 三者之排除集合一致 | §16.5.1 / BR-17 |
 
 ### 22.3 US AC-ID ↔ F049 AC 對照（可追溯性）
 
@@ -761,6 +866,7 @@ dev 資料乾淨不代表 production ETL 後一致。架構師須於 production 
 | US-170 | AC-5/AC-6 | §19.3 / AC-TERM-1 |
 | US-170 | AC-7 | §19.3 / AC-TERM-3 |
 | US-170 | AC-8 | §19.3 / AC-TERM-4 |
+| **US-184**（經 [F120](F120-stage0-list-estimate-overview.md)） | **AC-LIST-09 / TC-184-07** | **§16.5 / AC-DEPT-3 / BR-17（v2.1）**——本頁月層級總量改精確和，使 F120 之 `I-F120-03` 跨區塊嚴格相等成立 |
 
 ---
 
@@ -777,3 +883,52 @@ dev 資料乾淨不代表 production ETL 後一致。架構師須於 production 
 | OQ-F049-07 | Part B 警告（`DEPT_HEADCOUNT_ZERO` / `SCOPE_UNRESOLVED`）落點：response `warnings[]` 結構欄位 vs 既有 `warning_summary` vs 擴 audit enum？ | 走 response `warnings[]` 結構欄位（不擴 `assignment_audit_log.action` enum、不新增錯誤碼），與月名單分派 `warning_summary` 慣例一致 | 待 architect |
 
 > **架構師範疇明示**：上述 OQ 之最終裁定與 `architecture-spec.md` / AD-E07-8 / AD-E07-29 / `data-model.md` 之對應更新由 system-architect 承載；本 feature 檔僅定義行為契約、不變量與資料來源映射，**不**寫 SQL / guard 實作 / 端點程式碼 / migration / test。
+
+---
+
+## 24. v2.1 受影響之既有實作與測試落點（僅定位，本版不改 code / test）
+
+> **本節為 spec 層之影響清單，供 tdd-implementation / test-generator 接手。** spec-writer **未**修改任何程式碼、測試或 prototype。行號為 2026-08-20 之現況，接手時請重新定位。
+> **實作路徑已定案**（[AD-E07-51](../implementation-log/AD-E07-51-f120-list-estimate-overview.md) §4.5 + §4.3，team lead 已核准）：後端新增 `orgMonthTotal`、前端改為直接取用。下表已依此路徑撰寫。
+
+### 24.1 後端（新增；純加性）
+
+| # | 落點 | 說明 |
+|---|---|---|
+| 1 | `apps/api/src/modules/assignment-list/stage0-estimate.service.ts` — 抽出私有方法 `resolveListTotals(ym, listNo?)`（現行邏輯位於 `computeDeptEstimate` 約 `:536-573`） | AD-E07-51 §4.3；供 `computeDeptEstimate` 與 [F120](F120-stage0-list-estimate-overview.md) 之 `computeListEstimateOverview` **共同呼叫**（`I-LISTOVW-SHARED-SOURCE-01`）。**純重構、行為不變** |
+| 2 | 同檔 `Stage0DeptEstimateResult` interface（約 `:143-157`） | 新增 top-level **`orgMonthTotal: number`**（欄位名固定、**非 nullable**；所有角色皆回傳全公司口徑之名單層總量，§16.5.5「處長分支」） |
+| 3 | 同檔 `computeDeptEstimate()` 之 return（約 `:730-745`） | 值 = 對 #1 回傳之 `listTotals` Map 之全部 value 做一次 reduce——**Map 已存在**，不需新查詢、不觸發任何額外 COUNT，**無效能影響**，不違反 §22.1 `I-RUN-EST-01` |
+| 4 | `apps/web/src/api/assignment-run.ts`（dept-estimate response 型別，約 `:121` 附近之 `orgTotal` 註解所在介面） | 同步新增 `orgMonthTotal` 欄位型別 |
+
+### 24.2 前端（必須修改；行為變更之直接落點）
+
+| # | 落點 | 現況 | v2.1 後應為 |
+|---|---|---|---|
+| 5 | `apps/web/src/pages/assignment/stage0-estimate-page.tsx:227-232`（本地 `orgMonthTotal` useMemo） | `data.days.filter(isWorkday).reduce((s, d) => s + (d.orgTotal ?? 0), 0)`——逐日捨入值之和 | **移除整段客戶端 reduce**，改為直接取用回應欄位 **`data.orgMonthTotal`**（同名，故下游兩個顯示處之引用可維持不變；資料未載入時沿用既有 `hasActiveList` 空狀態顯示「—」）。**不得**保留原 reduce 作為 fallback |
+| 6 | 同檔 `:612-614`（KPI 卡片 `kpi-total-cases`「本月全名單總量」） | 顯示 #5 之值 | 值來源同 #5；標籤、`hasActiveList` 空狀態、處長分支（改顯示「轄區本月件數」）**均不變** |
+| 7 | 同檔 `:799-816`（tfoot `org-total-row`「全名單總量」合計列） | 顯示 #5 之值 | 值來源同 #5（§16.5.3：兩處須同值、皆直接取用欄位） |
+| 7a | **（v2.2）** 同檔 `:353-360`（`section-chief-readonly-banner` 標題與說明句） | 「唯讀模式：僅顯示您轄區部門（X）的預估資料」＋「…您看到的是轄區部門的每日工作量與人均負荷。」 | 標題改「唯讀模式：**部門相關區塊**僅顯示您轄區部門（X）的預估資料」；說明句補界定範圍句（逐字以 `prototypes/30-stage0-estimate.html:208` 為 ground truth）。**僅改文字**，不動 class / 顯示條件 / 版面 |
+
+> **⚠️ 實作陷阱（務必避免）**：**不可**改由前端以 `listLists()` 之 `estimateCases`（`apps/web/src/api/assignment-list.ts:90`）自行加總。該欄位僅為**物化值** `stage0_estimate_count`，`NULL` 之名單在前端會貢獻 0，而後端 `listTotals` 對同一批名單會走 fallback dry-run 取得真實值——兩者**排除集合不同**，會直接破壞 §16.5.1 之「排除集合一致」與 [F120 `I-F120-03`](F120-stage0-list-estimate-overview.md)。月層級總量**必須**取自後端 `resolveListTotals()` 之 `listTotals`，並以 `orgMonthTotal` 承載（AD-E07-51 §4.3 / §4.5、`I-LISTOVW-SHARED-SOURCE-01`；原 [F120 OQ-F120-A3](F120-stage0-list-estimate-overview.md) 已據此裁定）。
+
+### 24.3 必須修改之既有測試
+
+| # | 測試 | 現況斷言 | 影響 |
+|---|---|---|---|
+| 8 | `apps/web/src/pages/assignment/__tests__/stage0-estimate-page.test.tsx:333-336`（`TS-F049-FE-001` 系列，`org-total-row` 期望 `'200'`） | 由 mock 之 `days[].orgTotal = 200` 推導 | fixture 改為設定 `orgMonthTotal`；**期望值本身之業務意圖不變** |
+| 9 | 同檔 `:277-288`（`TS-F049-AGG-003`：0 active 名單 → `kpi-total-cases` 顯示「—」） | `hasActiveList` 為 false 時顯示「—」 | 空名單路徑不經加總，**預期仍通過**；仍須複跑確認（另建議補一條 `orgMonthTotal = null`〔處長〕→ 不渲染之案例） |
+| 10 | 同檔 fixture helper（約 `:95-115` 之 `workday()` / `deptResp()`，`orgTotal: org`） | 僅構造 `days[].orgTotal` | 需可設定 top-level `orgMonthTotal`（`number`） |
+| 11a | **（v2.2）** `apps/web/src/pages/assignment/__tests__/stage0-estimate-page.test.tsx:391`（`section-chief-readonly-banner` 存在性斷言） | 僅斷言 banner 存在，未斷言文字 | **預期仍通過**；建議**新增**一條逐字斷言，鎖住「部門相關區塊」限定語不被還原（該限定語為 AC-SCOPE-1 之必要條件） |
+| 11 | `apps/api/src/modules/assignment-list/__tests__/stage0-dept-estimate.service.spec.ts`（**新增**，非修改） | 現無 top-level 月層級斷言 | 建議補：`orgMonthTotal === Σ 名單 stage0_estimate_count`（精確）、**處長與部長同參數下該值相同**（非 `null`，§16.5.5「處長分支」）、單一名單模式退化為該名單值、某名單逾時時該名單自和中排除 |
+
+### 24.4 **不**受影響（明列，避免誤改）
+
+| 落點 | 理由 |
+|---|---|
+| `stage0-estimate.service.ts` 之 `days[].orgTotal` / `deptAssignedTotal` / `gap` 逐日計算與 `Math.round`（約 `:617-675`） | §16.2 / §16.3 完全不變 |
+| `apps/api/src/modules/assignment-list/__tests__/stage0-dept-estimate.service.spec.ts` 全部 `orgTotal` 斷言（`:248` / `:272` / `:348` / `:376` / `:397` / `:414` / `:454` / `:470` / `:566` / `:732` / `:751` / `:787` / `:815` 等） | 全為**每日**值斷言，逐日捨入未變；該檔既有之「不 assert Σ 部門 === orgTotal」容差註記（`:8` / `:435`）亦維持有效 |
+| `stage0-estimate-page.tsx:233-239`（`gapMonth` useMemo） | 月缺口維持 `Σ_d gap[d]`（§16.5.4 明訂不改為相減） |
+| `stage0-estimate-page.tsx:1041` / `:1180-1190`（每日列 / 累積之 `d.orgTotal`） | 每日呈現層不變 |
+| `apps/api/src/modules/assignment-overview/**`（F111 分派總覽）與 `apps/web/src/pages/assignment/_components/overview/dialing-volume-panel.tsx:31-34` | 僅消費**每日** `orgTotal`（處長 fallback 為 `Σ deptCells.cases`），無月層級「全名單總量」KPI |
+| `prototypes/30-stage0-estimate.html:517`（`orgMonthTotal = lists.reduce(...)`） | **本即為精確和**，與 v2.1 一致；prototype 無須修改（現行 React 為與 prototype 脫節之既有落差） |
+| `docs/stories/**`（US-184 TC-184-07） | 原文即「兩者相等」，裁決後無須改動（product-analyst 之檔） |
