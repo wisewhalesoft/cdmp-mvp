@@ -1,8 +1,8 @@
 ---
 spec-id: CDMP-OQ
 title: 待決事項與開放問題
-version: "2.9"
-date: 2026-08-18
+version: "2.15"
+date: 2026-08-20
 status: Draft
 ---
 
@@ -520,10 +520,93 @@ status: Draft
 
 ---
 
+## F120 M01 Stage 0「名單基礎預估數量總覽」區塊（2026-08-20）— ⚠️ DRAFT，待人工審閱閘
+
+> 本節對應 [F120 v1.0](features/F120-stage0-list-estimate-overview.md)（依已定案之 **US-184 v1.1** 撰寫；US-184 之 14 AC / 16 TC ＋ 業務主管三項裁決為最終業務契約，本輪**未修改** US-184）。
+> **業務層問題已全數關閉**（OQ-184-01 分組歸屬 / OQ-184-02 處長可見性 / OQ-184-04 分組佔比，均於 2026-08-20 裁決並落入 AC-LIST-06 / AC-LIST-11 / AC-LIST-08）。以下為 spec 層裁定、交付其他 agent 之項目，以及本輪查證發現之落差。
+
+### (A) spec-writer 裁定 — 待人工確認
+
+| ID | 問題 | 裁定 | 狀態 |
+|----|------|------|------|
+| OQ-F120-A | US-184 AC-LIST-06 稱「估算逾時名單不受互斥完備不變量約束」，但 AC-LIST-10 要求逾時名單**仍列於清單**（必然落在某組），AC-LIST-08 又稱「空分組不顯示」而 AC-LIST-10 稱「全數逾時之分組仍須顯示」——三者字面互相打架 | **分組歸屬涵蓋全部名單**（含無估算值者）；「另計」解讀為「不計入**件數**小計」而非「不歸屬分組」。拆為兩個獨立計數：`listCount`（含無估算值 → 名單數、**空分組隱藏判定**）與 `subtotalCount` / `totalEstimatedCount`（排除無估算值 → 件數小計、總計、**佔比分母**），使三條 AC 同時成立且口徑一致（[F120 §12 G-6 / AC-LIST-06a](features/F120-stage0-list-estimate-overview.md)） | ⚠️ 待確認（不改變任何業務結果） |
+| OQ-F120-B | US-184 AC-LIST-07「依 `pooldata_field_option` 既有登錄順序」未定義同 `display_order` 時之次序 | **排序鍵定為 `display_order ASC, option_value ASC`**——與既有 `PooldataFieldOptionService.listOptions()` 之排序完全相同，故為與既有行為對齊而非新規則。**必要性**：現行 seed 之 `prod_kind` 三筆 `display_order` 皆為 `0`，僅靠 `display_order` 排序非決定性（[F120 §12 G-2 / §5.3](features/F120-stage0-list-estimate-overview.md)） | ⚠️ 待確認 |
+| OQ-F120-C | US-184 TC-184-12 要求條件欄文字與名單詳情 Drawer / 名單定義列表 Kanban 卡片「逐字元相同」 | **比較對象限定為「單一條件之描述字串」與「名單詳情 Drawer」**。Kanban 卡片本即只取前 2 筆條件 ＋ `+N` 摘要，整格比較必然失敗，且會逼本區塊複製其截斷邏輯，與 AC-LIST-04「須完整呈現全部條件」直接矛盾（[F120 §12 G-4 / AC-LIST-04](features/F120-stage0-list-estimate-overview.md)） | ⚠️ 待確認 |
+| OQ-F120-D | US-184 AC-LIST-10 以「估算逾時」為觸發條件 | **判定基準改述為「該名單不存在於 `listTotals`（無估算值）」**。既有 `computeDeptEstimate` 之 `catch` 涵蓋逾時以外之失敗原因（`ASSIGNMENT_LIST_NOT_FOUND`、查詢錯誤等），以「逾時」為判定會使非逾時原因之名單被誤顯示為 0——正是專案既有教訓所禁。使用者可見文案**沿用既有訊息不改**（[F120 §12 G-5 / BR-7](features/F120-stage0-list-estimate-overview.md)） | ⚠️ 待確認 |
+
+### (B) ✅ 已裁決（原阻塞項，2026-08-20 使用者拍板）
+
+| ID | 問題 | 建議 | 狀態 |
+|----|------|------|------|
+| **OQ-F120-B1** | **[F049](features/F049-stage0-daily-estimate.md) KPI「本月全名單總量」現行為 `Σ_{工作日 d} Math.round(orgTotal[d])`（每日先捨入再相加），與名單總量精確和 `Σ_L list_total[L]` 之間存在 ≤ 工作日數 × 0.5 件之殘差**（20 個工作日約 ±10 件；實數層兩者恆等，殘差純由逐日捨入產生）。US-184 AC-LIST-09 / TC-184-07 之字面要求「兩者數值相等」在一般情形下**不成立**，照字面寫嚴格相等斷言將產生間歇性紅燈並被誤判為 F120 缺陷 | **首選：修正 F049 之 KPI 算式改用 `Σ_L list_total[L]` 精確和**——該 KPI 語意本就是「本月名單總量」而非「各日顯示值之和」，每日捨入屬呈現層需要、不應污染月層級 KPI；改動極小，且與 [F049 §16.3](features/F049-stage0-daily-estimate.md)「不做尾差調整」之精神不衝突（後者針對**部門格**）。<br>**備選**：F049 不動，TC-184-07 改容差斷言 `\|F120 總計 − F049 KPI\| ≤ ceil(工作日數 / 2)` 並於 UI 說明差異來源。<br>**未拍板前**：F120 AC-LIST-09 已寫為「同源不變量 `I-F120-03` ＋ 顯示值容差」，**不得**寫嚴格相等斷言（[F120 §12 G-1](features/F120-stage0-list-estimate-overview.md)）<br><br>**✅ 裁決（2026-08-20，使用者 / team lead）：採首選——F049 KPI 改精確和。** 已落地為 [F049 v2.1](features/F049-stage0-daily-estimate.md)：新增 §16.5（月層級彙總定義 + 殘差說明 + 兩個顯示落點）、AC-DEPT-3、BR-17；§14.3 契約新增 `orgMonthTotal`；**§24 列出受影響之既有實作與測試落點**（spec-writer 僅定位、未改 code）。每日顯示值、§16.3 捨入規則與月缺口 `Σ_d gap[d]` **維持不變**，故「月層級總量 = Σ 各日顯示值」「= 部門月合計 + 月缺口」兩式仍不嚴格成立（殘差 ≤ 工作日數 × 0.5，屬預期）。[F120 v1.1](features/F120-stage0-list-estimate-overview.md) 據此將 AC-LIST-09 / `I-F120-03` / TC-184-07 收緊為**嚴格相等**。**併同查證**：`prototypes/30-stage0-estimate.html:517` 本即為精確和，本次修正同時回復 prototype fidelity，prototype 無須修改。<br><br>**實作路徑（[AD-E07-51](implementation-log/AD-E07-51-f120-list-estimate-overview.md) §4.5 + §4.3，team lead 核准）**：後端 `Stage0DeptEstimateResult` 新增 top-level 欄位 **`orgMonthTotal`**（欄位名固定），值＝對共用方法 `Stage0EstimateService.resolveListTotals(ym, listNo?)` 之 `listTotals` Map 做一次 reduce；前端 KPI 與合計列**直接取用**、移除客戶端 reduce。**純加性、零額外查詢**（Map 本即已建立），不改動 F049 既有逐日 / 逐部門呈現。已寫入 [F049 §16.5.5](features/F049-stage0-daily-estimate.md) | ✅ 已裁決 |
+
+### (C) 交 system-architect — ✅ A1~A4 已由 [AD-E07-51](implementation-log/AD-E07-51-f120-list-estimate-overview.md) §4 全數裁定（2026-08-20）
+
+> 下表保留原題目與 spec-writer 建議預設供溯源；裁決結果見末欄。新增 **OQ-F120-A5**（豁免條件）為追蹤中項目。
+
+| ID | 項目 | 建議預設 | 裁決結果 |
+|----|------|---------|---------|
+| **OQ-F120-A1** | **端點拓樸**（承接 US-184 **OQ-184-05**）：新增獨立唯讀端點，或擴充既有 `GET /assignment/stage0/dept-estimate` 一併帶出名單層清單？是否需為「已解析分組」新增回傳欄位？ | **新增獨立端點**。理由：①本區塊之授權語意與部門矩陣**相反**（無 dept scope），塞進同一回應會造成「同一回應中一部分 scoped、一部分 unscoped」，是安全邊界最易出錯之形態②本區塊不含日曆維度，與 `days[]` 無關③可獨立降級（部門矩陣失敗不致連帶讓名單總覽空白）。**但** `listTotals` 須共用同一段邏輯（見 A3），否則違反 `I-F120-03`。已解析分組**建議**回傳（見 A2） | ✅ **採建議**：新增 `GET /api/v1/assignment/stage0/list-estimate-overview`（AD §4.1）。併同查證既有 `computeDeptEstimate` 之 `lists` / `listTotals` 本就未套 scope 過濾，與無 scope 語意天然對齊 |
+| OQ-F120-A2 | **運算歸屬**：`GROUP-RESOLVE` / 小計 / 佔比於後端計算並回傳 [F120 §6.1](features/F120-stage0-list-estimate-overview.md) 之 shape，或由顯示層計算？ | **後端計算**。理由：避免顯示層重複實作運算子 fallback（違反 [F119 BR-11](features/F119-categorical-text-match-operators.md) 單一落點）、使 TC-184-13~15 可於 API 層斷言、與同頁部門矩陣之既有分工一致。若改顯示層須說明可測落點並確保兩端 `resolveCategoricalOperator` 語意一致 | ✅ **採建議**：後端 `computeListEstimateOverview()`；新增**純函式** `resolveListGroup()`（`stage0-list-group-resolve.ts`）匯入既有 `resolveCategoricalOperator()`，不新建第三個 fallback 落點（AD §4.2 / `I-LISTOVW-OPERATOR-SINGLE-SOURCE-01` / `I-LISTOVW-PURE-GROUP-RESOLVE-01`） |
+| OQ-F120-A3 | **`listTotals` 共用機制**：本區塊與部門矩陣如何保證取自同一份 `listTotals`（`I-F120-03`）？ | 抽出 `resolveListTotals(ym, listNo?)` 單一 method 供兩區塊呼叫；物化值路徑天然穩定，僅 fallback 路徑存在逾時不確定性（屬 AC-LIST-10 既有降級語意） | ✅ **採建議**：抽出 `Stage0EstimateService.resolveListTotals(ym, listNo?)` 私有方法，由 `computeDeptEstimate` 與 `computeListEstimateOverview` 共同呼叫 → **`I-F120-03` 依建構成立**（AD §4.3 / `I-LISTOVW-SHARED-SOURCE-01`）。同一方法亦供 F049 之 `orgMonthTotal` 使用 |
+| OQ-F120-A4 | **效能**：全名單彙總下若多筆名單無物化值，本區塊與部門矩陣可能各觸發一次 fallback dry-run COUNT（重複成本） | 與 A3 同解（共用 `listTotals` 即免除重複）；不另引入快取層，沿用既有 `STAGE0_DEPT_ESTIMATE_TIMEOUT_MS`（預設 30s）之降級語意 | ✅ **採建議**：不新增快取層（AD §4.4 / `I-LISTOVW-NO-NEW-CACHE-01`）；重複成本為有界之固定倍率，非隨資料量增長之無界成本 |
+
+#### 已定案（原追蹤項）
+
+| ID | 項目 | 裁決結果 |
+|----|------|---------|
+| **OQ-F120-A5** | **AC-LIST-09 跨區塊嚴格相等之邊界條件**：兩端點各自執行 fallback dry-run 而其中一次逾時時，兩側精確和可能不一致，需定義邊界與測試層處置 | ✅ **已定案（2026-08-20，[AD-E07-51](implementation-log/AD-E07-51-f120-list-estimate-overview.md) **v1.2** §4.5.1，不變式 `I-LISTOVW-STRICT-EQUALITY-BOUNDARY-01`）**：**充分條件＝`excluded(dept-estimate) === excluded(list-estimate-overview)`**（兩端因無估算值而被排除之名單編號集合相同）⟹ 嚴格相等；`unestimatedListCount = 0` 僅為其**特例**，**兩者非等價**（排除集合相同但皆非空時，縮減後之總和**仍**嚴格相等）。**測試層**：TC-184-07 於測試套件中**無條件斷言嚴格相等**（`expect(deptEstimate.orgMonthTotal).toBe(listOverview.totalEstimatedCount)`），**不得**加 `unestimatedListCount` 或任何降級旗標分支——分歧之唯一成因為兩個獨立 HTTP 請求對同一 fallback 查詢因真實 DB 負載產生之 timeout 分歧（需真實網路時序競爭），同一測試行程內兩次呼叫套用同一組 fixture / mock 時兩端排除集合恆相等（**含刻意建構之 AC-LIST-10 部分降級情境**）；加分支反而**放棄驗證力道**。**生產環境**之 timeout 分歧窗口列為**已知殘留風險**（非靜默錯誤，兩端皆有既有 warning 標示），根因處置為提高 [F088](features/F088-ready-stage-summary.md) 物化覆蓋率，**不**在讀取端加同步 / 快取（維持 AD §4.4 / `I-LISTOVW-NO-NEW-CACHE-01`）。已寫入 [F120 v1.2](features/F120-stage0-list-estimate-overview.md) AC-LIST-09（充分條件＋測試層指示＋生產殘留風險＋兩組關係表）、`I-F120-03`、§11 TC-184-07 |
+
+### (D) 交 ui-ux-designer — ✅ U1 / U2 / U3 全數定案（2026-08-20），並已編碼進 AC
+
+> prototype `prototypes/30-stage0-estimate.html` 已完成（1072 → 1633 行）；設計報告見 [`ui-ux-design-overview.md` 附錄 D](../ui-ux-design-overview.md)。
+> **關鍵處置**：定案原僅存在於 prototype 與設計報告，而 test-generator 只讀 spec ＋ prototype → **未入 spec 即無法被斷言**；[F120 v1.3](features/F120-stage0-list-estimate-overview.md) 已全數編碼為 AC 條文。
+
+| ID | 議題 | 定案結果 | 落入之 AC |
+|----|------|---------|----------|
+| **OQ-F120-U1** | ①條件欄串接／截斷／展開 ②處長語意標示 ③視覺排序與可摺疊 | ①每筆條件**各自一個標籤、不串接**＋底部「且」關係說明句；截斷＝**前 2 筆 ＋「＋N 項」**；展開＝**就地展開之真正 `<button>`**、焦點回到觸發按鈕、**禁 hover / tooltip / 浮層**　②**三個必要觸點**（標題徽章／表格上方說明條／**總計列後綴**），觸發條件 `role === 'section_chief'` **與有無轄區無關**　③維持既有兩區塊之後（AC-LIST-01 原位置不動）；可摺疊、預設全展開、附一鍵切換＝版面決策 | AC-LIST-04 / AC-LIST-11 |
+| **OQ-F120-U2** | 單一名單鑽探之佔比呈現 | **保留欄位、全格「—」、欄標題下加灰字副標**；明訂**不得 `100%`**（同義反覆＋會被誤讀為「佔全月總量 100%」）、**不得抽欄**（破壞表頭一致性、增加版面分支） | AC-LIST-08 |
+| **OQ-F120-U3** | 無估算值視覺標記與 [F119 AC-13](features/F119-categorical-text-match-operators.md) 收斂 | **完全沿用同頁既有逾時語彙**（琥珀 ＋ `hourglass`），不新增顏色 / 圖示；**列／分組／區塊三個層級**皆就地指認；逐筆訊息仍只由頁首既有 warning 承載 | AC-LIST-10（含 spec-writer 額外補入之**區塊層級「不完整」徽章**） |
+
+### (F) 殘留盲區：ui-ux 已決定但**未入 spec**（不阻塞；供 team lead 裁決是否補 AC）
+
+> 判準：**test-generator 是 blind 的，只讀 spec ＋ prototype**。下列項目只存在於 prototype 與設計報告，故 ring **不會**斷言；若下游改壞不會被擋下。
+
+| ID | 項目 | 現況與影響 | spec-writer 建議 |
+|----|------|-----------|-----------------|
+| **OQ-F120-BS1** | **分組摺疊之無障礙行為**（`<button>` ＋ `aria-expanded` ＋ `aria-controls`、重繪後焦點回到觸發按鈕、「全部收合／全部展開」一鍵切換） | [F120 AC-LIST-08](features/F120-stage0-list-estimate-overview.md) 已明說摺疊屬**版面決策、不另約束** → 完全不受 AC 保護。條件展開之同類行為**已**入 AC-LIST-04（因它牽涉「須能呈現全部條件」），故兩者保護程度不一致 | **建議補一條無障礙 AC**（涵蓋兩種摺疊：分組列與條件「＋N 項」），理由是本專案已有「hover/tooltip 走不到鍵盤與觸控」之明確立場，該立場只保護了一半 |
+| **OQ-F120-BS2** | 合成分組與未登錄代碼分組之**灰字說明句**（「同時指定 2 種以上產品類別的名單」／「未指定產品類別，或以文字比對方式指定的名單」／「此代碼尚未登錄於產品類別可選值清單」） | 使用者可見文字，無 AC。AC-LIST-06 已定義**歸屬規則**但未要求向使用者**解釋**分組含義 | 低優先。若下游刪除，業務仍能由分組名稱理解大意；建議列為 prototype-ground-truth 即可 |
+| **OQ-F120-BS3** | 區塊底部關於**佔比公式與「加總可能不等於 100%」**之說明句 | AC-LIST-08 規定「加總非 100% 屬預期、非缺陷」但**未要求告知使用者** → 使用者仍可能回報「為什麼不是 100%」 | 建議補一句 AC（成本極低，可省下重複的業務詢問） |
+| **OQ-F120-BS4**（＝ui-ux **D-Q1**） | `prototypes/27-list-definition.html` 之示範可選值標籤與正式 seed **不一致**（該檔寫「汽車新車」「其他商品」；`pooldata-field-option.json` 與 `28-scoring-config.html` 為「汽車」「一般商品」） | 本區塊採 **seed 值**，與 F120 分組標題定案一致；但 **TC-184-12 若以「兩份 prototype 逐字比對」實作即會失準**（React 端兩處共用同一解碼器，故落差只存在於原型層） | **需 team lead 指派修正 27 的示範標籤**；在此之前，TC-184-12 應以**同一解碼器輸出**為比較基準，而非跨原型檔比字串 |
+| **OQ-F120-BS5**（＝ui-ux **D-Q4**） | **[F049](features/F049-stage0-daily-estimate.md) 頁面層空狀態（AC-AGG-3「本月尚無啟用名單」）於 prototype 從未實作**——當月無名單時 KPI 仍顯示 0、部門表與月曆仍渲染整月 0 件 | **F120 之前就存在的 F049 落差**，非本 feature 造成；F120 自身之空狀態（AC-LIST-12）已實作 | **需 team lead 決定是否另開修補項**；F120 不承接 |
+| **OQ-F120-BS6**（＝ui-ux **D-Q5**） | 為讓三個區塊共用同一份名單集合（AC-LIST-02），prototype 之「名單篩選」下拉改為**由名單母體動態產生**（原為寫死 3 個 `<option>`） | 產生之選項文字與原本**逐字相同**（`{名稱}（{編號}）`），視覺零差異 | 告知性。若下游對該下拉有固定斷言，改為依母體產生後仍成立 |
+
+### (E) 本輪查證發現之既有落差（不阻塞 F120）
+
+| ID | 問題 | 處置 |
+|----|------|------|
+| OQ-F120-01 | **`ob_list_definition.prod_kind` 對「F119 文字比對運算子」與「完全未設定 `prod_kind` 條件」兩種情境皆衍生為空字串 `''`，表面結果無法區分**（`deriveBackwardCompatColumns()` 之條件為 `fieldType === 'categorical' && Array.isArray(values)`，文字運算子僅帶 `keyword`） | F120 以 **BR-1 / `I-F120-04`** 規避（分組判定唯一權威來源＝`condition_payload`，禁讀該欄位），並建議以 grep 反向斷言（TC-F120-E）。**本 spec 不主張修改 `deriveBackwardCompatColumns()`**——該函式服務 legacy 讀取端之向後相容，替文字運算子產生衍生值反而會製造誤導性假值（[F120 §12 G-3](features/F120-stage0-list-estimate-overview.md)） |
+| OQ-F120-02 | **`pooldata_field_option` 之 `prod_kind` 三筆（`01`/`02`/`03`）`display_order` 皆為 `0`** | 非缺陷但使「登錄順序」在單一排序鍵下非決定性。F120 以 `display_order ASC, option_value ASC` 規避（＝既有 `listOptions` 排序）。若日後業務透過 [F076](features/F076-manage-categorical-field-values.md) reorder 端點調整順序，本區塊分組順序會隨之改變——為 AC-LIST-05「白名單驅動」之**預期後果**，非缺陷 |
+| OQ-F120-03 | **Stage 0 部門估算端點之 `SCOPE_UNRESOLVED` / `DEPT_HEADCOUNT_ZERO` / `CALENDAR_EMPTY` 三碼與 `poolWarning = 'POOL_COUNT_LOW'` 仍未登錄於 [error-handling.md](error-handling.md)**（v1.20 banner 已自承） | F120 **不依賴**這些碼（僅用已登錄之 `STAGE0_LIST_ESTIMATE_PARTIAL`），本輪維持不動。補登建議併入 OQ-F119-05 所提之專責 pass |
+| OQ-F120-04 | **`STAGE0_LIST_ESTIMATE_PARTIAL` 之實際觸發範圍寬於 error-handling.md 所載之「估算逾時」**（`catch` 捕捉所有例外） | F120 以 BR-7 之判定基準改述規避（「不存在於 `listTotals`」），**未改**既有文案與登錄內容（避免文案 churn；逾時確為主因）。若日後要精確區分原因，屬 error-handling 專責 pass（[F120 §12 G-5](features/F120-stage0-list-estimate-overview.md)） |
+| OQ-F120-05 | **`docs/stories/overview.md` 與 E07 `epic-brief.md` 未登錄 US-184**（延續 v3.37 banner 第 ⑤ 點之既有落差，US-166~US-183 同樣未登錄） | 屬 product-analyst 範疇之既有文件債，本輪未回填 |
+| **OQ-F120-06** | **[F049](features/F049-stage0-daily-estimate.md) 頁面層空狀態（AC-AGG-3「本月尚無啟用名單，請先於名單定義頁建立並啟用名單」）於 `prototypes/30-stage0-estimate.html` **從未實作***。當月無啟用名單時，該頁 KPI 仍顯示 `0`、「部門負載總覽」仍渲染全部部門列、「部門每日分派明細」仍渲染整月每日 0 件，未出現 AC-AGG-3 所述之空狀態文案（ui-ux-designer 於 F120 原型實作期間查證，2026-08-20） | **既有落差，早於 F120，不由 F120 引入、亦不阻塞 F120**。F120 自身之區塊層空狀態（AC-LIST-12）**已完成**且不受本項影響——當月無名單時「名單基礎預估數量總覽」正確顯示空狀態文案且不渲染任何分組列／名單列／小計列／總計列（已於原型 `當月無啟用名單` 示範場景實測）。**本輪依 team lead 裁示不處理**：不在 prototype 30 補 F049 頁面層空狀態、不改動 [F049](features/F049-stage0-daily-estimate.md) 或 [F120](features/F120-stage0-list-estimate-overview.md) feature spec。**建議另立 story** 處理 F049 頁面層空狀態之補實作（範圍：prototype 30 之 KPI 區、部門負載總覽、部門每日分派明細三處於零名單時之呈現，以及對應之 React 落地）。**歸屬：ui-ux-designer（原型層呈現）＋ spec-writer（AC-AGG-3 之可斷言化）**。記錄人：ui-ux-designer（team lead 指派） |
+| **OQ-F120-07** | **`27a-list-create-draft.html` 與 `27b-list-edit-draft.html` 之 `FIELDS` 常數本應同源，但 `settle_src` 一筆的行尾註解 `// 不出現在 dropdown` **僅存在於 27a**、27b 無**（分岔位置：兩檔共用區段 offset 808；ui-ux-designer 於 F120 D-Q1 標籤修正時為驗證 F119 AC-18 而查獲，2026-08-20） | **既有落差，早於本輪，非本輪造成**——已以 `git show HEAD:` 取基準版比對確認基準版即分岔。**不影響 [F119](features/F119-categorical-text-match-operators.md) AC-18**：該不變式之邊界自檔內自述之 `renderCategoricalValueUI 與其下所有 helper` 區塊起算，本落差落在該邊界**之外**；實測該區塊於標籤修正前後兩檔皆 `identical=true`（前 24,815 B / 後 25,183 B，兩檔各自相等）。**與 F120 無關**。**本輪依 team lead 裁示只記錄不修**（此刻變更該二檔只會在即將進入實作的 diff 中加入無關雜訊）。**建議**：未來若進行 27a / 27b 全檔同源化（而非僅 AC-18 區塊）時一併補平。記錄人：ui-ux-designer（team lead 指派） |
+
+---
+
 ## 更新紀錄
 
 | 日期 | 變更內容 | 負責人 |
 |------|---------|--------|
+| 2026-08-20 | **新增 OQ-F120-07（既有落差追蹤項）**：27a / 27b 之 `FIELDS` 常數 `settle_src` 行尾註解僅存在於 27a。早於本輪、基準版即分岔；落在 F119 AC-18 自述邊界之外，該不變式改動前後皆成立；與 F120 無關。依 team lead 裁示只記錄不修，建議未來 27a/27b 全檔同源化時補平 | UI/UX Designer（team lead 指派） |
+| 2026-08-20 | **(D) 段 OQ-F120-U1 / U2 / U3 全數標 ✅ 已定案**並記錄結果與其**落入之 AC**（[F120 v1.3](features/F120-stage0-list-estimate-overview.md) 已將 ui-ux 定案編碼為 AC 條文，使 test-generator 可斷言）；**新增 (F) 殘留盲區段（OQ-F120-BS1~BS6）**——列出 ui-ux 已決定但未入 spec、故 ring 不會斷言之項目：分組摺疊無障礙行為／合成分組灰字說明句／底部佔比說明句／**D-Q1 prototype 27 示範標籤與 seed 不一致（影響 TC-184-12 實作方式）**／**D-Q4 F049 頁面層空狀態從未實作（既有落差）**／D-Q5 名單篩選下拉改動態產生 | Spec Writer Agent |
+| 2026-08-20 | **新增 OQ-F120-06（既有落差追蹤項）**：F049 頁面層空狀態（AC-AGG-3）於 `prototypes/30-stage0-estimate.html` 從未實作。早於 F120、不阻塞 F120；F120 區塊層空狀態（AC-LIST-12）已完成不受影響。依 team lead 裁示本輪不處理、不改 F049／F120 feature spec，建議另立 story | UI/UX Designer（team lead 指派） |
+| 2026-08-20 | **OQ-F120-A5 之裁決結果修正為 AD-E07-51 v1.2 §4.5.1 之精確版本**（取代先前之簡化寫法）：充分條件由「`unestimatedListCount = 0`」更正為「**兩端排除之無估算值名單集合相同**」（前者僅為其特例、非等價）；測試層指示由「不得寫成無條件嚴格相等」**反轉**為「**測試套件中無條件斷言嚴格相等、不得加降級旗標分支**」（測試環境下兩端排除集合恆相等，加分支會連帶跳過含 AC-LIST-10 部分降級情境之驗證）；生產環境 timeout 分歧窗口改述為**已知殘留風險**（根因處置＝提高 F088 物化覆蓋率，非讀取端加快取）。[F120](features/F120-stage0-list-estimate-overview.md) 已升 v1.2 同步 | Spec Writer Agent |
+| 2026-08-20 | **欄位命名最終裁決 ＋ OQ-F120-A5 關閉**：team lead 裁定月層級欄位名為 **`orgMonthTotal`**（prototype／前端既有變數同名、與 `days[].orgTotal` 同族），本檔所有引用同步；型別定為 `number`（非 nullable、所有角色皆回傳，適用 F049 BR-12 而非 BR-13）。**OQ-F120-A5 標 ✅ 已定案**（AD-E07-51 v1.1 §4.5.1 / `I-LISTOVW-STRICT-EQUALITY-BOUNDARY-01`：案例 A 穩態嚴格相等依建構成立／案例 B 過渡態 `unestimatedListCount > 0` 合法豁免，被排除端已由既有機制明示非靜默錯誤），已寫入 [F120 v1.2](features/F120-stage0-list-estimate-overview.md) AC-LIST-09 兩案表 ＋「兩組關係不得混淆」對照表 | Spec Writer Agent |
+| 2026-08-20 | **F120 節連帶更新（AD-E07-51 §4 裁決落地 + 實作路徑約束）**：(C) 段 **OQ-F120-A1~A4 全數標為 ✅ 已裁定**並補記裁決結果（獨立端點 `list-estimate-overview`／後端計算＋純函式 `resolveListGroup()`／`resolveListTotals(ym, listNo?)` 共用使 `I-F120-03` 依建構成立／不新增快取層）；**OQ-F120-B1 補記實作路徑**（後端新欄位 `orgMonthTotal`＝共用 Map reduce，前端直接取用，純加性零額外查詢，已寫入 F049 §16.5.5）；**新增追蹤項 OQ-F120-A5**——AC-LIST-09 嚴格相等於「兩端點 fallback dry-run 逾時不一致」情境之豁免條件待 AD-E07-51 §8 補定義，F120 已預留指向而未寫成無條件嚴格相等，test-generator 於補齊前不得撰寫 TC-184-07 最終斷言 | Spec Writer Agent |
+| 2026-08-20 | **OQ-F120-B1 已裁決並關閉**（使用者 / team lead）：採 F120 §12 G-1 首選主張——F049 月層級「全名單總量」改 `Σ_L list_total[L]` 精確和，落地為 [F049 v2.1](features/F049-stage0-daily-estimate.md)（§16.5 / AC-DEPT-3 / BR-17 / §14.3 `orgMonthTotal` / §24 影響清單）；[F120 v1.1](features/F120-stage0-list-estimate-overview.md) 之 AC-LIST-09 / `I-F120-03` / TC-184-07 同步收緊為嚴格相等。F120 節之 (B) 段由「🔴 阻塞性待裁」改為「✅ 已裁決」。**F120 對 team lead 已無殘留待裁項目**（剩餘為 architect 4 項、ui-ux 3 項之 HOW） | Spec Writer Agent |
+| 2026-08-20 | **新增 F120 Stage 0「名單基礎預估數量總覽」節（spec 為 DRAFT 待人工審閱閘）**：(A) 4 項 spec-writer 裁定待確認（逾時名單仍歸屬分組＋兩個獨立計數以消除 US-184 三條 AC 之互相打架／分組排序次鍵 `option_value`／逐字元比較限單一條件字串／warning 判定基準改「不存在於 `listTotals`」）；(B) **1 項阻塞待裁 OQ-F120-B1**（F049 KPI 每日捨入殘差使 TC-184-07 字面斷言不成立，主張改用精確和）；(C) 4 項交 system-architect（**A1 端點拓樸＝承接 OQ-184-05**）；(D) 3 項交 ui-ux-designer（**U1 含處長語意標示，為 AC-LIST-11 必要條件**）；(E) 5 項既有落差（`prod_kind` 衍生欄位無法區分兩情境／`display_order` 全為 0／3 個 warning 碼未登錄／warning 觸發範圍寬於逾時／US-184 未登錄於 stories overview）。**不新增錯誤碼、不新增端點契約以外之欄位、無 migration** | Spec Writer Agent |
 | 2026-08-18 | **F119 v1.1 連帶更新**：新增 **OQ-F119-06**（月跑快照未記錄篩選條件 → ✅ 使用者裁決 descope、另開票掛 F066；F119 AC-15 縮為 Drawer + 列表兩端）；**OQ-F119-05 標 ✅ 已解決**（`STAGE0_LIST_ESTIMATE_PARTIAL` 已於 error-handling.md v1.20 補登，含 payload 結構與前端呈現要求），併同記錄同端點另 3 碼 + `poolWarning` 仍未登錄 | Spec Writer Agent |
 | 2026-08-18 | 新增 F119 類別型文字比對運算子節（**spec 為 DRAFT 待人工審閱閘**）：(A) 6 項 spec-writer 裁定待確認（`operator` 採 categorical 子屬性而非新 `fieldType`／一致性範圍三處擴為五路徑／簽章 `:catop:` 格式與向後相容／後端互斥防呆 422／零可選值欄位可用性／關鍵字長度上限 100）；(B) 承 US-183 之 4 項（OQ-183-01~04，狀態沿用）；(C) 7 項交 system-architect（**SA-1 `data-model.md` 補述為必辦**）；(D) 5 項既有落差（`spec_name` 不在 seed／F114 無 spec 檔／US-183 AC-16 交叉引用筆誤／`STAGE0_LIST_ESTIMATE_PARTIAL` 未登錄 error-handling／F050 3 處條文待加性補述，刻意未逕改）。**不新增錯誤碼、不新增端點、無 migration** | Spec Writer Agent |
 | 2026-08-04 | **F117 / F118 人工審閱閘：全節收斂**。業務裁決 3 項（孤兒部門＝顯示鎖定＋後端保留、不做強制歸零；語意等價之後果可接受；複製範圍以實作為準修正 spec）；architect / ui-ux 8 項定案（端點改 `GET .../copy-duplicate-check`、`ORDER BY list_no`、保留「未設代理」紅點、二次確認彈窗等）。兩份 spec 狀態 DRAFT → **Approved**。新增 4 項不阻塞之遺留技術債（OQ-F118-05 ~ 07、OQ-DOC-01） | 人工審閱閘 |
