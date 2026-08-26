@@ -7,6 +7,7 @@
     "configFile": "vitest.mutation.assignment-list.config.ts"
   },
   "coverageAnalysis": "perTest",
+  "concurrency": 2,
   "mutate": [
     "src/modules/assignment-list/assignment-list.service.ts"
   ],

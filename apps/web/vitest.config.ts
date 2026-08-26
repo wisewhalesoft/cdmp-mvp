@@ -10,6 +10,8 @@ export default defineConfig({
     setupFiles: ['./test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}', 'test/**/*.test.{ts,tsx}'],
     css: true,
+    // 16GB 筆電：限制 worker 數防記憶體耗盡（詳 ~/.claude/CLAUDE.md 資源限制）
+    poolOptions: { threads: { maxThreads: 4 }, forks: { maxForks: 4 } },
   },
   resolve: {
     alias: {

@@ -12,6 +12,8 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   fullyParallel: true,
+  // 16GB 筆電：限制平行 workers（詳 ~/.claude/CLAUDE.md 資源限制）
+  workers: 2,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   reporter: [['list']],
