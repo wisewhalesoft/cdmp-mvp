@@ -44,6 +44,7 @@ import type {
   PipelineProgressResponse,
 } from '@cdmp/shared';
 import { formatDateTW } from '@/utils/date-utils';
+import { formatCronTW } from '@/utils/cron-utils';
 
 function PipelineStatusBadge({ status }: { status: EtlPipelineStatus }) {
   const config: Record<EtlPipelineStatus, { bg: string; text: string }> = {
@@ -428,8 +429,11 @@ export function PipelineListPage() {
           <td className="px-4 py-3">
             <PipelineStatusBadge status={pipeline.status} />
           </td>
-          <td className="px-4 py-3 text-gray-600">
-            {pipeline.schedule ?? '-'}
+          <td
+            className="px-4 py-3 text-gray-600"
+            title={pipeline.schedule ? `Cron: ${pipeline.schedule}` : undefined}
+          >
+            {formatCronTW(pipeline.schedule)}
           </td>
           <td className="px-4 py-3 text-gray-500">
             {pipeline.lastExecutionAt

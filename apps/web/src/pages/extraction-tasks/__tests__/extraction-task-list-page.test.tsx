@@ -257,5 +257,21 @@ describe('ExtractionTaskListPage', () => {
     });
   });
 
+  describe('排程顯示', () => {
+    it('should render schedule in readable Chinese with UTC+8 instead of raw cron', async () => {
+      await renderAndLoad();
+      expect(screen.getByText('每日 02:00 (UTC+8)')).toBeInTheDocument();
+      expect(screen.getByText('每日 03:00 (UTC+8)')).toBeInTheDocument();
+      expect(screen.getByText('每日 04:00 (UTC+8)')).toBeInTheDocument();
+      expect(screen.queryByText('0 2 * * *')).not.toBeInTheDocument();
+    });
+
+    it('should keep the raw cron expression in the cell title attribute', async () => {
+      await renderAndLoad();
+      const cell = screen.getByText('每日 02:00 (UTC+8)').closest('td');
+      expect(cell).toHaveAttribute('title', 'Cron: 0 2 * * *');
+    });
+  });
+
   // Sidebar active state 已由共用 AppSidebar 元件負責，於其自身 unit test 覆蓋。
 });

@@ -495,4 +495,45 @@ describe('PipelineListPage', () => {
       expect(mockedTogglePipeline).toHaveBeenCalledWith('pl-1', false);
     });
   });
+
+  describe('排程顯示', () => {
+    it('should render schedule in readable Chinese with UTC+8 instead of raw cron', async () => {
+      mockedGetPipelines.mockResolvedValue(mockListResponse);
+      mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+      await act(async () => {
+        renderPage();
+      });
+
+      expect(screen.getByText('每日 02:00 (UTC+8)')).toBeInTheDocument();
+      expect(screen.getByText('每日 03:00 (UTC+8)')).toBeInTheDocument();
+      expect(screen.queryByText('0 2 * * *')).not.toBeInTheDocument();
+    });
+
+    it('should keep the raw cron expression in the cell title attribute', async () => {
+      mockedGetPipelines.mockResolvedValue(mockListResponse);
+      mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+      await act(async () => {
+        renderPage();
+      });
+
+      const cell = screen.getByText('每日 02:00 (UTC+8)').closest('td');
+      expect(cell).toHaveAttribute('title', 'Cron: 0 2 * * *');
+    });
+
+    it('should render "-" without title when pipeline has no schedule', async () => {
+      mockedGetPipelines.mockResolvedValue(mockListResponse);
+      mockedGetPipelineStats.mockResolvedValue(mockStats);
+
+      await act(async () => {
+        renderPage();
+      });
+
+      const scheduleCell =
+        screen.getByTestId('pipeline-row-pl-2').querySelectorAll('td')[4];
+      expect(scheduleCell.textContent).toBe('-');
+      expect(scheduleCell).not.toHaveAttribute('title');
+    });
+  });
 });

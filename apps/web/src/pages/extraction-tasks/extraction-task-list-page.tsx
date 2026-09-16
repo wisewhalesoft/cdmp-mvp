@@ -26,6 +26,7 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTW } from '@/utils/date-utils';
+import { formatCronTW } from '@/utils/cron-utils';
 import { ToggleTaskDialog } from './toggle-task-dialog';
 import { DeleteTaskDialog } from './delete-task-dialog';
 import { ExtractionLogDrawer } from './extraction-log-drawer';
@@ -505,8 +506,11 @@ export function ExtractionTaskListPage() {
                               </div>
                             )}
                           </td>
-                          <td className="px-5 py-3 font-mono text-xs text-gray-600">
-                            {task.schedule}
+                          <td
+                            className="px-5 py-3 text-gray-600"
+                            title={task.schedule ? `Cron: ${task.schedule}` : undefined}
+                          >
+                            {formatCronTW(task.schedule)}
                           </td>
                           <td className="px-5 py-3 text-gray-500">
                             {task.lastExecutionAt ? formatDateTW(task.lastExecutionAt) : '-'}
