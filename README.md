@@ -51,6 +51,32 @@ cdmp-mvp/
 > 🔴 **一律設 `NODE_ENV=production`**（關 `synchronize`）——因 dev/test 共用同一個 CDMP，
 > 開 synchronize 會改到共用 schema。schema 改由 migration baseline 提供（見「正式部署」）。
 
+### TLS 攔截環境（Kaspersky 端點防護／企業 MITM proxy）— `local-ca.crt`
+
+若本機有端點防護或企業 proxy 以自簽 CA 重簽 HTTPS，容器內 build 會失敗：
+`apk` 報 `TLS: server certificate not trusted`、`npm` 報 `SELF_SIGNED_CERT_IN_CHAIN`
+（host 有信任該 CA、容器沒有，故只有 Docker build 壞）。
+
+解法：把該 root CA 匯出成 `local-ca.crt`，放進 **各 build context**（`apps/api/`、`apps/web/`）。
+Dockerfile 以 optional glob 讀取，檔案不存在的機器照常 build，**不入版控**（已在 `.gitignore`）。
+
+```powershell
+# 1) 找出攔截用的 root CA（Subject 關鍵字視產品而定，如 Kaspersky / Zscaler / NetSkope）
+Get-ChildItem Cert:\LocalMachine\Root | Where-Object { $_.Subject -like "*Kaspersky*" } |
+  Select-Object Subject, Thumbprint
+
+# 2) 依 Thumbprint 匯出成 PEM，複製到兩個 build context
+$cert = Get-Item Cert:\LocalMachine\Root\<THUMBPRINT>
+$b64  = [Convert]::ToBase64String($cert.RawData, 'InsertLineBreaks')
+"-----BEGIN CERTIFICATE-----`n$b64`n-----END CERTIFICATE-----" |
+  Set-Content apps/api/local-ca.crt -Encoding ascii
+Copy-Item apps/api/local-ca.crt apps/web/local-ca.crt
+```
+
+> 確認攔截來源：`docker run --rm node:20-alpine sh -c "apk add -q openssl && echo |
+> openssl s_client -connect registry.npmjs.org:443 2>/dev/null | grep -E '^ *i:'"`
+> — 輸出的 issuer 就是要匯出的 CA。
+
 ### Development — 啟動 (API + Worker + Frontend)
 
 ```bash

@@ -33,3 +33,6 @@ docker-compose.override.yml
 apps/*/coverage/
 apps/*/reports/
 apps/*/.stryker-tmp/
+
+# 本機 TLS 攔截用的 root CA（Kaspersky／企業 MITM），每台機器自行放置，不進版控
+local-ca.crt
