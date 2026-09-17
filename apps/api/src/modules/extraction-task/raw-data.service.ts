@@ -367,10 +367,29 @@ export class RawDataService {
 
   /**
    * Truncate (delete all rows from) a raw data table. Used for full mode.
+   *
+   * PostgreSQL 與 MSSQL 皆走 `TRUNCATE TABLE`；只有 SQLite（測試環境，無 TRUNCATE
+   * 語法）退回 `DELETE FROM`。
+   *
+   * 🔴 MSSQL 不可退回 `DELETE FROM`（正式環境事故，error 9002
+   * `The transaction log for database 'CDMP' is full due to 'ACTIVE_TRANSACTION'`）：
+   * 原實作只讓 `isPostgres` 走 TRUNCATE，else 分支是為 SQLite 而寫；PG→MSSQL 遷移後
+   * MSSQL 掉進 else，全量擷取每次執行前的清表變成單句 `DELETE FROM raw_xxxxxxxx`：
+   *  - DELETE 逐列記錄完整 row image。raw table 的字串／decimal 欄一律為 NVARCHAR(MAX)
+   *    （見 `mapToMssqlType`），寬表（OBPOOLDATA 系 122 欄）× 8M 列的 log 量級等同資料本身。
+   *  - 單句 DELETE＝單一隱含交易，跑數十分鐘不 commit，成為 log 的 holdup transaction：
+   *    log 一邊暴增、一邊因交易未結束而無法截斷回收 → 撞上限拋 9002。此情境加做 log
+   *    備份救不了（備份無法截斷使用中的交易）。
+   *  - 數百萬 row/page lock 觸發鎖升級為整表 X 鎖。
+   * TRUNCATE 只記錄頁面配置（minimally logged）、瞬間完成，上述三項全部消失。
+   *
+   * TRUNCATE 的三項限制在此皆不成立：raw table 是獨立 staging（無 FK 參考）、
+   * `_cdmp_id` 為純代理鍵（IDENTITY 重置無影響）；唯一前提是連線帳號需有該表 ALTER
+   * 權限——本服務自身即負責這些表的 CREATE/DROP，權限本就足夠。
    */
   async truncateTable(rawTableName: string): Promise<void> {
     this.validateTableName(rawTableName);
-    if (this.isPostgres) {
+    if (this.isPostgres || this.isMssql) {
       await this.dataSource.query(`TRUNCATE TABLE "${rawTableName}"`);
     } else {
       await this.dataSource.query(`DELETE FROM "${rawTableName}"`);

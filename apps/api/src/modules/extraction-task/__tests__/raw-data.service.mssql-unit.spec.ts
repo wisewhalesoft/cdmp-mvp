@@ -240,3 +240,33 @@ describe('P4e STATIC — 事實鎖定', () => {
     expect(body.includes('formatCopyValue')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// §十二 TRUNCLOG — truncateTable 的交易 log 安全性（正式環境 error 9002 迴歸）
+// ---------------------------------------------------------------------------
+describe('TRUNCLOG — truncateTable 每 dialect 生成的 SQL', () => {
+  it('TRUNCLOG-001 (Regression): mssql 必須生成 TRUNCATE，永不得退回 DELETE', async () => {
+    // 事故：全量擷取清表在 MSSQL 走 `DELETE FROM raw_xxxxxxxx`（原 else 分支為 SQLite 而寫，
+    // PG→MSSQL 遷移後 MSSQL 掉入）。800 萬列寬表（NVARCHAR(MAX) 欄）的逐列 DELETE 是單一
+    // 長時間未 commit 的隱含交易，把 log 釘住無法截斷 →
+    // `The transaction log for database 'CDMP' is full due to 'ACTIVE_TRANSACTION'`（9002）。
+    const { svc, q } = makeCap('mssql');
+    await svc.truncateTable('raw_deadbeef');
+    expect(q).toHaveBeenCalledTimes(1);
+    const sql = String(q.mock.calls[0][0]);
+    expect(sql).toBe('TRUNCATE TABLE "raw_deadbeef"');
+    expect(sql).not.toMatch(/DELETE/i);
+  });
+
+  it('TRUNCLOG-002: postgres 維持 TRUNCATE（無回歸）', async () => {
+    const { svc, q } = makeCap('postgres');
+    await svc.truncateTable('raw_deadbeef');
+    expect(String(q.mock.calls[0][0])).toBe('TRUNCATE TABLE "raw_deadbeef"');
+  });
+
+  it('TRUNCLOG-003: sqlite（測試環境，無 TRUNCATE 語法）維持 DELETE', async () => {
+    const { svc, q } = makeCap('sqlite');
+    await svc.truncateTable('raw_deadbeef');
+    expect(String(q.mock.calls[0][0])).toBe('DELETE FROM "raw_deadbeef"');
+  });
+});

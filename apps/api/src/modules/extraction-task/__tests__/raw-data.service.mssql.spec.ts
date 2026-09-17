@@ -199,7 +199,7 @@ describe('P4e ISPG-GATE (real MSSQL)', () => {
     await svc.createRawTable(t, MIXED_COLS);
     await ds!.query(`INSERT INTO "${t}" (s) VALUES (N'a')`);
     expect(await count(t)).toBe(1);
-    await svc.truncateTable(t); // mssql → DELETE FROM（既有 else 分支，冪等）
+    await svc.truncateTable(t); // mssql → TRUNCATE TABLE（需 ALTER 權限，真庫驗證；見 TRUNCLOG-001）
     expect(await count(t)).toBe(0);
     await svc.dropTable(t); // DROP TABLE IF EXISTS（T-SQL 2016+ 原生）
     expect(await svc.tableExists(t)).toBe(false);
