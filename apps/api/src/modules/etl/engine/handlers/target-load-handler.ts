@@ -132,6 +132,14 @@ export class TargetLoadHandler implements NodeExecutor {
         .join(', ');
       const escapedPartitionValue = partitionValue.replace(/'/g, "''");
 
+      // partitionCoversTable（opt-in，預設 false）：宣告「本表為單一來源，本分區即全表」，
+      // 清除步驟改走 TRUNCATE。與 MSSQL 版同旗標、同語意（引擎間行為對稱）。
+      // 顯式 opt-in 的理由見 MSSQL 版 handler 同段註解：pipeline 定義使用者可自建，
+      // 若某條真正需要「只替換本分區、保留其他來源列」，TRUNCATE 會靜默清空整張表。
+      // PG 的 TRUNCATE 同樣是交易內可回滾的，故不弱化 I-ETL-ATOMIC-LOAD-01。
+      // （MSSQL 版另加 WITH (TABLOCK) 以取得最小化記錄；TABLOCK 為 T-SQL 專屬語法，PG 無對應。）
+      const partitionCoversTable = context.node.data.partitionCoversTable === true;
+
       // 2. 單條 INSERT…SELECT，每列填 partitionValue
       // In-DB 的 INSERT…SELECT 不帶任何 bind 參數，不受 PG 65535 參數上限約束，
       // 故無需分批；單條語句一次搬移全部列為 O(n)（取代原 LIMIT/OFFSET 分批——
@@ -145,14 +153,19 @@ export class TargetLoadHandler implements NodeExecutor {
       // 交易只包 clear+insert（enriched 暫存表建立於交易外），避免長交易鎖表。
       await context.queryRunner.startTransaction();
       try {
-        // 1. per-partition 截斷（只刪本分區，保護其他來源列）
+        // 1. 清除：partitionCoversTable 時全表 TRUNCATE；否則 per-partition DELETE
+        //    （只刪本分區，保護其他來源列）。
         try {
           await context.queryRunner.query(
-            `DELETE FROM "${targetTable}" WHERE "${partitionColumn}" = '${escapedPartitionValue}'`,
+            partitionCoversTable
+              ? `TRUNCATE TABLE "${targetTable}"`
+              : `DELETE FROM "${targetTable}" WHERE "${partitionColumn}" = '${escapedPartitionValue}'`,
           );
         } catch (err: any) {
           throw new Error(
-            `partition_replace DELETE 失敗（${partitionColumn}='${partitionValue}'）：${err.message}`,
+            partitionCoversTable
+              ? `partition_replace TRUNCATE 失敗（${targetTable}）：${err.message}`
+              : `partition_replace DELETE 失敗（${partitionColumn}='${partitionValue}'）：${err.message}`,
           );
         }
         try {

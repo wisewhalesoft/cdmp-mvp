@@ -476,6 +476,7 @@ describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
       partitionValue?: string | undefined;
       queryRunner?: any;
       omitPartitionValue?: boolean;
+      partitionCoversTable?: unknown;
     } = {},
   ): NodeExecutionContext {
     const columns = opts.columns ?? ['list_no', 'orgno', 'appl_no', 'custo_no', 'assignday', 'data_source'];
@@ -487,6 +488,9 @@ describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
       loadMode: 'partition_replace',
       partitionColumn: opts.partitionColumn ?? 'data_source',
     };
+    if (opts.partitionCoversTable !== undefined) {
+      data.partitionCoversTable = opts.partitionCoversTable;
+    }
     if (!opts.omitPartitionValue) {
       // v2.0（AD-E07-25 DP-AD25-1 單源化）：partitionValue 預設 'etl_load'（取代 'etl_legacy'）
       data.partitionValue = opts.partitionValue ?? 'etl_load';
@@ -501,8 +505,9 @@ describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
     } as NodeExecutionContext;
   }
 
-  // TS-F090-ETL-002v2（regression guard）：前置 DELETE 針對 partition（v2.0：data_source='etl_load'），
-  // 不可全表 TRUNCATE（BR-3：fullMode 仍為 false，引擎層不 TRUNCATE）
+  // TS-F090-ETL-002v2（regression guard）：**預設**（未設 partitionCoversTable）前置 DELETE 針對
+  // partition（v2.0：data_source='etl_load'），不可全表 TRUNCATE（BR-3：fullMode 仍為 false，
+  // 引擎層不 TRUNCATE）。顯式 opt-in partitionCoversTable=true 時改走 TRUNCATE，見下方 COVERSTABLE 組。
   it('TS-F090-ETL-002v2: 前置 DELETE 針對 partition（data_source=etl_load），不 TRUNCATE 全表', async () => {
     const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 3));
     await handler.execute(ctx);
@@ -556,6 +561,36 @@ describe('TargetLoadHandler - partition_replace（F090 / AD-E07-21）', () => {
     const insertIdx = qr.calls.findIndex((c: any) => c.sql.includes('INSERT INTO'));
     expect(deleteIdx).toBeGreaterThanOrEqual(0);
     expect(insertIdx).toBeGreaterThan(deleteIdx);
+  });
+
+  // --- partitionCoversTable（opt-in 全表 TRUNCATE，與 MSSQL 版同旗標同語意）-------
+  it('COVERSTABLE-001: partitionCoversTable=true → TRUNCATE 全表，絕不 DELETE', async () => {
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 3), { partitionCoversTable: true });
+    await handler.execute(ctx);
+    const allSql = ctx.queryRunner.calls.map((c: any) => c.sql).join('
+');
+    expect(allSql).toContain('TRUNCATE TABLE "ob_pool_data_list"');
+    expect(allSql).not.toMatch(/DELETE\s+FROM/i);
+  });
+
+  it('COVERSTABLE-002: 旗標須嚴格 === true，truthy 值不得啟用 TRUNCATE', async () => {
+    // node.data 由 JSON 反序列化而來、型別未受約束；誤判會靜默清空整張表。
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 3), { partitionCoversTable: 'true' });
+    await handler.execute(ctx);
+    const allSql = ctx.queryRunner.calls.map((c: any) => c.sql).join('
+');
+    expect(allSql).not.toMatch(/TRUNCATE/i);
+    expect(allSql).toMatch(/DELETE\s+FROM/i);
+  });
+
+  it('COVERSTABLE-003: TRUNCATE 仍在 INSERT 之前（清除→重填順序不變）', async () => {
+    const ctx = makePartitionCtx(makeDs('etl_tmp_oblist', 2), { partitionCoversTable: true });
+    await handler.execute(ctx);
+    const qr = ctx.queryRunner;
+    const truncIdx = qr.calls.findIndex((c: any) => c.sql.includes('TRUNCATE TABLE'));
+    const insertIdx = qr.calls.findIndex((c: any) => c.sql.includes('INSERT INTO'));
+    expect(truncIdx).toBeGreaterThanOrEqual(0);
+    expect(insertIdx).toBeGreaterThan(truncIdx);
   });
 
   // partitionColumn 不應在來源映射欄位中重複出現（由 handler 填值）

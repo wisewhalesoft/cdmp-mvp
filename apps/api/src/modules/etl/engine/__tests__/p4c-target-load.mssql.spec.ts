@@ -389,6 +389,42 @@ describe('P4c PARTITION (partition_replace)', () => {
     expect(monthly[0].c).toBe(1);
   });
 
+  // --- partitionCoversTable（真庫）-------------------------------------------
+  // 正式環境 CDMP_log 上限 20GB 且無成長空間；819 萬列的 per-partition DELETE 完整記錄
+  // 必然拋 9002 ACTIVE_TRANSACTION。旗標為真時改走全表 TRUNCATE（最小化記錄）。
+
+  it('COVERSTABLE-001：partitionCoversTable=true → 全表 TRUNCATE（含其他分區列一併清除）', async (ctx) => {
+    if (gate()) return ctx.skip();
+    const t = await syntheticTable('id varchar(10) NOT NULL, data_source varchar(20) NOT NULL, val varchar(20)');
+    await h.qr!.query(`INSERT INTO dbo.${t} (id,data_source,val) VALUES ('m1','monthly_run','gone'),('e1','etl_load','old')`);
+    const fx = await fixture(`('n1','new1'),('n2','new2')`, 'id,val');
+    const res = await new TargetLoadHandlerMssql().execute(
+      tlCtx({ targetTable: t, loadMode: 'partition_replace', partitionCoversTable: true, partitionColumn: 'data_source', partitionValue: 'etl_load' }, fx, 2),
+    );
+    expect(res.rowCount).toBe(2);
+    // 旗標的語意就是「本分區即全表」：其他分區列**被一併清除**（對比 MSSQL-001 的預設行為）。
+    // 這正是旗標必須顯式 opt-in、且套用前須逐表查證無其他來源列的原因。
+    const all = await h.qr!.query(`SELECT id, data_source FROM dbo.${t} ORDER BY id`);
+    expect(all.map((r: any) => r.id)).toEqual(['n1', 'n2']);
+    expect(all.every((r: any) => r.data_source === 'etl_load')).toBe(true);
+  });
+
+  it('COVERSTABLE-002（I-ETL-ATOMIC-LOAD-01）：INSERT 失敗 → TRUNCATE 回滾，既存列全數保留', async (ctx) => {
+    if (gate()) return ctx.skip();
+    // 原子性不因改走 TRUNCATE 而弱化：T-SQL TRUNCATE 於交易內可回滾。
+    const t = await syntheticTable('id varchar(10) NOT NULL PRIMARY KEY, data_source varchar(20) NOT NULL, val varchar(20)');
+    await h.qr!.query(`INSERT INTO dbo.${t} (id,data_source,val) VALUES ('m1','monthly_run','keep'),('e1','etl_load','keep2')`);
+    // 同批兩列撞同一 PK → INSERT 必失敗
+    const fx = await fixture(`('dup','v1'),('dup','v2')`, 'id,val');
+    await expect(
+      new TargetLoadHandlerMssql().execute(
+        tlCtx({ targetTable: t, loadMode: 'partition_replace', partitionCoversTable: true, partitionColumn: 'data_source', partitionValue: 'etl_load' }, fx, 2),
+      ),
+    ).rejects.toThrow(/partition_replace INSERT 失敗/);
+    const all = await h.qr!.query(`SELECT id FROM dbo.${t} ORDER BY id`);
+    expect(all.map((r: any) => r.id)).toEqual(['e1', 'm1']); // TRUNCATE 已回滾，非「已清空未重填」
+  });
+
   it('EQ-002：partitionValue 含單引號 → 逸出正確（防注入回歸）', async (ctx) => {
     if (gate()) return ctx.skip();
     const t = await syntheticTable('id varchar(10) NOT NULL, data_source varchar(20) NOT NULL, val varchar(20)');

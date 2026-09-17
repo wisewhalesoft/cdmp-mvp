@@ -405,6 +405,37 @@ describe('P4c PARTITION UNIT', () => {
   it('UNIT-003：partitionColumn/partitionValue 未設定 → 拋錯', async () => {
     await expect(runPartition({ partitionColumn: undefined })).rejects.toThrow(/partition_replace 模式需設定/);
   });
+
+  // --- partitionCoversTable（交易 log 安全性）---------------------------------
+  // 正式環境 CDMP_log 上限 20GB 且 max_size==size（無成長空間）。819 萬列的
+  // DELETE+INSERT 皆完整記錄（~30GB）必然拋 9002 ACTIVE_TRANSACTION。
+  // TRUNCATE + WITH (TABLOCK) 在 SIMPLE recovery 下兩步皆最小化記錄。
+
+  it('UNIT-004：partitionCoversTable=true → 清除步驟為 TRUNCATE，絕不含 DELETE', async () => {
+    const { sql } = await runPartition({ partitionCoversTable: true });
+    expect(sql).toContain('TRUNCATE TABLE "ob_pool_data_list"');
+    expect(sql).not.toMatch(/DELETE\s+FROM/i);
+  });
+
+  it('UNIT-005：未設旗標（預設）維持 per-partition DELETE，絕不 TRUNCATE 整表', async () => {
+    const { sql } = await runPartition();
+    expect(sql).toContain(`DELETE FROM "ob_pool_data_list" WHERE "data_source" = 'etl_load'`);
+    expect(sql).not.toMatch(/TRUNCATE/i);
+  });
+
+  it('UNIT-006：旗標須嚴格 === true，truthy 值（字串「true」）不得啟用 TRUNCATE', async () => {
+    // 防禦 node.data 由 JSON 反序列化而來、型別未受約束：誤判會靜默清空整張表。
+    const { sql } = await runPartition({ partitionCoversTable: 'true' as any });
+    expect(sql).not.toMatch(/TRUNCATE/i);
+    expect(sql).toMatch(/DELETE\s+FROM/i);
+  });
+
+  it('UNIT-007：INSERT 帶 WITH (TABLOCK)（兩種旗標值皆是，最小化記錄前提）', async () => {
+    for (const over of [{}, { partitionCoversTable: true }]) {
+      const { sql } = await runPartition(over);
+      expect(sql).toMatch(/INSERT INTO "ob_pool_data_list" WITH \(TABLOCK\) \(/);
+    }
+  });
 });
 
 // =====================================================================

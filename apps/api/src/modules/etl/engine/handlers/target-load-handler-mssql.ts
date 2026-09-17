@@ -143,24 +143,46 @@ export class TargetLoadHandlerMssql implements NodeExecutor {
           .join(', ');
         const escapedPartitionValue = partitionValue.replace(/'/g, "''");
 
+        // partitionCoversTable（opt-in，預設 false）：宣告「本表為單一來源，本分區即全表」。
+        // 為真時清除步驟改走 TRUNCATE（最小化記錄）而非 DELETE（逐列完整記錄）。
+        //
+        // 必須是顯式 opt-in，不可以「模式名即 partition_replace」當作默認：
+        // pipeline 定義可由使用者於 UI 自行新增，若未來有一條真正需要「只替換自己那一區、
+        // 保留其他來源列」的 pipeline（正是模式名稱所承諾的語意），TRUNCATE 會靜默清空整張表。
+        //
+        // 旗標為真的前提（套用前須逐表查證）：目標表無其他寫入者、無 FK 參考、
+        // 實際資料中不存在 partitionValue 以外的分區值。
+        const partitionCoversTable = context.node.data.partitionCoversTable === true;
+
         // 2. 單條 INSERT…SELECT，每列填 partitionValue
+        //
+        // WITH (TABLOCK)：SIMPLE / BULK_LOGGED recovery 下對空表（含 TRUNCATE 後）的
+        // INSERT…SELECT 可走最小化記錄，百萬列級的 log 用量由十幾 GB 降至幾百 MB。
+        // 不符合最小化記錄條件時（FULL recovery / 非空表）只是多拿一個表鎖，
+        // 無正確性副作用——百萬列 INSERT 本就會鎖升級到整表。
         const selectColsForInsert = insertColumns.map((c) => `"${c}"`).join(', ');
         const selectSql = `SELECT ${selectColsForInsert}, '${escapedPartitionValue}' AS "${partitionColumn}" FROM "${tempTable}"`;
-        const insertSql = `INSERT INTO "${targetTable}" (${insertColumnList}) ${selectSql}`;
+        const insertSql = `INSERT INTO "${targetTable}" WITH (TABLOCK) (${insertColumnList}) ${selectSql}`;
 
-        // I-ETL-ATOMIC-LOAD-01：DELETE 與其後 INSERT 同屬一交易——INSERT 失敗整個回滾至 DELETE 前
-        // （既存分區資料保留），非「已刪除、未重填」的資料遺失中間態。T-SQL DELETE/TRUNCATE 於交易內
-        // 皆可回滾（真庫實證）。交易只包 clear+insert；## 暫存表建於交易外，rollback 後仍存在、由 finally 清理。
+        // I-ETL-ATOMIC-LOAD-01：清除與其後 INSERT 同屬一交易——INSERT 失敗整個回滾至清除前
+        // （既存資料保留），非「已刪除、未重填」的資料遺失中間態。T-SQL DELETE/TRUNCATE 於交易內
+        // 皆可回滾（真庫實證），故 partitionCoversTable 改走 TRUNCATE 不弱化本保證；最小化記錄的
+        // 操作同樣可回滾。交易只包 clear+insert；## 暫存表建於交易外，rollback 後仍存在、由 finally 清理。
         await context.queryRunner.startTransaction();
         try {
-          // 1. per-partition 截斷（只刪本分區，保護其他來源列）
+          // 1. 清除：partitionCoversTable 時全表 TRUNCATE（最小化記錄）；
+          //    否則 per-partition DELETE（只刪本分區，保護其他來源列）。
           try {
             await context.queryRunner.query(
-              `DELETE FROM "${targetTable}" WHERE "${partitionColumn}" = '${escapedPartitionValue}'`,
+              partitionCoversTable
+                ? `TRUNCATE TABLE "${targetTable}"`
+                : `DELETE FROM "${targetTable}" WHERE "${partitionColumn}" = '${escapedPartitionValue}'`,
             );
           } catch (err: any) {
             throw new Error(
-              `partition_replace DELETE 失敗（${partitionColumn}='${partitionValue}'）：${err.message}`,
+              partitionCoversTable
+                ? `partition_replace TRUNCATE 失敗（${targetTable}）：${err.message}`
+                : `partition_replace DELETE 失敗（${partitionColumn}='${partitionValue}'）：${err.message}`,
             );
           }
           try {
