@@ -632,6 +632,27 @@ export class RawDataService {
    * control characters under the typed bulk protocol. Value coercion here is a
    * separate, escape-free function (NOESCAPE-GATE-001 / STATIC-003).
    */
+  /**
+   * `request.bulk()` 選項：`lockTable` 使 tedious 於 `insert bulk` 語句附加 `WITH (TABLOCK)`
+   * （`node_modules/tedious/lib/bulk-load.js` getOptionsSql）。
+   *
+   * 目的是取得**最小化記錄**（minimal logging）：SIMPLE / BULK_LOGGED recovery 下，
+   * 對堆積表或空的叢集索引表之 bulk load 唯有持整表鎖才符合最小化記錄條件。未加時每批
+   * 皆完整記錄——819 萬列寬表（欄位多為 NVARCHAR(MAX)）的擷取會墊高 log 水位數 GB。
+   * 正式環境 CDMP_log 為 20GB 且 max_size==size（無成長空間），該水位是實質風險。
+   *
+   * 此處不會造成 ACTIVE_TRANSACTION：每個 `writeRows` 是獨立 bulk、各自提交，
+   * 不存在跨批次的長交易（與 partition_replace 的單一大交易是不同問題）。
+   *
+   * 🔴 選項名是 `lockTable`，**不是** `tableLock`。tedious 對未知選項不報錯、靜默忽略
+   * → 打錯名字的結果是「看起來有加、實際仍完整記錄」。BULKOPT-002 以靜態斷言把這個
+   * 對 tedious 的相依契約釘住，防止套件升級改名後無聲失效。
+   *
+   * 鎖的取捨：TABLOCK 於 bulk 期間持有目標表排他鎖。raw_* 是 ETL 中繼 staging 表，
+   * 僅由本擷取任務寫入、由 pipeline 於擷取完成後讀取，擷取期間無併發讀者。
+   */
+  private static readonly BULK_OPTIONS = { lockTable: true } as const;
+
   async openBulkWriter(
     rawTableName: string,
     columns: string[],
@@ -665,6 +686,8 @@ export class RawDataService {
     const colTypes = safeCols.map((c) =>
       this.mapToBulkColumnType(sql, typeByName.get(c.toLowerCase()) ?? 'nvarchar'),
     );
+
+    const BULK_OPTIONS = RawDataService.BULK_OPTIONS;
 
     const pool = new sql.ConnectionPool(this.buildMssqlConnectionConfig());
     await pool.connect();
@@ -704,7 +727,7 @@ export class RawDataService {
         for (const row of rows) {
           table.rows.add(...safeCols.map((c, i) => coerce(row[c], colTypes[i].isString)));
         }
-        await pool.request().bulk(table);
+        await pool.request().bulk(table, BULK_OPTIONS);
       },
       async finish(): Promise<void> {
         await closePool();
