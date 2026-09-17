@@ -352,15 +352,17 @@ describe('AD-E07-39 P1b2 BASELINE', () => {
     expect(rows.length).toBe(ds!.entityMetadatas.length);
   });
 
-  it('TS-MSSQL-P1B2-BASELINE-003：typeorm_migrations 恰 6 筆（schema + reference-data + queue_job + customer_core code-decode + users employee_no + customer_financial baseline），第二次 migration:run 為 no-op', async (ctx) => {
+  it('TS-MSSQL-P1B2-BASELINE-003：typeorm_migrations 恰 7 筆（schema + reference-data + queue_job + customer_core code-decode + users employee_no + customer_financial baseline + etl partitionCoversTable），第二次 migration:run 為 no-op', async (ctx) => {
     ensureMssql(ctx);
     // AD-E07-39 P1b3 新增 MssqlBaselineReferenceData（*1751884800001*）→ 由 1 支變 2 支；
     // AD-E07-40 P2a 再新增 MssqlQueueJobSchema（*1751884800002*）→ 2 支變 3 支；
     // AD-E07-41 P4 再新增 MssqlUpdateCustomerCoreCodeDecode（*1751884800003*）→ 3 支變 4 支；
     // F113 / AD-E02-5 再新增 MssqlAddUsersEmployeeNo（*1751884800004*）→ 4 支變 5 支；
-    // F114 再新增 MssqlAddCustomerFinancial（*1751884800005*）→ 5 支變 6 支（皆 migrations/mssql/* glob 自動載入）。
+    // F114 再新增 MssqlAddCustomerFinancial（*1751884800005*）→ 5 支變 6 支；
+    // partition_replace 交易 log 修正再新增 MssqlEtlPartitionCoversTable（*1751884800006*）
+    //   → 6 支變 7 支（皆 migrations/mssql/* glob 自動載入）。
     const before = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
-    expect(Number(before[0].n)).toBe(6);
+    expect(Number(before[0].n)).toBe(7);
 
     const second = runTypeormCli('migration:run');
     expect(second.status, `stderr=${second.stderr}`).toBe(0);
@@ -368,7 +370,7 @@ describe('AD-E07-39 P1b2 BASELINE', () => {
     expect(out).toMatch(/No migrations are pending/i);
 
     const after = await ds!.query(`SELECT COUNT(*) AS n FROM dbo.typeorm_migrations`);
-    expect(Number(after[0].n)).toBe(6);
+    expect(Number(after[0].n)).toBe(7);
   });
 
   it('TS-MSSQL-P1B2-BASELINE-004：CLI datasource synchronize=false 且以 NODE_ENV=production 執行（無 synchronize 混淆）', (ctx) => {
